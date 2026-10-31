@@ -29,6 +29,11 @@ export type Taxi = {
   vehicleClass?: string;
   vehicleCondition?: number;
   vehicleMileage?: number;
+  operatingKm?: number;
+  fuelExpense?: number;
+  maintenanceExpense?: number;
+  tripRevenue?: number;
+  fuelLitres?: number;
 
   // Vehicle delivery information
   deliveryStartedAt?: number;
@@ -36,7 +41,8 @@ export type Taxi = {
   deliveryPath?: Point[];
 };
 export type MissionRecord={pickup:string;dropoff:string};
-export type FleetState={taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];missionHistory?:MissionRecord[]};
+export type FleetState={taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;transactions?:FinancialTransaction[]};
+export type FinancialTransaction={id:string;time:number;taxiId?:string;description:string;amount:number};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
@@ -90,7 +96,80 @@ export async function loadRoadGraph():Promise<RoadGraph>{
  }
  return{nodes,edges,nodeKeys:[...nodes.keys()]};
 }
-export function nearest(graph:RoadGraph,point:Point):string{let best='',d=Infinity;for(const k of graph.nodeKeys){const p=graph.nodes.get(k)!;const distance=meters(p,point);if(distance<d){d=distance;best=k;}}return best;}
+// Spatial lookup for road nodes. Cache per graph and append new nodes when the
+// road manager extends an existing graph. WeakMap allows old graphs to be GC'd.
+const NEAREST_CELL_DEGREES = 0.005;
+type NearestIndex = {cells: Map<number, Map<number, string[]>>; count: number; minLat: number; maxLat: number};
+const nearestIndexes = new WeakMap<RoadGraph, NearestIndex>();
+function roadNodeIndex(graph: RoadGraph): NearestIndex {
+ let index = nearestIndexes.get(graph);
+ if (!index || index.count > graph.nodeKeys.length) {
+  index = {cells: new Map(), count: 0, minLat: Infinity, maxLat: -Infinity};
+  nearestIndexes.set(graph, index);
+ }
+ for (let i = index.count; i < graph.nodeKeys.length; i++) {
+  const k = graph.nodeKeys[i];
+  const p = graph.nodes.get(k);
+  if (!p) continue;
+  const x = Math.floor(p[0] / NEAREST_CELL_DEGREES);
+  const y = Math.floor(p[1] / NEAREST_CELL_DEGREES);
+  let column = index.cells.get(x);
+  if (!column) {column = new Map(); index.cells.set(x, column);}
+  let cell = column.get(y);
+  if (!cell) {cell = []; column.set(y, cell);}
+  cell.push(k);
+  index.minLat = Math.min(index.minLat, p[1]);
+  index.maxLat = Math.max(index.maxLat, p[1]);
+ }
+ index.count = graph.nodeKeys.length;
+ return index;
+}
+export function nearest(graph: RoadGraph, point: Point): string {
+ if (!graph.nodeKeys.length) return '';
+ const index = roadNodeIndex(graph);
+ const size = NEAREST_CELL_DEGREES;
+ const cx = Math.floor(point[0] / size), cy = Math.floor(point[1] / size);
+ let best = '', distance = Infinity;
+ const visit = (x: number, y: number) => {
+  const cell = index.cells.get(x)?.get(y);
+  if (!cell) return;
+  for (const k of cell) {
+   const p = graph.nodes.get(k);
+   if (!p) continue;
+   const d = meters(p, point);
+   if (d < distance) {distance = d; best = k;}
+  }
+ };
+ // Examine square rings. Stop only when the nearest point outside the square
+ // cannot beat the current best. The latitude factor is conservative for all
+ // nodes in the graph, so the original nearest-node semantics are preserved.
+ const minCos = Math.max(0.001, Math.cos(Math.max(
+  Math.abs((point[1] + index.minLat) * Math.PI / 360),
+  Math.abs((point[1] + index.maxLat) * Math.PI / 360)
+ )));
+ for (let ring = 0; ; ring++) {
+  if (ring === 0) visit(cx, cy);
+  else {
+   for (let x = cx - ring; x <= cx + ring; x++) {
+    visit(x, cy - ring);
+    visit(x, cy + ring);
+   }
+   for (let y = cy - ring + 1; y < cy + ring; y++) {
+    visit(cx - ring, y);
+    visit(cx + ring, y);
+   }
+  }
+  if (best) {
+   const west = (point[0] - (cx - ring) * size) * 111320 * minCos;
+   const east = ((cx + ring + 1) * size - point[0]) * 111320 * minCos;
+   const south = (point[1] - (cy - ring) * size) * 111320;
+   const north = ((cy + ring + 1) * size - point[1]) * 111320;
+   if (Math.min(west, east, south, north) > distance) return best;
+  }
+  // The index is finite; this guard handles queries far outside the network.
+  if (ring > 100000) return best;
+ }
+}
 export function route(graph:RoadGraph,from:string,to:string):{path:Point[];edgeIds:string[];length:number}|null{if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};const dist=new Map([[from,0]]),prev=new Map<string,{from:string;id:string}>();const heap:Array<[number,string]>=[[0,from]];const push=(item:[number,string])=>{heap.push(item);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=item[0])break;heap[i]=heap[p];i=p;}heap[i]=item;};const pop=():[number,string]|undefined=>{if(!heap.length)return;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&heap[c+1][0]<heap[c][0])c++;if(heap[c][0]>=last[0])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};let visits=0;while(heap.length&&visits++<150000){const [d,k]=pop()!;if(d!==(dist.get(k)??Infinity))continue;if(k===to)break;for(const e of graph.edges.get(k)??[]){const nd=d+e.meters;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,{from:k,id:e.id});push([nd,e.to]);}}}if(!dist.has(to))return null;const keys=[to],ids:string[]=[];let cur=to;while(cur!==from){const p=prev.get(cur);if(!p)return null;ids.push(p.id);keys.push(p.from);cur=p.from;}keys.reverse();ids.reverse();return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};}
 export const fleetKey=(id:string)=>`travelempire.fleet.v0.8.${id}`;
 export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(localStorage.getItem(fleetKey(id))??'null') as FleetState|null;if(saved&&Array.isArray(saved.taxis))return saved;}catch{/* ignore invalid save */}return{taxis:[],revenue:0,completed:0,exploredEdgeIds:[]};}
@@ -129,11 +208,11 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
  if(taxi.status!=='IDLE'||graph.nodeKeys.length<2)return taxi;
  const from=nearest(graph,taxi.position);
  const eligible=exploredRoadNodes(graph,explored,hq);
- const frontier=explorationFrontierNodes(graph,explored,hq);
  if(!eligible.length)return taxi;
  const pickupPoints=eligible.filter(k=>meters(graph.nodes.get(k)!,taxi.position)<=3500);
  if(!pickupPoints.length)return taxi;
- const destinations=[...new Set([...eligible,...frontier])];
+ // Passenger destinations must never be on the unexplored frontier.
+ const destinations=eligible;
  const pointNear=(origin:Point,radius:number):Point=>{
   const distance=radius*Math.sqrt(Math.random());
   const angle=Math.random()*2*Math.PI;
@@ -170,6 +249,45 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
  return taxi;
 }
 
+// A shared pool of passenger requests, independent of the number of idle taxis.
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;createdAt:number;expiresAt:number};
+export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,hq:Point,now=Date.now()):PassengerRequest|null{
+ const allEligible=exploredRoadNodes(graph,explored,hq);
+ if(allEligible.length<2)return null;
+ const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
+ // Use random sampled eligible nodes; both endpoints are always inside the explored network.
+ for(let attempt=0;attempt<35;attempt++){
+  const from=eligible[Math.floor(Math.random()*eligible.length)];
+  const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=200&&d<=4000;});
+  if(!near.length)continue;
+  const to=near[Math.floor(Math.random()*near.length)];
+  const trip=route(graph,from,to);
+  if(!trip||trip.length<150||trip.length>5000)continue;
+  return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:Math.round((4+trip.length/1000*1.8)*100)/100,createdAt:now,expiresAt:now+120000};
+ }
+ return null;
+}
+export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest):Taxi|null{
+ if(taxi.status!=='IDLE')return null;
+ const start=nearest(graph,taxi.position),pickup=nearest(graph,mission.pickup);
+ if(!start||!pickup)return null;
+ const toPickup=route(graph,start,pickup);
+ if(!toPickup||toPickup.length>6500)return null;
+ return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
+}
+// Scouting is separate from passenger service: only scouting may target the unexplored frontier.
+export function dispatchScout(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point):Taxi{
+ if(taxi.status!=='IDLE')return taxi;
+ const frontier=explorationFrontierNodes(graph,explored,hq);
+ if(!frontier.length)return taxi;
+ const start=nearest(graph,taxi.position);
+ const candidates=frontier.map(k=>({k,d:meters(graph.nodes.get(k)!,taxi.position)})).filter(x=>x.d<5000).sort((a,b)=>a.d-b.d).slice(0,24);
+ for(const candidate of candidates){
+  const journey=route(graph,start,candidate.k);
+  if(journey&&journey.path.length>1&&journey.length<6500){return{...taxi,status:'EXPLORING',path:journey.path,edgeIds:journey.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};}
+ }
+ return taxi;
+}
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in simulated seconds (4x wall time).
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[]}{
@@ -204,18 +322,16 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  return{taxi:t,crossed};
 }
 export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number):{taxi:Taxi;earned:number;finished:boolean;discovered:string[]}{
- // Cancel any legacy scouting job restored from an older local save.
- if(taxi.status==='EXPLORING')return{taxi:{...taxi,status:'IDLE',path:[],edgeIds:[],journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,fare:0,speedKph:0},earned:0,finished:false,discovered:[]};
  if(taxi.status==='IDLE')return{taxi,earned:0,finished:false,discovered:[]};
  const advanced=advanceTaxi(taxi,graph,seconds);
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...advanced.crossed]};
- if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:[]};
+ if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
   const next=route(graph,from,to);
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
-   return{taxi:t,earned:0,finished:false,discovered:[]};
+   return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
   }
  }
  const earned=t.status==='TO_DROPOFF'?t.fare:0;

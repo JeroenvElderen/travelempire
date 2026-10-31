@@ -1,0 +1,1309 @@
+{
+  "format": "travelempire-road-regions-v1",
+  "regions": {
+    "GRC.1.1.1_1": {
+      "file": "GRC.1.1.1_1.jsonl.gz",
+      "edges": 2437
+    },
+    "GRC.1.1.2_1": {
+      "file": "GRC.1.1.2_1.jsonl.gz",
+      "edges": 251902
+    },
+    "GRC.1.1.3_1": {
+      "file": "GRC.1.1.3_1.jsonl.gz",
+      "edges": 3917
+    },
+    "GRC.1.1.4_1": {
+      "file": "GRC.1.1.4_1.jsonl.gz",
+      "edges": 64854
+    },
+    "GRC.1.1.5_1": {
+      "file": "GRC.1.1.5_1.jsonl.gz",
+      "edges": 97055
+    },
+    "GRC.1.1.6_1": {
+      "file": "GRC.1.1.6_1.jsonl.gz",
+      "edges": 282101
+    },
+    "GRC.1.1.7_1": {
+      "file": "GRC.1.1.7_1.jsonl.gz",
+      "edges": 4138
+    },
+    "GRC.1.1.8_1": {
+      "file": "GRC.1.1.8_1.jsonl.gz",
+      "edges": 5145
+    },
+    "GRC.1.1.9_1": {
+      "file": "GRC.1.1.9_1.jsonl.gz",
+      "edges": 147828
+    },
+    "GRC.1.2.10_1": {
+      "file": "GRC.1.2.10_1.jsonl.gz",
+      "edges": 19149
+    },
+    "GRC.1.2.11_1": {
+      "file": "GRC.1.2.11_1.jsonl.gz",
+      "edges": 61258
+    },
+    "GRC.1.2.12_1": {
+      "file": "GRC.1.2.12_1.jsonl.gz",
+      "edges": 7133
+    },
+    "GRC.1.2.13_1": {
+      "file": "GRC.1.2.13_1.jsonl.gz",
+      "edges": 29845
+    },
+    "GRC.1.2.14_1": {
+      "file": "GRC.1.2.14_1.jsonl.gz",
+      "edges": 5394
+    },
+    "GRC.1.2.15_1": {
+      "file": "GRC.1.2.15_1.jsonl.gz",
+      "edges": 64059
+    },
+    "GRC.1.2.16_1": {
+      "file": "GRC.1.2.16_1.jsonl.gz",
+      "edges": 16798
+    },
+    "GRC.1.2.17_1": {
+      "file": "GRC.1.2.17_1.jsonl.gz",
+      "edges": 3594
+    },
+    "GRC.1.2.18_1": {
+      "file": "GRC.1.2.18_1.jsonl.gz",
+      "edges": 16868
+    },
+    "GRC.1.2.19_1": {
+      "file": "GRC.1.2.19_1.jsonl.gz",
+      "edges": 1020
+    },
+    "GRC.1.2.1_1": {
+      "file": "GRC.1.2.1_1.jsonl.gz",
+      "edges": 1840
+    },
+    "GRC.1.2.20_1": {
+      "file": "GRC.1.2.20_1.jsonl.gz",
+      "edges": 56637
+    },
+    "GRC.1.2.21_1": {
+      "file": "GRC.1.2.21_1.jsonl.gz",
+      "edges": 34771
+    },
+    "GRC.1.2.22_1": {
+      "file": "GRC.1.2.22_1.jsonl.gz",
+      "edges": 105147
+    },
+    "GRC.1.2.23_1": {
+      "file": "GRC.1.2.23_1.jsonl.gz",
+      "edges": 3918
+    },
+    "GRC.1.2.24_1": {
+      "file": "GRC.1.2.24_1.jsonl.gz",
+      "edges": 50495
+    },
+    "GRC.1.2.25_1": {
+      "file": "GRC.1.2.25_1.jsonl.gz",
+      "edges": 8903
+    },
+    "GRC.1.2.26_1": {
+      "file": "GRC.1.2.26_1.jsonl.gz",
+      "edges": 247265
+    },
+    "GRC.1.2.27_1": {
+      "file": "GRC.1.2.27_1.jsonl.gz",
+      "edges": 15385
+    },
+    "GRC.1.2.28_1": {
+      "file": "GRC.1.2.28_1.jsonl.gz",
+      "edges": 10164
+    },
+    "GRC.1.2.29_1": {
+      "file": "GRC.1.2.29_1.jsonl.gz",
+      "edges": 2474
+    },
+    "GRC.1.2.2_1": {
+      "file": "GRC.1.2.2_1.jsonl.gz",
+      "edges": 11028
+    },
+    "GRC.1.2.30_1": {
+      "file": "GRC.1.2.30_1.jsonl.gz",
+      "edges": 4853
+    },
+    "GRC.1.2.31_1": {
+      "file": "GRC.1.2.31_1.jsonl.gz",
+      "edges": 33547
+    },
+    "GRC.1.2.32_1": {
+      "file": "GRC.1.2.32_1.jsonl.gz",
+      "edges": 42286
+    },
+    "GRC.1.2.33_1": {
+      "file": "GRC.1.2.33_1.jsonl.gz",
+      "edges": 4783
+    },
+    "GRC.1.2.34_1": {
+      "file": "GRC.1.2.34_1.jsonl.gz",
+      "edges": 39989
+    },
+    "GRC.1.2.3_1": {
+      "file": "GRC.1.2.3_1.jsonl.gz",
+      "edges": 8261
+    },
+    "GRC.1.2.4_1": {
+      "file": "GRC.1.2.4_1.jsonl.gz",
+      "edges": 80902
+    },
+    "GRC.1.2.5_1": {
+      "file": "GRC.1.2.5_1.jsonl.gz",
+      "edges": 7026
+    },
+    "GRC.1.2.6_1": {
+      "file": "GRC.1.2.6_1.jsonl.gz",
+      "edges": 8622
+    },
+    "GRC.1.2.7_1": {
+      "file": "GRC.1.2.7_1.jsonl.gz",
+      "edges": 1526
+    },
+    "GRC.1.2.8_1": {
+      "file": "GRC.1.2.8_1.jsonl.gz",
+      "edges": 5385
+    },
+    "GRC.1.2.9_1": {
+      "file": "GRC.1.2.9_1.jsonl.gz",
+      "edges": 17575
+    },
+    "GRC.2.1.1_1": {
+      "file": "GRC.2.1.1_1.jsonl.gz",
+      "edges": 49388
+    },
+    "GRC.3.1.10_1": {
+      "file": "GRC.3.1.10_1.jsonl.gz",
+      "edges": 11790
+    },
+    "GRC.3.1.11_1": {
+      "file": "GRC.3.1.11_1.jsonl.gz",
+      "edges": 31847
+    },
+    "GRC.3.1.12_1": {
+      "file": "GRC.3.1.12_1.jsonl.gz",
+      "edges": 35620
+    },
+    "GRC.3.1.13_1": {
+      "file": "GRC.3.1.13_1.jsonl.gz",
+      "edges": 9373
+    },
+    "GRC.3.1.14_1": {
+      "file": "GRC.3.1.14_1.jsonl.gz",
+      "edges": 7751
+    },
+    "GRC.3.1.15_1": {
+      "file": "GRC.3.1.15_1.jsonl.gz",
+      "edges": 66561
+    },
+    "GRC.3.1.16_1": {
+      "file": "GRC.3.1.16_1.jsonl.gz",
+      "edges": 2532
+    },
+    "GRC.3.1.17_1": {
+      "file": "GRC.3.1.17_1.jsonl.gz",
+      "edges": 21844
+    },
+    "GRC.3.1.18_1": {
+      "file": "GRC.3.1.18_1.jsonl.gz",
+      "edges": 13596
+    },
+    "GRC.3.1.19_1": {
+      "file": "GRC.3.1.19_1.jsonl.gz",
+      "edges": 6728
+    },
+    "GRC.3.1.1_1": {
+      "file": "GRC.3.1.1_1.jsonl.gz",
+      "edges": 35708
+    },
+    "GRC.3.1.20_1": {
+      "file": "GRC.3.1.20_1.jsonl.gz",
+      "edges": 3955
+    },
+    "GRC.3.1.21_1": {
+      "file": "GRC.3.1.21_1.jsonl.gz",
+      "edges": 4033
+    },
+    "GRC.3.1.22_1": {
+      "file": "GRC.3.1.22_1.jsonl.gz",
+      "edges": 20789
+    },
+    "GRC.3.1.23_1": {
+      "file": "GRC.3.1.23_1.jsonl.gz",
+      "edges": 3576
+    },
+    "GRC.3.1.24_1": {
+      "file": "GRC.3.1.24_1.jsonl.gz",
+      "edges": 9109
+    },
+    "GRC.3.1.25_1": {
+      "file": "GRC.3.1.25_1.jsonl.gz",
+      "edges": 1368
+    },
+    "GRC.3.1.26_1": {
+      "file": "GRC.3.1.26_1.jsonl.gz",
+      "edges": 8764
+    },
+    "GRC.3.1.27_1": {
+      "file": "GRC.3.1.27_1.jsonl.gz",
+      "edges": 8802
+    },
+    "GRC.3.1.28_1": {
+      "file": "GRC.3.1.28_1.jsonl.gz",
+      "edges": 4211
+    },
+    "GRC.3.1.29_1": {
+      "file": "GRC.3.1.29_1.jsonl.gz",
+      "edges": 2969
+    },
+    "GRC.3.1.2_1": {
+      "file": "GRC.3.1.2_1.jsonl.gz",
+      "edges": 25446
+    },
+    "GRC.3.1.30_1": {
+      "file": "GRC.3.1.30_1.jsonl.gz",
+      "edges": 3917
+    },
+    "GRC.3.1.31_1": {
+      "file": "GRC.3.1.31_1.jsonl.gz",
+      "edges": 7652
+    },
+    "GRC.3.1.32_1": {
+      "file": "GRC.3.1.32_1.jsonl.gz",
+      "edges": 19921
+    },
+    "GRC.3.1.33_1": {
+      "file": "GRC.3.1.33_1.jsonl.gz",
+      "edges": 3038
+    },
+    "GRC.3.1.34_1": {
+      "file": "GRC.3.1.34_1.jsonl.gz",
+      "edges": 34200
+    },
+    "GRC.3.1.35_1": {
+      "file": "GRC.3.1.35_1.jsonl.gz",
+      "edges": 66960
+    },
+    "GRC.3.1.36_1": {
+      "file": "GRC.3.1.36_1.jsonl.gz",
+      "edges": 3164
+    },
+    "GRC.3.1.37_1": {
+      "file": "GRC.3.1.37_1.jsonl.gz",
+      "edges": 70870
+    },
+    "GRC.3.1.38_1": {
+      "file": "GRC.3.1.38_1.jsonl.gz",
+      "edges": 52253
+    },
+    "GRC.3.1.39_1": {
+      "file": "GRC.3.1.39_1.jsonl.gz",
+      "edges": 25341
+    },
+    "GRC.3.1.3_1": {
+      "file": "GRC.3.1.3_1.jsonl.gz",
+      "edges": 5160
+    },
+    "GRC.3.1.40_1": {
+      "file": "GRC.3.1.40_1.jsonl.gz",
+      "edges": 91905
+    },
+    "GRC.3.1.41_1": {
+      "file": "GRC.3.1.41_1.jsonl.gz",
+      "edges": 5517
+    },
+    "GRC.3.1.42_1": {
+      "file": "GRC.3.1.42_1.jsonl.gz",
+      "edges": 3976
+    },
+    "GRC.3.1.43_1": {
+      "file": "GRC.3.1.43_1.jsonl.gz",
+      "edges": 5328
+    },
+    "GRC.3.1.44_1": {
+      "file": "GRC.3.1.44_1.jsonl.gz",
+      "edges": 2974
+    },
+    "GRC.3.1.45_1": {
+      "file": "GRC.3.1.45_1.jsonl.gz",
+      "edges": 9974
+    },
+    "GRC.3.1.46_1": {
+      "file": "GRC.3.1.46_1.jsonl.gz",
+      "edges": 73041
+    },
+    "GRC.3.1.47_1": {
+      "file": "GRC.3.1.47_1.jsonl.gz",
+      "edges": 20852
+    },
+    "GRC.3.1.48_1": {
+      "file": "GRC.3.1.48_1.jsonl.gz",
+      "edges": 4078
+    },
+    "GRC.3.1.49_1": {
+      "file": "GRC.3.1.49_1.jsonl.gz",
+      "edges": 22167
+    },
+    "GRC.3.1.4_1": {
+      "file": "GRC.3.1.4_1.jsonl.gz",
+      "edges": 1365
+    },
+    "GRC.3.1.50_1": {
+      "file": "GRC.3.1.50_1.jsonl.gz",
+      "edges": 3883
+    },
+    "GRC.3.1.51_1": {
+      "file": "GRC.3.1.51_1.jsonl.gz",
+      "edges": 14981
+    },
+    "GRC.3.1.52_1": {
+      "file": "GRC.3.1.52_1.jsonl.gz",
+      "edges": 5999
+    },
+    "GRC.3.1.53_1": {
+      "file": "GRC.3.1.53_1.jsonl.gz",
+      "edges": 10859
+    },
+    "GRC.3.1.54_1": {
+      "file": "GRC.3.1.54_1.jsonl.gz",
+      "edges": 3466
+    },
+    "GRC.3.1.55_1": {
+      "file": "GRC.3.1.55_1.jsonl.gz",
+      "edges": 12295
+    },
+    "GRC.3.1.56_1": {
+      "file": "GRC.3.1.56_1.jsonl.gz",
+      "edges": 10376
+    },
+    "GRC.3.1.57_1": {
+      "file": "GRC.3.1.57_1.jsonl.gz",
+      "edges": 23115
+    },
+    "GRC.3.1.58_1": {
+      "file": "GRC.3.1.58_1.jsonl.gz",
+      "edges": 39791
+    },
+    "GRC.3.1.59_1": {
+      "file": "GRC.3.1.59_1.jsonl.gz",
+      "edges": 39129
+    },
+    "GRC.3.1.5_1": {
+      "file": "GRC.3.1.5_1.jsonl.gz",
+      "edges": 8249
+    },
+    "GRC.3.1.60_1": {
+      "file": "GRC.3.1.60_1.jsonl.gz",
+      "edges": 32731
+    },
+    "GRC.3.1.61_1": {
+      "file": "GRC.3.1.61_1.jsonl.gz",
+      "edges": 6536
+    },
+    "GRC.3.1.62_1": {
+      "file": "GRC.3.1.62_1.jsonl.gz",
+      "edges": 32485
+    },
+    "GRC.3.1.63_1": {
+      "file": "GRC.3.1.63_1.jsonl.gz",
+      "edges": 15070
+    },
+    "GRC.3.1.64_1": {
+      "file": "GRC.3.1.64_1.jsonl.gz",
+      "edges": 3040
+    },
+    "GRC.3.1.65_1": {
+      "file": "GRC.3.1.65_1.jsonl.gz",
+      "edges": 4862
+    },
+    "GRC.3.1.66_1": {
+      "file": "GRC.3.1.66_1.jsonl.gz",
+      "edges": 4809
+    },
+    "GRC.3.1.6_1": {
+      "file": "GRC.3.1.6_1.jsonl.gz",
+      "edges": 5433
+    },
+    "GRC.3.1.7_1": {
+      "file": "GRC.3.1.7_1.jsonl.gz",
+      "edges": 4943
+    },
+    "GRC.3.1.8_1": {
+      "file": "GRC.3.1.8_1.jsonl.gz",
+      "edges": 5493
+    },
+    "GRC.3.1.9_1": {
+      "file": "GRC.3.1.9_1.jsonl.gz",
+      "edges": 5044
+    },
+    "GRC.4.1.10_1": {
+      "file": "GRC.4.1.10_1.jsonl.gz",
+      "edges": 2971
+    },
+    "GRC.4.1.11_1": {
+      "file": "GRC.4.1.11_1.jsonl.gz",
+      "edges": 88320
+    },
+    "GRC.4.1.12_1": {
+      "file": "GRC.4.1.12_1.jsonl.gz",
+      "edges": 113446
+    },
+    "GRC.4.1.13_1": {
+      "file": "GRC.4.1.13_1.jsonl.gz",
+      "edges": 210785
+    },
+    "GRC.4.1.14_1": {
+      "file": "GRC.4.1.14_1.jsonl.gz",
+      "edges": 61790
+    },
+    "GRC.4.1.15_1": {
+      "file": "GRC.4.1.15_1.jsonl.gz",
+      "edges": 70360
+    },
+    "GRC.4.1.16_1": {
+      "file": "GRC.4.1.16_1.jsonl.gz",
+      "edges": 62926
+    },
+    "GRC.4.1.17_1": {
+      "file": "GRC.4.1.17_1.jsonl.gz",
+      "edges": 104496
+    },
+    "GRC.4.1.18_1": {
+      "file": "GRC.4.1.18_1.jsonl.gz",
+      "edges": 60487
+    },
+    "GRC.4.1.19_1": {
+      "file": "GRC.4.1.19_1.jsonl.gz",
+      "edges": 30684
+    },
+    "GRC.4.1.1_1": {
+      "file": "GRC.4.1.1_1.jsonl.gz",
+      "edges": 139102
+    },
+    "GRC.4.1.20_1": {
+      "file": "GRC.4.1.20_1.jsonl.gz",
+      "edges": 101867
+    },
+    "GRC.4.1.21_1": {
+      "file": "GRC.4.1.21_1.jsonl.gz",
+      "edges": 87221
+    },
+    "GRC.4.1.22_1": {
+      "file": "GRC.4.1.22_1.jsonl.gz",
+      "edges": 23982
+    },
+    "GRC.4.1.23_1": {
+      "file": "GRC.4.1.23_1.jsonl.gz",
+      "edges": 130059
+    },
+    "GRC.4.1.24_1": {
+      "file": "GRC.4.1.24_1.jsonl.gz",
+      "edges": 54140
+    },
+    "GRC.4.1.2_1": {
+      "file": "GRC.4.1.2_1.jsonl.gz",
+      "edges": 74034
+    },
+    "GRC.4.1.3_1": {
+      "file": "GRC.4.1.3_1.jsonl.gz",
+      "edges": 46627
+    },
+    "GRC.4.1.4_1": {
+      "file": "GRC.4.1.4_1.jsonl.gz",
+      "edges": 9050
+    },
+    "GRC.4.1.5_1": {
+      "file": "GRC.4.1.5_1.jsonl.gz",
+      "edges": 62788
+    },
+    "GRC.4.1.6_1": {
+      "file": "GRC.4.1.6_1.jsonl.gz",
+      "edges": 74662
+    },
+    "GRC.4.1.7_1": {
+      "file": "GRC.4.1.7_1.jsonl.gz",
+      "edges": 100507
+    },
+    "GRC.4.1.8_1": {
+      "file": "GRC.4.1.8_1.jsonl.gz",
+      "edges": 73835
+    },
+    "GRC.4.1.9_1": {
+      "file": "GRC.4.1.9_1.jsonl.gz",
+      "edges": 89398
+    },
+    "GRC.5.1.10_1": {
+      "file": "GRC.5.1.10_1.jsonl.gz",
+      "edges": 42055
+    },
+    "GRC.5.1.11_1": {
+      "file": "GRC.5.1.11_1.jsonl.gz",
+      "edges": 48975
+    },
+    "GRC.5.1.12_1": {
+      "file": "GRC.5.1.12_1.jsonl.gz",
+      "edges": 101430
+    },
+    "GRC.5.1.13_1": {
+      "file": "GRC.5.1.13_1.jsonl.gz",
+      "edges": 76226
+    },
+    "GRC.5.1.14_1": {
+      "file": "GRC.5.1.14_1.jsonl.gz",
+      "edges": 70913
+    },
+    "GRC.5.1.15_1": {
+      "file": "GRC.5.1.15_1.jsonl.gz",
+      "edges": 55378
+    },
+    "GRC.5.1.16_1": {
+      "file": "GRC.5.1.16_1.jsonl.gz",
+      "edges": 112388
+    },
+    "GRC.5.1.17_1": {
+      "file": "GRC.5.1.17_1.jsonl.gz",
+      "edges": 59156
+    },
+    "GRC.5.1.18_1": {
+      "file": "GRC.5.1.18_1.jsonl.gz",
+      "edges": 102884
+    },
+    "GRC.5.1.1_1": {
+      "file": "GRC.5.1.1_1.jsonl.gz",
+      "edges": 69300
+    },
+    "GRC.5.1.2_1": {
+      "file": "GRC.5.1.2_1.jsonl.gz",
+      "edges": 127534
+    },
+    "GRC.5.1.3_1": {
+      "file": "GRC.5.1.3_1.jsonl.gz",
+      "edges": 102082
+    },
+    "GRC.5.1.4_1": {
+      "file": "GRC.5.1.4_1.jsonl.gz",
+      "edges": 65865
+    },
+    "GRC.5.1.5_1": {
+      "file": "GRC.5.1.5_1.jsonl.gz",
+      "edges": 84708
+    },
+    "GRC.5.1.6_1": {
+      "file": "GRC.5.1.6_1.jsonl.gz",
+      "edges": 109634
+    },
+    "GRC.5.1.7_1": {
+      "file": "GRC.5.1.7_1.jsonl.gz",
+      "edges": 84902
+    },
+    "GRC.5.1.8_1": {
+      "file": "GRC.5.1.8_1.jsonl.gz",
+      "edges": 92319
+    },
+    "GRC.5.1.9_1": {
+      "file": "GRC.5.1.9_1.jsonl.gz",
+      "edges": 54565
+    },
+    "GRC.5.2.10_1": {
+      "file": "GRC.5.2.10_1.jsonl.gz",
+      "edges": 36960
+    },
+    "GRC.5.2.11_1": {
+      "file": "GRC.5.2.11_1.jsonl.gz",
+      "edges": 87484
+    },
+    "GRC.5.2.12_1": {
+      "file": "GRC.5.2.12_1.jsonl.gz",
+      "edges": 102821
+    },
+    "GRC.5.2.1_1": {
+      "file": "GRC.5.2.1_1.jsonl.gz",
+      "edges": 54153
+    },
+    "GRC.5.2.2_1": {
+      "file": "GRC.5.2.2_1.jsonl.gz",
+      "edges": 34675
+    },
+    "GRC.5.2.3_1": {
+      "file": "GRC.5.2.3_1.jsonl.gz",
+      "edges": 56670
+    },
+    "GRC.5.2.4_1": {
+      "file": "GRC.5.2.4_1.jsonl.gz",
+      "edges": 88586
+    },
+    "GRC.5.2.5_1": {
+      "file": "GRC.5.2.5_1.jsonl.gz",
+      "edges": 171414
+    },
+    "GRC.5.2.6_1": {
+      "file": "GRC.5.2.6_1.jsonl.gz",
+      "edges": 97272
+    },
+    "GRC.5.2.7_1": {
+      "file": "GRC.5.2.7_1.jsonl.gz",
+      "edges": 138894
+    },
+    "GRC.5.2.8_1": {
+      "file": "GRC.5.2.8_1.jsonl.gz",
+      "edges": 63461
+    },
+    "GRC.5.2.9_1": {
+      "file": "GRC.5.2.9_1.jsonl.gz",
+      "edges": 40921
+    },
+    "GRC.6.1.10_1": {
+      "file": "GRC.6.1.10_1.jsonl.gz",
+      "edges": 35804
+    },
+    "GRC.6.1.11_1": {
+      "file": "GRC.6.1.11_1.jsonl.gz",
+      "edges": 45928
+    },
+    "GRC.6.1.12_1": {
+      "file": "GRC.6.1.12_1.jsonl.gz",
+      "edges": 5159
+    },
+    "GRC.6.1.13_1": {
+      "file": "GRC.6.1.13_1.jsonl.gz",
+      "edges": 57075
+    },
+    "GRC.6.1.14_1": {
+      "file": "GRC.6.1.14_1.jsonl.gz",
+      "edges": 88721
+    },
+    "GRC.6.1.15_1": {
+      "file": "GRC.6.1.15_1.jsonl.gz",
+      "edges": 144848
+    },
+    "GRC.6.1.16_1": {
+      "file": "GRC.6.1.16_1.jsonl.gz",
+      "edges": 11050
+    },
+    "GRC.6.1.17_1": {
+      "file": "GRC.6.1.17_1.jsonl.gz",
+      "edges": 118093
+    },
+    "GRC.6.1.18_1": {
+      "file": "GRC.6.1.18_1.jsonl.gz",
+      "edges": 38722
+    },
+    "GRC.6.1.19_1": {
+      "file": "GRC.6.1.19_1.jsonl.gz",
+      "edges": 57060
+    },
+    "GRC.6.1.1_1": {
+      "file": "GRC.6.1.1_1.jsonl.gz",
+      "edges": 34594
+    },
+    "GRC.6.1.20_1": {
+      "file": "GRC.6.1.20_1.jsonl.gz",
+      "edges": 42221
+    },
+    "GRC.6.1.21_1": {
+      "file": "GRC.6.1.21_1.jsonl.gz",
+      "edges": 18729
+    },
+    "GRC.6.1.22_1": {
+      "file": "GRC.6.1.22_1.jsonl.gz",
+      "edges": 45231
+    },
+    "GRC.6.1.23_1": {
+      "file": "GRC.6.1.23_1.jsonl.gz",
+      "edges": 104077
+    },
+    "GRC.6.1.24_1": {
+      "file": "GRC.6.1.24_1.jsonl.gz",
+      "edges": 28501
+    },
+    "GRC.6.1.25_1": {
+      "file": "GRC.6.1.25_1.jsonl.gz",
+      "edges": 57720
+    },
+    "GRC.6.1.26_1": {
+      "file": "GRC.6.1.26_1.jsonl.gz",
+      "edges": 111697
+    },
+    "GRC.6.1.27_1": {
+      "file": "GRC.6.1.27_1.jsonl.gz",
+      "edges": 34195
+    },
+    "GRC.6.1.28_1": {
+      "file": "GRC.6.1.28_1.jsonl.gz",
+      "edges": 58874
+    },
+    "GRC.6.1.29_1": {
+      "file": "GRC.6.1.29_1.jsonl.gz",
+      "edges": 80345
+    },
+    "GRC.6.1.2_1": {
+      "file": "GRC.6.1.2_1.jsonl.gz",
+      "edges": 86902
+    },
+    "GRC.6.1.30_1": {
+      "file": "GRC.6.1.30_1.jsonl.gz",
+      "edges": 122545
+    },
+    "GRC.6.1.31_1": {
+      "file": "GRC.6.1.31_1.jsonl.gz",
+      "edges": 156410
+    },
+    "GRC.6.1.32_1": {
+      "file": "GRC.6.1.32_1.jsonl.gz",
+      "edges": 21877
+    },
+    "GRC.6.1.33_1": {
+      "file": "GRC.6.1.33_1.jsonl.gz",
+      "edges": 24466
+    },
+    "GRC.6.1.34_1": {
+      "file": "GRC.6.1.34_1.jsonl.gz",
+      "edges": 69557
+    },
+    "GRC.6.1.35_1": {
+      "file": "GRC.6.1.35_1.jsonl.gz",
+      "edges": 21179
+    },
+    "GRC.6.1.36_1": {
+      "file": "GRC.6.1.36_1.jsonl.gz",
+      "edges": 87570
+    },
+    "GRC.6.1.37_1": {
+      "file": "GRC.6.1.37_1.jsonl.gz",
+      "edges": 59442
+    },
+    "GRC.6.1.38_1": {
+      "file": "GRC.6.1.38_1.jsonl.gz",
+      "edges": 76809
+    },
+    "GRC.6.1.3_1": {
+      "file": "GRC.6.1.3_1.jsonl.gz",
+      "edges": 5610
+    },
+    "GRC.6.1.4_1": {
+      "file": "GRC.6.1.4_1.jsonl.gz",
+      "edges": 44354
+    },
+    "GRC.6.1.5_1": {
+      "file": "GRC.6.1.5_1.jsonl.gz",
+      "edges": 133460
+    },
+    "GRC.6.1.6_1": {
+      "file": "GRC.6.1.6_1.jsonl.gz",
+      "edges": 33381
+    },
+    "GRC.6.1.7_1": {
+      "file": "GRC.6.1.7_1.jsonl.gz",
+      "edges": 33479
+    },
+    "GRC.6.1.8_1": {
+      "file": "GRC.6.1.8_1.jsonl.gz",
+      "edges": 51715
+    },
+    "GRC.6.1.9_1": {
+      "file": "GRC.6.1.9_1.jsonl.gz",
+      "edges": 69129
+    },
+    "GRC.6.2.10_1": {
+      "file": "GRC.6.2.10_1.jsonl.gz",
+      "edges": 61494
+    },
+    "GRC.6.2.11_1": {
+      "file": "GRC.6.2.11_1.jsonl.gz",
+      "edges": 69139
+    },
+    "GRC.6.2.12_1": {
+      "file": "GRC.6.2.12_1.jsonl.gz",
+      "edges": 54097
+    },
+    "GRC.6.2.13_1": {
+      "file": "GRC.6.2.13_1.jsonl.gz",
+      "edges": 74740
+    },
+    "GRC.6.2.14_1": {
+      "file": "GRC.6.2.14_1.jsonl.gz",
+      "edges": 92478
+    },
+    "GRC.6.2.15_1": {
+      "file": "GRC.6.2.15_1.jsonl.gz",
+      "edges": 143363
+    },
+    "GRC.6.2.16_1": {
+      "file": "GRC.6.2.16_1.jsonl.gz",
+      "edges": 83736
+    },
+    "GRC.6.2.17_1": {
+      "file": "GRC.6.2.17_1.jsonl.gz",
+      "edges": 32662
+    },
+    "GRC.6.2.18_1": {
+      "file": "GRC.6.2.18_1.jsonl.gz",
+      "edges": 18077
+    },
+    "GRC.6.2.19_1": {
+      "file": "GRC.6.2.19_1.jsonl.gz",
+      "edges": 123396
+    },
+    "GRC.6.2.1_1": {
+      "file": "GRC.6.2.1_1.jsonl.gz",
+      "edges": 44257
+    },
+    "GRC.6.2.20_1": {
+      "file": "GRC.6.2.20_1.jsonl.gz",
+      "edges": 64089
+    },
+    "GRC.6.2.21_1": {
+      "file": "GRC.6.2.21_1.jsonl.gz",
+      "edges": 46707
+    },
+    "GRC.6.2.22_1": {
+      "file": "GRC.6.2.22_1.jsonl.gz",
+      "edges": 47621
+    },
+    "GRC.6.2.2_1": {
+      "file": "GRC.6.2.2_1.jsonl.gz",
+      "edges": 131380
+    },
+    "GRC.6.2.3_1": {
+      "file": "GRC.6.2.3_1.jsonl.gz",
+      "edges": 83922
+    },
+    "GRC.6.2.4_1": {
+      "file": "GRC.6.2.4_1.jsonl.gz",
+      "edges": 57525
+    },
+    "GRC.6.2.5_1": {
+      "file": "GRC.6.2.5_1.jsonl.gz",
+      "edges": 19089
+    },
+    "GRC.6.2.6_1": {
+      "file": "GRC.6.2.6_1.jsonl.gz",
+      "edges": 61269
+    },
+    "GRC.6.2.7_1": {
+      "file": "GRC.6.2.7_1.jsonl.gz",
+      "edges": 39186
+    },
+    "GRC.6.2.8_1": {
+      "file": "GRC.6.2.8_1.jsonl.gz",
+      "edges": 64960
+    },
+    "GRC.6.2.9_1": {
+      "file": "GRC.6.2.9_1.jsonl.gz",
+      "edges": 49303
+    },
+    "GRC.7.1.1_1": {
+      "file": "GRC.7.1.1_1.jsonl.gz",
+      "edges": 188426
+    },
+    "GRC.7.1.2_1": {
+      "file": "GRC.7.1.2_1.jsonl.gz",
+      "edges": 13242
+    },
+    "GRC.7.1.3_1": {
+      "file": "GRC.7.1.3_1.jsonl.gz",
+      "edges": 214132
+    },
+    "GRC.7.1.4_1": {
+      "file": "GRC.7.1.4_1.jsonl.gz",
+      "edges": 110821
+    },
+    "GRC.7.1.5_1": {
+      "file": "GRC.7.1.5_1.jsonl.gz",
+      "edges": 6444
+    },
+    "GRC.7.1.6_1": {
+      "file": "GRC.7.1.6_1.jsonl.gz",
+      "edges": 8963
+    },
+    "GRC.7.1.7_1": {
+      "file": "GRC.7.1.7_1.jsonl.gz",
+      "edges": 118029
+    },
+    "GRC.7.2.10_1": {
+      "file": "GRC.7.2.10_1.jsonl.gz",
+      "edges": 115752
+    },
+    "GRC.7.2.11_1": {
+      "file": "GRC.7.2.11_1.jsonl.gz",
+      "edges": 103437
+    },
+    "GRC.7.2.12_1": {
+      "file": "GRC.7.2.12_1.jsonl.gz",
+      "edges": 122127
+    },
+    "GRC.7.2.13_1": {
+      "file": "GRC.7.2.13_1.jsonl.gz",
+      "edges": 158498
+    },
+    "GRC.7.2.14_1": {
+      "file": "GRC.7.2.14_1.jsonl.gz",
+      "edges": 172878
+    },
+    "GRC.7.2.15_1": {
+      "file": "GRC.7.2.15_1.jsonl.gz",
+      "edges": 56961
+    },
+    "GRC.7.2.16_1": {
+      "file": "GRC.7.2.16_1.jsonl.gz",
+      "edges": 30398
+    },
+    "GRC.7.2.17_1": {
+      "file": "GRC.7.2.17_1.jsonl.gz",
+      "edges": 82960
+    },
+    "GRC.7.2.18_1": {
+      "file": "GRC.7.2.18_1.jsonl.gz",
+      "edges": 127307
+    },
+    "GRC.7.2.19_1": {
+      "file": "GRC.7.2.19_1.jsonl.gz",
+      "edges": 95256
+    },
+    "GRC.7.2.1_1": {
+      "file": "GRC.7.2.1_1.jsonl.gz",
+      "edges": 87980
+    },
+    "GRC.7.2.20_1": {
+      "file": "GRC.7.2.20_1.jsonl.gz",
+      "edges": 58580
+    },
+    "GRC.7.2.21_1": {
+      "file": "GRC.7.2.21_1.jsonl.gz",
+      "edges": 216557
+    },
+    "GRC.7.2.22_1": {
+      "file": "GRC.7.2.22_1.jsonl.gz",
+      "edges": 155227
+    },
+    "GRC.7.2.23_1": {
+      "file": "GRC.7.2.23_1.jsonl.gz",
+      "edges": 198858
+    },
+    "GRC.7.2.24_1": {
+      "file": "GRC.7.2.24_1.jsonl.gz",
+      "edges": 27434
+    },
+    "GRC.7.2.25_1": {
+      "file": "GRC.7.2.25_1.jsonl.gz",
+      "edges": 83599
+    },
+    "GRC.7.2.26_1": {
+      "file": "GRC.7.2.26_1.jsonl.gz",
+      "edges": 100420
+    },
+    "GRC.7.2.2_1": {
+      "file": "GRC.7.2.2_1.jsonl.gz",
+      "edges": 131921
+    },
+    "GRC.7.2.3_1": {
+      "file": "GRC.7.2.3_1.jsonl.gz",
+      "edges": 89041
+    },
+    "GRC.7.2.4_1": {
+      "file": "GRC.7.2.4_1.jsonl.gz",
+      "edges": 55533
+    },
+    "GRC.7.2.5_1": {
+      "file": "GRC.7.2.5_1.jsonl.gz",
+      "edges": 3811
+    },
+    "GRC.7.2.6_1": {
+      "file": "GRC.7.2.6_1.jsonl.gz",
+      "edges": 43390
+    },
+    "GRC.7.2.7_1": {
+      "file": "GRC.7.2.7_1.jsonl.gz",
+      "edges": 77085
+    },
+    "GRC.7.2.8_1": {
+      "file": "GRC.7.2.8_1.jsonl.gz",
+      "edges": 137163
+    },
+    "GRC.7.2.9_1": {
+      "file": "GRC.7.2.9_1.jsonl.gz",
+      "edges": 140612
+    },
+    "GRC.7.3.10_1": {
+      "file": "GRC.7.3.10_1.jsonl.gz",
+      "edges": 109079
+    },
+    "GRC.7.3.11_1": {
+      "file": "GRC.7.3.11_1.jsonl.gz",
+      "edges": 98707
+    },
+    "GRC.7.3.12_1": {
+      "file": "GRC.7.3.12_1.jsonl.gz",
+      "edges": 172983
+    },
+    "GRC.7.3.13_1": {
+      "file": "GRC.7.3.13_1.jsonl.gz",
+      "edges": 83960
+    },
+    "GRC.7.3.14_1": {
+      "file": "GRC.7.3.14_1.jsonl.gz",
+      "edges": 137056
+    },
+    "GRC.7.3.15_1": {
+      "file": "GRC.7.3.15_1.jsonl.gz",
+      "edges": 27857
+    },
+    "GRC.7.3.16_1": {
+      "file": "GRC.7.3.16_1.jsonl.gz",
+      "edges": 122011
+    },
+    "GRC.7.3.17_1": {
+      "file": "GRC.7.3.17_1.jsonl.gz",
+      "edges": 56340
+    },
+    "GRC.7.3.18_1": {
+      "file": "GRC.7.3.18_1.jsonl.gz",
+      "edges": 68213
+    },
+    "GRC.7.3.19_1": {
+      "file": "GRC.7.3.19_1.jsonl.gz",
+      "edges": 96751
+    },
+    "GRC.7.3.1_1": {
+      "file": "GRC.7.3.1_1.jsonl.gz",
+      "edges": 220373
+    },
+    "GRC.7.3.2_1": {
+      "file": "GRC.7.3.2_1.jsonl.gz",
+      "edges": 180061
+    },
+    "GRC.7.3.3_1": {
+      "file": "GRC.7.3.3_1.jsonl.gz",
+      "edges": 85725
+    },
+    "GRC.7.3.4_1": {
+      "file": "GRC.7.3.4_1.jsonl.gz",
+      "edges": 138292
+    },
+    "GRC.7.3.5_1": {
+      "file": "GRC.7.3.5_1.jsonl.gz",
+      "edges": 71763
+    },
+    "GRC.7.3.6_1": {
+      "file": "GRC.7.3.6_1.jsonl.gz",
+      "edges": 91583
+    },
+    "GRC.7.3.7_1": {
+      "file": "GRC.7.3.7_1.jsonl.gz",
+      "edges": 103394
+    },
+    "GRC.7.3.8_1": {
+      "file": "GRC.7.3.8_1.jsonl.gz",
+      "edges": 96465
+    },
+    "GRC.7.3.9_1": {
+      "file": "GRC.7.3.9_1.jsonl.gz",
+      "edges": 81726
+    },
+    "GRC.8.1.10_1": {
+      "file": "GRC.8.1.10_1.jsonl.gz",
+      "edges": 74053
+    },
+    "GRC.8.1.11_1": {
+      "file": "GRC.8.1.11_1.jsonl.gz",
+      "edges": 138821
+    },
+    "GRC.8.1.12_1": {
+      "file": "GRC.8.1.12_1.jsonl.gz",
+      "edges": 151304
+    },
+    "GRC.8.1.13_1": {
+      "file": "GRC.8.1.13_1.jsonl.gz",
+      "edges": 154261
+    },
+    "GRC.8.1.14_1": {
+      "file": "GRC.8.1.14_1.jsonl.gz",
+      "edges": 271340
+    },
+    "GRC.8.1.15_1": {
+      "file": "GRC.8.1.15_1.jsonl.gz",
+      "edges": 197937
+    },
+    "GRC.8.1.16_1": {
+      "file": "GRC.8.1.16_1.jsonl.gz",
+      "edges": 106960
+    },
+    "GRC.8.1.17_1": {
+      "file": "GRC.8.1.17_1.jsonl.gz",
+      "edges": 139618
+    },
+    "GRC.8.1.18_1": {
+      "file": "GRC.8.1.18_1.jsonl.gz",
+      "edges": 157618
+    },
+    "GRC.8.1.19_1": {
+      "file": "GRC.8.1.19_1.jsonl.gz",
+      "edges": 171896
+    },
+    "GRC.8.1.1_1": {
+      "file": "GRC.8.1.1_1.jsonl.gz",
+      "edges": 101331
+    },
+    "GRC.8.1.20_1": {
+      "file": "GRC.8.1.20_1.jsonl.gz",
+      "edges": 77020
+    },
+    "GRC.8.1.21_1": {
+      "file": "GRC.8.1.21_1.jsonl.gz",
+      "edges": 51050
+    },
+    "GRC.8.1.22_1": {
+      "file": "GRC.8.1.22_1.jsonl.gz",
+      "edges": 34520
+    },
+    "GRC.8.1.23_1": {
+      "file": "GRC.8.1.23_1.jsonl.gz",
+      "edges": 57679
+    },
+    "GRC.8.1.24_1": {
+      "file": "GRC.8.1.24_1.jsonl.gz",
+      "edges": 62887
+    },
+    "GRC.8.1.25_1": {
+      "file": "GRC.8.1.25_1.jsonl.gz",
+      "edges": 138905
+    },
+    "GRC.8.1.2_1": {
+      "file": "GRC.8.1.2_1.jsonl.gz",
+      "edges": 40421
+    },
+    "GRC.8.1.3_1": {
+      "file": "GRC.8.1.3_1.jsonl.gz",
+      "edges": 70042
+    },
+    "GRC.8.1.4_1": {
+      "file": "GRC.8.1.4_1.jsonl.gz",
+      "edges": 111681
+    },
+    "GRC.8.1.5_1": {
+      "file": "GRC.8.1.5_1.jsonl.gz",
+      "edges": 212222
+    },
+    "GRC.8.1.6_1": {
+      "file": "GRC.8.1.6_1.jsonl.gz",
+      "edges": 237784
+    },
+    "GRC.8.1.7_1": {
+      "file": "GRC.8.1.7_1.jsonl.gz",
+      "edges": 80844
+    },
+    "GRC.8.1.8_1": {
+      "file": "GRC.8.1.8_1.jsonl.gz",
+      "edges": 58869
+    },
+    "GRC.8.1.9_1": {
+      "file": "GRC.8.1.9_1.jsonl.gz",
+      "edges": 136505
+    },
+    "GRC.8.2.10_1": {
+      "file": "GRC.8.2.10_1.jsonl.gz",
+      "edges": 64657
+    },
+    "GRC.8.2.11_1": {
+      "file": "GRC.8.2.11_1.jsonl.gz",
+      "edges": 57345
+    },
+    "GRC.8.2.12_1": {
+      "file": "GRC.8.2.12_1.jsonl.gz",
+      "edges": 36947
+    },
+    "GRC.8.2.13_1": {
+      "file": "GRC.8.2.13_1.jsonl.gz",
+      "edges": 54181
+    },
+    "GRC.8.2.14_1": {
+      "file": "GRC.8.2.14_1.jsonl.gz",
+      "edges": 78012
+    },
+    "GRC.8.2.15_1": {
+      "file": "GRC.8.2.15_1.jsonl.gz",
+      "edges": 36179
+    },
+    "GRC.8.2.16_1": {
+      "file": "GRC.8.2.16_1.jsonl.gz",
+      "edges": 115540
+    },
+    "GRC.8.2.17_1": {
+      "file": "GRC.8.2.17_1.jsonl.gz",
+      "edges": 39176
+    },
+    "GRC.8.2.18_1": {
+      "file": "GRC.8.2.18_1.jsonl.gz",
+      "edges": 18820
+    },
+    "GRC.8.2.19_1": {
+      "file": "GRC.8.2.19_1.jsonl.gz",
+      "edges": 26462
+    },
+    "GRC.8.2.1_1": {
+      "file": "GRC.8.2.1_1.jsonl.gz",
+      "edges": 93439
+    },
+    "GRC.8.2.20_1": {
+      "file": "GRC.8.2.20_1.jsonl.gz",
+      "edges": 64308
+    },
+    "GRC.8.2.21_1": {
+      "file": "GRC.8.2.21_1.jsonl.gz",
+      "edges": 79558
+    },
+    "GRC.8.2.22_1": {
+      "file": "GRC.8.2.22_1.jsonl.gz",
+      "edges": 101101
+    },
+    "GRC.8.2.23_1": {
+      "file": "GRC.8.2.23_1.jsonl.gz",
+      "edges": 53685
+    },
+    "GRC.8.2.24_1": {
+      "file": "GRC.8.2.24_1.jsonl.gz",
+      "edges": 125487
+    },
+    "GRC.8.2.25_1": {
+      "file": "GRC.8.2.25_1.jsonl.gz",
+      "edges": 39262
+    },
+    "GRC.8.2.2_1": {
+      "file": "GRC.8.2.2_1.jsonl.gz",
+      "edges": 89354
+    },
+    "GRC.8.2.3_1": {
+      "file": "GRC.8.2.3_1.jsonl.gz",
+      "edges": 12942
+    },
+    "GRC.8.2.4_1": {
+      "file": "GRC.8.2.4_1.jsonl.gz",
+      "edges": 46484
+    },
+    "GRC.8.2.5_1": {
+      "file": "GRC.8.2.5_1.jsonl.gz",
+      "edges": 153614
+    },
+    "GRC.8.2.6_1": {
+      "file": "GRC.8.2.6_1.jsonl.gz",
+      "edges": 40739
+    },
+    "GRC.8.2.7_1": {
+      "file": "GRC.8.2.7_1.jsonl.gz",
+      "edges": 46518
+    },
+    "GRC.8.2.8_1": {
+      "file": "GRC.8.2.8_1.jsonl.gz",
+      "edges": 161967
+    },
+    "GRC.8.2.9_1": {
+      "file": "GRC.8.2.9_1.jsonl.gz",
+      "edges": 87893
+    }
+  }
+}
