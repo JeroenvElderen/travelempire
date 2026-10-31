@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vercel/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# Large geographic source datasets
+data/gadm/
+data/osm/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Large geographic databases
+data/roads/*.sqlite
+data/roads/*.sqlite-wal
+data/roads/*.sqlite-shm
