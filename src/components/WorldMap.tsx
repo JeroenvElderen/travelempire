@@ -3,13 +3,39 @@ import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
+import {deliveryPosition} from '../dealership';
 import {regionId,regionName,type RegionCollection,type ClaimedRegion} from '../territories';
+// The delivery SVG faces right (east) at zero rotation. Rotate it to the
+// bearing of the current road segment, not the overall delivery route.
+function deliveryHeading(path: [number,number][], started: number, until: number, now: number): number {
+ if (path.length < 2 || until <= started) return 0;
+ const lengths = path.slice(1).map((p,i) => {
+  const a=path[i];
+  const lat=(a[1]+p[1])*Math.PI/360;
+  return Math.hypot((p[0]-a[0])*111320*Math.cos(lat),(p[1]-a[1])*111320);
+ });
+ const total=lengths.reduce((sum,n)=>sum+n,0);
+ let remaining=total*Math.max(0,Math.min(1,(now-started)/(until-started)));
+ let index=lengths.length-1;
+ for(let i=0;i<lengths.length;i++){
+  if(remaining<=lengths[i]){index=i;break;}
+  remaining-=lengths[i];
+ }
+ // Skip zero-length segments, which have no meaningful direction.
+ if(lengths[index]<0.01){const found=lengths.findIndex(n=>n>=0.01);if(found<0)return 0;index=found;}
+ const a=path[index],b=path[index+1];
+ const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
+ const north=b[1]-a[1];
+ const bearing=Math.atan2(east,north)*180/Math.PI;
+ return bearing-90;
+}
 type Basemap='standard'|'satellite';
 type Props={selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null; regions?:RegionCollection|null; claimedRegion?:ClaimedRegion|null; onRegionSelected?:(id:string)=>void;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
 export default function WorldMap({selecting,onLocationSelected,headquarters,regions,claimedRegion,onRegionSelected,taxis=[],exploredEdgeIds=[],graph}:Props){
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
+ const deliveryMarkers=useRef(new Map<string,maplibregl.Marker>());
  const container=useRef<HTMLDivElement>(null);const map=useRef<maplibregl.Map|null>(null);const marker=useRef<maplibregl.Marker|null>(null);const onLocationRef=useRef(onLocationSelected);onLocationRef.current=onLocationSelected;
  const onRegionRef=useRef(onRegionSelected);onRegionRef.current=onRegionSelected;
  const selectingRef=useRef(selecting);selectingRef.current=selecting;
@@ -17,14 +43,29 @@ export default function WorldMap({selecting,onLocationSelected,headquarters,regi
  const [explorationVisible,setExplorationVisible]=useState(true);const [diagnosticVisible,setDiagnosticVisible]=useState(false);const [roadsVisible,setRoadsVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Not generated');const [territoriesVisible,setTerritoriesVisible]=useState(true);const [territoryError,setTerritoryError]=useState<string|null>(null);const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;const instance=new maplibregl.Map({container:container.current,style,center:[-6.1,53.2],zoom:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('load',()=>{setReady(true);});instance.on('error',e=>{console.error('MapLibre:',e.error);setError('Some map resources failed to load. Check your API key and network.');});
  instance.on('click',async e=>{if(!selectingRef.current){const layers=instance.getStyle()?.layers??[];if(layers.some(layer=>layer.id==='territory-fill')){const hits=instance.queryRenderedFeatures(e.point,{layers:['territory-fill']});if(hits.length){onRegionRef.current?.(String(hits[0].properties?.regionKey??''));}}return;}if(busy.current)return;busy.current=true;setLookingUp(true);setError(null);const {lng,lat}=e.lngLat;try{if(!key)throw Error('MapTiler API key required for location lookup.');const response=await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${encodeURIComponent(key)}&language=en`);if(!response.ok)throw Error(`Location lookup failed (${response.status})`);const data=await response.json() as {features?:Array<{text?:string;place_name?:string;place_type?:string[];properties?:Record<string,unknown>;context?:Array<{id?:string;text?:string;short_code?:string}>}>};const features=data.features??[];const place=features[0];const context=[...(place?.context??[])];for(const f of features){if(f.place_type?.includes('country'))context.push({id:'country',text:f.text,short_code:String(f.properties?.short_code??'')});if(f.place_type?.includes('region'))context.push({id:'region',text:f.text});}const country=context.find(c=>c.id?.startsWith('country'));const region=context.find(c=>c.id?.startsWith('region'));if(!country?.text)throw Error('Select a location on land within a recognized country.');onLocationRef.current({lng,lat,label:place?.text||place?.place_name||`${lat.toFixed(4)}, ${lng.toFixed(4)}`,country:country.text,countryCode:country.short_code??'',region:region?.text??''});}catch(err){setError(err instanceof Error?err.message:'Unable to identify this location.');}finally{busy.current=false;setLookingUp(false);}});
- return()=>{taxiMarkers.current.forEach(m=>m.remove());taxiMarkers.current.clear();marker.current?.remove();marker.current=null;map.current=null;instance.remove();};},[]);
+ return()=>{taxiMarkers.current.forEach(m=>m.remove());taxiMarkers.current.clear();deliveryMarkers.current.forEach(m=>m.remove());deliveryMarkers.current.clear();marker.current?.remove();marker.current=null;map.current=null;instance.remove();};},[]);
  useEffect(()=>{if(!map.current)return;map.current.getCanvas().style.cursor=selecting?'crosshair':'';},[selecting]);
  useEffect(()=>{if(!map.current)return;marker.current?.remove();marker.current=null;if(headquarters){marker.current=new maplibregl.Marker({color:'#4bd9ac'}).setLngLat([headquarters.lng,headquarters.lat]).setPopup(new maplibregl.Popup({offset:20}).setText(`${headquarters.label} — ${headquarters.country}`)).addTo(map.current);map.current.flyTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}},[headquarters]);
+ const taxisRef=useRef(taxis);taxisRef.current=taxis;
  const taxiSnapshots=useRef(new Map<string,{taxi:Taxi;at:number}>());
- useEffect(()=>{const now=performance.now();const ids=new Set(taxis.map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);}}for(const taxi of taxis){taxiSnapshots.current.set(taxi.id,{taxi,at:now});if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/car_topview.svg`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
+ useEffect(()=>{const now=performance.now();const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);}}for(const taxi of taxis){if(taxi.deliveryUntil && taxi.deliveryUntil> Date.now())continue;taxiSnapshots.current.set(taxi.id,{taxi,at:now});if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/car_topview.svg`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
  useEffect(()=>{
   let frame=0;
   const animate=()=>{
+   const wallNow=Date.now();
+   const deliveries=taxisRef.current.filter(t=>t.deliveryUntil&&t.deliveryUntil>wallNow);
+   const activeIds=new Set(deliveries.map(t=>t.id));
+   for(const [id,m] of deliveryMarkers.current)if(!activeIds.has(id)){m.remove();deliveryMarkers.current.delete(id)}
+   for(const taxi of deliveries){
+    const point=deliveryPosition(taxi,wallNow);if(!point||!map.current)continue;
+    let m=deliveryMarkers.current.get(taxi.id);
+    if(!m){const el=document.createElement('div');el.className='delivery-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL}assets/delivery_truck.svg`;img.alt='Vehicle delivery';el.appendChild(img);m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(point).addTo(map.current);deliveryMarkers.current.set(taxi.id,m)}
+    m.setLngLat(point);
+    if(taxi.deliveryPath&&taxi.deliveryStartedAt&&taxi.deliveryUntil){
+     m.setRotation(deliveryHeading(taxi.deliveryPath,taxi.deliveryStartedAt,taxi.deliveryUntil,wallNow));
+    }
+    m.getElement().title=`Delivering ${taxi.vehicleModel??taxi.name}`;
+   }
    const now=performance.now();
    for(const [id,snapshot] of taxiSnapshots.current){
     const marker=taxiMarkers.current.get(id);if(!marker)continue;

@@ -33,3 +33,12 @@ __pycache__/
 data/roads/*.sqlite
 data/roads/*.sqlite-wal
 data/roads/*.sqlite-shm
+
+# Generated Greek regional road packages
+public/data/roads/regions/*.jsonl.gz
+
+# Large local databases
+data/roads/*.sqlite*
+data/osm/*.pbf
+data/gadm/*.gpkg
+EOF

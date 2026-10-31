@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Menu, X } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import FleetPanel from "./components/FleetPanel";
-import {loadRoadGraph,loadFleet,saveFleet,purchaseTaxi,dispatch,tickTaxi,TAXI_COST,type RoadGraph,type FleetState} from "./simulation/taxi";
+import {loadRoadGraph,loadFleet,saveFleet,dispatch,tickTaxi,DRIVER_COST,nearest,type RoadGraph,type FleetState, type Taxi} from "./simulation/taxi";
 import "./taxi.css";
+import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
 import * as Research from "./research";
 import CompanySetup from "./components/CompanySetup";
@@ -31,10 +32,21 @@ export default function App(){
  useEffect(()=>{let active=true;loadRoadGraph().then(g=>{if(active)setGraph(g)}).catch(e=>{if(active)setSimError(String(e))});return()=>{active=false}},[]);
  useEffect(()=>{setFleet(company?loadFleet(company.id):{taxis:[],revenue:0,completed:0})},[company?.id]);
  useEffect(()=>{if(company)saveFleet(company.id,fleet)},[company?.id,fleet]);
- useEffect(()=>{if(!company||!graph||!fleet.taxis.length)return;const timer=window.setInterval(()=>{setFleet(old=>{let revenue=0,completed=0;const discovered=new Set(old.exploredEdgeIds??[]);const taxis=old.taxis.map(t=>{const active=t.status==='IDLE'?dispatch(t,graph,new Set(old.exploredEdgeIds??[]),[company.headquarters.lng,company.headquarters.lat]):t;const next=tickTaxi(active,graph,1);revenue+=next.earned*(1+0.05*Research.level(research,'pricing'));if(next.finished)completed++;next.discovered.forEach(id=>discovered.add(id));return next.taxi});if(revenue)setCompany(c=>{if(!c)return c;const updated={...c,cash:Math.round((c.cash+revenue)*100)/100};saveCompany(updated);return updated});return{taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:[...discovered]};});},1000);return()=>clearInterval(timer)},[company?.id,graph,fleet.taxis.length,research]);
- const buyTaxi=(driver:string)=>{if(!company||!graph)return;try{const result=purchaseTaxi(company,fleet,graph,driver);const discount=Research.level(research,'procurement')*0.04;
- const adjusted={...result.company,cash:Math.round((result.company.cash+TAXI_COST*discount)*100)/100};
- saveCompany(adjusted);setCompany(adjusted);setFleet(result.fleet);setSimError('')}catch(e){setSimError(String(e))}};
+ useEffect(()=>{if(!company||!graph||!fleet.taxis.length)return;const timer=window.setInterval(()=>{setFleet(old=>{let revenue=0,completed=0;const discovered=new Set(old.exploredEdgeIds??[]);const taxis=old.taxis.map(t=>{const delivered=t.deliveryUntil&&Date.now()>=t.deliveryUntil ? {...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined} : t;const active=delivered.deliveryUntil ? delivered : delivered.status==='IDLE'?dispatch(delivered,graph,new Set(old.exploredEdgeIds??[]),[company.headquarters.lng,company.headquarters.lat]):delivered;const next=tickTaxi(active,graph,1);revenue+=next.earned*(1+0.05*Research.level(research,'pricing'));if(next.finished)completed++;next.discovered.forEach(id=>discovered.add(id));return next.taxi});if(revenue)setCompany(c=>{if(!c)return c;const updated={...c,cash:Math.round((c.cash+revenue)*100)/100};saveCompany(updated);return updated});return{taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:[...discovered]};});},1000);return()=>clearInterval(timer)},[company?.id,graph,fleet.taxis.length,research]);
+ const buyTaxi=(driver:string,offer:VehicleOffer)=>{if(!company||!graph)return;try{
+  if(!driver.trim())throw Error('Enter a driver name.');
+  const discount=Research.level(research,'procurement')*0.04;
+  const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
+  if(company.cash<cost)throw Error('Insufficient company funds.');
+  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+  const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
+  const now=Date.now();
+  const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
+   vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,
+   deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,hq)};
+  const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
+  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,taxi]}));setSimError('');
+ }catch(e){setSimError(String(e))}};
  const [regions,setRegions]=useState<RegionCollection|null>(null);
  const [territoryStatus,setTerritoryStatus]=useState<'idle'|'loading'|'ready'|'error'>('idle');
  const [territoryError,setTerritoryError]=useState('');

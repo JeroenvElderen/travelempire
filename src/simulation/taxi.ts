@@ -1,6 +1,40 @@
 import type {Company} from '../company';
 export type Point=[number,number];
-export type Taxi={id:string;name:string;driver:string;position:Point;status:'IDLE'|'TO_PICKUP'|'TO_DROPOFF'|'EXPLORING';path:Point[];edgeIds:string[];leg:number;distanceIntoLeg:number;pickup?:Point;dropoff?:Point;fare:number;completed:number;journeyEdges?:string[];scoutingRuns?:number;speedKph?:number};
+export type Taxi = {
+  id: string;
+  name: string;
+  driver: string;
+  position: Point;
+
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING';
+
+  path: Point[];
+  edgeIds: string[];
+  leg: number;
+  distanceIntoLeg: number;
+
+  pickup?: Point;
+  dropoff?: Point;
+
+  fare: number;
+  completed: number;
+  journeyEdges?: string[];
+  scoutingRuns?: number;
+  speedKph?: number;
+
+  // Dealership vehicle information
+  vehicleModel?: string;
+  vehicleYear?: number;
+  vehicleFuel?: string;
+  vehicleClass?: string;
+  vehicleCondition?: number;
+  vehicleMileage?: number;
+
+  // Vehicle delivery information
+  deliveryStartedAt?: number;
+  deliveryUntil?: number;
+  deliveryPath?: Point[];
+};
 export type MissionRecord={pickup:string;dropoff:string};
 export type FleetState={taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];missionHistory?:MissionRecord[]};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number}[]>;nodeKeys:string[]};
