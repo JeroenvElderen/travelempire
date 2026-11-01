@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vercel/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Large geographic source datasets
+data/gadm/
+data/osm/
+data/old-roads/
+
+# Large local databases
+data/roads/*.sqlite*
+
+# Large geographic previews
+public/data/roads/preview.geojson
+
+# Generated regional road packages
+public/data/roads/regions/*.jsonl.gz
+
+# Supabase-hosted road tiles
+public/data/roads/tiles/
+
+# Supabase-hosted station tiles
+public/data/stations/tiles/
+
+# Vite cache
+.vite/*.zip

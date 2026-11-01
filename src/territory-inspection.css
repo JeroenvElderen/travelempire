@@ -1,0 +1,11 @@
+/* Territory details are overlaid on the map, not the sidebar. */
+.territory-inspection{position:absolute;right:22px;top:88px;z-index:12;width:min(340px,calc(100% - 44px));max-height:calc(100% - 115px);overflow:auto;padding:20px;border:1px solid #2c5c55;border-radius:14px;background:#13282beF;color:#eaf6f2;box-shadow:0 12px 32px #0006;box-sizing:border-box}
+.territory-inspection-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#60d8b5;font-size:11px;font-weight:700;letter-spacing:1.3px}
+.territory-inspection-heading button{background:transparent;border:0;color:#eaf6f2;font-size:26px;cursor:pointer;min-width:36px;min-height:36px}
+.territory-inspection h2{font-size:23px;line-height:1.2;margin:10px 0 6px}
+.territory-inspection p{color:#b4c9c5;overflow-wrap:anywhere;font-size:12px;margin:0 0 16px}
+.territory-inspection dl{margin:0}.territory-inspection dl>div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #ffffff19;padding:11px 0;font-size:12px}
+.territory-inspection dt{color:#a3bdb7}.territory-inspection dd{margin:0;text-align:right;font-weight:600;max-width:55%;overflow-wrap:anywhere}
+.territory-purchase{width:100%;border:1px solid #56726c;background:#30423f;color:#a9bcb7;border-radius:9px;padding:12px;font-weight:700;cursor:not-allowed}
+.territory-inspection>small{display:block;margin-top:12px;color:#a7bcb6;font-size:11px;line-height:1.5}
+@media(max-width:700px){.territory-inspection{right:10px;top:auto;bottom:78px;width:calc(100% - 20px);max-height:50%;padding:14px}}

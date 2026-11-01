@@ -1,0 +1,9 @@
+import {useEffect,useState} from 'react';
+import type {Company} from '../company';
+import {projects,level,price,duration,type ResearchId,type ResearchState} from '../research';
+import '../research.css';
+export default function ResearchPanel({company,state,onStart,onCancel}:{company:Company|null;state:ResearchState;onStart:(id:ResearchId)=>void;onCancel:()=>void}){
+ const [now,setNow]=useState(Date.now());useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[]);
+ const fmt=(ms:number)=>{const s=Math.ceil(Math.max(0,ms)/1000);return `${Math.floor(s/3600)}h ${String(Math.floor(s%3600/60)).padStart(2,'0')}m ${String(s%60).padStart(2,'0')}s`};
+ return <section className="research-page"><span className="eyebrow">REAL-WORLD RESEARCH</span><h1>Research & Development</h1><p>Research runs on real-world time, even while the game is closed. Game speed does not affect it.</p>{!company?<p>Create a company to start research.</p>:<><div className="research-card"><h2>{state.active?`Active: ${projects.find(p=>p.id===state.active?.id)?.name} — Level ${state.active.level}`:'No active project'}</h2>{state.active&&<><strong>{fmt(state.active.endsAt-now)} remaining</strong><progress value={Math.max(0,now-state.active.startedAt)} max={state.active.endsAt-state.active.startedAt}/><button onClick={onCancel}>Cancel (no refund)</button></>}</div><div className="research-grid">{projects.map(p=>{const l=level(state,p.id),next=l+1,amount=price(p.id,next);return <article className="research-card" key={p.id}><small>LEVEL {l}/5</small><h2>{p.name}</h2><p>{p.effect}</p>{l<5?<><p>Cost: €{amount.toLocaleString('en-IE')} · Duration: {fmt(duration(state,next))}</p><button disabled={!!state.active||company.cash<amount} onClick={()=>onStart(p.id)}>{state.active?'Research busy':company.cash<amount?'Insufficient funds':'Start research'}</button></>:<strong>Fully researched ✓</strong>}</article>})}</div></>}</section>
+}
