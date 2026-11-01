@@ -104,7 +104,7 @@ export default function App(){
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
     // Never overwrite a taxi that became busy while the worker was calculating.
-    return t.status==='IDLE'&&!t.deliveryUntil&&assigned?.status!=='IDLE'?assigned:t;
+    return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
    })}));
    const queue=message.queue.filter(q=>q.expiresAt>Date.now());
    queueRef.current=queue;
@@ -184,7 +184,6 @@ export default function App(){
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph||!fleet.taxis.length)return;
-  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const timer=window.setInterval(()=>{
    const now=Date.now();
    setFleet(old=>{
