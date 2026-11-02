@@ -105,6 +105,13 @@ export default function App(){
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
+    // Preserve live position, speed and leg when the worker extends a moving
+    // Explorer route. Never rewind movement to an older worker snapshot.
+    if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned?.status==='EXPLORING'&&
+       assigned.edgeIds.length>t.edgeIds.length&&
+       t.edgeIds.every((id,i)=>assigned.edgeIds[i]===id)){
+     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns};
+    }
     // Never overwrite a taxi that became busy while the worker was calculating.
     return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
    })}));
