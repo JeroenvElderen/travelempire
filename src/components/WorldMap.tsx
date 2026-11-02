@@ -1,4 +1,4 @@
-import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,writeExplorationMask,type Segment} from '../data/explorationStore';
+import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
@@ -286,9 +286,6 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
- const explorationWorker=useRef<Worker|null>(null);
- const explorationBusy=useRef(false);
- const explorationPending=useRef(false);
  const explorationInputs=useRef({graph,exploredEdgeIds,headquarters});
  explorationInputs.current={graph,exploredEdgeIds,headquarters};
  const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
@@ -325,7 +322,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     if(!current||(!current.length&&segments.length))persistentSegments.current.set(id,segments);
    }
    explorationLastSignature.current='';
-   explorationSchedule.current?.();
+   fogDraw.current?.();
   }).catch(error=>console.error('[TravelEmpire] Cloud geometry restore failed',error));
   return()=>{cancelled=true};
  },[companyId]);
