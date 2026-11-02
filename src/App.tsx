@@ -275,7 +275,7 @@ export default function App(){
     let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
-    const taxis=old.taxis.map(t=>{
+    const taxis: Taxi[] = old.taxis.map((t): Taxi => {
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
      if(delivered.kind==='surveyor'&&delivered.status==='REFUELLING'){
