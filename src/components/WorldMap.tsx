@@ -345,6 +345,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    instance.addLayer({id:'service-coverage-fill',type:'fill',source:'service-coverage',paint:{'fill-opacity':0}});
   };
   if(!explorationVisible||!headquarters){remove();return;}
+  // Keep the last successful geometry until the worker returns a new result.
+  // Never replace it with the starting-circle fallback on routine effect reruns.
   // Immediate starting overlay, even before the first expensive road union finishes.
   // GeoJSON holes require the opposite winding order to the outer ring.
   const lng=headquarters.lng,lat=headquarters.lat;
@@ -356,17 +358,22 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   const outer:Array<[number,number]>=[[-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]];
   const fallback:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[outer,ring]}}]};
   if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);
-  else apply({type:'FeatureCollection',features:[]},fallback);
+  else if(!instance.getSource('locked-territory'))apply({type:'FeatureCollection',features:[]},fallback);
   const worker=new Worker(new URL('../simulation/explorationGeometry.worker.ts',import.meta.url),{type:'module'});
   explorationWorker.current=worker;
   explorationBusy.current=false;
   const send=()=>{
    if(explorationBusy.current){explorationPending.current=true;return;}
    const {graph:currentGraph,exploredEdgeIds:currentIds,headquarters:currentHQ}=explorationInputs.current;
-   if(!currentGraph||!currentHQ)return;
+   if(!currentHQ)return;
+   if(!currentGraph){
+    // Cloud/IndexedDB geometry is sufficient for fog rendering even while
+    // road tiles and the dispatch graph are still loading.
+    if(!persistentSegments.current.size)return;
+   }
    // Index each road ID once per graph version; avoid scanning 600k+ nodes on every tick.
-   const edgeCount=[...currentGraph.edges.values()].reduce((count,edges)=>count+edges.length,0);
-   if(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount){
+   const edgeCount=currentGraph?[...currentGraph.edges.values()].reduce((count,edges)=>count+edges.length,0):0;
+   if(currentGraph&&(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount)){
     const entries=new Map<string,Array<[[number,number],[number,number]]>>();
     const seen=new Set<string>();
     for(const [from,edges] of currentGraph.edges)for(const edge of edges){
@@ -402,8 +409,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    }
    if(explorationPending.current){explorationPending.current=false;window.setTimeout(send,200);}
   };
-  worker.onerror=e=>{explorationBusy.current=false;explorationLastSignature.current='';console.error('[TravelEmpire] Exploration worker:',e.message)};
-  const onStyle=()=>{if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);else apply({type:'FeatureCollection',features:[]},fallback);};
+  worker.onerror=e=>{explorationBusy.current=false;explorationLastSignature.current='';console.error('[TravelEmpire] Exploration worker:',e.message);};
+  const onStyle=()=>{if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);else if(!instance.getSource('locked-territory'))apply({type:'FeatureCollection',features:[]},fallback);};
   instance.on('style.load',onStyle);
   send();
   return()=>{explorationSchedule.current=null;worker.terminate();explorationWorker.current=null;instance.off('style.load',onStyle)};
