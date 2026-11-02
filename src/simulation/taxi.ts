@@ -319,7 +319,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[]
+ _frontierNodes?:string[],allowedRoads?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -359,7 +359,7 @@ export function dispatchScout(
   // approach distances; avoid searching the entire connected road network.
   if(best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
-   const isNew=!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
+   const isNew=(!allowedRoads||allowedRoads.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
@@ -390,7 +390,7 @@ export function dispatchScout(
  let extraMeters=0;
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
-   !explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
+   (!allowedRoads||allowedRoads.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0
   );
   if(!links.length)break;
