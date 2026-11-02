@@ -1,4 +1,4 @@
-import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
+import {readExploration,writeExploration,clearExploration,syncExploration,cloudExplorationEnabled} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed} from './simulation/energy';
 import {demandAt} from './simulation/demand';
 import { useEffect, useState } from "react";
@@ -174,6 +174,11 @@ export default function App(){
   readExploration(id).then(record=>{if(cancelled||!record)return;
    setFleet(old=>{const merged=[...new Set([...(old.exploredEdgeIds??[]),...record.ids])];discoveredCacheRef.current={ids:merged,set:new Set(merged)};return {...old,exploredEdgeIds:merged};});
   }).catch(error=>console.error('[TravelEmpire] Exploration restore failed',error));
+  // Remote discoveries are merged after local restoration, never replacing them.
+  if(cloudExplorationEnabled())void syncExploration(id).then(record=>{
+   if(cancelled||!record)return;
+   setFleet(old=>{const ids=[...new Set([...(old.exploredEdgeIds??[]),...record.ids])];discoveredCacheRef.current={ids,set:new Set(ids)};return {...old,exploredEdgeIds:ids};});
+  }).catch(error=>console.error('[TravelEmpire] Cloud exploration restore failed',error));
   return()=>{cancelled=true};
  },[company?.id]);
  // Persist periodically instead of serialising the entire explored-road set every second.
@@ -203,6 +208,14 @@ export default function App(){
   const timer=window.setInterval(saveExploration,5000);
   window.addEventListener('pagehide',saveExploration);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);void saveExploration()};
+ },[company?.id]);
+ // Cloud synchronization is throttled; IndexedDB writes remain immediate.
+ useEffect(()=>{if(!company||!cloudExplorationEnabled())return;
+  const id=company.id;
+  const run=()=>{void syncExploration(id).catch(error=>console.error('[TravelEmpire] Cloud exploration sync failed',error));};
+  const timer=window.setInterval(run,30000);
+  window.addEventListener('online',run);
+  return()=>{window.clearInterval(timer);window.removeEventListener('online',run);};
  },[company?.id]);
  useEffect(()=>{if(!company||!fleet.exploredEdgeIds?.length)return;
   const timer=window.setTimeout(()=>{void writeExploration(company.id,{ids:fleet.exploredEdgeIds??[],segments:{}}).catch(error=>console.error('[TravelEmpire] Discovery save failed',error));},350);
