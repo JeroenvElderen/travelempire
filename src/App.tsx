@@ -1,4 +1,4 @@
-import {loadStationTile,stationTileKey} from './data/stations';
+import {loadStationTile} from './data/stations';
 import {reachableStations} from './data/stationRouting';
 import {readExploration,writeExploration,clearExploration,syncExploration,cloudExplorationEnabled} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyRangeKm} from './simulation/energy';
@@ -157,7 +157,7 @@ export default function App(){
         vehicle.status==='TO_STATION'||vehicle.status==='REFUELLING')continue;
      const remaining=energyRangeKm(vehicle);
      if(remaining>35)continue;
-     const stations=await loadStationTile(stationTileKey(vehicle.position[0],vehicle.position[1])).catch(()=>[]);
+     const stations=await loadStationTile(vehicle.position[0],vehicle.position[1]).catch(()=>[]);
      if(cancelled)break;
      const spec=energySpec(vehicle);
      const planned=reachableStations(graph,vehicle.position,stations,spec.unit==='kWh'?'charging':'fuel',remaining*0.9,12)[0];
