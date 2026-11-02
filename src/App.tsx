@@ -258,7 +258,7 @@ export default function App(){
     const taxis=old.taxis.map(t=>{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
-     const next=tickTaxi(delivered,graph,1);
+     const next=tickTaxi(delivered,graph,1,discovered);
      const km=meters(delivered.position,next.taxi.position)/1000;
      const spec=energySpec(delivered);
      const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
