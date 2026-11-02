@@ -147,15 +147,17 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const renderedPosition=useRef(new Map<string,[number,number]>());
  useEffect(()=>{const now=performance.now();const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);}}for(const taxi of taxis){if(taxi.deliveryUntil && taxi.deliveryUntil> Date.now())continue;const previous=taxiSnapshots.current.get(taxi.id);
   if(!previous || previous.to.position[0]!==taxi.position[0] || previous.to.position[1]!==taxi.position[1]){
-   const forecast=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
+   const forecast=taxi; // Disable speculative travel: it can jump ahead of the authoritative simulation.
    // Preserve the last rendered position across simulation ticks to avoid
    // one-frame jumps when the simulation and animation clocks differ.
    // Only do this on the same route; a new job must not interpolate from
    // the old job's unrelated path.
-   const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
-    previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
-   const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:taxi;
+   // Interpolate only between authoritative snapshots of the same journey.
+   // A route transition starts at the new position; never connect two jobs.
+   const sameRoute=!!previous&&previous.to.edgeIds.length===taxi.edgeIds.length&&
+    previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&
+    previous.to.leg<=taxi.leg&&previous.to.status===taxi.status;
+   const from=sameRoute?previous!.to:taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }else{
    // Keep route/status current without restarting the animation clock.
@@ -187,7 +189,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     // Forecast is computed only when authoritative state changes, never per frame.
     const position=elapsed<=1
       ?positionOnTravelledRoute(snapshot.from,snapshot.to,Math.min(1,elapsed))
-      :positionOnTravelledRoute(snapshot.to,snapshot.forecast,Math.min(1,(elapsed-1)/0.65));
+      :snapshot.to.position;
     const lastRendered=renderedPosition.current.get(id);
     if(!lastRendered||Math.abs(lastRendered[0]-position[0])+Math.abs(lastRendered[1]-position[1])>1e-9){
      marker.setLngLat(position);
