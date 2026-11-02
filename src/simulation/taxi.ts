@@ -367,6 +367,7 @@ export function dispatchScout(
      if(!best||candidate.distance<best.distance)best=candidate;
     }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
    }
+   if(allowedRoads&&!allowedRoads.has(edge.id))continue;
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
