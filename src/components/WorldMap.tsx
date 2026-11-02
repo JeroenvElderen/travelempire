@@ -348,13 +348,11 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   const ctx=canvas.getContext('2d');
   if(!ctx){canvas.remove();return;}
   let frame=0;
-  let lastDraw=0;
-  let trailing=0;
   const draw=()=>{
    frame=0;
    const width=host.clientWidth,height=host.clientHeight;
    if(!width||!height)return;
-   const dpr=Math.min(window.devicePixelRatio||1,1.25);
+   const dpr=Math.min(window.devicePixelRatio||1,2);
    if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){
     canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
    }
@@ -395,13 +393,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    for(const [width,path] of batches){ctx.lineWidth=width;ctx.stroke(path);}
    ctx.globalCompositeOperation='source-over';
   };
-  const schedule=()=>{
-   // Mobile map movement fires every animation frame. Throttle expensive fog
-   // projection work, then always redraw the final settled position.
-   const elapsed=performance.now()-lastDraw;
-   if(elapsed<80){if(!trailing)trailing=window.setTimeout(()=>{trailing=0;schedule();},80-elapsed);return;}
-   if(!frame)frame=requestAnimationFrame(()=>{lastDraw=performance.now();draw();});
-  };
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(draw);};
   fogDraw.current=schedule;
   instance.on('move',schedule);
   instance.on('moveend',schedule);
@@ -411,7 +403,6 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   return()=>{
    fogDraw.current=null;
    instance.off('move',schedule);instance.off('moveend',schedule);instance.off('resize',schedule);
-   if(trailing)window.clearTimeout(trailing);
    instance.off('style.load',schedule);
    if(frame)cancelAnimationFrame(frame);
    canvas.remove();
