@@ -105,6 +105,16 @@ export default function App(){
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
+    // Apply boundary enforcement from the worker to already-moving Explorers.
+    // Keep the current simulated position instead of reverting to the worker snapshot.
+    if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned&&
+       (assigned.status==='IDLE'||assigned.edgeIds.length<t.edgeIds.length)){
+     if(assigned.status==='IDLE')return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+     if(assigned.edgeIds.length>t.leg&&
+        assigned.edgeIds.every((id,i)=>t.edgeIds[i]===id))
+      return {...t,path:assigned.path,edgeIds:assigned.edgeIds};
+     return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+    }
     // Preserve live position, speed and leg when the worker extends a moving
     // Explorer route. Never rewind movement to an older worker snapshot.
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned?.status==='EXPLORING'&&
