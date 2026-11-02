@@ -26,11 +26,13 @@ self.onmessage=(event:MessageEvent<Request>)=>{
    const result=union(featureCollection([merged,...shapes.slice(i,i+32)]));
    if(result)merged=result as typeof merged;
   }
+  const world=polygon([[[-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]]]);
+  const locked=difference(featureCollection([world,merged]))??world;
+  // Commit incremental state only after BOTH union and fog subtraction work.
+  // A failed calculation must not poison subsequent refreshes.
   cachedMerged=merged;
   previousSegments=keys;
   previousHQ=hqKey;
-  const world=polygon([[[-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]]]);
-  const locked=difference(featureCollection([world,merged]))??world;
   self.postMessage({coverage:featureCollection([merged]),locked:featureCollection([locked])});
  }catch(error){self.postMessage({error:error instanceof Error?error.message:String(error)});}
 };
