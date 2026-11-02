@@ -1,5 +1,5 @@
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,dispatchScout,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -34,7 +34,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
   const taxis=msg.taxis.slice();
-  const queue=msg.queue.filter(m=>m.expiresAt>now);
+  const eligibleStops=passengerRoadNodes(graph,explored);
+  const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(graph,m.pickup))&&eligibleStops.has(nearest(graph,m.dropoff)));
   let generatedMission=false;
   const passengerTaxis=taxis.filter(t=>t.kind!=='explorer');
   const demand=demandAt(now,passengerTaxis.length);
@@ -48,7 +49,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
    let best:{index:number;taxi:Taxi;distance:number}|null=null;
    for(const candidate of candidates){
-    const assigned=assignPassenger(taxis[candidate.index],graph,mission);
+    const assigned=assignPassenger(taxis[candidate.index],graph,mission,explored);
     if(!assigned)continue;
     const distance=assigned.path.reduce((sum,p,j)=>j?sum+meters(p,assigned.path[j-1]):sum,0);
     if(!best||distance<best.distance)best={index:candidate.index,taxi:assigned,distance};
