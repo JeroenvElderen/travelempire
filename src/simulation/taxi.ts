@@ -204,18 +204,38 @@ export function exploredRoadNodes(graph:RoadGraph, explored:Set<string>, hq:Poin
  return [...eligible];
 }
 
-// Frontier stops are road nodes immediately beyond the explored network.
-// They must connect directly to an eligible node, never an arbitrary unexplored road.
+// Explorer targets are *inside* undiscovered road networks, not passenger stops
+// on the already explored boundary. Follow outward, connected, unvisited roads.
 export function explorationFrontierNodes(graph:RoadGraph,explored:Set<string>,hq:Point):string[]{
  const eligible=new Set(exploredRoadNodes(graph,explored,hq));
  const frontier=new Set<string>();
+ const visited=new Set<string>();
+ const queue:Array<{node:string;distance:number}>=[];
  for(const from of eligible){
   for(const edge of graph.edges.get(from)??[]){
-   if(!explored.has(edge.id)&&!eligible.has(edge.to)&&edge.meters<=750){
-    frontier.add(edge.to);
+   if(!explored.has(edge.id)&&edge.meters<=750&&!eligible.has(edge.to)&&!visited.has(edge.to)){
+    visited.add(edge.to);
+    queue.push({node:edge.to,distance:edge.meters});
    }
   }
  }
+ // Continue past the boundary so explorers spend time discovering NEW roads,
+ // rather than driving only to the next node beside the existing fog edge.
+ let cursor=0;
+ while(cursor<queue.length&&cursor<12000){
+  const current=queue[cursor++];
+  if(current.distance>=450)frontier.add(current.node);
+  if(current.distance>=2500)continue;
+  for(const edge of graph.edges.get(current.node)??[]){
+   if(explored.has(edge.id)||edge.meters>750||eligible.has(edge.to)||visited.has(edge.to))continue;
+   const distance=current.distance+edge.meters;
+   if(distance>3000)continue;
+   visited.add(edge.to);
+   queue.push({node:edge.to,distance});
+  }
+ }
+ // Very short isolated streets must still be explorable.
+ if(!frontier.size)for(const item of queue)frontier.add(item.node);
  return [...frontier];
 }
 
@@ -305,22 +325,28 @@ export function dispatchScout(
  if(!frontier.length)return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
- // Shuffle before limiting the route searches; never always choose the nearest node.
+ // Select targets beyond the discovered boundary; reject routes that merely
+ // circulate through already explored roads.
  const candidates=frontier
   .filter(k=>!reservedTargets.has(k))
   .map(k=>({k,d:meters(graph.nodes.get(k)!,taxi.position)}))
-  .filter(x=>x.d>=100&&x.d<5000)
-  .map(x=>({...x,score:Math.random()+(x.d>=1000?0.3:0)}))
+  .filter(x=>x.d>=100&&x.d<6500)
+  .map(x=>({...x,score:Math.random()}))
   .sort((a,b)=>b.score-a.score)
-  .slice(0,24);
+  .slice(0,32);
  let best:{key:string;journey:NonNullable<ReturnType<typeof route>>;score:number}|null=null;
  for(const candidate of candidates){
   const journey=route(graph,start,candidate.k);
-  if(!journey||journey.path.length<2||journey.length>6500)continue;
-  const newEdges=journey.edgeIds.filter(id=>!explored.has(id));
-  const overlapping=journey.edgeIds.filter(id=>reservedEdges.has(id)).length;
-  // Prefer genuinely new roads and discourage several taxis taking the same path.
-  const score=newEdges.length*3-overlapping*4+candidate.score*2;
+  if(!journey||journey.path.length<2||journey.length>9000)continue;
+  let newMeters=0,overlapMeters=0;
+  for(let i=0;i<journey.edgeIds.length;i++){
+   const length=meters(journey.path[i],journey.path[i+1]);
+   if(!explored.has(journey.edgeIds[i]))newMeters+=length;
+   if(reservedEdges.has(journey.edgeIds[i]))overlapMeters+=length;
+  }
+  // The trip MUST discover a meaningful length of new roads.
+  if(newMeters<100)continue;
+  const score=newMeters*2-overlapMeters*2-journey.length*0.12+candidate.score*250;
   if(!best||score>best.score)best={key:candidate.k,journey,score};
  }
  if(!best)return taxi;
