@@ -1,4 +1,4 @@
-import {readExploration,writeExploration,type Segment} from '../data/explorationStore';
+import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
@@ -307,6 +307,15 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    explorationLastSignature.current='';
    explorationSchedule.current?.();
   }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
+  if(cloudExplorationEnabled())void syncExploration(companyId).then(record=>{
+   if(cancelled||explorationCompany.current!==companyId||!record)return;
+   for(const [id,segments] of Object.entries(record.segments)){
+    const current=persistentSegments.current.get(id);
+    if(!current||(!current.length&&segments.length))persistentSegments.current.set(id,segments);
+   }
+   explorationLastSignature.current='';
+   explorationSchedule.current?.();
+  }).catch(error=>console.error('[TravelEmpire] Cloud geometry restore failed',error));
   return()=>{cancelled=true};
  },[companyId]);
  const persistGeometry=async()=>{const id=explorationCompany.current;if(!id||persistBusy.current){persistAgain.current=true;return;}persistBusy.current=true;
