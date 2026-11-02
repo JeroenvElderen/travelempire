@@ -3,12 +3,12 @@ import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
   id: string;
-  kind?: 'taxi' | 'explorer'; // Older saves default to taxi.
+  kind?: 'taxi' | 'explorer' | 'surveyor'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'TO_STATION' | 'REFUELLING';
 
   path: Point[];
   edgeIds: string[];
@@ -45,6 +45,8 @@ export type Taxi = {
   fuelLitres?: number;
   energyRemaining?: number;
   energyPurchased?: number;
+  stationId?: string;
+  refillUntil?: number;
 
   // Vehicle delivery information
   deliveryStartedAt?: number;
