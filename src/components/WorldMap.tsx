@@ -144,7 +144,9 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const taxiSnapshots=useRef(new Map<string,{from:Taxi;to:Taxi;at:number;routeKey:string}>());
  const taxiHeadingState=useRef(new Map<string,{angle:number;at:number}>());
  const renderedPosition=useRef(new Map<string,[number,number]>());
- const routeKey=(taxi:Taxi)=>taxi.status+'|'+taxi.edgeIds.join('|');
+ const sameJourney=(a:Taxi,b:Taxi)=>
+  a.status===b.status&&a.leg<=b.leg&&a.edgeIds.length<=b.edgeIds.length&&
+  a.edgeIds.every((edge,i)=>edge===b.edgeIds[i]);
  useEffect(()=>{
   const now=performance.now();
   const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));
@@ -154,12 +156,18 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   for(const taxi of taxis){
    if(taxi.deliveryUntil&&taxi.deliveryUntil>Date.now())continue;
    const previous=taxiSnapshots.current.get(taxi.id);
-   const key=routeKey(taxi);
-   if(!previous||previous.to.position[0]!==taxi.position[0]||previous.to.position[1]!==taxi.position[1]||previous.routeKey!==key){
-    const continuous=!!previous&&previous.routeKey===key&&taxi.leg>=previous.to.leg;
-    const from=continuous?previous.to:taxi;
-    taxiSnapshots.current.set(taxi.id,{from,to:taxi,at:now,routeKey:key});
-   }else taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
+   const changed=!previous||previous.to.position[0]!==taxi.position[0]||previous.to.position[1]!==taxi.position[1];
+   if(changed){
+    const continuous=!!previous&&sameJourney(previous.to,taxi);
+    // Preserve the last displayed position only when both snapshots share
+    // the same physical route; never connect unrelated assignments.
+    const rendered=renderedPosition.current.get(taxi.id);
+    const from=continuous&&rendered?{...previous!.to,position:rendered}:continuous?previous!.to:taxi;
+    taxiSnapshots.current.set(taxi.id,{from,to:taxi,at:now,routeKey:taxi.status});
+   }else if(previous){
+    // Route extension changes the path but not the current movement clock.
+    taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
+   }
    if(!taxiMarkers.current.has(taxi.id)&&map.current){
     const el=document.createElement('div');el.className='taxi-map-marker';
     const img=document.createElement('img');
