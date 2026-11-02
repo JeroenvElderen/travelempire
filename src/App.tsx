@@ -235,7 +235,7 @@ export default function App(){
     const cache=discoveredCacheRef.current;
     const discovered=cache&&cache.ids===savedIds?cache.set:new Set<string>(savedIds);
     const initialDiscoveryCount=discovered.size;
-    let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
+    let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     const taxis=old.taxis.map(t=>{
@@ -266,7 +266,7 @@ export default function App(){
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
      next.discovered.forEach(id=>discovered.add(id));
      return {...next.taxi,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
-       fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,
+       fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
@@ -274,13 +274,13 @@ export default function App(){
     // A small office/depot overhead accrues in simulated time, including idle periods.
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
     const loanTick=advanceLoans(old.loans??[],4);
-    const net=revenue-fuelExpense-maintenanceExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
+    const net=revenue-fuelExpense-maintenanceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     return{...old,drivers,taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
-      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,
+      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
       loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal,transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
