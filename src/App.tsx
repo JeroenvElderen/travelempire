@@ -105,22 +105,12 @@ export default function App(){
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
-    // Apply boundary enforcement from the worker to already-moving Explorers.
-    // Keep the current simulated position instead of reverting to the worker snapshot.
-    if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned&&
-       (assigned.status==='IDLE'||assigned.edgeIds.length<t.edgeIds.length)){
-     if(assigned.status==='IDLE')return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
-     if(assigned.edgeIds.length>t.leg&&
-        assigned.edgeIds.every((id,i)=>t.edgeIds[i]===id))
-      return {...t,path:assigned.path,edgeIds:assigned.edgeIds};
-     return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
-    }
     // Preserve live position, speed and leg when the worker extends a moving
     // Explorer route. Never rewind movement to an older worker snapshot.
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned?.status==='EXPLORING'&&
        assigned.edgeIds.length>t.edgeIds.length&&
        t.edgeIds.every((id,i)=>assigned.edgeIds[i]===id)){
-     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns};
+     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns,discoveryEdgeIds:assigned.discoveryEdgeIds};
     }
     // Never overwrite a taxi that became busy while the worker was calculating.
     return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
@@ -283,7 +273,7 @@ export default function App(){
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
-     next.discovered.forEach(id=>{if(t.kind==='explorer'){if(t.status==='EXPLORING')discovered.add(id);}else territory.add(id);});
+     next.discovered.forEach(id=>{if(t.kind==='explorer'){if(t.status==='EXPLORING'&&delivered.discoveryEdgeIds?.includes(id))discovered.add(id);}else territory.add(id);});
      return {...next.taxi,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
