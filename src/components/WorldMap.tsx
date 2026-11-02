@@ -1,3 +1,4 @@
+import {readExploration,writeExploration,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
@@ -68,10 +69,10 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null};
+type Props={companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph}:Props){
+export default function WorldMap({companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph}:Props){
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
  const [stationsVisible,setStationsVisible]=useState(true);
@@ -292,6 +293,25 @@ export default function WorldMap({selecting,onLocationSelected,headquarters,taxi
  explorationInputs.current={graph,exploredEdgeIds,headquarters};
  const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
  const explorationSchedule=useRef<(()=>void)|null>(null);
+ const persistentSegments=useRef<Map<string,Segment[]>>(new Map());
+ const explorationCompany=useRef<string|undefined>(undefined);
+ const persistBusy=useRef(false);
+ const persistAgain=useRef(false);
+ useEffect(()=>{explorationCompany.current=companyId;persistentSegments.current=new Map();explorationLast.current=null;
+  if(!companyId)return;let cancelled=false;
+  readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
+   // Merge rather than replace discoveries made while storage was loading.
+   for(const [id,segments] of Object.entries(record?.segments??{}))if(!persistentSegments.current.has(id))persistentSegments.current.set(id,segments);
+   explorationSchedule.current?.();
+  }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
+  return()=>{cancelled=true};
+ },[companyId]);
+ const persistGeometry=async()=>{const id=explorationCompany.current;if(!id||persistBusy.current){persistAgain.current=true;return;}persistBusy.current=true;
+  try{do{persistAgain.current=false;const old=await readExploration(id);const segments={...(old?.segments??{})};
+   for(const [key,value] of persistentSegments.current)segments[key]=value;
+   await writeExploration(id,{ids:[...new Set([...(old?.ids??[]),...explorationInputs.current.exploredEdgeIds])],segments});
+  }while(persistAgain.current&&explorationCompany.current===id)}catch(error){console.error('[TravelEmpire] Geometry save failed',error)}finally{persistBusy.current=false;}
+ };
  // Build a stable edge geometry index only when the graph changes.
  const explorationEdgeIndex=useRef<{graph:RoadGraph|null|undefined;entries:Map<string,Array<[[number,number],[number,number]]>>}>({graph:null,entries:new Map()});
  useEffect(()=>{
@@ -343,11 +363,16 @@ export default function WorldMap({selecting,onLocationSelected,headquarters,taxi
     }
     explorationEdgeIndex.current={graph:currentGraph,entries};
    }
-   const segments:Array<[[number,number],[number,number]]>=[];
+   let changed=false;
    for(const id of new Set(currentIds)){
+    if(persistentSegments.current.has(id))continue;
     const found=explorationEdgeIndex.current.entries.get(id);
-    if(found)segments.push(...found);
+    if(found){persistentSegments.current.set(id,found);changed=true;}
    }
+   if(changed)void persistGeometry();
+   // Render ALL previously discovered geometry, including unloaded road tiles.
+   const segments:Segment[]=[];
+   for(const list of persistentSegments.current.values())segments.push(...list);
    explorationBusy.current=true;
    worker.postMessage({headquarters:[currentHQ.lng,currentHQ.lat],segments});
   };
