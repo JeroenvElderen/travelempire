@@ -105,6 +105,23 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      if(inside(a)&&inside(b)&&inside(middle))allowedRoads.add(edge.id);
     }
    }
+   // Trim any previously assigned Explorer route at the first forbidden edge.
+   // Do this before reserving routes or extending them, so stale assignments
+   // cannot carry a vehicle beyond the current taxi-revealed boundary.
+   for(let index=0;index<taxis.length;index++){
+    const taxi=taxis[index];
+    if(taxi.kind!=='explorer'||taxi.status!=='EXPLORING')continue;
+    const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!allowedRoads.has(id));
+    if(firstForbidden<0)continue;
+    if(firstForbidden<=taxi.leg){
+     // A vehicle already traversing an invalid edge is held at its current
+     // position rather than permitted to complete that edge.
+     taxis[index]={...taxi,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+    }else{
+     taxis[index]={...taxi,path:taxi.path.slice(0,firstForbidden+1),
+      edgeIds:taxi.edgeIds.slice(0,firstForbidden)};
+    }
+   }
    const reservedTargets=new Set<string>();
    const reservedEdges=new Set<string>();
    // Existing scouts reserve their remaining route, so new scouts avoid following them.
@@ -137,7 +154,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     if(taxis[index].kind!=='explorer'||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges);
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
