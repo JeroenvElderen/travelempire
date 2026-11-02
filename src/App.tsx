@@ -33,7 +33,6 @@ export default function App(){
  const [missionQueue,setMissionQueue]=useState<PassengerRequest[]>([]);
  const queueRef=useRef<PassengerRequest[]>([]);
  const lastMissionAt=useRef(0);
- const lastScoutAt=useRef(0);
 
  const dispatchWorkerRef=useRef<Worker|null>(null);
  const dispatchBusyRef=useRef(false);
@@ -103,7 +102,6 @@ export default function App(){
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
    if(message.generatedMission)lastMissionAt.current=Date.now();
-   if(message.assignedCount)lastScoutAt.current=Date.now();
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
