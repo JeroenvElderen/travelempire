@@ -69,10 +69,10 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null};
+type Props={companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph}:Props){
+export default function WorldMap({companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph}:Props){
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
  const [stationsVisible,setStationsVisible]=useState(true);
@@ -286,8 +286,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
- const explorationInputs=useRef({graph,exploredEdgeIds,headquarters});
- explorationInputs.current={graph,exploredEdgeIds,headquarters};
+ const explorationInputs=useRef({graph,territoryEdgeIds,headquarters});
+ explorationInputs.current={graph,territoryEdgeIds,headquarters};
  const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
  const explorationApply=useRef<((coverage:GeoJSON.FeatureCollection,locked:GeoJSON.FeatureCollection)=>void)|null>(null);
  const persistentSegments=useRef<Map<string,Segment[]>>(new Map());
@@ -310,15 +310,17 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
 
   readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
    // Merge rather than replace discoveries made while storage was loading.
-   for(const [id,segments] of Object.entries(record?.segments??{}))if(!persistentSegments.current.has(id))persistentSegments.current.set(id,segments);
+   for(const [id,segments] of Object.entries(record?.segments??{}))if(id.startsWith('territory:')&&!persistentSegments.current.has(id.slice(10)))persistentSegments.current.set(id.slice(10),segments);
    explorationLastSignature.current='';
    fogDraw.current?.();
   }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
   if(cloudExplorationEnabled())void syncExploration(companyId).then(record=>{
    if(cancelled||explorationCompany.current!==companyId||!record)return;
    for(const [id,segments] of Object.entries(record.segments)){
-    const current=persistentSegments.current.get(id);
-    if(!current||(!current.length&&segments.length))persistentSegments.current.set(id,segments);
+    if(!id.startsWith('territory:'))continue;
+    const key=id.slice(10);
+    const current=persistentSegments.current.get(key);
+    if(!current||(!current.length&&segments.length))persistentSegments.current.set(key,segments);
    }
    explorationLastSignature.current='';
    fogDraw.current?.();
@@ -327,8 +329,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  },[companyId]);
  const persistGeometry=async()=>{const id=explorationCompany.current;if(!id||persistBusy.current){persistAgain.current=true;return;}persistBusy.current=true;
   try{do{persistAgain.current=false;const old=await readExploration(id);const segments={...(old?.segments??{})};
-   for(const [key,value] of persistentSegments.current)segments[key]=value;
-   await writeExploration(id,{ids:[...new Set([...(old?.ids??[]),...explorationInputs.current.exploredEdgeIds])],segments});
+   for(const [key,value] of persistentSegments.current)segments['territory:'+key]=value;
+   await writeExploration(id,{ids:[...new Set([...(old?.ids??[]),...explorationInputs.current.territoryEdgeIds])],segments});
   }while(persistAgain.current&&explorationCompany.current===id)}catch(error){console.error('[TravelEmpire] Geometry save failed',error)}finally{persistBusy.current=false;}
  };
  // Build a stable edge geometry index only when the graph changes.
@@ -425,7 +427,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    }
   }
   let changed=false;
-  for(const id of exploredEdgeIds){
+  for(const id of territoryEdgeIds){
    const existing=persistentSegments.current.get(id);
    if(existing?.length)continue;
    const found=explorationEdgeIndex.current.entries.get(id);
@@ -433,7 +435,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   }
   if(changed)void persistGeometry();
   fogDraw.current?.();
- },[graph,exploredEdgeIds,explorationVisible]);
+ },[graph,territoryEdgeIds,explorationVisible]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
- return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control"><button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Standard</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 50 m exploration corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show loaded OSM roads</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = explored WorldFront polygons (50 m either side). Passenger stops stay inside explored areas.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control"><button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Standard</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 150 m taxi corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show loaded OSM roads</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = territory revealed by taxis (150 m radius). Explorer-discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
