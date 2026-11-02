@@ -254,6 +254,8 @@ export default function App(){
      const consumed=energyUsed(delivered,km,efficiencyBonus);
      // Energy purchases are charged at refill time, never again per driven kilometre.
      const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1);
+     const explorerTravelCost=t.kind==='explorer'?km*2.50:0;
+     explorationExpense+=explorerTravelCost;
      const wearPerKm=0.025*(1-careBonus); // Condition points lost per kilometre
      const wage=t.kind==='explorer'?0:0.009*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
      const insurance=t.kind==='explorer'?0.00045:0.00085; // €3.06 per simulated hour per taxi
