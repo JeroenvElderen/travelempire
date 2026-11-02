@@ -36,14 +36,15 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const taxis=msg.taxis.slice();
   const queue=msg.queue.filter(m=>m.expiresAt>now);
   let generatedMission=false;
-  const demand=demandAt(now,taxis.length);
+  const passengerTaxis=taxis.filter(t=>t.kind!=='explorer');
+  const demand=demandAt(now,passengerTaxis.length);
   if(msg.allowMission&&queue.length<demand.queueLimit){
    const request=createPassengerRequest(graph,explored,hq,now,demand.fareMultiplier);
    if(request){queue.push(request);generatedMission=true;}
   }
   for(let i=queue.length-1;i>=0;i--){
    const mission=queue[i];
-   const candidates=taxis.map((t,index)=>({index,d:t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
+   const candidates=taxis.map((t,index)=>({index,d:t.kind!=='explorer'&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
     .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
    let best:{index:number;taxi:Taxi;distance:number}|null=null;
    for(const candidate of candidates){
@@ -68,7 +69,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     for(const edge of taxi.edgeIds.slice(taxi.leg))reservedEdges.add(edge);
    }
    for(let index=0;index<taxis.length;index++){
-    if(taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
+    if(taxis[index].kind!=='explorer'||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
     const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,frontier);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
