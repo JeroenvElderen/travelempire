@@ -67,6 +67,27 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(destination){const target=nearest(graph,destination);if(target)reservedTargets.add(target);}
     for(const edge of taxi.edgeIds.slice(taxi.leg))reservedEdges.add(edge);
    }
+   // Preplan the next sequence before an Explorer reaches its final junction.
+   // Append the new path without resetting its current leg or position.
+   for(let index=0;index<taxis.length;index++){
+    const taxi=taxis[index];
+    if(taxi.kind!=='explorer'||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
+    const remaining=taxi.path.length-1-taxi.leg;
+    if(remaining>2||!taxi.path.length)continue;
+    const destination=taxi.path[taxi.path.length-1];
+    const from=nearest(graph,destination);
+    if(!from)continue;
+    // This vehicle may continue from its own reserved destination.
+    reservedTargets.delete(from);
+    const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
+     graph,explored,hq,reservedTargets,reservedEdges);
+    if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
+    // The nearest node at the destination must match the new route's start.
+    if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
+    taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns};
+    assignedCount++;
+   }
    for(let index=0;index<taxis.length;index++){
     if(taxis[index].kind!=='explorer'||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
     const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges);
