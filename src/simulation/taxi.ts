@@ -3,6 +3,7 @@ import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
   id: string;
+  kind?: 'taxi' | 'explorer'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
