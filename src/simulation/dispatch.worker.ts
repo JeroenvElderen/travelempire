@@ -1,5 +1,5 @@
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,dispatchScout,explorationFrontierNodes,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,dispatchScout,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -55,10 +55,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    if(best){taxis[best.index]=best.taxi;queue.splice(i,1);}
   }
-  // Passenger assignments run first. Spread remaining idle taxis over distinct frontiers.
+  // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
   if(msg.allowScout){
-   const frontier=explorationFrontierNodes(graph,explored,hq);
    const reservedTargets=new Set<string>();
    const reservedEdges=new Set<string>();
    // Existing scouts reserve their remaining route, so new scouts avoid following them.
@@ -70,7 +69,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     if(taxis[index].kind!=='explorer'||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,frontier);
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
