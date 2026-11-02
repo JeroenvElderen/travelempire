@@ -22,6 +22,8 @@ export type Taxi = {
   completed: number;
   journeyEdges?: string[];
   scoutingRuns?: number;
+  // Edges eligible for discovery on this assignment; transit edges are excluded.
+  discoveryEdgeIds?: string[];
   speedKph?: number;
 
   // Dealership vehicle information
@@ -405,7 +407,6 @@ export function dispatchScout(
      if(!best||candidate.distance<best.distance)best=candidate;
     }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
    }
-   if(allowedRoads&&!allowedRoads.has(edge.id))continue;
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
@@ -445,7 +446,7 @@ export function dispatchScout(
  reservedTargets.add(cursor);
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
-  edgeIds:ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
+  edgeIds:ids,discoveryEdgeIds:allowedRoads?ids.filter(id=>allowedRoads.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
