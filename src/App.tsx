@@ -134,7 +134,7 @@ export default function App(){
    const queue=queueRef.current.filter(q=>q.expiresAt>now);
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
-   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
+   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,territory:fleetSaveRef.current.territoryEdgeIds??[],
     hq:[company.headquarters.lng,company.headquarters.lat],allowMission:taxis.some(t=>t.kind!=='explorer')&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>t.kind!=='explorer').length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
