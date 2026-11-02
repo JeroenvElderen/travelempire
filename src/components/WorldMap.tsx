@@ -289,7 +289,6 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const explorationInputs=useRef({graph,exploredEdgeIds,headquarters});
  explorationInputs.current={graph,exploredEdgeIds,headquarters};
  const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
- const explorationSchedule=useRef<(()=>void)|null>(null);
  const explorationApply=useRef<((coverage:GeoJSON.FeatureCollection,locked:GeoJSON.FeatureCollection)=>void)|null>(null);
  const persistentSegments=useRef<Map<string,Segment[]>>(new Map());
  const explorationCompany=useRef<string|undefined>(undefined);
