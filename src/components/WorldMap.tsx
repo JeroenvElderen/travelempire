@@ -155,7 +155,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
     previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
    const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
+   const from=sameRoute&&displayed?{...previous.to,position:displayed}:taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }else{
    // Keep route/status current without restarting the animation clock.
@@ -193,33 +193,31 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
      marker.setLngLat(position);
      renderedPosition.current.set(id,position);
     }
-    // Derive heading from the interpolated *displayed* motion, not the next
-    // simulation leg: otherwise rotation leads the marker at intersections.
+    // Use the active road segment for heading, rather than tiny frame-to-frame
+    // position corrections that can point backwards and make vehicles wobble.
     const previousHeading=taxiHeadingState.current.get(id);
+    const route=elapsed<=1?snapshot.to:snapshot.forecast;
+    const path=route.path;
+    let target:number|undefined;
+    if(path.length>1){
+     const index=Math.max(0,Math.min(route.leg,path.length-2));
+     const a=path[index],b=path[index+1];
+     const dx=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
+     const dy=b[1]-a[1];
+     if(dx*dx+dy*dy>1e-16)target=Math.atan2(dx,dy)*180/Math.PI;
+    }
     if(previousHeading){
-     const dx=(position[0]-previousHeading.position[0])*Math.cos(position[1]*Math.PI/180);
-     const dy=position[1]-previousHeading.position[1];
-     const distanceSquared=dx*dx+dy*dy;
-     if(distanceSquared>1e-15){
-      const target=Math.atan2(dx,dy)*180/Math.PI;
+     if(target!==undefined){
       const delta=((target-previousHeading.angle+540)%360)-180;
       const dt=Math.min(0.1,Math.max(0,(now-previousHeading.at)/1000));
-      // Smooth short-arc turning, including wraparound at 0/360 degrees.
-      // A speed-aware turn response avoids snapping at intersections while
-      // keeping fast-moving taxis aligned with the road direction.
-      const blend=1-Math.exp(-dt/((taxi.speedKph ?? 0)>45?0.12:0.20));
+      const blend=1-Math.exp(-dt/0.16);
       previousHeading.angle+=delta*blend;
       marker.setRotation(previousHeading.angle);
      }
      previousHeading.position=position;
      previousHeading.at=now;
     }else{
-     let initial=0;
-     if(taxi.path.length>1){
-      const index=Math.min(taxi.leg,taxi.path.length-2);
-      const a=taxi.path[index],b=taxi.path[index+1];
-      initial=Math.atan2((b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360),b[1]-a[1])*180/Math.PI;
-     }
+     const initial=target??0;
      taxiHeadingState.current.set(id,{angle:initial,position,at:now});
      marker.setRotation(initial);
     }
