@@ -316,7 +316,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    // Merge rather than replace discoveries made while storage was loading.
    for(const [id,segments] of Object.entries(record?.segments??{}))if(!persistentSegments.current.has(id))persistentSegments.current.set(id,segments);
    explorationLastSignature.current='';
-   explorationSchedule.current?.();
+   fogDraw.current?.();
   }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
   if(cloudExplorationEnabled())void syncExploration(companyId).then(record=>{
    if(cancelled||explorationCompany.current!==companyId||!record)return;
@@ -337,100 +337,101 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  };
  // Build a stable edge geometry index only when the graph changes.
  const explorationEdgeIndex=useRef<{graph:RoadGraph|null|undefined;edgeCount:number;entries:Map<string,Array<[[number,number],[number,number]]>>}>({graph:null,edgeCount:-1,entries:new Map()});
+ // Draw fog as a screen-space canvas mask. No Turf polygon unions or
+ // world-sized GeoJSON subtraction: each discovered segment clears its own
+ // geographic-width corridor, even when the road tile is no longer loaded.
+ const fogDraw=useRef<(()=>void)|null>(null);
  useEffect(()=>{
   const instance=map.current;
-  if(!instance||!ready)return;
-  const remove=()=>{
-   for(const id of ['service-coverage-line','service-coverage-fill','locked-territory-fill','exploration-fog'])if(instance.getLayer(id))instance.removeLayer(id);
-   for(const id of ['service-coverage','locked-territory','exploration-fog-source'])if(instance.getSource(id))instance.removeSource(id);
-  };
-  const apply=(coverage:GeoJSON.FeatureCollection,locked:GeoJSON.FeatureCollection)=>{
-   if(!instance.isStyleLoaded())return;
-   const oldLocked=instance.getSource('locked-territory') as maplibregl.GeoJSONSource|undefined;
-   const oldCoverage=instance.getSource('service-coverage') as maplibregl.GeoJSONSource|undefined;
-   if(oldLocked&&oldCoverage){oldLocked.setData(locked);oldCoverage.setData(coverage);return;}
-   remove();
-   instance.addSource('locked-territory',{type:'geojson',data:locked});
-   instance.addLayer({id:'locked-territory-fill',type:'fill',source:'locked-territory',paint:{'fill-color':'#d36b6b','fill-opacity':0.58}});
-   instance.addSource('service-coverage',{type:'geojson',data:coverage});
-   instance.addLayer({id:'service-coverage-fill',type:'fill',source:'service-coverage',paint:{'fill-opacity':0}});
-  };
-  explorationApply.current=apply;
-  if(!explorationVisible||!headquarters){remove();return;}
-  // Keep the last successful geometry until the worker returns a new result.
-  // Never replace it with the starting-circle fallback on routine effect reruns.
-  // Immediate starting overlay, even before the first expensive road union finishes.
-  // GeoJSON holes require the opposite winding order to the outer ring.
-  const lng=headquarters.lng,lat=headquarters.lat;
-  const ring:Array<[number,number]>=[];
-  for(let i=0;i<=96;i++){
-   const angle=-i*Math.PI*2/96;
-   ring.push([lng+0.5*Math.sin(angle)/(111.32*Math.cos(lat*Math.PI/180)),lat+0.5*Math.cos(angle)/111.32]);
-  }
-  const outer:Array<[number,number]>=[[-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]];
-  const fallback:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[outer,ring]}}]};
-  if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);
-  else if(!instance.getSource('locked-territory'))apply({type:'FeatureCollection',features:[]},fallback);
-  const worker=new Worker(new URL('../simulation/explorationGeometry.worker.ts',import.meta.url),{type:'module'});
-  explorationWorker.current=worker;
-  explorationBusy.current=false;
-  const send=()=>{
-   if(explorationBusy.current){explorationPending.current=true;return;}
-   const {graph:currentGraph,exploredEdgeIds:currentIds,headquarters:currentHQ}=explorationInputs.current;
-   if(!currentHQ)return;
-   if(!currentGraph){
-    // Cloud/IndexedDB geometry is sufficient for fog rendering even while
-    // road tiles and the dispatch graph are still loading.
-    if(!persistentSegments.current.size)return;
+  if(!instance||!ready||!container.current)return;
+  const host=container.current;
+  const canvas=document.createElement('canvas');
+  canvas.setAttribute('aria-hidden','true');
+  canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1';
+  host.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  if(!ctx){canvas.remove();return;}
+  let frame=0;
+  const draw=()=>{
+   frame=0;
+   const width=host.clientWidth,height=host.clientHeight;
+   if(!width||!height)return;
+   const dpr=Math.min(window.devicePixelRatio||1,2);
+   if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
    }
-   // Index each road ID once per graph version; avoid scanning 600k+ nodes on every tick.
-   const edgeCount=currentGraph?[...currentGraph.edges.values()].reduce((count,edges)=>count+edges.length,0):0;
-   if(currentGraph&&(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount)){
-    const entries=new Map<string,Array<[[number,number],[number,number]]>>();
+   ctx.setTransform(dpr,0,0,dpr,0,0);
+   ctx.clearRect(0,0,width,height);
+   if(!explorationVisible||!headquarters)return;
+   ctx.globalCompositeOperation='source-over';
+   ctx.fillStyle='rgba(211,107,107,0.58)';
+   ctx.fillRect(0,0,width,height);
+   ctx.globalCompositeOperation='destination-out';
+   const clearCircle=(lng:number,lat:number,radiusMeters:number)=>{
+    const center=instance.project([lng,lat]);
+    const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
+    const edge=instance.project([lng+radiusMeters/metersPerDegree,lat]);
+    const radius=Math.max(0.5,Math.abs(edge.x-center.x));
+    ctx.beginPath();ctx.arc(center.x,center.y,radius,0,Math.PI*2);ctx.fill();
+   };
+   clearCircle(headquarters.lng,headquarters.lat,500);
+   // One path per segment. A 150 m radius remains geographic at every zoom.
+   const bounds=instance.getBounds();
+   const west=bounds.getWest()-0.03,east=bounds.getEast()+0.03;
+   const south=bounds.getSouth()-0.03,north=bounds.getNorth()+0.03;
+   for(const segments of persistentSegments.current.values())for(const [a,b] of segments){
+    if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||
+       Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
+    const p=instance.project(a),q=instance.project(b);
+    const lat=(a[1]+b[1])/2;
+    const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
+    const edge=instance.project([a[0]+150/metersPerDegree,a[1]]);
+    ctx.lineWidth=Math.max(1,2*Math.abs(edge.x-p.x));
+    ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();
+   }
+   ctx.globalCompositeOperation='source-over';
+  };
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(draw);};
+  fogDraw.current=schedule;
+  instance.on('move',schedule);
+  instance.on('resize',schedule);
+  instance.on('style.load',schedule);
+  schedule();
+  return()=>{
+   fogDraw.current=null;
+   instance.off('move',schedule);instance.off('resize',schedule);
+   instance.off('style.load',schedule);
+   if(frame)cancelAnimationFrame(frame);
+   canvas.remove();
+  };
+ },[ready,explorationVisible,headquarters?.lng,headquarters?.lat,basemap]);
+ useEffect(()=>{
+  const currentGraph=graph;
+  if(currentGraph){
+   const edgeCount=[...currentGraph.edges.values()].reduce((n,edges)=>n+edges.length,0);
+   if(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount){
+    const entries=new Map<string,Segment[]>();
     const seen=new Set<string>();
     for(const [from,edges] of currentGraph.edges)for(const edge of edges){
-     const unique=[from,edge.to].sort().join('|');if(seen.has(unique))continue;seen.add(unique);
+     const unique=[from,edge.to].sort().join('|');
+     if(seen.has(unique))continue;seen.add(unique);
      const a=currentGraph.nodes.get(from),b=currentGraph.nodes.get(edge.to);
-     if(a&&b){let list=entries.get(edge.id);if(!list){list=[];entries.set(edge.id,list);}list.push([[a[0],a[1]],[b[0],b[1]]]);}
+     if(a&&b){const list=entries.get(edge.id)??[];list.push([[a[0],a[1]],[b[0],b[1]]]);entries.set(edge.id,list);}
     }
     explorationEdgeIndex.current={graph:currentGraph,edgeCount,entries};
    }
-   let changed=false;
-   for(const id of new Set(currentIds)){
-    if(persistentSegments.current.has(id))continue;
-    const found=explorationEdgeIndex.current.entries.get(id);
-    if(found){persistentSegments.current.set(id,found);changed=true;}
-   }
-   if(changed)void persistGeometry();
-   // Render ALL previously discovered geometry, including unloaded road tiles.
-   const segments:Segment[]=[];
-   for(const list of persistentSegments.current.values())segments.push(...list);
-   const signature=`${currentHQ.lng},${currentHQ.lat}:${segments.length}:${persistentSegments.current.size}`;
-   if(signature===explorationLastSignature.current)return;
-   explorationLastSignature.current=signature;
-   explorationBusy.current=true;
-   worker.postMessage({headquarters:[currentHQ.lng,currentHQ.lat],segments});
-  };
-  explorationSchedule.current=send;
-  worker.onmessage=(event:MessageEvent<{coverage?:GeoJSON.FeatureCollection;locked?:GeoJSON.FeatureCollection;error?:string}>)=>{
-   explorationBusy.current=false;
-   if(event.data.error){console.error('[TravelEmpire] Exploration geometry:',event.data.error);explorationLastSignature.current='';}
-   if(event.data.coverage&&event.data.locked){
-    explorationLast.current={coverage:event.data.coverage,locked:event.data.locked};
-    apply(event.data.coverage,event.data.locked);
-    const id=explorationCompany.current;
-    if(id)void writeExplorationMask(id,explorationLast.current).catch(error=>console.error('[TravelEmpire] Fog cache save failed',error));
-   }
-   if(explorationPending.current){explorationPending.current=false;window.setTimeout(send,200);}
-  };
-  worker.onerror=e=>{explorationBusy.current=false;explorationLastSignature.current='';console.error('[TravelEmpire] Exploration worker:',e.message);};
-  const onStyle=()=>{if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);else if(!instance.getSource('locked-territory'))apply({type:'FeatureCollection',features:[]},fallback);};
-  instance.on('style.load',onStyle);
-  send();
-  return()=>{explorationApply.current=null;explorationSchedule.current=null;worker.terminate();explorationWorker.current=null;instance.off('style.load',onStyle)};
- },[headquarters?.lng,headquarters?.lat,explorationVisible,ready,basemap]);
- // Coalesce frequent simulation ticks rather than rebuilding the polygons every second.
- useEffect(()=>{if(!explorationVisible)return;explorationSchedule.current?.();},[graph,exploredEdgeIds,explorationVisible]);
+  }
+  let changed=false;
+  for(const id of exploredEdgeIds){
+   const existing=persistentSegments.current.get(id);
+   if(existing?.length)continue;
+   const found=explorationEdgeIndex.current.entries.get(id);
+   if(found?.length){persistentSegments.current.set(id,found);changed=true;}
+  }
+  if(changed)void persistGeometry();
+  fogDraw.current?.();
+ },[graph,exploredEdgeIds,explorationVisible]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
  return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control"><button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Standard</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 50 m exploration corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show loaded OSM roads</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = explored WorldFront polygons (50 m either side). Passenger stops stay inside explored areas.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
