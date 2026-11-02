@@ -1,5 +1,7 @@
+import {loadStationTile,stationTileKey} from './data/stations';
+import {reachableStations} from './data/stationRouting';
 import {readExploration,writeExploration,clearExploration,syncExploration,cloudExplorationEnabled} from './data/explorationStore';
-import {energySpec,energyRemaining,energyUsed} from './simulation/energy';
+import {energySpec,energyRemaining,energyUsed,energyRangeKm} from './simulation/energy';
 import {demandAt} from './simulation/demand';
 import { useEffect, useState } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Menu, X } from "lucide-react";
@@ -264,8 +266,8 @@ export default function App(){
      const explorerTravelCost=t.kind==='explorer'?km*2.50:0;
      explorationExpense+=explorerTravelCost;
      const wearPerKm=0.025*(1-careBonus); // Condition points lost per kilometre
-     const wage=t.kind==='explorer'?0:0.009*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
-     const insurance=t.kind==='explorer'?0.00045:0.00085; // €3.06 per simulated hour per taxi
+     const wage=t.kind==='explorer'||t.kind==='surveyor'?0:0.009*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
+     const insurance=t.kind==='explorer'||t.kind==='surveyor'?0.00045:0.00085; // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
      const earned=next.earned*(1+0.05*Research.level(research,'pricing'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1);
@@ -273,7 +275,7 @@ export default function App(){
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
-     next.discovered.forEach(id=>{if(t.kind==='explorer'){if(t.status==='EXPLORING'&&delivered.discoveryEdgeIds?.includes(id))discovered.add(id);}else territory.add(id);});
+     next.discovered.forEach(id=>{if(t.kind==='explorer'){if(t.status==='EXPLORING'&&delivered.discoveryEdgeIds?.includes(id))discovered.add(id);}else if(t.kind==='surveyor'?t.status==='EXPLORING':!old.taxis.some(v=>v.kind==='surveyor'))territory.add(id);});
      return {...next.taxi,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
@@ -308,6 +310,17 @@ export default function App(){
   const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',name:`Explorer ${fleet.taxis.filter(t=>t.kind==='explorer').length+1}`,driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:'Explorer Vehicle',vehicleYear:2026,vehicleFuel:'Electric',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Electric'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
   const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
   saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:'Explorer vehicle purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
+ }catch(e){setSimError(String(e))}};
+ const buySurveyor=()=>{if(!company||!graph)return;try{
+  if(Research.level(Research.settle(research),'survey_vehicle')<1)throw Error('Research Territory Survey Vehicle first.');
+  if(fleet.taxis.some(t=>t.kind==='surveyor'))throw Error('Only one survey car per company.');
+  const cost=12000;if(company.cash<cost)throw Error('Insufficient funds for survey car (€12,000).');
+  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+  const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
+  const now=Date.now();
+  const surveyor:Taxi={id:crypto.randomUUID(),kind:'surveyor',name:'Territory Survey Car',driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:'Survey Car',vehicleYear:2026,vehicleFuel:'Electric',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Electric'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
+  const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
+  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,surveyor],transactions:[{id:crypto.randomUUID(),time:now,description:'Survey car purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
  }catch(e){setSimError(String(e))}};
  const buyTaxi=(driver:string,offer:VehicleOffer)=>{if(!company||!graph)return;try{
   if(!driver.trim())throw Error('Enter a driver name.');
@@ -356,7 +369,7 @@ export default function App(){
  <section className="world" style={{display:page==='World'?'block':'none'}}><WorldMap companyId={company?.id} selecting={selecting} onLocationSelected={onLocation} headquarters={company?.headquarters??null} taxis={fleet.taxis} exploredEdgeIds={fleet.exploredEdgeIds??[]} territoryEdgeIds={fleet.territoryEdgeIds??[]} graph={graph}/>{selecting&&<div className="location-hint"><strong>Choose headquarters</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPage('Company');}}>Cancel</button></div>}</section>
  {page==='Company'&&(!company||showSetup)?<CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/>:null}
  {page==='Company'&&company&&!showSetup&&<section className="company-dashboard"><span className="eyebrow">COMPANY OVERVIEW · LOCAL PREVIEW</span><h1>{company.name}</h1><p>Your company profile is saved in this browser. Taxi operations run locally while this browser tab is open.</p><div className="company-metrics"><article><small>AVAILABLE CAPITAL</small><strong>€{company.cash.toLocaleString('en-IE')}</strong></article><article><small>HEADQUARTERS</small><strong>{company.headquarters.label}</strong></article><article><small>FLEET</small><strong>{fleet.taxis.filter(t=>t.kind!=='explorer').length} taxis · {fleet.taxis.filter(t=>t.kind==='explorer').length} explorers</strong></article></div><p className="setup-disclaimer">No administrative ownership restrictions. Greek roads load automatically near headquarters and active taxis from Supabase.</p><button className="setup-secondary" onClick={()=>setPage('World')}>View headquarters on map</button><button className="danger-button" onClick={()=>{if(window.confirm('Delete this locally saved company? This cannot be undone.')){Research.clear(company.id);void clearExploration(company.id);clearCompany();localStorage.removeItem(`travelempire.fleet.v0.8.${company.id}`);setFleet({taxis:[],revenue:0,completed:0});setCompany(null);setSelection(null);setShowSetup(false);}}}>Delete local company</button></section>}
- {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi}/>}
+ {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuySurveyor={buySurveyor} research={research} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi}/>}
  {page==='Operations'&&<section className="company-dashboard"><span className="eyebrow">AUTOMATIC DISPATCH · V1.9.3</span><h1>Operations</h1><p>Automatic dispatch is enabled whenever this browser tab is open. Passenger stops stay on discovered roads. Waiting passenger requests expire after two minutes. Passenger demand and fares vary by the time of day in Greece. Idle taxis serve passengers; dedicated Explorer Vehicles autonomously scout unexplored roads. Only Explorers discover roads and unlock passenger jobs. Regular taxis reveal 150 m territory corridors as they drive.</p><div className="company-metrics"><article><small>DEMAND IN GREECE</small><strong>{demandAt(Date.now(),fleet.taxis.length).level}</strong></article><article><small>RUSH-HOUR FARE MULTIPLIER</small><strong>{demandAt(Date.now(),fleet.taxis.length).fareMultiplier.toFixed(2)}×</strong></article><article><small>ACTIVE TAXIS</small><strong>{fleet.taxis.filter(t=>t.status!=='IDLE').length}</strong></article><article><small>WAITING PASSENGERS</small><strong>{missionQueue.length}</strong></article><article><small>EXPLORED ROAD IDS</small><strong>{(fleet.exploredEdgeIds??[]).length.toLocaleString()}</strong></article><article><small>ACTIVE EXPLORERS</small><strong>{fleet.taxis.filter(t=>t.status==='EXPLORING').length}</strong></article><article><small>COMPLETED TRIPS</small><strong>{fleet.completed}</strong></article><article><small>TRIP REVENUE</small><strong>€{fleet.revenue.toFixed(2)}</strong></article><article><small>ROAD GRAPH</small><strong>{graph?`${graph.nodeKeys.length.toLocaleString()} nodes`:'Loading'}</strong></article><article><small>LOADED ROAD TILES</small><strong>{roadPackages}</strong></article><article><small>QUEUED TILE LOADS</small><strong>{roadDiagnostics.queued}</strong></article><article><small>ROUTING EDGES</small><strong>{roadDiagnostics.edges.toLocaleString()}</strong></article><article><small>DISPATCH WORKER EDGES</small><strong>{roadDiagnostics.workerEdges.toLocaleString()}</strong></article></div>{simError&&<p role="alert">{simError}</p>}</section>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onUpgrade={buyUpgrade} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
