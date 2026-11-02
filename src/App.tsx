@@ -132,7 +132,7 @@ export default function App(){
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
-  },3000);
+  },500);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
  // Prefetch roads near active vehicles and destinations without resetting their routes.
