@@ -383,7 +383,28 @@ export function dispatchScout(
  }
  keys.reverse();ids.reverse();
  keys.push(best.to);ids.push(best.id);
- reservedTargets.add(best.to);
+ // Extend the assignment along connected, undiscovered streets. This avoids
+ // becoming IDLE at every junction and waiting for the next worker dispatch.
+ const planned=new Set(ids);
+ let cursor=best.to;
+ let extraMeters=0;
+ for(let step=0;step<24&&extraMeters<900;step++){
+  const links=(graph.edges.get(cursor)??[]).filter(edge=>
+   !explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
+   !reservedTargets.has(edge.to)&&edge.meters>0
+  );
+  if(!links.length)break;
+  // Prefer roads within the revealed territory, then shorter connected streets.
+  links.sort((a,b)=>{
+   const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
+   return ai-bi||a.meters-b.meters;
+  });
+  const edge=links[0];
+  keys.push(edge.to);ids.push(edge.id);planned.add(edge.id);
+  extraMeters+=edge.meters;cursor=edge.to;
+ }
+ reservedTargets.add(cursor);
+ for(const id of ids)reservedEdges.add(id);
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
   edgeIds:ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
