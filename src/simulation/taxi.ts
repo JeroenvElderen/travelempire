@@ -314,48 +314,72 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
-// Scouting follows actual roads, but randomizes among reachable frontier nodes.
-// Reservations let the dispatch worker spread simultaneous scouts across routes.
+// Systematic exploration: finish undiscovered streets connected to the revealed
+// network before pushing the frontier outward. Never choose random destinations.
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- frontierNodes?:string[]
+ _frontierNodes?:string[]
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
- const frontier=frontierNodes??explorationFrontierNodes(graph,explored,hq);
- if(!frontier.length)return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
- // Select targets beyond the discovered boundary; reject routes that merely
- // circulate through already explored roads.
- const candidates=frontier
-  .filter(k=>!reservedTargets.has(k))
-  .map(k=>({k,d:meters(graph.nodes.get(k)!,taxi.position)}))
-  .filter(x=>x.d>=100&&x.d<6500)
-  .map(x=>({...x,score:Math.random()}))
-  .sort((a,b)=>b.score-a.score)
-  .slice(0,32);
- let best:{key:string;journey:NonNullable<ReturnType<typeof route>>;score:number}|null=null;
- for(const candidate of candidates){
-  const journey=route(graph,start,candidate.k);
-  if(!journey||journey.path.length<2||journey.length>9000)continue;
-  let newMeters=0,overlapMeters=0;
-  for(let i=0;i<journey.edgeIds.length;i++){
-   const length=meters(journey.path[i],journey.path[i+1]);
-   if(!explored.has(journey.edgeIds[i]))newMeters+=length;
-   if(reservedEdges.has(journey.edgeIds[i]))overlapMeters+=length;
+ const revealed=new Set(exploredRoadNodes(graph,explored,hq));
+ // Dijkstra from the current vehicle position: one search replaces dozens of
+ // independent full-graph routes, and yields the cheapest road-by-road approach.
+ const dist=new Map<string,number>([[start,0]]);
+ const previous=new Map<string,{from:string;id:string}>();
+ const heap:Array<[number,string]>=[[0,start]];
+ const push=(item:[number,string])=>{
+  heap.push(item);let i=heap.length-1;
+  while(i>0){const p=(i-1)>>1;if(heap[p][0]<=item[0])break;heap[i]=heap[p];i=p;}
+  heap[i]=item;
+ };
+ const pop=():[number,string]|undefined=>{
+  if(!heap.length)return undefined;
+  const first=heap[0],last=heap.pop()!;
+  if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;
+   if(c+1<heap.length&&heap[c+1][0]<heap[c][0])c++;
+   if(heap[c][0]>=last[0])break;heap[i]=heap[c];i=c;
+  }heap[i]=last;}
+  return first;
+ };
+ // Prefer undiscovered edges whose endpoints are already in the revealed area.
+ // Only after these are exhausted consider the closest outward frontier edge.
+ let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
+ let visits=0;
+ while(heap.length&&visits++<150000){
+  const current=pop();if(!current)break;
+  const [distance,node]=current;
+  if(distance!==(dist.get(node)??Infinity))continue;
+  if(best&&best.inside&&distance>best.distance)break;
+  for(const edge of graph.edges.get(node)??[]){
+   const isNew=!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
+   if(isNew){
+    const inside=revealed.has(node)&&revealed.has(edge.to);
+    const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
+    if(!best||(inside&&!best.inside)||(inside===best.inside&&candidate.distance<best.distance))best=candidate;
+   }
+   const next=distance+edge.meters;
+   if(next<(dist.get(edge.to)??Infinity)){
+    dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
+   }
   }
-  // The trip MUST discover a meaningful length of new roads.
-  if(newMeters<100)continue;
-  const score=newMeters*2-overlapMeters*2-journey.length*0.12+candidate.score*250;
-  if(!best||score>best.score)best={key:candidate.k,journey,score};
  }
  if(!best)return taxi;
- reservedTargets.add(best.key);
- for(const id of best.journey.edgeIds)reservedEdges.add(id);
- return{...taxi,status:'EXPLORING',path:best.journey.path,edgeIds:best.journey.edgeIds,
-  journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,
-  fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
+ const keys=[best.from],ids:string[]=[];
+ let node=best.from;
+ while(node!==start){
+  const step=previous.get(node);if(!step)return taxi;
+  ids.push(step.id);keys.push(step.from);node=step.from;
+ }
+ keys.reverse();ids.reverse();
+ keys.push(best.to);ids.push(best.id);
+ reservedTargets.add(best.to);
+ for(const id of ids)reservedEdges.add(id);
+ return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
+  edgeIds:ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
+  pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in simulated seconds (4x wall time).
