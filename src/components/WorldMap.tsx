@@ -40,7 +40,7 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  const start=from.position,end=to.position;
  if(fraction<=0)return start;
  if(fraction>=1)return end;
- if(from.path.length<2||to.path.length<2||from.path!==to.path && (from.path.length!==to.path.length||from.edgeIds[0]!==to.edgeIds[0])){
+ if(from.path.length<2||to.path.length<2||from.path!==to.path && (from.edgeIds.length>to.edgeIds.length||!from.edgeIds.every((id,i)=>id===to.edgeIds[i]))){
   return [start[0]+(end[0]-start[0])*fraction,start[1]+(end[1]-start[1])*fraction];
  }
  const path=to.path;
@@ -152,8 +152,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    // one-frame jumps when the simulation and animation clocks differ.
    // Only do this on the same route; a new job must not interpolate from
    // the old job's unrelated path.
-   const sameRoute=!!previous&&previous.to.path.length===taxi.path.length&&
-    previous.to.edgeIds[0]===taxi.edgeIds[0]&&previous.to.leg<=taxi.leg;
+   const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
+    previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
    const displayed=renderedPosition.current.get(taxi.id);
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
