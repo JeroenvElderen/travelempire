@@ -107,22 +107,12 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      if(inside(a)&&inside(b)&&inside(middle))allowedRoads.add(edge.id);
     }
    }
-   // Trim any previously assigned Explorer route at the first forbidden edge.
-   // Do this before reserving routes or extending them, so stale assignments
-   // cannot carry a vehicle beyond the current taxi-revealed boundary.
+   // Existing routes remain drivable, including transit through undiscovered
+   // territory. Only eligible edges are counted as road discoveries.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if(taxi.kind!=='explorer'||taxi.status!=='EXPLORING')continue;
-    const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!allowedRoads.has(id));
-    if(firstForbidden<0)continue;
-    if(firstForbidden<=taxi.leg){
-     // A vehicle already traversing an invalid edge is held at its current
-     // position rather than permitted to complete that edge.
-     taxis[index]={...taxi,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
-    }else{
-     taxis[index]={...taxi,path:taxi.path.slice(0,firstForbidden+1),
-      edgeIds:taxi.edgeIds.slice(0,firstForbidden)};
-    }
+    if(taxi.kind==='explorer'&&taxi.status==='EXPLORING')
+     taxis[index]={...taxi,discoveryEdgeIds:taxi.edgeIds.filter(id=>allowedRoads.has(id))};
    }
    // Stranded idle Explorers return to the nearest reachable permitted road.
    // Returning never discovers roads or reveals territory.
@@ -172,7 +162,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns};
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],discoveryEdgeIds:[...(taxi.discoveryEdgeIds??[]),...(extension.discoveryEdgeIds??[])],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
