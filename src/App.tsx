@@ -144,6 +144,34 @@ export default function App(){
   },500);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
+ // Autonomous survey car: return along actual roads to a compatible station.
+ useEffect(()=>{
+  if(!graph||!company)return;
+  let cancelled=false,busy=false;
+  const check=async()=>{
+   if(busy)return;busy=true;
+   try{
+    const updates=new Map<string,Taxi>();
+    for(const vehicle of taxisRef.current){
+     if(vehicle.kind!=='surveyor'||vehicle.deliveryUntil&&vehicle.deliveryUntil>Date.now()||
+        vehicle.status==='TO_STATION'||vehicle.status==='REFUELLING')continue;
+     const remaining=energyRangeKm(vehicle);
+     if(remaining>35)continue;
+     const stations=await loadStationTile(stationTileKey(vehicle.position[0],vehicle.position[1])).catch(()=>[]);
+     if(cancelled)break;
+     const spec=energySpec(vehicle);
+     const planned=reachableStations(graph,vehicle.position,stations,spec.unit==='kWh'?'charging':'fuel',remaining*0.9,12)[0];
+     if(!planned||remaining>Math.max(15,planned.roadKm*1.6+5))continue;
+     updates.set(vehicle.id,planned.path.length<2?
+      {...vehicle,status:'REFUELLING',stationId:planned.station.id,refillUntil:Date.now()+30000,path:[],edgeIds:[],leg:0,distanceIntoLeg:0}:
+      {...vehicle,status:'TO_STATION',stationId:planned.station.id,path:planned.path,edgeIds:planned.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[],speedKph:0});
+    }
+    if(!cancelled&&updates.size)setFleet(old=>({...old,taxis:old.taxis.map(t=>updates.get(t.id)??t)}));
+   }finally{busy=false;}
+  };
+  const timer=window.setInterval(()=>{void check()},5000);
+  void check();return()=>{cancelled=true;window.clearInterval(timer)};
+ },[graph,company?.id]);
  // Prefetch roads near active vehicles and destinations without resetting their routes.
  useEffect(()=>{
   if(!company||!graph)return;
@@ -250,7 +278,20 @@ export default function App(){
     const taxis=old.taxis.map(t=>{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
+     if(delivered.kind==='surveyor'&&delivered.status==='REFUELLING'){
+      if(!delivered.refillUntil||now<delivered.refillUntil)return delivered;
+      const spec=energySpec(delivered),quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
+      const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1);
+      if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return delivered;
+      fuelExpense+=cost;
+      transactions.push({id:crypto.randomUUID(),time:now,taxiId:delivered.id,description:`${delivered.name} · automatic ${spec.unit==='kWh'?'charging':'refuelling'}`,amount:-cost});
+      return {...delivered,status:'IDLE',stationId:undefined,refillUntil:undefined,energyRemaining:spec.capacity,energyPurchased:(delivered.energyPurchased??0)+quantity,fuelExpense:(delivered.fuelExpense??0)+cost};
+     }
      const next=tickTaxi(delivered,graph,1,discovered);
+     if(delivered.kind==='surveyor'&&delivered.status==='TO_STATION'&&next.taxi.status==='IDLE'){
+      const spec=energySpec(delivered);
+      return {...next.taxi,status:'REFUELLING',stationId:delivered.stationId,refillUntil:now+(spec.unit==='kWh'?120000:30000)};
+     }
      const km=meters(delivered.position,next.taxi.position)/1000;
      const spec=energySpec(delivered);
      const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
