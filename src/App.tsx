@@ -131,7 +131,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],allowMission:taxis.some(t=>t.kind!=='explorer')&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>t.kind!=='explorer').length).intervalMs,
-    allowScout:now-lastScoutAt.current>=3000});
+    allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
   },3000);
