@@ -193,18 +193,28 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
      marker.setLngLat(position);
      renderedPosition.current.set(id,position);
     }
-    // Use the active road segment for heading, rather than tiny frame-to-frame
-    // position corrections that can point backwards and make vehicles wobble.
+    // Select heading from the segment under the rendered position, not the
+    // simulation's leg (which may already be beyond the visible intersection).
     const previousHeading=taxiHeadingState.current.get(id);
     const route=elapsed<=1?snapshot.to:snapshot.forecast;
     const path=route.path;
     let target:number|undefined;
     if(path.length>1){
-     const index=Math.max(0,Math.min(route.leg,path.length-2));
-     const a=path[index],b=path[index+1];
-     const dx=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
-     const dy=b[1]-a[1];
-     if(dx*dx+dy*dy>1e-16)target=Math.atan2(dx,dy)*180/Math.PI;
+     let bestDistance=Infinity;
+     for(let i=0;i<path.length-1;i++){
+      const a=path[i],b=path[i+1];
+      const cos=Math.cos(position[1]*Math.PI/180);
+      const dx=(b[0]-a[0])*cos,dy=b[1]-a[1];
+      const lengthSq=dx*dx+dy*dy;
+      if(lengthSq<1e-16)continue;
+      const px=(position[0]-a[0])*cos,py=position[1]-a[1];
+      const t=Math.max(0,Math.min(1,(px*dx+py*dy)/lengthSq));
+      const dist=(px-t*dx)**2+(py-t*dy)**2;
+      // Prefer the segment nearest the displayed car; a tiny forward bias
+      // resolves ties at intersections without turning on approach.
+      const score=dist+(t>=1?1e-14:0);
+      if(score<bestDistance){bestDistance=score;target=Math.atan2(dx,dy)*180/Math.PI;}
+     }
     }
     if(previousHeading){
      if(target!==undefined){
