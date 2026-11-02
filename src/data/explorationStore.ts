@@ -1,0 +1,9 @@
+// IndexedDB stores exploration independently of the limited localStorage fleet save.
+export type Segment=[[number,number],[number,number]];
+const DB='travelempire-exploration-v1';
+const STORE='companies';
+export type ExplorationRecord={ids:string[];segments:Record<string,Segment[]>};
+function openDB():Promise<IDBDatabase>{return new Promise((resolve,reject)=>{const request=indexedDB.open(DB,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(STORE))request.result.createObjectStore(STORE)};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
+export async function readExploration(id:string):Promise<ExplorationRecord|null>{const db=await openDB();try{return await new Promise((resolve,reject)=>{const request=db.transaction(STORE,'readonly').objectStore(STORE).get(id);request.onsuccess=()=>resolve(request.result??null);request.onerror=()=>reject(request.error);});}finally{db.close();}}
+export async function writeExploration(id:string,record:ExplorationRecord):Promise<void>{const db=await openDB();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');const store=tx.objectStore(STORE);const get=store.get(id);get.onsuccess=()=>{const old=get.result as ExplorationRecord|undefined;store.put({ids:[...new Set([...(old?.ids??[]),...record.ids])],segments:{...(old?.segments??{}),...record.segments}},id);};tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}finally{db.close();}}
+export async function clearExploration(id:string):Promise<void>{const db=await openDB();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}finally{db.close();}}
