@@ -1,5 +1,5 @@
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,route,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -122,6 +122,27 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     }else{
      taxis[index]={...taxi,path:taxi.path.slice(0,firstForbidden+1),
       edgeIds:taxi.edgeIds.slice(0,firstForbidden)};
+    }
+   }
+   // Stranded idle Explorers return to the nearest reachable permitted road.
+   // Returning never discovers roads or reveals territory.
+   const permittedNodes=new Set<string>();
+   for(const [from,links] of graph.edges)for(const edge of links)if(allowedRoads.has(edge.id)){
+    permittedNodes.add(from);permittedNodes.add(edge.to);
+   }
+   for(let index=0;index<taxis.length;index++){
+    const taxi=taxis[index];
+    if(taxi.kind!=='explorer'||taxi.status!=='IDLE'||taxi.deliveryUntil)continue;
+    const start=nearest(graph,taxi.position);
+    if(!start||permittedNodes.has(start))continue;
+    const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
+     .sort((a,b)=>a.d-b.d).slice(0,12);
+    for(const candidate of candidates){
+     const home=route(graph,start,candidate.k);
+     if(!home||home.path.length<2)continue;
+     taxis[index]={...taxi,status:'RETURNING',path:home.path,edgeIds:home.edgeIds,
+      leg:0,distanceIntoLeg:0,journeyEdges:[]};
+     break;
     }
    }
    const reservedTargets=new Set<string>();
