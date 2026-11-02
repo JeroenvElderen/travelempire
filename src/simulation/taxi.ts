@@ -290,27 +290,65 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
 export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;createdAt:number;expiresAt:number};
-export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,hq:Point,now=Date.now(),fareMultiplier=1):PassengerRequest|null{
- const allEligible=exploredRoadNodes(graph,explored,hq);
+// A passenger stop is valid only at a node touching an Explorer-discovered edge.
+export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<string>{
+ const eligible=new Set<string>();
+ for(const [from,links] of graph.edges)for(const edge of links)if(discovered.has(edge.id)){
+  eligible.add(from);eligible.add(edge.to);
+ }
+ return eligible;
+}
+export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1):PassengerRequest|null{
+ const allEligible=[...passengerRoadNodes(graph,explored)];
  if(allEligible.length<2)return null;
  const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
- // Use random sampled eligible nodes; both endpoints are always inside the explored network.
  for(let attempt=0;attempt<35;attempt++){
   const from=eligible[Math.floor(Math.random()*eligible.length)];
   const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=200&&d<=4000;});
   if(!near.length)continue;
   const to=near[Math.floor(Math.random()*near.length)];
-  const trip=route(graph,from,to);
+  // No passenger journey may traverse an undiscovered road.
+  const trip=routeDiscovered(graph,from,to,explored);
   if(!trip||trip.length<150||trip.length>5000)continue;
   return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
  }
  return null;
 }
-export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest):Taxi|null{
+export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>):ReturnType<typeof route>{
+ if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
+ const dist=new Map<string,number>([[from,0]]),prev=new Map<string,{from:string;id:string}>();
+ const heap:Array<[number,string]>=[[0,from]];
+ while(heap.length){
+  heap.sort((a,b)=>b[0]-a[0]);
+  const [d,k]=heap.pop()!;
+  if(d!==(dist.get(k)??Infinity))continue;
+  if(k===to)break;
+  for(const edge of graph.edges.get(k)??[]){
+   if(!discovered.has(edge.id))continue;
+   const nd=d+edge.meters;
+   if(nd<(dist.get(edge.to)??Infinity)){
+    dist.set(edge.to,nd);prev.set(edge.to,{from:k,id:edge.id});heap.push([nd,edge.to]);
+   }
+  }
+ }
+ if(!dist.has(to))return null;
+ const keys=[to],ids:string[]=[];let current=to;
+ while(current!==from){
+  const step=prev.get(current);if(!step)return null;
+  ids.push(step.id);keys.push(step.from);current=step.from;
+ }
+ keys.reverse();ids.reverse();
+ return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};
+}
+export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
  const start=nearest(graph,taxi.position),pickup=nearest(graph,mission.pickup);
  if(!start||!pickup)return null;
- const toPickup=route(graph,start,pickup);
+ if(discovered){
+  const eligible=passengerRoadNodes(graph,discovered);
+  if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
+ }
+ const toPickup=discovered?routeDiscovered(graph,start,pickup,discovered):route(graph,start,pickup);
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
