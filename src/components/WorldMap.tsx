@@ -297,11 +297,14 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const explorationCompany=useRef<string|undefined>(undefined);
  const persistBusy=useRef(false);
  const persistAgain=useRef(false);
- useEffect(()=>{explorationCompany.current=companyId;persistentSegments.current=new Map();explorationLast.current=null;
+ const explorationLastSignature=useRef('');
+ const explorationGeneration=useRef(0);
+ useEffect(()=>{explorationCompany.current=companyId;persistentSegments.current=new Map();explorationLast.current=null;explorationLastSignature.current='';explorationGeneration.current++;
   if(!companyId)return;let cancelled=false;
   readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
    // Merge rather than replace discoveries made while storage was loading.
    for(const [id,segments] of Object.entries(record?.segments??{}))if(!persistentSegments.current.has(id))persistentSegments.current.set(id,segments);
+   explorationLastSignature.current='';
    explorationSchedule.current?.();
   }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
   return()=>{cancelled=true};
@@ -313,7 +316,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   }while(persistAgain.current&&explorationCompany.current===id)}catch(error){console.error('[TravelEmpire] Geometry save failed',error)}finally{persistBusy.current=false;}
  };
  // Build a stable edge geometry index only when the graph changes.
- const explorationEdgeIndex=useRef<{graph:RoadGraph|null|undefined;entries:Map<string,Array<[[number,number],[number,number]]>>}>({graph:null,entries:new Map()});
+ const explorationEdgeIndex=useRef<{graph:RoadGraph|null|undefined;edgeCount:number;entries:Map<string,Array<[[number,number],[number,number]]>>}>({graph:null,edgeCount:-1,entries:new Map()});
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready)return;
@@ -353,7 +356,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    const {graph:currentGraph,exploredEdgeIds:currentIds,headquarters:currentHQ}=explorationInputs.current;
    if(!currentGraph||!currentHQ)return;
    // Index each road ID once per graph version; avoid scanning 600k+ nodes on every tick.
-   if(explorationEdgeIndex.current.graph!==currentGraph){
+   const edgeCount=[...currentGraph.edges.values()].reduce((count,edges)=>count+edges.length,0);
+   if(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount){
     const entries=new Map<string,Array<[[number,number],[number,number]]>>();
     const seen=new Set<string>();
     for(const [from,edges] of currentGraph.edges)for(const edge of edges){
@@ -361,7 +365,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
      const a=currentGraph.nodes.get(from),b=currentGraph.nodes.get(edge.to);
      if(a&&b){let list=entries.get(edge.id);if(!list){list=[];entries.set(edge.id,list);}list.push([[a[0],a[1]],[b[0],b[1]]]);}
     }
-    explorationEdgeIndex.current={graph:currentGraph,entries};
+    explorationEdgeIndex.current={graph:currentGraph,edgeCount,entries};
    }
    let changed=false;
    for(const id of new Set(currentIds)){
@@ -373,20 +377,23 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    // Render ALL previously discovered geometry, including unloaded road tiles.
    const segments:Segment[]=[];
    for(const list of persistentSegments.current.values())segments.push(...list);
+   const signature=`${currentHQ.lng},${currentHQ.lat}:${segments.length}:${persistentSegments.current.size}`;
+   if(signature===explorationLastSignature.current)return;
+   explorationLastSignature.current=signature;
    explorationBusy.current=true;
    worker.postMessage({headquarters:[currentHQ.lng,currentHQ.lat],segments});
   };
   explorationSchedule.current=send;
   worker.onmessage=(event:MessageEvent<{coverage?:GeoJSON.FeatureCollection;locked?:GeoJSON.FeatureCollection;error?:string}>)=>{
    explorationBusy.current=false;
-   if(event.data.error)console.error('[TravelEmpire] Exploration geometry:',event.data.error);
+   if(event.data.error){console.error('[TravelEmpire] Exploration geometry:',event.data.error);explorationLastSignature.current='';}
    if(event.data.coverage&&event.data.locked){
     explorationLast.current={coverage:event.data.coverage,locked:event.data.locked};
     apply(event.data.coverage,event.data.locked);
    }
    if(explorationPending.current){explorationPending.current=false;window.setTimeout(send,200);}
   };
-  worker.onerror=e=>{explorationBusy.current=false;console.error('[TravelEmpire] Exploration worker:',e.message)};
+  worker.onerror=e=>{explorationBusy.current=false;explorationLastSignature.current='';console.error('[TravelEmpire] Exploration worker:',e.message)};
   const onStyle=()=>{if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);else apply({type:'FeatureCollection',features:[]},fallback);};
   instance.on('style.load',onStyle);
   send();
