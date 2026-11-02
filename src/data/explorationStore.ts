@@ -65,7 +65,8 @@ export async function syncExploration(id:string):Promise<ExplorationRecord|null>
   // Preserve all locally discovered IDs, including ones whose geometry
   // has not yet been loaded. Those get an empty geometry until resolved.
   const ids=new Set([...(local?.ids??[]),...Object.keys(remote)]);
-  const combined={...remote,...(local?.segments??{})};
+  const combined={...remote};
+  for(const [roadId,segments] of Object.entries(local?.segments??{}))if(segments.length||!combined[roadId])combined[roadId]=segments;
   for(const roadId of ids)if(!combined[roadId])combined[roadId]=[];
   const upload=Object.entries(combined).filter(([roadId,segments])=>!remote[roadId]||(segments.length>0&&remote[roadId].length===0));
   for(let i=0;i<upload.length;i+=200){
