@@ -192,18 +192,22 @@ export default function App(){
   window.addEventListener('pagehide',flush);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',flush);flush()};
  },[company?.id]);
+ // Persist discoveries promptly rather than waiting for a five-second fleet snapshot.
+ // IndexedDB merges the IDs transactionally with geometry written by WorldMap.
  useEffect(()=>{if(!company)return;const id=company.id;let busy=false;let pending=false;
   const saveExploration=async()=>{if(busy){pending=true;return;}busy=true;
    try{do{pending=false;const ids=fleetSaveRef.current.exploredEdgeIds??[];
-    const old=await readExploration(id);
-    const merged=[...new Set([...(old?.ids??[]),...ids])];
-    await writeExploration(id,{ids:merged,segments:old?.segments??{}});
+    if(ids.length)await writeExploration(id,{ids,segments:{}});
    }while(pending)}catch(error){console.error('[TravelEmpire] Exploration save failed',error)}finally{busy=false;}
   };
   const timer=window.setInterval(saveExploration,5000);
   window.addEventListener('pagehide',saveExploration);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);void saveExploration()};
  },[company?.id]);
+ useEffect(()=>{if(!company||!fleet.exploredEdgeIds?.length)return;
+  const timer=window.setTimeout(()=>{void writeExploration(company.id,{ids:fleet.exploredEdgeIds??[],segments:{}}).catch(error=>console.error('[TravelEmpire] Discovery save failed',error));},350);
+  return()=>window.clearTimeout(timer);
+ },[company?.id,fleet.exploredEdgeIds]);
  useEffect(()=>{if(!company)return;const id=company.id;const save=()=>{try{saveFleet(id,{...fleetSaveRef.current,exploredEdgeIds:[]})}catch(error){console.error('[TravelEmpire] Fleet save failed',error)}};
   const timer=window.setInterval(save,5000);
   window.addEventListener('pagehide',save);
