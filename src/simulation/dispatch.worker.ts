@@ -38,7 +38,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const eligibleStops=passengerRoadNodes(activeGraph,explored);
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
-  const passengerTaxis=taxis.filter(t=>t.kind!=='explorer');
+  const passengerTaxis=taxis.filter(t=>t.kind!=='explorer'&&t.kind!=='surveyor');
   const demand=demandAt(now,passengerTaxis.length);
   if(msg.allowMission&&queue.length<demand.queueLimit){
    const request=createPassengerRequest(graph,explored,hq,now,demand.fareMultiplier);
@@ -46,7 +46,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   }
   for(let i=queue.length-1;i>=0;i--){
    const mission=queue[i];
-   const candidates=taxis.map((t,index)=>({index,d:t.kind!=='explorer'&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
+   const candidates=taxis.map((t,index)=>({index,d:t.kind!=='explorer'&&t.kind!=='surveyor'&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
     .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
    let best:{index:number;taxi:Taxi;distance:number}|null=null;
    for(const candidate of candidates){
@@ -56,6 +56,15 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(!best||distance<best.distance)best={index:candidate.index,taxi:assigned,distance};
    }
    if(best){taxis[best.index]=best.taxi;queue.splice(i,1);}
+  }
+  // Surveyors expand taxi-revealed territory, never carry passengers.
+  const surveyed=new Set(msg.territory??[]);
+  const surveyTargets=new Set<string>(),surveyEdges=new Set<string>();
+  for(let index=0;index<taxis.length;index++){
+   const vehicle=taxis[index];
+   if(vehicle.kind!=='surveyor'||vehicle.deliveryUntil||vehicle.status!=='IDLE'||vehicle.refillUntil||vehicle.energyRemaining!==undefined&&vehicle.energyRemaining<=15)continue;
+   const planned=dispatchScout(vehicle,activeGraph,surveyed,hq,surveyTargets,surveyEdges);
+   if(planned.status==='EXPLORING')taxis[index]={...planned,discoveryEdgeIds:[]};
   }
   // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
