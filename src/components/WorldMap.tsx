@@ -140,100 +140,82 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const taxisRef=useRef(taxis);taxisRef.current=taxis;
  // Render one simulation tick behind the authoritative state. This avoids running
  // the road integrator on every animation frame and prevents one-second jumps.
- const graphRef=useRef(graph);graphRef.current=graph;
- const taxiSnapshots=useRef(new Map<string,{from:Taxi;to:Taxi;forecast:Taxi;at:number}>());
- const taxiHeadingState=useRef(new Map<string,{angle:number;position:[number,number];at:number}>());
- // Render-only state. Simulation position, job status and saved coordinates are untouched.
+ // Vehicle visuals follow confirmed simulation snapshots, never predicted positions.
+ const taxiSnapshots=useRef(new Map<string,{from:Taxi;to:Taxi;at:number;routeKey:string}>());
+ const taxiHeadingState=useRef(new Map<string,{angle:number;at:number}>());
  const renderedPosition=useRef(new Map<string,[number,number]>());
- useEffect(()=>{const now=performance.now();const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);}}for(const taxi of taxis){if(taxi.deliveryUntil && taxi.deliveryUntil> Date.now())continue;const previous=taxiSnapshots.current.get(taxi.id);
-  if(!previous || previous.to.position[0]!==taxi.position[0] || previous.to.position[1]!==taxi.position[1]){
-   const forecast=taxi; // Disable speculative travel: it can jump ahead of the authoritative simulation.
-   // Preserve the last rendered position across simulation ticks to avoid
-   // one-frame jumps when the simulation and animation clocks differ.
-   // Only do this on the same route; a new job must not interpolate from
-   // the old job's unrelated path.
-   // Interpolate only between authoritative snapshots of the same journey.
-   // A route transition starts at the new position; never connect two jobs.
-   const sameRoute=!!previous&&previous.to.edgeIds.length===taxi.edgeIds.length&&
-    previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&
-    previous.to.leg<=taxi.leg&&previous.to.status===taxi.status;
-   const from=sameRoute?previous!.to:taxi;
-   taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
-  }else{
-   // Keep route/status current without restarting the animation clock.
-   taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':taxi.kind==='surveyor'?'car_black.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
+ const routeKey=(taxi:Taxi)=>taxi.status+'|'+taxi.edgeIds.join('|');
+ useEffect(()=>{
+  const now=performance.now();
+  const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));
+  for(const [id,m] of taxiMarkers.current){
+   if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);}
+  }
+  for(const taxi of taxis){
+   if(taxi.deliveryUntil&&taxi.deliveryUntil>Date.now())continue;
+   const previous=taxiSnapshots.current.get(taxi.id);
+   const key=routeKey(taxi);
+   if(!previous||previous.to.position[0]!==taxi.position[0]||previous.to.position[1]!==taxi.position[1]||previous.routeKey!==key){
+    const continuous=!!previous&&previous.routeKey===key&&taxi.leg>=previous.to.leg;
+    const from=continuous?previous.to:taxi;
+    taxiSnapshots.current.set(taxi.id,{from,to:taxi,at:now,routeKey:key});
+   }else taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
+   if(!taxiMarkers.current.has(taxi.id)&&map.current){
+    const el=document.createElement('div');el.className='taxi-map-marker';
+    const img=document.createElement('img');
+    img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':taxi.kind==='surveyor'?'car_black.svg':'car_topview.svg'}`;
+    img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+    const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);
+    m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);
+   }
+  }
+ },[taxis]);
  useEffect(()=>{
   let frame=0;
   const animate=()=>{
    const wallNow=Date.now();
    const deliveries=taxisRef.current.filter(t=>t.deliveryUntil&&t.deliveryUntil>wallNow);
    const activeIds=new Set(deliveries.map(t=>t.id));
-   for(const [id,m] of deliveryMarkers.current)if(!activeIds.has(id)){m.remove();deliveryMarkers.current.delete(id)}
+   for(const [id,m] of deliveryMarkers.current)if(!activeIds.has(id)){m.remove();deliveryMarkers.current.delete(id);}
    for(const taxi of deliveries){
     const point=deliveryPosition(taxi,wallNow);if(!point||!map.current)continue;
     let m=deliveryMarkers.current.get(taxi.id);
-    if(!m){const el=document.createElement('div');el.className='delivery-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL}assets/delivery_truck.svg`;img.alt='Vehicle delivery';el.appendChild(img);m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(point).addTo(map.current);m.getElement().style.zIndex='3';deliveryMarkers.current.set(taxi.id,m)}
-    m.setLngLat(point);
-    if(taxi.deliveryPath&&taxi.deliveryStartedAt&&taxi.deliveryUntil){
-     m.setRotation(deliveryHeading(taxi.deliveryPath,taxi.deliveryStartedAt,taxi.deliveryUntil,wallNow));
+    if(!m){
+     const el=document.createElement('div');el.className='delivery-map-marker';
+     const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL}assets/delivery_truck.svg`;
+     img.alt='Vehicle delivery';el.appendChild(img);
+     m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(point).addTo(map.current);
+     m.getElement().style.zIndex='3';deliveryMarkers.current.set(taxi.id,m);
     }
+    m.setLngLat(point);
+    if(taxi.deliveryPath&&taxi.deliveryStartedAt&&taxi.deliveryUntil)m.setRotation(deliveryHeading(taxi.deliveryPath,taxi.deliveryStartedAt,taxi.deliveryUntil,wallNow));
     m.getElement().title=`Delivering ${taxi.vehicleModel??taxi.name}`;
    }
    const now=performance.now();
    for(const [id,snapshot] of taxiSnapshots.current){
     const marker=taxiMarkers.current.get(id);if(!marker)continue;
-    const taxi=snapshot.to;
     const elapsed=Math.max(0,(now-snapshot.at)/1000);
-    // Continue a short distance along the actual road after a late simulation tick.
-    // Forecast is computed only when authoritative state changes, never per frame.
-    const position=elapsed<=1
-      ?positionOnTravelledRoute(snapshot.from,snapshot.to,Math.min(1,elapsed))
-      :snapshot.to.position;
-    const lastRendered=renderedPosition.current.get(id);
-    if(!lastRendered||Math.abs(lastRendered[0]-position[0])+Math.abs(lastRendered[1]-position[1])>1e-9){
-     marker.setLngLat(position);
-     renderedPosition.current.set(id,position);
-    }
-    // Select heading from the segment under the rendered position, not the
-    // simulation's leg (which may already be beyond the visible intersection).
-    const previousHeading=taxiHeadingState.current.get(id);
-    const route=elapsed<=1?snapshot.to:snapshot.forecast;
-    const path=route.path;
-    let target:number|undefined;
-    if(path.length>1){
-     let bestDistance=Infinity;
-     for(let i=0;i<path.length-1;i++){
-      const a=path[i],b=path[i+1];
-      const cos=Math.cos(position[1]*Math.PI/180);
-      const dx=(b[0]-a[0])*cos,dy=b[1]-a[1];
-      const lengthSq=dx*dx+dy*dy;
-      if(lengthSq<1e-16)continue;
-      const px=(position[0]-a[0])*cos,py=position[1]-a[1];
-      const t=Math.max(0,Math.min(1,(px*dx+py*dy)/lengthSq));
-      const dist=(px-t*dx)**2+(py-t*dy)**2;
-      // Prefer the segment nearest the displayed car; a tiny forward bias
-      // resolves ties at intersections without turning on approach.
-      const score=dist+(t>=1?1e-14:0);
-      if(score<bestDistance){bestDistance=score;target=Math.atan2(dx,dy)*180/Math.PI;}
-     }
-    }
-    if(previousHeading){
-     if(target!==undefined){
-      const delta=((target-previousHeading.angle+540)%360)-180;
-      const dt=Math.min(0.1,Math.max(0,(now-previousHeading.at)/1000));
-      const blend=1-Math.exp(-dt/0.16);
-      previousHeading.angle+=delta*blend;
-      marker.setRotation(previousHeading.angle);
-     }
-     previousHeading.position=position;
-     previousHeading.at=now;
-    }else{
-     const initial=target??0;
-     taxiHeadingState.current.set(id,{angle:initial,position,at:now});
-     marker.setRotation(initial);
-    }
-    // Avoid mutating DOM attributes on every animation frame.
+    const fraction=Math.min(1,elapsed);
+    const position=positionOnTravelledRoute(snapshot.from,snapshot.to,fraction);
+    const last=renderedPosition.current.get(id);
+    if(!last||Math.abs(last[0]-position[0])+Math.abs(last[1]-position[1])>1e-9){marker.setLngLat(position);renderedPosition.current.set(id,position);}
+    // Determine the tangent along the actual interpolated path by sampling
+    // immediately ahead of the displayed position (never a future simulation leg).
+    const ahead=positionOnTravelledRoute(snapshot.from,snapshot.to,Math.min(1,fraction+0.002));
+    const behind=positionOnTravelledRoute(snapshot.from,snapshot.to,Math.max(0,fraction-0.002));
+    const dx=(ahead[0]-behind[0])*Math.cos(position[1]*Math.PI/180);
+    const dy=ahead[1]-behind[1];
+    const previous=taxiHeadingState.current.get(id);
+    if(dx*dx+dy*dy>1e-17){
+     const target=Math.atan2(dx,dy)*180/Math.PI;
+     if(previous){
+      const delta=((target-previous.angle+540)%360)-180;
+      const dt=Math.min(0.1,Math.max(0,(now-previous.at)/1000));
+      previous.angle+=delta*(1-Math.exp(-dt/0.12));previous.at=now;
+      marker.setRotation(previous.angle);
+     }else{taxiHeadingState.current.set(id,{angle:target,at:now});marker.setRotation(target);}
+    }else if(previous)previous.at=now;
+    const taxi=snapshot.to;
     const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
     if(marker.getElement().title!==title)marker.getElement().title=title;
    }
