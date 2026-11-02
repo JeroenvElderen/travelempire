@@ -1,4 +1,4 @@
-import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,type Segment} from '../data/explorationStore';
+import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,writeExplorationMask,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
@@ -293,6 +293,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  explorationInputs.current={graph,exploredEdgeIds,headquarters};
  const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
  const explorationSchedule=useRef<(()=>void)|null>(null);
+ const explorationApply=useRef<((coverage:GeoJSON.FeatureCollection,locked:GeoJSON.FeatureCollection)=>void)|null>(null);
  const persistentSegments=useRef<Map<string,Segment[]>>(new Map());
  const explorationCompany=useRef<string|undefined>(undefined);
  const persistBusy=useRef(false);
@@ -301,6 +302,16 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const explorationGeneration=useRef(0);
  useEffect(()=>{explorationCompany.current=companyId;persistentSegments.current=new Map();explorationLast.current=null;explorationLastSignature.current='';explorationGeneration.current++;
   if(!companyId)return;let cancelled=false;
+  // Restore the last proven fog mask immediately; rebuilding large unions can
+  // take time or fail, but must never erase already discovered territory.
+  void readExplorationMask(companyId).then(mask=>{
+   if(cancelled||explorationCompany.current!==companyId||!mask)return;
+   if(!explorationLast.current){
+    explorationLast.current=mask;
+    explorationApply.current?.(mask.coverage,mask.locked);
+   }
+  }).catch(error=>console.error('[TravelEmpire] Cached fog restore failed',error));
+
   readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
    // Merge rather than replace discoveries made while storage was loading.
    for(const [id,segments] of Object.entries(record?.segments??{}))if(!persistentSegments.current.has(id))persistentSegments.current.set(id,segments);
@@ -344,6 +355,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    instance.addSource('service-coverage',{type:'geojson',data:coverage});
    instance.addLayer({id:'service-coverage-fill',type:'fill',source:'service-coverage',paint:{'fill-opacity':0}});
   };
+  explorationApply.current=apply;
   if(!explorationVisible||!headquarters){remove();return;}
   // Keep the last successful geometry until the worker returns a new result.
   // Never replace it with the starting-circle fallback on routine effect reruns.
@@ -406,6 +418,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    if(event.data.coverage&&event.data.locked){
     explorationLast.current={coverage:event.data.coverage,locked:event.data.locked};
     apply(event.data.coverage,event.data.locked);
+    const id=explorationCompany.current;
+    if(id)void writeExplorationMask(id,explorationLast.current).catch(error=>console.error('[TravelEmpire] Fog cache save failed',error));
    }
    if(explorationPending.current){explorationPending.current=false;window.setTimeout(send,200);}
   };
@@ -413,7 +427,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   const onStyle=()=>{if(explorationLast.current)apply(explorationLast.current.coverage,explorationLast.current.locked);else if(!instance.getSource('locked-territory'))apply({type:'FeatureCollection',features:[]},fallback);};
   instance.on('style.load',onStyle);
   send();
-  return()=>{explorationSchedule.current=null;worker.terminate();explorationWorker.current=null;instance.off('style.load',onStyle)};
+  return()=>{explorationApply.current=null;explorationSchedule.current=null;worker.terminate();explorationWorker.current=null;instance.off('style.load',onStyle)};
  },[headquarters?.lng,headquarters?.lat,explorationVisible,ready,basemap]);
  // Coalesce frequent simulation ticks rather than rebuilding the polygons every second.
  useEffect(()=>{if(!explorationVisible)return;explorationSchedule.current?.();},[graph,exploredEdgeIds,explorationVisible]);
