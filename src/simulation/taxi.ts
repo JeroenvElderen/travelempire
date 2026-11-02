@@ -344,28 +344,36 @@ export function dispatchScout(
   }heap[i]=last;}
   return first;
  };
- // Prefer undiscovered edges whose endpoints are already in the revealed area.
- // Only after these are exhausted consider the closest outward frontier edge.
+ // Bounded nearest-first search. A full graph scan blocked dispatch on mobile.
+ // Complete nearby streets within the revealed territory, then expand outward.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
+ let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let visits=0;
- while(heap.length&&visits++<150000){
+ const maxSearchMeters=3500;
+ while(heap.length&&visits++<12000){
   const current=pop();if(!current)break;
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
-  if(best&&best.inside&&distance>best.distance)break;
+  if(distance>maxSearchMeters)break;
+  // Once the nearest inside road is found, only finish nodes with shorter
+  // approach distances; avoid searching the entire connected road network.
+  if(best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    const isNew=!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
-    if(!best||(inside&&!best.inside)||(inside===best.inside&&candidate.distance<best.distance))best=candidate;
+    if(inside){
+     if(!best||candidate.distance<best.distance)best=candidate;
+    }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
    }
    const next=distance+edge.meters;
-   if(next<(dist.get(edge.to)??Infinity)){
+   if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
    }
   }
  }
+ best=best??bestOutside;
  if(!best)return taxi;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
