@@ -249,7 +249,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
-   if(!roadsVisible||!graph){remove();setRoadStatus(graph?'Road overlay hidden':'Waiting for geographic road tiles');return;}
+   if(!graph){remove();setRoadStatus('Waiting for geographic road tiles');return;}
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    const features:GeoJSON.Feature[]=[];
@@ -259,6 +259,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     const a=graph.nodes.get(from);
     if(!a)continue;
     for(const edge of edges){
+     if(!roadsVisible&&!exploredSet.has(edge.id))continue;
      if(seen.has(edge.id))continue;
      seen.add(edge.id);
      const b=graph.nodes.get(edge.to);
@@ -273,9 +274,10 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    if(existing)existing.setData(data);
    else{
     instance.addSource(sourceId,{type:'geojson',data});
-    instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#2586c8','line-width':['interpolate',['linear'],['zoom'],8,0.7,13,2.1,17,3.5],'line-opacity':0.55}});
+    instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#2586c8','line-width':['interpolate',['linear'],['zoom'],8,0.7,13,2.1,17,3.5],'line-opacity':roadsVisible?0.55:0}});
     instance.addLayer({id:exploredLayerId,type:'line',source:sourceId,filter:['==',['get','explored'],true],paint:{'line-color':'#21db82','line-width':['interpolate',['linear'],['zoom'],8,2.0,13,4.0,17,6.0],'line-opacity':0.98}});
    }
+   if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.55:0);
    setRoadStatus(`${features.filter(f=>f.properties?.explored===true).length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
   };
   instance.on('moveend',update);
