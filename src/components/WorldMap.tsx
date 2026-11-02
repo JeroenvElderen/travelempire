@@ -4,7 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
-import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
+import {type Taxi,type RoadGraph} from '../simulation/taxi';
 import {deliveryPosition} from '../dealership';
 import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
 import {energySpec,energyRangeKm} from '../simulation/energy';
