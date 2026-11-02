@@ -348,11 +348,13 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   const ctx=canvas.getContext('2d');
   if(!ctx){canvas.remove();return;}
   let frame=0;
+  let lastDraw=0;
+  let trailing=0;
   const draw=()=>{
    frame=0;
    const width=host.clientWidth,height=host.clientHeight;
    if(!width||!height)return;
-   const dpr=Math.min(window.devicePixelRatio||1,2);
+   const dpr=Math.min(window.devicePixelRatio||1,1.25);
    if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){
     canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
    }
@@ -375,6 +377,8 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    const bounds=instance.getBounds();
    const west=bounds.getWest()-0.03,east=bounds.getEast()+0.03;
    const south=bounds.getSouth()-0.03,north=bounds.getNorth()+0.03;
+   // Batch strokes by approximate width to avoid a canvas draw call per road.
+   const batches=new Map<number,Path2D>();
    for(const segments of persistentSegments.current.values())for(const [a,b] of segments){
     if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||
        Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
@@ -382,21 +386,32 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     const lat=(a[1]+b[1])/2;
     const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
     const edge=instance.project([a[0]+150/metersPerDegree,a[1]]);
-    ctx.lineWidth=Math.max(1,2*Math.abs(edge.x-p.x));
-    ctx.lineCap='round';ctx.lineJoin='round';
-    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();
+    const width=Math.max(1,Math.round(2*Math.abs(edge.x-p.x)*2)/2);
+    let path=batches.get(width);
+    if(!path){path=new Path2D();batches.set(width,path);}
+    path.moveTo(p.x,p.y);path.lineTo(q.x,q.y);
    }
+   ctx.lineCap='round';ctx.lineJoin='round';
+   for(const [width,path] of batches){ctx.lineWidth=width;ctx.stroke(path);}
    ctx.globalCompositeOperation='source-over';
   };
-  const schedule=()=>{if(!frame)frame=requestAnimationFrame(draw);};
+  const schedule=()=>{
+   // Mobile map movement fires every animation frame. Throttle expensive fog
+   // projection work, then always redraw the final settled position.
+   const elapsed=performance.now()-lastDraw;
+   if(elapsed<80){if(!trailing)trailing=window.setTimeout(()=>{trailing=0;schedule();},80-elapsed);return;}
+   if(!frame)frame=requestAnimationFrame(()=>{lastDraw=performance.now();draw();});
+  };
   fogDraw.current=schedule;
   instance.on('move',schedule);
+  instance.on('moveend',schedule);
   instance.on('resize',schedule);
   instance.on('style.load',schedule);
   schedule();
   return()=>{
    fogDraw.current=null;
-   instance.off('move',schedule);instance.off('resize',schedule);
+   instance.off('move',schedule);instance.off('moveend',schedule);instance.off('resize',schedule);
+   if(trailing)window.clearTimeout(trailing);
    instance.off('style.load',schedule);
    if(frame)cancelAnimationFrame(frame);
    canvas.remove();
