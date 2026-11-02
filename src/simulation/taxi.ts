@@ -55,7 +55,7 @@ export const driverLevel=(trips:number)=>trips>=100?'Expert':trips>=30?'Experien
 export const driverSkill=(trips:number)=>Math.min(5,1+Math.floor(Math.max(0,trips)/25));
 export type BusinessLoan={id:string;principal:number;balance:number;annualRate:number;termDays:number;remainingDays:number;dailyPayment:number;accruedGameSeconds:number};
 export type EconomyUpgrade='fuel'|'workshop'|'dispatch'|'training';
-export type FleetState={loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
+export type FleetState={loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
 export type FinancialTransaction={id:string;time:number;taxiId?:string;description:string;amount:number};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
@@ -404,7 +404,6 @@ export function dispatchScout(
   extraMeters+=edge.meters;cursor=edge.to;
  }
  reservedTargets.add(cursor);
- for(const id of ids)reservedEdges.add(id);
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
   edgeIds:ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
