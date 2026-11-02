@@ -5,7 +5,7 @@ let activeRevision=0;
 const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowScout:boolean};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowScout:boolean};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
@@ -58,6 +58,53 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
   if(msg.allowScout){
+   // The starting HQ is revealed within 500m; taxi-travelled segments reveal
+   // 150m corridors. Explorer-discovered roads alone never expand this mask.
+   const territoryIds=new Set(msg.territory??[]);
+   const revealedSegments:Array<[Point,Point]>=[];
+   const seenTerritory=new Set<string>();
+   for(const [from,links] of graph.edges){
+    for(const edge of links){
+     if(!territoryIds.has(edge.id)||seenTerritory.has(edge.id))continue;
+     const a=graph.nodes.get(from),b=graph.nodes.get(edge.to);
+     if(a&&b){revealedSegments.push([a,b]);seenTerritory.add(edge.id);}
+    }
+   }
+   // Index taxi corridor segments spatially; avoid O(all roads × all corridors).
+   const cell=0.003;
+   const grid=new Map<string,Array<[Point,Point]>>();
+   const cellKey=(x:number,y:number)=>x+','+y;
+   for(const segment of revealedSegments){
+    const [a,b]=segment;
+    const x0=Math.floor(Math.min(a[0],b[0])/cell)-1,x1=Math.floor(Math.max(a[0],b[0])/cell)+1;
+    const y0=Math.floor(Math.min(a[1],b[1])/cell)-1,y1=Math.floor(Math.max(a[1],b[1])/cell)+1;
+    for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
+     const k=cellKey(x,y),list=grid.get(k)??[];list.push(segment);grid.set(k,list);
+    }
+   }
+   const inside=(point:Point)=>{
+    if(meters(point,hq)<=500)return true;
+    const segments=grid.get(cellKey(Math.floor(point[0]/cell),Math.floor(point[1]/cell)))??[];
+    const cos=Math.cos(point[1]*Math.PI/180);
+    for(const [a,b] of segments){
+     const ax=(a[0]-point[0])*111320*cos,ay=(a[1]-point[1])*111320;
+     const bx=(b[0]-point[0])*111320*cos,by=(b[1]-point[1])*111320;
+     const dx=bx-ax,dy=by-ay;
+     const t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy||1)));
+     if(Math.hypot(ax+t*dx,ay+t*dy)<=150)return true;
+    }
+    return false;
+   };
+   const allowedRoads=new Set<string>();
+   for(const [from,links] of graph.edges){
+    const a=graph.nodes.get(from);if(!a)continue;
+    for(const edge of links){
+     if(allowedRoads.has(edge.id))continue;
+     const b=graph.nodes.get(edge.to);if(!b)continue;
+     const middle:Point=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+     if(inside(a)&&inside(b)&&inside(middle))allowedRoads.add(edge.id);
+    }
+   }
    const reservedTargets=new Set<string>();
    const reservedEdges=new Set<string>();
    // Existing scouts reserve their remaining route, so new scouts avoid following them.
@@ -80,7 +127,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
