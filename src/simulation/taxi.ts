@@ -292,18 +292,42 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
-// Scouting is separate from passenger service: only scouting may target the unexplored frontier.
-export function dispatchScout(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point):Taxi{
+// Scouting follows actual roads, but randomizes among reachable frontier nodes.
+// Reservations let the dispatch worker spread simultaneous scouts across routes.
+export function dispatchScout(
+ taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
+ reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
+ frontierNodes?:string[]
+):Taxi{
  if(taxi.status!=='IDLE')return taxi;
- const frontier=explorationFrontierNodes(graph,explored,hq);
+ const frontier=frontierNodes??explorationFrontierNodes(graph,explored,hq);
  if(!frontier.length)return taxi;
  const start=nearest(graph,taxi.position);
- const candidates=frontier.map(k=>({k,d:meters(graph.nodes.get(k)!,taxi.position)})).filter(x=>x.d<5000).sort((a,b)=>a.d-b.d).slice(0,24);
+ if(!start)return taxi;
+ // Shuffle before limiting the route searches; never always choose the nearest node.
+ const candidates=frontier
+  .filter(k=>!reservedTargets.has(k))
+  .map(k=>({k,d:meters(graph.nodes.get(k)!,taxi.position)}))
+  .filter(x=>x.d>=100&&x.d<5000)
+  .map(x=>({...x,score:Math.random()+(x.d>=1000?0.3:0)}))
+  .sort((a,b)=>b.score-a.score)
+  .slice(0,24);
+ let best:{key:string;journey:NonNullable<ReturnType<typeof route>>;score:number}|null=null;
  for(const candidate of candidates){
   const journey=route(graph,start,candidate.k);
-  if(journey&&journey.path.length>1&&journey.length<6500){return{...taxi,status:'EXPLORING',path:journey.path,edgeIds:journey.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};}
+  if(!journey||journey.path.length<2||journey.length>6500)continue;
+  const newEdges=journey.edgeIds.filter(id=>!explored.has(id));
+  const overlapping=journey.edgeIds.filter(id=>reservedEdges.has(id)).length;
+  // Prefer genuinely new roads and discourage several taxis taking the same path.
+  const score=newEdges.length*3-overlapping*4+candidate.score*2;
+  if(!best||score>best.score)best={key:candidate.k,journey,score};
  }
- return taxi;
+ if(!best)return taxi;
+ reservedTargets.add(best.key);
+ for(const id of best.journey.edgeIds)reservedEdges.add(id);
+ return{...taxi,status:'EXPLORING',path:best.journey.path,edgeIds:best.journey.edgeIds,
+  journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,
+  fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in simulated seconds (4x wall time).

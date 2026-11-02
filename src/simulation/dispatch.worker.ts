@@ -1,5 +1,5 @@
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,dispatchScout,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,dispatchScout,explorationFrontierNodes,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -54,13 +54,26 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    if(best){taxis[best.index]=best.taxi;queue.splice(i,1);}
   }
-  // An unreachable waiting passenger must not block all scouting.
+  // Passenger assignments run first. Spread remaining idle taxis over distinct frontiers.
   let assignedCount=0;
   if(msg.allowScout){
+   const frontier=explorationFrontierNodes(graph,explored,hq);
+   const reservedTargets=new Set<string>();
+   const reservedEdges=new Set<string>();
+   // Existing scouts reserve their remaining route, so new scouts avoid following them.
+   for(const taxi of taxis){
+    if(taxi.status!=='EXPLORING')continue;
+    const destination=taxi.path.at(-1);
+    if(destination){const target=nearest(graph,destination);if(target)reservedTargets.add(target);}
+    for(const edge of taxi.edgeIds.slice(taxi.leg))reservedEdges.add(edge);
+   }
    for(let index=0;index<taxis.length;index++){
     if(taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq);
-    if(scout.status!=='IDLE'){taxis[index]=scout;assignedCount++;break;}
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,frontier);
+    if(scout.status!=='IDLE'){
+     taxis[index]=scout;
+     assignedCount++;
+    }
    }
   }
   self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size});
