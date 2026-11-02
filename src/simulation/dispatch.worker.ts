@@ -34,8 +34,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
   const taxis=msg.taxis.slice();
-  const eligibleStops=passengerRoadNodes(graph,explored);
-  const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(graph,m.pickup))&&eligibleStops.has(nearest(graph,m.dropoff)));
+  const activeGraph=graph;
+  const eligibleStops=passengerRoadNodes(activeGraph,explored);
+  const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
   const passengerTaxis=taxis.filter(t=>t.kind!=='explorer');
   const demand=demandAt(now,passengerTaxis.length);
