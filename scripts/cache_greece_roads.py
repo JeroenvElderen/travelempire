@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """One-time Greece PBF -> 0.1 degree gzip road tiles -> resumable Supabase manifest."""
-import argparse,gzip,json,math,os,random,sqlite3,time,urllib.request,urllib.error
+import argparse,gzip,hashlib,json,math,os,random,sqlite3,time,urllib.request,urllib.error
 from pathlib import Path
 import osmium
 BUCKET="travelempire-road-tiles"
@@ -29,6 +29,7 @@ def main():
     p.add_argument("--pbf",type=Path,required=True)
     p.add_argument("--database",type=Path,default=Path("/tmp/travelempire-greece.sqlite"))
     p.add_argument("--max-tiles",type=int,default=0)
+    p.add_argument("--refresh-existing",action="store_true",help="Compare all cached tiles against the current PBF and replace changed tiles")
     args=p.parse_args()
     if args.database.exists():args.database.unlink()
     db=sqlite3.connect(args.database)
@@ -72,15 +73,24 @@ def main():
     cached=manifest["tiles"]
     all_tiles=[row[0] for row in db.execute("SELECT DISTINCT tile FROM edges ORDER BY tile")]
     missing=[tile for tile in all_tiles if tile not in cached]
-    print(f"Nationwide tiles {len(all_tiles)}, cached {len(all_tiles)-len(missing)}, missing {len(missing)}",flush=True)
-    for index,tile in enumerate(missing[:args.max_tiles] if args.max_tiles else missing,1):
+    candidates=all_tiles if args.refresh_existing else missing
+    print(f"Nationwide tiles {len(all_tiles)}, cached {len(all_tiles)-len(missing)}, missing {len(missing)}, refresh={args.refresh_existing}",flush=True)
+    changed=0
+    for index,tile in enumerate(candidates[:args.max_tiles] if args.max_tiles else candidates,1):
         lines=[row[0] for row in db.execute("SELECT line FROM edges WHERE tile=?",(tile,))]
         if not lines:continue
-        filename=tile+".jsonl.gz"
-        storage(filename,gzip.compress(("\n".join(lines)+"\n").encode(),compresslevel=5),"application/gzip")
-        cached[tile]={"file":filename,"edges":len(lines)}
+        raw=("\n".join(lines)+"\n").encode()
+        digest=hashlib.sha256(raw).hexdigest()
+        previous=cached.get(tile)
+        if previous and previous.get("sha256")==digest:continue
+        # Content-addressed filenames avoid clients receiving a stale CDN-cached tile.
+        filename=f"{tile}-{digest[:16]}.jsonl.gz"
+        storage(filename,gzip.compress(raw,compresslevel=5),"application/gzip")
+        cached[tile]={"file":filename,"edges":len(lines),"sha256":digest}
+        # Publish the manifest only after the new tile is uploaded successfully.
         storage(name,json.dumps(manifest,separators=(",",":")).encode())
-        if index%10==0:print(f"Published {index} tiles; {len(cached)} total",flush=True)
-    print(f"Complete: {len(cached)} tiles in Supabase manifest",flush=True)
+        changed+=1
+        if changed%10==0:print(f"Published {changed} changed/new tiles; {len(cached)} total",flush=True)
+    print(f"Complete: {len(cached)} tiles in Supabase manifest; {changed} updated",flush=True)
     db.close()
 if __name__=="__main__":main()
