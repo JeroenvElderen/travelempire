@@ -148,7 +148,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
  const selectingRef=useRef(selecting);selectingRef.current=selecting;
  const [roadsVisible,setRoadsVisible]=useState(true); const [explorationVisible,setExplorationVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
- useEffect(()=>{if(!ready||!ferryNetwork||!map.current)return;return startAutomaticFerryMarkers(map.current,ferryNetwork);},[ready,ferryNetwork]);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;const instance=new maplibregl.Map({container:container.current,style,center:[-6.1,53.2],zoom:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
   if(!event.id||instance.hasImage(event.id))return;
   instance.addImage(event.id,{width:1,height:1,data:new Uint8Array(4)});
@@ -420,6 +419,34 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // world-sized GeoJSON subtraction: each discovered segment clears its own
  // geographic-width corridor, even when the road tile is no longer loaded.
  const fogDraw=useRef<(()=>void)|null>(null);
+ const seaLast=useRef(new Map<string,{point:[number,number];at:number}>());
+ const seaDirty=useRef(false);
+ useEffect(()=>{seaLast.current.clear();seaDirty.current=false;},[companyId]);
+ useEffect(()=>{
+  if(!ready||!ferryNetwork||!map.current)return;
+  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,(routeId,from,to)=>{
+   if(!explorationCompany.current)return;
+   const now=Date.now();
+   const last=seaLast.current.get(routeId);
+   if(!last){seaLast.current.set(routeId,{point:to,at:now});return;}
+   if(now-last.at<2000)return;
+   seaLast.current.set(routeId,{point:to,at:now});
+   // Do not join discontinuities caused by viewport culling or route restarts.
+   const dx=(to[0]-last.point[0])*111320*Math.cos(to[1]*Math.PI/180);
+   const dy=(to[1]-last.point[1])*111320;
+   if(Math.hypot(dx,dy)>10000)return;
+   const key='sea:'+routeId;
+   const segments=persistentSegments.current.get(key)??[];
+   if(segments.length>=3000)return;
+   segments.push([last.point,to]);
+   persistentSegments.current.set(key,segments);
+   seaDirty.current=true;
+   fogDraw.current?.();
+  });
+  const save=window.setInterval(()=>{if(seaDirty.current){seaDirty.current=false;void persistGeometry();}},30000);
+  return()=>{stop();window.clearInterval(save);if(seaDirty.current){seaDirty.current=false;void persistGeometry();}};
+ },[ready,ferryNetwork,companyId]);
+
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready||!container.current)return;
@@ -460,13 +487,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const south=bounds.getSouth()-0.03,north=bounds.getNorth()+0.03;
    // Batch strokes by approximate width to avoid a canvas draw call per road.
    const batches=new Map<number,Path2D>();
-   for(const segments of persistentSegments.current.values())for(const [a,b] of segments){
+   for(const [segmentKey,segments] of persistentSegments.current)for(const [a,b] of segments){
     if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||
        Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
     const p=instance.project(a),q=instance.project(b);
     const lat=(a[1]+b[1])/2;
     const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
-    const edge=instance.project([a[0]+150/metersPerDegree,a[1]]);
+    const edge=instance.project([a[0]+(segmentKey.startsWith('sea:')?300:150)/metersPerDegree,a[1]]);
     const width=Math.max(1,Math.round(2*Math.abs(edge.x-p.x)*2)/2);
     let path=batches.get(width);
     if(!path){path=new Path2D();batches.set(width,path);}
