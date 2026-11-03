@@ -3,6 +3,7 @@ import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
+import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
@@ -147,6 +148,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
  const selectingRef=useRef(selecting);selectingRef.current=selecting;
  const [roadsVisible,setRoadsVisible]=useState(true); const [explorationVisible,setExplorationVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
+ useEffect(()=>{if(!ready||!ferryNetwork||!map.current)return;return startAutomaticFerryMarkers(map.current,ferryNetwork);},[ready,ferryNetwork]);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;const instance=new maplibregl.Map({container:container.current,style,center:[-6.1,53.2],zoom:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
   if(!event.id||instance.hasImage(event.id))return;
   instance.addImage(event.id,{width:1,height:1,data:new Uint8Array(4)});
