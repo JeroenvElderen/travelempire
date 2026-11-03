@@ -153,9 +153,9 @@ def main():
         tags["@id"]=f"way/{element['id']}"
         features.append({"type":"Feature","properties":tags,"geometry":{"type":"LineString","coordinates":coords}})
     network=build({"type":"FeatureCollection","features":features})
-    print(f"OSM ferry ways: {len(features)}; duration-tagged routes: {len(network['routes'])}; provisional ports: {len(network['ports'])}")
+    print(f"OSM ferry ways: {len(features)}; valid ferry routes: {len(network['routes'])}; provisional ports: {len(network['ports'])}")
     if not network["routes"]:
-        sys.exit("No valid routes found. Remote data was NOT overwritten. Ferry durations must be present in OSM.")
+        sys.exit("No valid routes found. Remote data was NOT overwritten. Check OSM geometry and endpoints.")
     if len(network["routes"]) < 3:
         sys.exit("Fewer than 3 routes found. Aborting to avoid publishing an incomplete network.")
     upload_object(storage,key,OBJECT,network)

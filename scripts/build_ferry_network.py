@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a strict car-ferry network from OSM-derived GeoJSON LineString features.
+"""Build a ferry network from OSM-derived GeoJSON LineString features.
 
 Input features require route=ferry. All ferries carry player vehicles in-game.
 The first and last coordinates become provisional terminal locations; a later
@@ -38,7 +38,8 @@ def build(source):
         coords = geom.get("coordinates") or []
         if len(coords)<2 or not all(len(p)>=2 and all(isinstance(v,(int,float)) and math.isfinite(v) for v in p[:2]) and abs(p[0])<=180 and abs(p[1])<=90 for p in coords):continue
         duration = parse_duration(tags.get("duration"))
-        if duration is None or duration<=0: continue
+        estimated = duration is None or duration<=0
+        if estimated: duration = estimate_duration(coords)
         ends=[]
         for p in (coords[0],coords[-1]):
             key=f"{p[0]:.5f},{p[1]:.5f}"
@@ -47,7 +48,7 @@ def build(source):
             ends.append(pid)
         if ends[0]==ends[1]:continue
         rid=str(tags.get("@id") or tags.get("id") or f"feature-{index}")
-        routes.append({"id":"osm-ferry:"+rid,"from":ends[0],"to":ends[1],"geometry":[p[:2] for p in coords],"durationMinutes":duration,"motorVehicle":True,"source":"OpenStreetMap","name":tags.get("name") or tags.get("int_name")})
+        routes.append({"id":"osm-ferry:"+rid,"from":ends[0],"to":ends[1],"geometry":[p[:2] for p in coords],"durationMinutes":duration,"durationEstimated":estimated,"motorVehicle":True,"source":"OpenStreetMap","name":tags.get("name") or tags.get("int_name")})
     return {"version":1,"ports":list(ports.values()),"routes":routes}
 
 def main():
@@ -56,5 +57,5 @@ def main():
     data=build(json.loads(src.read_text(encoding="utf-8")))
     out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(data,ensure_ascii=False,separators=(",",":")),encoding="utf-8")
-    print(f"Imported {len(data['routes'])} confirmed vehicle-ferry routes and {len(data['ports'])} provisional terminals")
+    print(f"Imported {len(data['routes'])} ferry routes and {len(data['ports'])} provisional terminals")
 if __name__=="__main__":main()
