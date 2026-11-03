@@ -42,7 +42,7 @@ export function ferryTransfers(network:FerryNetwork,portId:string):FerryTransfer
  * Falls back to bundled data if the bucket is unavailable.
  * Never place a service-role key in frontend environment variables.
  */
-export async function loadFerryNetwork(url='/data/ferries/GRC.json'):Promise<FerryNetwork>{
+export async function loadFerryNetwork(url='/data/ferries/GRC.json',refresh=false):Promise<FerryNetwork>{
  const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\/+$/,'');
  if(storage){
   const remote=`${storage}/storage/v1/object/public/travelempire-ferries/GRC.json`;
