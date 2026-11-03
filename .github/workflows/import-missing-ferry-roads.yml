@@ -1,0 +1,24 @@
+name: Import missing ferry terminal road tiles
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 4 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: missing-ferry-road-tiles
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Import missing ferry destination roads
+        run: python3 scripts/import_missing_ferry_roads.py
