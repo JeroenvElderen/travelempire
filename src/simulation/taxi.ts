@@ -358,10 +358,75 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
+
+// A road is eligible for discovery only when it intersects the Black Explorer's
+// 150 m territory corridor. Travel through other roads is still permitted.
+// Work in locally projected metres, including closest-point checks on segments
+// (not merely endpoint checks), to handle long road segments.
+export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,radius=150):Set<string>{
+ const allowed=new Set<string>();
+ if(!territory.size)return allowed;
+ type Segment={a:Point;b:Point};
+ const territorySegments:Segment[]=[];
+ const seenTerritory=new Set<string>();
+ for(const [from,links] of graph.edges){
+  const a=graph.nodes.get(from);if(!a)continue;
+  for(const edge of links){
+   if(!territory.has(edge.id))continue;
+   const b=graph.nodes.get(edge.to);if(!b)continue;
+   const segmentKey=[from,edge.to].sort().join('|');
+   if(seenTerritory.has(segmentKey))continue;
+   seenTerritory.add(segmentKey);territorySegments.push({a,b});
+  }
+ }
+ if(!territorySegments.length)return allowed;
+ const cell=0.003;
+ const grid=new Map<string,Segment[]>();
+ const cellKey=(x:number,y:number)=>x+','+y;
+ for(const seg of territorySegments){
+  const minX=Math.floor((Math.min(seg.a[0],seg.b[0])-0.002)/cell);
+  const maxX=Math.floor((Math.max(seg.a[0],seg.b[0])+0.002)/cell);
+  const minY=Math.floor((Math.min(seg.a[1],seg.b[1])-0.002)/cell);
+  const maxY=Math.floor((Math.max(seg.a[1],seg.b[1])+0.002)/cell);
+  for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
+   const k=cellKey(x,y),items=grid.get(k)??[];items.push(seg);grid.set(k,items);
+  }
+ }
+ const pointSegmentDistance=(p:[number,number],a:[number,number],b:[number,number])=>{
+  const dx=b[0]-a[0],dy=b[1]-a[1],len=dx*dx+dy*dy;
+  const t=len?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len)):0;
+  return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);
+ };
+ const close=(a:Point,b:Point,c:Point,d:Point)=>{
+  const latitude=(a[1]+b[1]+c[1]+d[1])/4*Math.PI/180;
+  const x=111320*Math.cos(latitude),y=111320;
+  const A:[number,number]=[a[0]*x,a[1]*y],B:[number,number]=[b[0]*x,b[1]*y];
+  const C:[number,number]=[c[0]*x,c[1]*y],D:[number,number]=[d[0]*x,d[1]*y];
+  const cross=(u:[number,number],v:[number,number],w:[number,number])=>(v[0]-u[0])*(w[1]-u[1])-(v[1]-u[1])*(w[0]-u[0]);
+  if(cross(A,B,C)*cross(A,B,D)<=0&&cross(C,D,A)*cross(C,D,B)<=0)return true;
+  return Math.min(pointSegmentDistance(A,C,D),pointSegmentDistance(B,C,D),pointSegmentDistance(C,A,B),pointSegmentDistance(D,A,B))<=radius;
+ };
+ for(const [from,links] of graph.edges){
+  const a=graph.nodes.get(from);if(!a)continue;
+  for(const edge of links){
+   const b=graph.nodes.get(edge.to);if(!b)continue;
+   const candidates=new Set<Segment>();
+   const minX=Math.floor((Math.min(a[0],b[0])-0.002)/cell);
+   const maxX=Math.floor((Math.max(a[0],b[0])+0.002)/cell);
+   const minY=Math.floor((Math.min(a[1],b[1])-0.002)/cell);
+   const maxY=Math.floor((Math.max(a[1],b[1])+0.002)/cell);
+   for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++)
+    for(const seg of grid.get(cellKey(x,y))??[])candidates.add(seg);
+   for(const seg of candidates)if(close(a,b,seg.a,seg.b)){allowed.add(edge.id);break;}
+  }
+ }
+ return allowed;
+}
+
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],allowedRoads?:Set<string>
+ _frontierNodes?:string[],allowedRoads?:Set<string>,discoveryAllowed?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -401,7 +466,7 @@ export function dispatchScout(
   // approach distances; avoid searching the entire connected road network.
   if(best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
-   const isNew=(!allowedRoads||allowedRoads.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
+   const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
@@ -432,7 +497,7 @@ export function dispatchScout(
  let extraMeters=0;
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
-   (!allowedRoads||allowedRoads.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
+   (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0
   );
   if(!links.length)break;
@@ -448,7 +513,7 @@ export function dispatchScout(
  reservedTargets.add(cursor);
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
-  edgeIds:ids,discoveryEdgeIds:allowedRoads?ids.filter(id=>allowedRoads.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
+  edgeIds:ids,discoveryEdgeIds:discoveryAllowed?ids.filter(id=>discoveryAllowed.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
