@@ -96,7 +96,7 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
     el.src='/assets/passenger_ferry_professional.svg';
     el.alt='Moving ferry';
     el.title='Ferry sailing automatically';
-    el.style.cssText='width:27px;height:27px;object-fit:contain;pointer-events:none;user-select:none;';
+    el.style.cssText='width:44px;height:44px;object-fit:contain;pointer-events:none;user-select:none;';
     marker=new maplibregl.Marker({element:el,rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(point).addTo(map);
     markers.set(sailing.id,marker);
    }
