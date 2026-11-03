@@ -19,14 +19,27 @@ MAX_TILES = 12
 HEADERS = {"apikey": KEY, "Authorization": "Bearer " + KEY}
 
 def get(bucket, name):
-    req = urllib.request.Request(BASE + "public/" + bucket + "/" + name)
+    # Use authenticated object access for CI. Supabase Storage returns HTTP
+    # 400 with a JSON "not_found" code for absent objects on some versions.
+    req = urllib.request.Request(BASE + bucket + "/" + name, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=45) as response:
             return response.read()
     except urllib.error.HTTPError as error:
-        if error.code == 404:
+        detail = error.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(detail)
+        except ValueError:
+            payload = {}
+        code = str(payload.get("code", "")).lower()
+        message = str(payload.get("message", "")).lower()
+        if error.code == 404 or (error.code == 400 and (
+            code in ("not_found", "nosuchkey", "404", "objectnotfound")
+            or "not found" in message
+            or "does not exist" in message
+        )):
             return None
-        raise
+        raise RuntimeError(f"Supabase read {bucket}/{name} HTTP {error.code}: {detail[:300]}") from error
 
 def put(bucket, name, payload, content_type):
     req = urllib.request.Request(
