@@ -22,6 +22,7 @@ import "./map-update.css";
 import "./company.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
+import {loadFerryNetwork} from './maritime/ferries';
 import {useRef} from 'react';
 
 
