@@ -597,6 +597,8 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    const nextLimit=clamp(nextEdge?.speedKph??50,5,160)/3.6;
    const curveLimit=turnSpeedKph(a,b,c)/3.6;
    junctionLimit=Math.min(nextLimit,curveLimit);
+   // Slow through urban junctions; do not simulate a full stop without signal data.
+   if((edge?.speedKph??50)<=50&&(nextEdge?.speedKph??50)<=50)junctionLimit=Math.min(junctionLimit,12/3.6);
   }
   // v² = u² + 2as: brake early enough to respect the next road and turn.
   const safeApproach=Math.sqrt(Math.max(0,junctionLimit*junctionLimit+2*braking*remaining));
