@@ -8,7 +8,7 @@ export type Taxi = {
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING';
 
   path: Point[];
   edgeIds: string[];
@@ -49,6 +49,7 @@ export type Taxi = {
   refillAtDepot?: boolean;
   refillUntil?: number;
   refillRequested?: boolean;
+  serviceUntil?: number;
 
   // Vehicle delivery information
   deliveryStartedAt?: number;
