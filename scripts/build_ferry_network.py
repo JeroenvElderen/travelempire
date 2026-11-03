@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a strict car-ferry network from OSM-derived GeoJSON LineString features.
 
-Input features require route=ferry and explicit motorcar=yes or motor_vehicle=yes.
+Input features require route=ferry. All ferries carry player vehicles in-game.
 The first and last coordinates become provisional terminal locations; a later
 road-network integration must verify and snap actual drivable boarding ramps.
 No timetable or fare is inferred from the source.
@@ -31,7 +31,7 @@ def build(source):
     ports, routes = {}, []
     for index, feature in enumerate(source.get("features", [])):
         tags = feature.get("properties") or {}
-        if tags.get("route") != "ferry" or not (truth(tags.get("motorcar")) or truth(tags.get("motor_vehicle"))):
+        if tags.get("route") != "ferry":
             continue
         geom = feature.get("geometry") or {}
         if geom.get("type") != "LineString": continue
