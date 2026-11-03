@@ -45,6 +45,7 @@ export default function App(){
  const workerRoadCountRef=useRef(0);
  const territoryDiscoveryAllowedRef=useRef<Set<string>>(new Set());
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
+ const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
  const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
  const pendingCashRef=useRef(0);
@@ -352,12 +353,13 @@ export default function App(){
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
+     if(roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
      next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
       const eligible=t.kind==='explorer'&&territoryDiscoveryAllowedRef.current.has(id);
       const survey=t.kind==='surveyor';
       if(eligible&&!discovered.has(id)||survey&&!territory.has(id)){
-       let length=0;for(const edges of graph.edges.values()){const match=edges.find(edge=>edge.id===id);if(match){length=match.meters;break;}}
+       const length=roadLengthByIdRef.current.get(id)??0;
        newRoadKm+=length/1000;
       }
       if(eligible)discovered.add(id);if(survey)territory.add(id);
