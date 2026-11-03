@@ -1,8 +1,6 @@
 name: Cache complete Greece OSM road network
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * 0"
     inputs:
       refresh_existing:
         description: 'Refresh existing Supabase tiles from latest OSM extract'
@@ -13,6 +11,8 @@ on:
         description: 'Maximum tiles to upload this run (0 = all remaining)'
         required: false
         default: '0'
+  schedule:
+    - cron: "0 3 * * 0"
 permissions:
   contents: read
 concurrency:
