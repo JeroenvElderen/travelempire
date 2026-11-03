@@ -4,7 +4,7 @@
  */
 export type Coordinate=[number,number];
 export type FerryPort={id:string;name:string;position:Coordinate;roadAccess?:Coordinate};
-export type FerryRoute={id:string;from:string;to:string;geometry:Coordinate[];durationMinutes:number;motorVehicle?:boolean;source:string;name?:string};
+export type FerryRoute={id:string;from:string;to:string;geometry:Coordinate[];durationMinutes:number;durationEstimated?:boolean;motorVehicle?:boolean;source:string;name?:string};
 export type FerryNetwork={version:1;ports:FerryPort[];routes:FerryRoute[]};
 export type FerryTransfer={routeId:string;fromPortId:string;toPortId:string;geometry:Coordinate[];durationMinutes:number};
 
