@@ -18,7 +18,7 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void,companyId?:string):()=>void{
  const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
@@ -37,23 +37,39 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
   return length>1?[{id:r.id,geometry,cumulative,length,durationMs:Math.max(60000,r.durationMinutes*60000/4)}]:[];
  });
  const markers=new Map<string,maplibregl.Marker>();
- const started=performance.now();
+ // Wall-clock epochs survive refreshes and component remounts. Each purchased
+ // route has its own departure time, scoped to the company and browser.
+ const epochs=new Map<string,number>();
+ const nowAtStart=Date.now();
+ for(const sailing of sailings){
+  const key=companyId?`travelempire.ferry.departure.${companyId}.${sailing.id}`:undefined;
+  let epoch=nowAtStart;
+  if(key){
+   try{
+    const saved=Number(localStorage.getItem(key));
+    if(Number.isFinite(saved)&&saved>0&&saved<=nowAtStart)epoch=saved;
+    else localStorage.setItem(key,String(epoch));
+   }catch{ /* Private browsing may disallow storage; keep session fallback. */ }
+  }
+  epochs.set(sailing.id,epoch);
+ }
  const lastSailed=new Map<string,{progress:number;cycle:number;at:number}>();
  let stopped=false;
  const refresh=()=>{
   if(stopped)return;
-  const now=performance.now()-started;
+  const now=Date.now();
   const bounds=map.getBounds();
   const active=new Set<string>();
   // Cap DOM markers and work per update. Do not bind to map move/render events.
   for(const sailing of sailings){
    if(active.size>=35)break;
-   const cycle=(now/sailing.durationMs)%2;
+   const elapsed=Math.max(0,now-(epochs.get(sailing.id)??now));
+   const cycle=(elapsed/sailing.durationMs)%2;
    const forward=cycle<1;
    const progress=forward?cycle:2-cycle;
    const {point,bearing}=position(sailing,progress);
    const prior=lastSailed.get(sailing.id);
-   const cycleIndex=Math.floor(now/sailing.durationMs);
+   const cycleIndex=Math.floor(elapsed/sailing.durationMs);
    if(!prior||prior.cycle!==cycleIndex){
     lastSailed.set(sailing.id,{progress,cycle:cycleIndex,at:now});
    }else if(now-prior.at>=2000&&Math.abs(progress-prior.progress)>0.000001){

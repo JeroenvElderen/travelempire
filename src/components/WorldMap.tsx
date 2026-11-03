@@ -434,7 +434,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    persistentSegments.current.set(key,segments);
    seaDirty.current=true;
    fogDraw.current?.();
-  });
+  },companyId);
   const save=window.setInterval(()=>{if(seaDirty.current){seaDirty.current=false;void persistGeometry();}},30000);
   return()=>{stop();window.clearInterval(save);if(seaDirty.current){seaDirty.current=false;void persistGeometry();}};
  },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
