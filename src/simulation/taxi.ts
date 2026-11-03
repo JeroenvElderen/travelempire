@@ -426,7 +426,7 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -455,6 +455,9 @@ export function dispatchScout(
  // Complete nearby streets within the revealed territory, then expand outward.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
+ // Surveyor: prioritise roads outside the existing 150 m territory corridor.
+ // Covered roads remain available as transit routes, not preferred survey targets.
+ let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  let visits=0;
  const maxSearchMeters=3500;
  while(heap.length&&visits++<12000){
@@ -464,10 +467,18 @@ export function dispatchScout(
   if(distance>maxSearchMeters)break;
   // Once the nearest inside road is found, only finish nodes with shorter
   // approach distances; avoid searching the entire connected road network.
-  if(best&&distance>best.distance)break;
+  if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
+    if(taxi.kind==='surveyor'&&territoryCovered){
+     // A road outside the covered corridor expands the map. Prefer it even
+     // when a covered but untravelled road is closer. Penalise long detours.
+     const newTerritory=!territoryCovered.has(edge.id);
+     const score=(newTerritory?6000:0)+Math.min(edge.meters,600)*2-distance*0.8;
+     if(!bestSurvey||score>bestSurvey.score)
+      bestSurvey={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:false,score};
+    }
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
     if(inside){
@@ -480,7 +491,7 @@ export function dispatchScout(
    }
   }
  }
- best=best??bestOutside;
+ best=taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
  if(!best)return taxi;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
@@ -501,8 +512,13 @@ export function dispatchScout(
    !reservedTargets.has(edge.to)&&edge.meters>0
   );
   if(!links.length)break;
-  // Prefer roads within the revealed territory, then shorter connected streets.
+  // Black Explorer expands into unrevealed territory; Purple Explorer stays
+  // focused on eligible discovered-territory roads.
   links.sort((a,b)=>{
+   if(taxi.kind==='surveyor'&&territoryCovered){
+    const ai=territoryCovered.has(a.id)?1:0,bi=territoryCovered.has(b.id)?1:0;
+    return ai-bi||b.meters-a.meters;
+   }
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
    return ai-bi||a.meters-b.meters;
   });
