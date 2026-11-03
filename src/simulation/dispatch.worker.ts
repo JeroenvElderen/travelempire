@@ -5,6 +5,8 @@ let activeRevision=0;
 const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
+let eligibilityCacheKey='';
+let eligibilityCache=new Set<string>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowScout:boolean};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
@@ -34,7 +36,14 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
   const territoryExplored=new Set(msg.territory);
-  const discoveryEligible=territoryDiscoveryEdges(graph,territoryExplored);
+  // Recompute only when the territory or road graph changes; dispatch runs often.
+  const territorySignature=msg.territory.length+':'+msg.territory.join('|');
+  const cacheKey=activeRevision+':'+seenRoadIds.size+':'+territorySignature;
+  if(cacheKey!==eligibilityCacheKey){
+   eligibilityCacheKey=cacheKey;
+   eligibilityCache=territoryDiscoveryEdges(graph,territoryExplored);
+  }
+  const discoveryEligible=eligibilityCache;
   const taxis=msg.taxis.slice();
   const activeGraph=graph;
   const validDiscovered=new Set([...explored].filter(id=>discoveryEligible.has(id)));
