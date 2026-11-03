@@ -18,7 +18,7 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void):()=>void{
  const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
