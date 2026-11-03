@@ -3,6 +3,7 @@ import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
+import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
@@ -77,7 +78,61 @@ function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)re
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
- useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,new Set(purchasedFerryRouteIds))};instance.on('styledata',update);update();return()=>{instance.off('styledata',update)}},[ferryNetwork,purchasedFerryRouteIds]);
+ const [ferryConnections,setFerryConnections]=useState<FerryConnectionResult|undefined>(undefined);
+ // Build a small spatial lookup in bounded batches, never inside a map event handler.
+ useEffect(()=>{
+  setFerryConnections(undefined);
+  if(!graph||!ferryNetwork)return;
+  let cancelled=false;
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  const cells=new Map<string,string[]>();
+  const cellSize=0.002;
+  const keyFor=(lng:number,lat:number)=>`${Math.floor(lng/cellSize)}:${Math.floor(lat/cellSize)}`;
+  let offset=0;
+  const build=()=>{
+   if(cancelled)return;
+   const until=Math.min(offset+2000,graph.nodeKeys.length);
+   for(;offset<until;offset++){
+    const id=graph.nodeKeys[offset];
+    const p=graph.nodes.get(id);
+    if(!p||!graph.edges.get(id)?.length)continue;
+    const key=keyFor(p[0],p[1]);
+    const list=cells.get(key);
+    if(list)list.push(id);else cells.set(key,[id]);
+   }
+   if(offset<graph.nodeKeys.length){timer=setTimeout(build,0);return;}
+   const connected:FerryConnectionResult['connected']=[];
+   const unconnected:FerryConnectionResult['unconnected']=[];
+   for(const port of ferryNetwork.ports){
+    const access=port.roadAccess??port.position;
+    const x=Math.floor(access[0]/cellSize),y=Math.floor(access[1]/cellSize);
+    let bestId:string|undefined,bestDistance=Infinity;
+    for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+     for(const id of cells.get(`${x+dx}:${y+dy}`)??[]){
+      const p=graph.nodes.get(id)!;
+      const lngMeters=(p[0]-access[0])*111320*Math.cos(access[1]*Math.PI/180);
+      const latMeters=(p[1]-access[1])*111320;
+      const distance=Math.hypot(lngMeters,latMeters);
+      if(distance<bestDistance){bestDistance=distance;bestId=id;}
+     }
+    }
+    if(bestId&&bestDistance<=250)connected.push({portId:port.id,roadNodeId:bestId,roadPoint:graph.nodes.get(bestId)!,distanceMeters:bestDistance});
+    else unconnected.push({portId:port.id,reason:'No loaded drivable road node within 250 m'});
+   }
+   if(!cancelled)setFerryConnections({connected,unconnected});
+  };
+  timer=setTimeout(build,0);
+  return()=>{cancelled=true;if(timer!==undefined)clearTimeout(timer)};
+ },[graph,ferryNetwork]);
+ useEffect(()=>{
+  const instance=map.current;
+  if(!instance||!ferryNetwork)return;
+  const owned=new Set(purchasedFerryRouteIds);
+  const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,ferryConnections)};
+  instance.on('style.load',update);
+  update();
+  return()=>instance.off('style.load',update);
+ },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
