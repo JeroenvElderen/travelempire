@@ -40,6 +40,7 @@ export default function App(){
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
  const workerRoadCountRef=useRef(0);
+ const territoryDiscoveryAllowedRef=useRef<Set<string>>(new Set());
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
  const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
