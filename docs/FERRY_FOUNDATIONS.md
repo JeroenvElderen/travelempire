@@ -32,3 +32,12 @@ This separation avoids disrupting existing taxi and Explorer movement before the
 - Greece's bundled ferry dataset is empty. Routes must be imported before players can purchase one.
 - The planner uses a simple all-pairs road-segment search between connected terminals, appropriate for small initial networks; benchmark or replace before importing a large network.
 - Do not confuse itinerary planning with live taxi navigation. Boarding, movement, save/recovery and ferry markers are separate milestones.
+
+## v2.2.3 — ferry overlays and OSM importer
+
+- `WorldMap` loads `/data/ferries/GRC.json` and draws ferry routes and terminal dots on MapLibre. Unpurchased routes are amber, purchased routes teal. The overlay is restored after map style changes.
+- `python3 scripts/fetch_greece_ferries.py` queries Overpass for Greek `route=ferry` ways, then generates `public/data/ferries/GRC.json` using the existing strict converter.
+- All ferry routes qualify for player vehicles regardless of real-world passenger/vehicle access restrictions.
+- OSM way geometries and their tagged durations are used; no fictitious duration or port-road connection is generated.
+- The bundled Greece JSON remains empty until the importer is run and its generated data committed. The build environment must have network access to Overpass; the importer is not run automatically by Vercel.
+- **Next:** review generated route and terminal coverage, verify road access for both ends, then implement boarding, sea traversal and disembarking. No changes to taxi movement in this version.
