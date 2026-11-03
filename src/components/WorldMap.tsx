@@ -69,11 +69,13 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null};
+type Props={companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph}:Props){
+export default function WorldMap({companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
+ const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
+ const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
  const [stationsVisible,setStationsVisible]=useState(true);
  const [stations,setStations]=useState<Station[]>([]);
@@ -160,7 +162,20 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
   }else{
    // Keep route/status current without restarting the animation clock.
    taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='surveyor'?'car_black.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
+  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='surveyor'?'car_black.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+   if(taxi.kind==='explorer'||taxi.kind==='surveyor'){
+    el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
+    const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
+     const popupContent=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;popupContent.appendChild(label);
+     const status=document.createElement('p');status.textContent=current.status==='PAUSED'?'Paused at headquarters':current.pauseAtHome?'Returning home to pause':current.status;popupContent.appendChild(status);
+     const button=document.createElement('button');button.type='button';const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';button.disabled=!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome);
+     button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');popup.remove();});popupContent.appendChild(button);
+     const popup=new maplibregl.Popup({offset:22,closeOnClick:true}).setLngLat(current.position).setDOMContent(popupContent).addTo(map.current);
+    };
+    el.addEventListener('click',openControls);
+    el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
+   }
+   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
  useEffect(()=>{
   let frame=0;
   const animate=()=>{
