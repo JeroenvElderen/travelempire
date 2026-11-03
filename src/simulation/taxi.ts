@@ -26,6 +26,8 @@ export type Taxi = {
   drivingPolicy?: 'economy'|'balanced'|'performance';
   serviceThreshold?: number;
   discoveredKm?: number;
+  uniqueDiscoveredKm?: number;
+  autoDepotService?: boolean;
   pauseAtHome?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
