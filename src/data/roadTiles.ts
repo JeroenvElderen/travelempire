@@ -9,7 +9,20 @@ const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\/+$/,'');
 const bucket='travelempire-road-tiles';
 export function tileId(lng:number,lat:number,size=0.1):string{return `${Math.floor(lng/size)}_${Math.floor(lat/size)}`;}
 export async function roadTileManifest():Promise<Manifest>{
- manifestPromise??=fetch(`${root}tiles-manifest.json`).then(r=>{if(!r.ok)throw Error(`Tile manifest HTTP ${r.status}`);return r.json() as Promise<Manifest>}).catch(e=>{manifestPromise=undefined;throw e});
+ manifestPromise??=(async()=>{
+  const bundledResponse=await fetch(`${root}tiles-manifest.json`);
+  if(!bundledResponse.ok)throw Error(`Tile manifest HTTP ${bundledResponse.status}`);
+  const bundled=await bundledResponse.json() as Manifest;
+  if(!storage)return bundled;
+  try{
+   const url=`${storage}/storage/v1/object/public/${bucket}/supplemental-manifest.json`;
+   const response=await fetch(url,{cache:'no-store'});
+   if(!response.ok)return bundled;
+   const supplemental=await response.json() as Manifest;
+   if(supplemental.tileSize!==bundled.tileSize||!supplemental.tiles)return bundled;
+   return {...bundled,tiles:{...bundled.tiles,...supplemental.tiles}};
+  }catch{return bundled;}
+ })().catch(e=>{manifestPromise=undefined;throw e});
  return manifestPromise;
 }
 let worker:Worker|undefined;let serial=0;
