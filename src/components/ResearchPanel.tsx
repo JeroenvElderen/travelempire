@@ -1,9 +1,44 @@
 import {useEffect,useState} from 'react';
+import {Beaker,Clock3,FlaskConical,Coins,TrendingUp,CheckCircle2,ArrowUpRight,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import {projects,level,price,duration,type ResearchId,type ResearchState} from '../research';
 import '../research.css';
+
+type Tab='overview'|'projects'|'progress';
+const icons={pricing:TrendingUp,procurement:Coins,efficiency:Clock3};
+const euro=(amount:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(amount);
+const formatDuration=(ms:number)=>{const seconds=Math.ceil(Math.max(0,ms)/1000);const hours=Math.floor(seconds/3600);const minutes=Math.floor(seconds%3600/60);const secs=seconds%60;return hours>0?`${hours}h ${String(minutes).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`:`${minutes}m ${String(secs).padStart(2,'0')}s`;};
 export default function ResearchPanel({company,state,onStart,onCancel}:{company:Company|null;state:ResearchState;onStart:(id:ResearchId)=>void;onCancel:()=>void}){
- const [now,setNow]=useState(Date.now());useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[]);
- const fmt=(ms:number)=>{const s=Math.ceil(Math.max(0,ms)/1000);return `${Math.floor(s/3600)}h ${String(Math.floor(s%3600/60)).padStart(2,'0')}m ${String(s%60).padStart(2,'0')}s`};
- return <section className="research-page"><span className="eyebrow">REAL-WORLD RESEARCH</span><h1>Research & Development</h1><p>Research runs on real-world time, even while the game is closed. Game speed does not affect it.</p>{!company?<p>Create a company to start research.</p>:<><div className="research-card"><h2>{state.active?`Active: ${projects.find(p=>p.id===state.active?.id)?.name} — Level ${state.active.level}`:'No active project'}</h2>{state.active&&<><strong>{fmt(state.active.endsAt-now)} remaining</strong><progress value={Math.max(0,now-state.active.startedAt)} max={state.active.endsAt-state.active.startedAt}/><button onClick={onCancel}>Cancel (no refund)</button></>}</div><div className="research-grid">{projects.map(p=>{const l=level(state,p.id),next=l+1,amount=price(p.id,next);return <article className="research-card" key={p.id}><small>LEVEL {l}/5</small><h2>{p.name}</h2><p>{p.effect}</p>{l<5?<><p>Cost: €{amount.toLocaleString('en-IE')} · Duration: {fmt(duration(state,next))}</p><button disabled={!!state.active||company.cash<amount} onClick={()=>onStart(p.id)}>{state.active?'Research busy':company.cash<amount?'Insufficient funds':'Start research'}</button></>:<strong>Fully researched ✓</strong>}</article>})}</div></>}</section>
+ const [now,setNow]=useState(Date.now());
+ const [tab,setTab]=useState<Tab>('overview');
+ useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[]);
+ const completed=projects.reduce((total,p)=>total+level(state,p.id),0);
+ const activeProject=state.active?projects.find(p=>p.id===state.active?.id):undefined;
+ const progress=state.active?Math.min(100,Math.max(0,100*(now-state.active.startedAt)/Math.max(1,state.active.endsAt-state.active.startedAt))):0;
+ const available=projects.filter(p=>level(state,p.id)<5).length;
+ const projectCard=(p:typeof projects[number])=>{
+  const current=level(state,p.id),next=current+1,cost=price(p.id,next);
+  const maxed=current>=5,locked=!!state.active||!company||company.cash<cost;
+  const Icon=icons[p.id];
+  return <article className="research-project" key={p.id}>
+   <div className="research-project-top"><span className="research-project-icon"><Icon size={22}/></span><span className={maxed?'research-level-badge complete':'research-level-badge'}>{maxed?'MAX LEVEL':`LEVEL ${current} / 5`}</span></div>
+   <h3>{p.name}</h3><p>{p.effect}</p>
+   <div className="research-level-track" aria-label={`${current} of 5 levels completed`}>{Array.from({length:5},(_,i)=><span key={i} className={i<current?'filled':''}/>)}</div>
+   <div className="research-project-details"><div><small>Next level</small><strong>{maxed?'Completed':`Level ${next}`}</strong></div><div><small>Research cost</small><strong>{maxed?'—':euro(cost)}</strong></div><div><small>Research time</small><strong>{maxed?'—':formatDuration(duration(state,next))}</strong></div></div>
+   {maxed?<div className="research-maxed"><CheckCircle2 size={16}/> Fully researched</div>:<button type="button" disabled={locked} onClick={()=>onStart(p.id)}>{state.active?'Research in progress':!company?'Create company first':company.cash<cost?'Insufficient funds':<>Start research <ArrowUpRight size={15}/></>}</button>}
+  </article>;
+ };
+ return <section className="research-page research-v215">
+  <header className="research-heading"><div><span className="eyebrow">RESEARCH & DEVELOPMENT · V2.1.5</span><h1>Research</h1><p>Invest in lasting improvements to pricing, fleet procurement and research efficiency.</p></div><span className="research-real-time"><Clock3 size={14}/> REAL-WORLD TIME</span></header>
+  <nav className="research-tabs" role="tablist" aria-label="Research sections">{([['overview','Overview',FlaskConical],['projects','Research projects',Beaker],['progress','Progress',TrendingUp]] as const).map(([id,label,Icon])=><button type="button" role="tab" aria-selected={tab===id} className={tab===id?'active':''} key={id} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}</nav>
+  <div className="research-kpis"><article><small>RESEARCH LEVELS</small><strong>{completed} <em>/ 15</em></strong><span>Across three programmes</span></article><article><small>ACTIVE PROJECTS</small><strong>{state.active?1:0} <em>/ 1</em></strong><span>One project at a time</span></article><article><small>AVAILABLE UPGRADES</small><strong>{available}</strong><span>Programmes not yet maxed</span></article><article><small>AVAILABLE CAPITAL</small><strong>{euro(company?.cash??0)}</strong><span>Company cash balance</span></article></div>
+  {!company&&<div className="research-notice">Create a company to unlock research projects. You can review the programmes below.</div>}
+  {tab==='overview'&&<div className="research-section"><div className="research-section-heading"><h2>Research status</h2><span>Live project information</span></div>
+   <article className="research-active-card">{state.active&&activeProject?<><div className="research-active-icon"><Beaker size={26}/></div><div className="research-active-body"><span className="research-overline">CURRENTLY RESEARCHING</span><h3>{activeProject.name} · Level {state.active.level}</h3><p>Research continues on real-world time, including while the game is closed.</p><div className="research-active-progress"><div style={{width:`${progress}%`}}/></div><div className="research-active-footer"><span>{progress.toFixed(0)}% complete</span><strong>{formatDuration(state.active.endsAt-now)} remaining</strong></div></div><button type="button" className="research-cancel" onClick={onCancel}>Cancel · no refund</button></>:<><div className="research-active-icon idle"><CheckCircle2 size={26}/></div><div className="research-active-body"><span className="research-overline">RESEARCH LAB</span><h3>No active project</h3><p>Select a programme to begin improving your company.</p></div><button type="button" onClick={()=>setTab('projects')}>Browse projects <ArrowUpRight size={15}/></button></>}</article>
+   <div className="research-section-heading"><h2>Research programmes</h2><button type="button" className="research-link" onClick={()=>setTab('projects')}>View all projects →</button></div>
+   <div className="research-grid">{projects.map(projectCard)}</div>
+  </div>}
+  {tab==='projects'&&<div className="research-section"><div className="research-section-heading"><h2>Available research</h2><span>Permanent company improvements</span></div><div className="research-grid">{projects.map(projectCard)}</div><div className="research-info"><ShieldCheck size={18}/> Research costs are charged when you start a project. Cancelling does not refund the cost.</div></div>}
+  {tab==='progress'&&<div className="research-section"><div className="research-section-heading"><h2>Development progress</h2><span>{completed} of 15 research levels completed</span></div><div className="research-progress-list">{projects.map(p=>{const Icon=icons[p.id],current=level(state,p.id);return <article key={p.id}><span className="research-project-icon"><Icon size={19}/></span><div><strong>{p.name}</strong><small>{p.effect}</small><div className="research-level-track">{Array.from({length:5},(_,i)=><span key={i} className={i<current?'filled':''}/>)}</div></div><b>{current} / 5</b></article>})}</div><div className="research-info"><Clock3 size={18}/> Research uses real-world time, independent of the simulation's 4× game speed.</div></div>}
+ </section>;
 }
