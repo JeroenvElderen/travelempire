@@ -1,0 +1,38 @@
+name: Import Greek ferry routes to Supabase
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every Sunday at 03:20 UTC
+    - cron: '20 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: greek-ferry-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Fetch OSM and upload to Supabase Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check required secrets
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as repository Actions secrets."
+            exit 1
+          fi
+      - name: Fetch and upload ferry routes
+        run: python3 scripts/upload_greece_ferries_supabase.py
