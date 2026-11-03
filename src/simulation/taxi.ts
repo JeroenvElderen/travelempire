@@ -3,7 +3,7 @@ import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
   id: string;
-  kind?: 'taxi' | 'explorer'; // Older saves default to taxi.
+  kind?: 'taxi' | 'explorer' | 'surveyor'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
@@ -63,7 +63,7 @@ export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meter
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
 // Road speeds are in km/h; gameplay fallbacks are used only when OSM maxspeed is absent.
-export const GAME_SPEED = 4;
+export const GAME_SPEED = 1;
 const DEFAULT_SPEED: Record<string,number> = {
  motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
  secondary:70,secondary_link:45,tertiary:50,tertiary_link:40,
@@ -192,7 +192,9 @@ export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(local
   // Migrate legacy saves without changing any existing taxi assignment.
   const names=new Set<string>();for(const taxi of saved.taxis)if(taxi.driver?.trim())names.add(taxi.driver.trim());
   const roster=saved.drivers??[];for(const name of names)if(!roster.some(d=>d.name.toLowerCase()===name.toLowerCase()))roster.push({id:crypto.randomUUID(),name,hiredAt:Date.now()});
-  return {...saved,drivers:roster};
+  // PR A saved Black Explorers as 'explorer'; migrate only those vehicles.
+  const taxis=saved.taxis.map(t=>t.kind==='explorer'&&(t.vehicleModel==='Black Explorer'||t.name==='Black Explorer')?{...t,kind:'surveyor' as const}:t);
+  return {...saved,taxis,drivers:roster};
  }}catch{/* ignore invalid save */}return{taxis:[],revenue:0,completed:0,exploredEdgeIds:[]};}
 export function saveFleet(id:string,fleet:FleetState){localStorage.setItem(fleetKey(id),JSON.stringify(fleet));}
 export const TAXI_COST=18000,DRIVER_COST=1200;
@@ -450,7 +452,7 @@ export function dispatchScout(
   pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
-// Acceleration/deceleration is expressed in simulated seconds (4x wall time).
+// Acceleration/deceleration is expressed in real seconds (1x wall time).
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[]}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[]};
  let t={...taxi};
@@ -464,7 +466,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   const limitKph=edge?.speedKph??50;
   const target=limitKph/3.6;
   const dt=Math.min(0.1,time);
-  const previous=Math.max(0,t.speedKph??0)/3.6;
+  const previous=Math.min(target,Math.max(0,t.speedKph??0)/3.6);
   const acceleration=target>=previous?2:3.5;
   const speed=previous+Math.sign(target-previous)*Math.min(Math.abs(target-previous),acceleration*dt);
   t.speedKph=speed*3.6;
@@ -478,7 +480,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    const id=t.edgeIds[t.leg];if(id)crossed.push(id);
    t.leg++;t.distanceIntoLeg=0;t.position=b;
   }
-  time-=dt;
+  time-=distance>0?dt*(moved/distance):dt;
  }
  return{taxi:t,crossed};
 }
