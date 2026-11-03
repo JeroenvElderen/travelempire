@@ -47,11 +47,11 @@ export async function loadFerryNetwork(url='/data/ferries/GRC.json'):Promise<Fer
  if(storage){
   const remote=`${storage}/storage/v1/object/public/travelempire-ferries/GRC.json`;
   try{
-   const response=await fetch(remote);
+   const response=await fetch(refresh?`${remote}?refresh=${Date.now()}`:remote,refresh?{cache:'no-store'}:undefined);
    if(!response.ok)throw new Error(`Ferry storage HTTP ${response.status}`);
    return validateFerryNetwork(await response.json());
   }catch(error){console.warn('Supabase ferry data unavailable; using bundled fallback',error);}
  }
- const response=await fetch(url);if(!response.ok)throw new Error('Ferry network data unavailable');
+ const response=await fetch(refresh?`${url}${url.includes('?')?'&':'?'}refresh=${Date.now()}`:url,refresh?{cache:'no-store'}:undefined);if(!response.ok)throw new Error('Ferry network data unavailable');
  return validateFerryNetwork(await response.json());
 }
