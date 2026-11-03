@@ -1,10 +1,10 @@
 /** Ferry links are transfers between road networks, not independently owned vessels.
- * A ferry is eligible only when source data explicitly confirms vehicle carriage.
- * Unknown capacity is deliberately excluded to prevent taxis boarding passenger-only boats.
+ * In TravelEmpire all ferry routes carry player vehicles, regardless of real-world restrictions.
+ * This is an intentional gameplay rule; ferry availability is independent of real-world vehicle capacity.
  */
 export type Coordinate=[number,number];
 export type FerryPort={id:string;name:string;position:Coordinate;roadAccess?:Coordinate};
-export type FerryRoute={id:string;from:string;to:string;geometry:Coordinate[];durationMinutes:number;motorVehicle:true;source:string;name?:string};
+export type FerryRoute={id:string;from:string;to:string;geometry:Coordinate[];durationMinutes:number;motorVehicle?:boolean;source:string;name?:string};
 export type FerryNetwork={version:1;ports:FerryPort[];routes:FerryRoute[]};
 export type FerryTransfer={routeId:string;fromPortId:string;toPortId:string;geometry:Coordinate[];durationMinutes:number};
 export const EMPTY_FERRY_NETWORK:FerryNetwork={version:1,ports:[],routes:[]};
@@ -16,7 +16,7 @@ export function validateFerryNetwork(input:unknown):FerryNetwork{
  const ports=new Map<string,FerryPort>();
  for(const p of obj.ports){if(!p||typeof p.id!=='string'||!p.id||!validPoint(p.position)||ports.has(p.id))throw new Error('Invalid or duplicate ferry port');ports.set(p.id,p);}
  const routes:FerryRoute[]=[];const ids=new Set<string>();
- for(const r of obj.routes){if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id)||r.motorVehicle!==true||!ports.has(r.from)||!ports.has(r.to)||r.from===r.to||!Number.isFinite(r.durationMinutes)||r.durationMinutes<=0||!Array.isArray(r.geometry)||r.geometry.length<2||!r.geometry.every(validPoint))throw new Error('Invalid vehicle ferry route');ids.add(r.id);routes.push(r);}
+ for(const r of obj.routes){if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id)||!ports.has(r.from)||!ports.has(r.to)||r.from===r.to||!Number.isFinite(r.durationMinutes)||r.durationMinutes<=0||!Array.isArray(r.geometry)||r.geometry.length<2||!r.geometry.every(validPoint))throw new Error('Invalid vehicle ferry route');ids.add(r.id);routes.push(r);}
  return {version:1,ports:[...ports.values()],routes};
 }
 /** Only validated road-compatible ferry links are returned. No arbitrary sea shortcuts. */
