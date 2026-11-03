@@ -38,7 +38,7 @@ export function planFerryJourney(
   links.get(b)?.push({to:a,weight:ferry.durationMinutes*60,leg:{kind:'ferry',routeId:ferry.id,fromPortId:ferry.to,toPortId:ferry.from,geometry:[...ferry.geometry].reverse(),durationMinutes:ferry.durationMinutes}});
  }
  const distance=new Map<string,number>([[start,0]]);
- const previous=new Map<string,{from:string;leg:FerryJourneyLeg}]>();
+ const previous=new Map<string,{from:string;leg:FerryJourneyLeg}>();
  const pending=new Set(unique);
  while(pending.size){
   let current:string|undefined,minimum=Infinity;
