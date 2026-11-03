@@ -22,6 +22,8 @@ export type Taxi = {
   completed: number;
   journeyEdges?: string[];
   scoutingRuns?: number;
+  explorationMode?: 'local'|'frontier';
+  discoveredKm?: number;
   pauseAtHome?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
@@ -481,7 +483,7 @@ export function dispatchScout(
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  let visits=0;
- const maxSearchMeters=3500;
+ const maxSearchMeters=taxi.explorationMode==='frontier'?5000:3500;
  while(heap.length&&visits++<12000){
   const current=pop();if(!current)break;
   const [distance,node]=current;
@@ -497,7 +499,7 @@ export function dispatchScout(
      // A road outside the covered corridor expands the map. Prefer it even
      // when a covered but untravelled road is closer. Penalise long detours.
      const newTerritory=!territoryCovered.has(edge.id);
-     const score=(newTerritory?6000:0)+Math.min(edge.meters,600)*2-distance*0.8;
+     const score=(newTerritory?(taxi.explorationMode==='local'?1500:6000):0)+Math.min(edge.meters,600)*2-distance*(taxi.explorationMode==='local'?1.6:0.8);
      if(!bestSurvey||score>bestSurvey.score)
       bestSurvey={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:false,score};
     }
