@@ -78,7 +78,7 @@ function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)re
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
- useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,new Set(purchasedFerryRouteIds),graph?connectFerryTerminals(ferryNetwork,graph):undefined)};instance.on('styledata',update);update();return()=>{instance.off('styledata',update)}},[ferryNetwork,purchasedFerryRouteIds,graph]);
+ useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const owned=new Set(purchasedFerryRouteIds);const connections=graph?connectFerryTerminals(ferryNetwork,graph):undefined;const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,connections)};/* styledata fires for source setData too, creating an expensive feedback loop. */instance.on('style.load',update);update();return()=>{instance.off('style.load',update)}},[ferryNetwork,purchasedFerryRouteIds,graph]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
