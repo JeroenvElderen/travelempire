@@ -306,19 +306,7 @@ export default function App(){
       }
      }
      const next=tickTaxi(working,graph,1,discovered);
-     // Sum actual route legs, not straight-line displacement across junctions.
-     let travelled=0;
-     if(working.path.length>1){
-      const last=next.taxi.status===working.status?Math.min(next.taxi.leg,working.path.length-1):working.path.length-1;
-      if(last===working.leg)travelled=Math.max(0,next.taxi.distanceIntoLeg-working.distanceIntoLeg);
-      else{
-       travelled=Math.max(0,meters(working.path[working.leg],working.path[working.leg+1])-working.distanceIntoLeg);
-       for(let j=working.leg+1;j<last;j++)travelled+=meters(working.path[j],working.path[j+1]);
-       if(last<working.path.length-1)travelled+=next.taxi.distanceIntoLeg;
-      }
-     }
-     const km=travelled/1000;
-     const spec=energySpec(delivered);
+     // The movement integrator reports the exact distance travelled this tick,\n     // including junction crossings and the final step before route reset.\n     const km=next.distanceMeters/1000;\n     const spec=energySpec(delivered);
      const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
      const experience=person?.completedTrips??0;
      // Career skills are derived from persistent driver trip counts (save compatible).
