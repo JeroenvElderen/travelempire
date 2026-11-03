@@ -1,7 +1,14 @@
 name: Cache complete Greece OSM road network
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"
     inputs:
+      refresh_existing:
+        description: 'Refresh existing Supabase tiles from latest OSM extract'
+        type: boolean
+        required: false
+        default: false
       max_tiles:
         description: 'Maximum tiles to upload this run (0 = all remaining)'
         required: false
@@ -9,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: missing-ferry-road-tiles
+  group: nationwide-greece-road-tiles
   cancel-in-progress: false
 jobs:
   nationwide-roads:
@@ -32,4 +39,4 @@ jobs:
           ls -lh /tmp/travelempire-osm/greece.osm.pbf
       - name: Build and upload missing nationwide road tiles
         run: |
-          python3 scripts/cache_greece_roads.py --pbf /tmp/travelempire-osm/greece.osm.pbf --max-tiles "${{ inputs.max_tiles || '0' }}"
+          python3 scripts/cache_greece_roads.py --pbf /tmp/travelempire-osm/greece.osm.pbf --max-tiles "${{ inputs.max_tiles || '0' }}" ${{ (github.event_name == 'schedule' || inputs.refresh_existing == true) && '--refresh-existing' || '' }}
