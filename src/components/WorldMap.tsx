@@ -424,7 +424,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{seaLast.current.clear();seaDirty.current=false;},[companyId]);
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,(routeId,from,to)=>{
+  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,(routeId,_from,to)=>{
    if(!explorationCompany.current)return;
    const now=Date.now();
    const last=seaLast.current.get(routeId);
