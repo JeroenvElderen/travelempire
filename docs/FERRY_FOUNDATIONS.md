@@ -12,3 +12,13 @@ This phase introduces a **validated, separate ferry graph**, not automatic ferry
 - Next phase: validate terminal-to-road connectivity, connect the ferry graph to road routing, then add boarding/transit/disembarking states and save/load.
 
 This separation avoids disrupting existing taxi and Explorer movement before the transport graph has been validated.
+
+## v2.2.1 — road terminal integration
+
+`src/maritime/roadConnections.ts` now resolves each ferry port to the nearest **loaded** road node within 250 metres (configurable). Terminals without nearby loaded roads remain explicitly unconnected. Both ends must be connected before `roadAccessibleFerryTransfers` exposes a crossing.
+
+`RoadNetworkManager.considerFerryTerminals(network)` requests tiles near terminal entrances, and `ferryConnections(network)` resolves them as tiles arrive. These APIs deliberately do not insert ferry edges into the road graph or move taxis; ferry boarding and vehicle state handling will be implemented separately.
+
+**Data limitation:** The Greece ferry dataset is still empty. Before crossings can be activated, import ferry route geometry and verify port road-access coordinates. Ferry routes are allowed to carry all player vehicles as a gameplay rule, regardless of real-world ferry restrictions.
+
+**Safety:** A port within 250 m of a road node is a candidate connection, not proof that the road reaches a boarding ramp. Actual ramp connectivity must be verified before enabling vehicle movement.
