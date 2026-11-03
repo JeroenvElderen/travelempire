@@ -390,14 +390,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
   readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
    // Merge rather than replace discoveries made while storage was loading.
-   for(const [id,segments] of Object.entries(record?.segments??{}))if(id.startsWith('territory:')&&!persistentSegments.current.has(id.slice(10)))persistentSegments.current.set(id.slice(10),segments);
+   for(const [id,segments] of Object.entries(record?.segments??{}))if(id.startsWith('territory:')&&!id.startsWith('territory:sea:')&&!persistentSegments.current.has(id.slice(10)))persistentSegments.current.set(id.slice(10),segments);
    explorationLastSignature.current='';
    fogDraw.current?.();
   }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
   if(cloudExplorationEnabled())void syncExploration(companyId).then(record=>{
    if(cancelled||explorationCompany.current!==companyId||!record)return;
    for(const [id,segments] of Object.entries(record.segments)){
-    if(!id.startsWith('territory:'))continue;
+    if(!id.startsWith('territory:')||id.startsWith('territory:sea:')&&!id.startsWith('territory:sea:v2:'))continue;
     const key=id.slice(10);
     const current=persistentSegments.current.get(key);
     if(!current||(!current.length&&segments.length))persistentSegments.current.set(key,segments);
@@ -424,21 +424,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{seaLast.current.clear();seaDirty.current=false;},[companyId]);
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,(routeId,_from,to)=>{
-   if(!explorationCompany.current)return;
-   const now=Date.now();
-   const last=seaLast.current.get(routeId);
-   if(!last){seaLast.current.set(routeId,{point:to,at:now});return;}
-   if(now-last.at<2000)return;
-   seaLast.current.set(routeId,{point:to,at:now});
-   // Do not join discontinuities caused by viewport culling or route restarts.
-   const dx=(to[0]-last.point[0])*111320*Math.cos(to[1]*Math.PI/180);
-   const dy=(to[1]-last.point[1])*111320;
-   if(Math.hypot(dx,dy)>10000)return;
-   const key='sea:'+routeId;
+  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,(routeId,sailedSegments)=>{
+   if(!explorationCompany.current||!sailedSegments.length)return;
+   // v2 avoids reusing legacy straight-chord sea discoveries.
+   const key='sea:v2:'+routeId;
    const segments=persistentSegments.current.get(key)??[];
    if(segments.length>=3000)return;
-   segments.push([last.point,to]);
+   segments.push(...sailedSegments.slice(0,3000-segments.length));
    persistentSegments.current.set(key,segments);
    seaDirty.current=true;
    fogDraw.current?.();
