@@ -33,12 +33,13 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   }
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
+  const territoryExplored=new Set(msg.territory);
   const taxis=msg.taxis.slice();
   const activeGraph=graph;
   const eligibleStops=passengerRoadNodes(activeGraph,explored);
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
-  const passengerTaxis=taxis.filter(t=>t.kind!=='explorer');
+  const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
   const demand=demandAt(now,passengerTaxis.length);
   if(msg.allowMission&&queue.length<demand.queueLimit){
    const request=createPassengerRequest(graph,explored,hq,now,demand.fareMultiplier);
@@ -46,7 +47,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   }
   for(let i=queue.length-1;i>=0;i--){
    const mission=queue[i];
-   const candidates=taxis.map((t,index)=>({index,d:t.kind!=='explorer'&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
+   const candidates=taxis.map((t,index)=>({index,d:(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
     .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
    let best:{index:number;taxi:Taxi;distance:number}|null=null;
    for(const candidate of candidates){
@@ -60,7 +61,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
   if(msg.allowScout){
-   // The Black Explorer can reach new frontiers without relying on taxi corridors.
+   // Road Explorers discover roads; Black Explorer independently reveals territory.
    // Only its actual exploration routes contribute to discovered territory.
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
@@ -69,7 +70,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if(taxi.kind!=='explorer'||taxi.status!=='EXPLORING')continue;
+    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='EXPLORING')continue;
     const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!allowedRoads.has(id));
     if(firstForbidden<0)continue;
     if(firstForbidden<=taxi.leg){
@@ -89,7 +90,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if(taxi.kind!=='explorer'||taxi.status!=='IDLE'||taxi.deliveryUntil)continue;
+    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil)continue;
     const start=nearest(graph,taxi.position);
     if(!start||permittedNodes.has(start))continue;
     const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
@@ -115,7 +116,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if(taxi.kind!=='explorer'||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
+    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
     const remaining=taxi.path.length-1-taxi.leg;
     if(remaining>2||!taxi.path.length)continue;
     const destination=taxi.path[taxi.path.length-1];
@@ -124,7 +125,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
+     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -133,8 +134,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
-    if(taxis[index].kind!=='explorer'||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
+    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
+    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
