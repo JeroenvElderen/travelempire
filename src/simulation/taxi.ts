@@ -428,12 +428,14 @@ export function dispatchScout(
  // Extend the assignment along connected, undiscovered streets. This avoids
  // becoming IDLE at every junction and waiting for the next worker dispatch.
  const planned=new Set(ids);
+ // Directed road IDs can revisit the same physical junction. Avoid route loops.
+ const visitedNodes=new Set(keys);
  let cursor=best.to;
  let extraMeters=0;
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (!allowedRoads||allowedRoads.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
-   !reservedTargets.has(edge.to)&&edge.meters>0
+   !reservedTargets.has(edge.to)&&edge.meters>0&&!visitedNodes.has(edge.to)
   );
   if(!links.length)break;
   // Prefer roads within the revealed territory, then shorter connected streets.
@@ -442,7 +444,7 @@ export function dispatchScout(
    return ai-bi||a.meters-b.meters;
   });
   const edge=links[0];
-  keys.push(edge.to);ids.push(edge.id);planned.add(edge.id);
+  keys.push(edge.to);ids.push(edge.id);planned.add(edge.id);visitedNodes.add(edge.to);
   extraMeters+=edge.meters;cursor=edge.to;
  }
  reservedTargets.add(cursor);
