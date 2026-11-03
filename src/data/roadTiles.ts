@@ -43,9 +43,21 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
  const saved=cache.get(id);if(saved)return Promise.resolve(saved);
  const inflight=pending.get(id);if(inflight)return inflight;
  const task=(async()=>{const manifest=await roadTileManifest();const info=manifest.tiles[id];if(!info)return [];
-  const url=info.source==='supabase'&&storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
-  const request=++serial;const result=new Promise<RoadSegment[]>((resolve,reject)=>callbacks.set(request,{resolve,reject}));
-  parser().postMessage({id:request,regionId:id,url});const roads=await result;cache.set(id,roads);return roads;
+  const remote=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:null;
+  const local=`${root}tiles/${encodeURIComponent(info.file)}`;
+  // Legacy bundled tiles may be hosted in Supabase rather than deployed locally.
+  // Try the primary source first, then its alternative without breaking startup.
+  const urls=info.source==='supabase'?[remote]:[remote,local];
+  let lastError:unknown;
+  for(const url of urls){
+   if(!url)continue;
+   const request=++serial;
+   const result=new Promise<RoadSegment[]>((resolve,reject)=>callbacks.set(request,{resolve,reject}));
+   parser().postMessage({id:request,regionId:id,url});
+   try{const roads=await result;cache.set(id,roads);return roads;}
+   catch(error){lastError=error;}
+  }
+  throw lastError??new Error(`No available source for road tile ${id}`);
  })().finally(()=>pending.delete(id));pending.set(id,task);return task;
 }
 
