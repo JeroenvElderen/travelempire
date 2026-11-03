@@ -306,7 +306,10 @@ export default function App(){
       }
      }
      const next=tickTaxi(working,graph,1,discovered);
-     // The movement integrator reports the exact distance travelled this tick,\n     // including junction crossings and the final step before route reset.\n     const km=next.distanceMeters/1000;\n     const spec=energySpec(delivered);
+     // The movement integrator reports the exact distance travelled this tick,
+     // including junction crossings and the final step before route reset.
+     const km=next.distanceMeters/1000;
+     const spec=energySpec(delivered);
      const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
      const experience=person?.completedTrips??0;
      // Career skills are derived from persistent driver trip counts (save compatible).
