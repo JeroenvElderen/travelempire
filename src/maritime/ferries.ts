@@ -32,7 +32,7 @@ export function ferryTransfers(network:FerryNetwork,portId:string):FerryTransfer
  * Never place a service-role key in frontend environment variables.
  */
 export async function loadFerryNetwork(url='/data/ferries/GRC.json'):Promise<FerryNetwork>{
- const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\\/+$/,'');
+ const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\/+$/,'');
  if(storage){
   const remote=`${storage}/storage/v1/object/public/travelempire-ferries/GRC.json`;
   try{
