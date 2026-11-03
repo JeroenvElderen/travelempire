@@ -285,7 +285,7 @@ export default function App(){
       if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,refillUntil:now+60000};
       pendingCashRef.current-=cost;fuelExpense+=cost;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic ${spec.unit==='L'?'refuel':'charge'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-cost});
-      return {...delivered,status:'IDLE',energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
+      return {...delivered,status:'IDLE' as const,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
      let working=delivered;
