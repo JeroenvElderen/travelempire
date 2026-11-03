@@ -15,7 +15,12 @@ BASE = URL + "/storage/v1/object/"
 ROAD_BUCKET = "travelempire-road-tiles"
 FERRY_BUCKET = "travelempire-ferries"
 TILE_SIZE = 0.1
-MAX_TILES = 12
+MAX_TILES = 6
+OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+]
 HEADERS = {"apikey": KEY, "Authorization": "Bearer " + KEY}
 
 def get(bucket, name):
@@ -61,17 +66,16 @@ def fetch_osm(x, y):
              'service|living_street|track)$"]'
              f'({south},{west},{north},{east});out geom;')
     data = urllib.parse.urlencode({"data": query}).encode()
-    for attempt in range(3):
+    for index, endpoint in enumerate(OVERPASS_ENDPOINTS):
         try:
-            req = urllib.request.Request("https://overpass.kumi.systems/api/interpreter",
-                                         data=data, headers={"User-Agent": "TravelEmpire-RoadTileImporter/1.0"})
-            with urllib.request.urlopen(req, timeout=110) as response:
+            req = urllib.request.Request(
+                endpoint, data=data,
+                headers={"User-Agent": "TravelEmpire-RoadTileImporter/1.1"})
+            with urllib.request.urlopen(req, timeout=35) as response:
                 return json.load(response)["elements"]
-        except Exception as error:
-            if attempt == 2:
-                raise
-            print(f"Overpass retry {attempt+1}: {error}", flush=True)
-            time.sleep(5*(attempt+1))
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as error:
+            print(f"Overpass endpoint {index+1}/{len(OVERPASS_ENDPOINTS)} failed: {error}", flush=True)
+    raise RuntimeError("All Overpass endpoints failed; tile will be retried next run")
 
 def build_tile(x, y, ways):
     roads = []
@@ -120,9 +124,22 @@ def main():
         seen.add(key)
         candidates.append((x, y, key))
     print(f"{len(candidates)} ferry-terminal tiles missing from road manifests", flush=True)
+    # Recover tile objects uploaded by earlier canceled runs before fetching again.
     uploaded = 0
+    def publish():
+        put(ROAD_BUCKET, "supplemental-manifest.json",
+            json.dumps(supplemental, separators=(",", ":")).encode(), "application/json")
     for x, y, key in candidates[:MAX_TILES]:
         try:
+            name = f"{key}.jsonl.gz"
+            previous = get(ROAD_BUCKET, name)
+            if previous:
+                count = len(gzip.decompress(previous).splitlines())
+                supplemental["tiles"][key] = {"file": name, "edges": count}
+                publish()
+                uploaded += 1
+                print(f"{key}: recovered {count} segments from previous upload", flush=True)
+                continue
             roads = build_tile(x, y, fetch_osm(x, y))
             if not roads:
                 print(f"{key}: no drivable OSM roads; leaving absent", flush=True)
@@ -131,12 +148,12 @@ def main():
             payload = gzip.compress(("".join(json.dumps(road, separators=(",", ":"))+"\n" for road in roads)).encode())
             put(ROAD_BUCKET, name, payload, "application/gzip")
             supplemental["tiles"][key] = {"file": name, "edges": len(roads)}
+            publish()
             uploaded += 1
             print(f"{key}: uploaded {len(roads)} segments", flush=True)
         except Exception as error:
             print(f"{key}: failed: {error}", flush=True)
-    put(ROAD_BUCKET, "supplemental-manifest.json",
-        json.dumps(supplemental, separators=(",", ":")).encode(), "application/json")
+    publish()
     print(f"Uploaded {uploaded} new tiles; {len(supplemental['tiles'])} supplemental tiles total", flush=True)
 
 if __name__ == "__main__":
