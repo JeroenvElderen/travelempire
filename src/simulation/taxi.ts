@@ -8,7 +8,7 @@ export type Taxi = {
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING';
 
   path: Point[];
   edgeIds: string[];
@@ -45,6 +45,10 @@ export type Taxi = {
   fuelLitres?: number;
   energyRemaining?: number;
   energyPurchased?: number;
+  refillDestination?: Point;
+  refillAtDepot?: boolean;
+  refillUntil?: number;
+  refillRequested?: boolean;
 
   // Vehicle delivery information
   deliveryStartedAt?: number;
@@ -604,7 +608,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  return{taxi:t,crossed};
 }
 export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[]}{
- if(taxi.status==='IDLE')return{taxi,earned:0,finished:false,discovered:[]};
+ if(taxi.status==='IDLE'||taxi.status==='REFUELLING')return{taxi,earned:0,finished:false,discovered:[]};
  const advanced=advanceTaxi(taxi,graph,seconds);
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...advanced.crossed]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
@@ -615,6 +619,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoad
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
    return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
   }
+ }
+ if(t.status==='RETURNING'&&t.refillDestination){
+  t={...t,status:'REFUELLING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,refillUntil:undefined,journeyEdges:[]};
+  return{taxi:t,earned:0,finished:false,discovered:[]};
  }
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=[...new Set(t.journeyEdges??[])];

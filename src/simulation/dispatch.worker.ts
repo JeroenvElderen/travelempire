@@ -1,3 +1,4 @@
+import {energyPercent} from './energy';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,territoryDiscoveryEdges,route,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -58,7 +59,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   }
   for(let i=queue.length-1;i>=0;i--){
    const mission=queue[i];
-   const candidates=taxis.map((t,index)=>({index,d:(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.deliveryUntil?meters(t.position,mission.pickup):Infinity}))
+   const candidates=taxis.map((t,index)=>({index,d:(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>20?meters(t.position,mission.pickup):Infinity}))
     .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
    let best:{index:number;taxi:Taxi;distance:number}|null=null;
    for(const candidate of candidates){
@@ -101,7 +102,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil)continue;
+    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=20)continue;
     const start=nearest(graph,taxi.position);
     if(!start||permittedNodes.has(start))continue;
     const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
@@ -145,7 +146,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
-    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
+    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=20)continue;
     const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
