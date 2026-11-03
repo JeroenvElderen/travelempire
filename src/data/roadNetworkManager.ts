@@ -27,8 +27,15 @@ export class RoadNetworkManager {
   // Limit startup work; nationwide tiles can contain far more road segments.
   const initial=nearby.filter(k=>this.available.has(k)&&!k.startsWith('national:'));
   const nationwide=nearby.filter(k=>this.available.has(k)&&k.startsWith('national:'));
-  await Promise.all(initial.map(k=>this.load(k)));
-  if(!this.graph.nodeKeys.length&&nationwide.length)await this.load(nationwide[0]);
+  // A single unavailable tile must never prevent the rest of the graph loading.
+  const attempts=await Promise.allSettled(initial.map(k=>this.load(k)));
+  for(let i=0;i<attempts.length;i++)if(attempts[i].status==='rejected')this.onError(`Initial road tile ${initial[i]}: ${String((attempts[i] as PromiseRejectedResult).reason)}`);
+  if(!this.graph.nodeKeys.length){
+   for(const id of nationwide){
+    try{await this.load(id);if(this.graph.nodeKeys.length)break;}
+    catch(error){this.onError(`Nationwide startup tile ${id}: ${String(error)}`);}
+   }
+  }
   if(!this.graph.nodeKeys.length)throw Error(`No road tiles near headquarters (${id}). Upload geographic tiles first.`);
   this.consider([point]);return this.graph;
  }
