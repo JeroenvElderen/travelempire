@@ -73,6 +73,33 @@ export default function App(){
  useEffect(()=>{setResearch(company?Research.settle(Research.load(company.id)):Research.empty())},[company?.id]);
  useEffect(()=>{if(company)Research.save(company.id,research)},[company?.id,research]);
  useEffect(()=>{if(!company)return;const timer=setInterval(()=>setResearch(old=>Research.settle(old)),1000);return()=>clearInterval(timer)},[company?.id]);
+ // Prefetch the actual road graph at purchased ferry endpoints (including islands).
+ // RoadNetworkManager queues at most 96 tiles and loads only two concurrently.
+ useEffect(()=>{
+  const manager=networkRef.current;
+  const purchased=company?.purchasedFerryRouteIds??[];
+  if(!manager||!graph||!purchased.length)return;
+  let cancelled=false;
+  void loadFerryNetwork().then(network=>{
+   if(cancelled||networkRef.current!==manager)return;
+   const owned=new Set(purchased);
+   const portIds=new Set<string>();
+   for(const route of network.routes)if(owned.has(route.id)){portIds.add(route.from);portIds.add(route.to);}
+   // Do not prefetch all 128 routes; only bought endpoints.
+   const points=network.ports.filter(p=>portIds.has(p.id)).map(p=>p.roadAccess??p.position);
+   // Queue a bounded number of destination harbours per turn to avoid
+   // saturating the existing prefetch queue or freezing mobile browsers.
+   let offset=0;
+   const enqueue=()=>{
+    if(cancelled||networkRef.current!==manager)return;
+    manager.consider(points.slice(offset,offset+2));
+    offset+=2;
+    if(offset<points.length)window.setTimeout(enqueue,1500);
+   };
+   enqueue();
+  }).catch(error=>console.warn('[TravelEmpire] Ferry destination road prefetch unavailable',error));
+  return()=>{cancelled=true};
+ },[company?.id,company?.purchasedFerryRouteIds?.join('|'),Boolean(graph)]);
  const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{const ready=Research.settle(research);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
  const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
  useEffect(()=>{
