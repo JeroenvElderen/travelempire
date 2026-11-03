@@ -8,7 +8,7 @@ export type Taxi = {
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING' | 'PAUSED';
 
   path: Point[];
   edgeIds: string[];
@@ -22,6 +22,7 @@ export type Taxi = {
   completed: number;
   journeyEdges?: string[];
   scoutingRuns?: number;
+  pauseAtHome?: boolean;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
   discoveryEdgeIds?: string[];
   speedKph?: number;
@@ -611,7 +612,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  return{taxi:t,crossed,distanceMeters};
 }
 export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
- if(taxi.status==='IDLE'||taxi.status==='REFUELLING')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
+ if(taxi.status==='IDLE'||taxi.status==='REFUELLING'||taxi.status==='PAUSED')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
  const advanced=advanceTaxi(taxi,graph,seconds);
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...advanced.crossed]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
@@ -622,6 +623,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoad
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
    return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
   }
+ }
+ if(t.status==='RETURNING'&&t.pauseAtHome){
+  t={...t,status:'PAUSED',pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.refillDestination){
   t={...t,status:'REFUELLING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,refillUntil:undefined,journeyEdges:[]};
