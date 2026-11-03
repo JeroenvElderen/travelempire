@@ -277,11 +277,15 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    const features:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
-   const MAX_VISIBLE=12000;
+   const MAX_VISIBLE=3500;
+   // Hard bound synchronous work even when almost all loaded roads are offscreen.
+   const MAX_SCANNED=30000;
+   let scanned=0;
    outer:for(const [from,edges] of graph.edges){
     const a=graph.nodes.get(from);
     if(!a)continue;
     for(const edge of edges){
+     if(++scanned>MAX_SCANNED)break outer;
      if(!roadsVisible&&!exploredSet.has(edge.id))continue;
      if(seen.has(edge.id))continue;
      seen.add(edge.id);
@@ -301,7 +305,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     instance.addLayer({id:exploredLayerId,type:'line',source:sourceId,filter:['==',['get','explored'],true],paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
    }
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
-   setRoadStatus(`${features.filter(f=>f.properties?.explored===true).length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
+   setRoadStatus(`${features.filter(f=>f.properties?.explored===true).length.toLocaleString()} explored / ${features.length.toLocaleString()} displayed road segments · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
   };
   instance.on('moveend',update);
   instance.on('style.load',update);
