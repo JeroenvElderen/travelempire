@@ -1,5 +1,5 @@
 import type {Point,RoadGraph} from '../simulation/taxi';
-import {meters} from '../simulation/taxi';
+import {meters,nearest} from '../simulation/taxi';
 import type {FerryNetwork,FerryPort,FerryTransfer} from './ferries';
 import {ferryTransfers} from './ferries';
 
@@ -21,17 +21,28 @@ export function connectFerryTerminals(
  if(!Number.isFinite(maxDistanceMeters)||maxDistanceMeters<=0)throw new Error('Invalid boarding distance');
  for(const port of network.ports){
   const access=port.roadAccess??port.position;
-  let bestId:string|undefined;let bestDistance=Infinity;
-  for(const nodeId of graph.nodeKeys){
-   const point=graph.nodes.get(nodeId);
-   if(!point)continue;
-   const distance=meters(access,point);
-   if(distance<bestDistance){bestDistance=distance;bestId=nodeId;}
+  // Indexed nearest-node lookup scales with Greece's tiled road network.
+  // A road node is usable only if at least one traversable edge is loaded.
+  const nearestId=nearest(graph,access);
+  let bestId=nearestId&&graph.edges.get(nearestId)?.length?nearestId:undefined;
+  let bestDistance=bestId?meters(access,graph.nodes.get(bestId)!):Infinity;
+  if(!bestId&&nearestId){
+   // The absolute nearest node can be a disconnected dead-end or have no
+   // outgoing edges. Search only nearby candidates in that case.
+   const latRadius=maxDistanceMeters/111320;
+   const lngRadius=maxDistanceMeters/(111320*Math.max(0.15,Math.cos(access[1]*Math.PI/180)));
+   for(const nodeId of graph.nodeKeys){
+    const point=graph.nodes.get(nodeId);
+    if(!point||Math.abs(point[0]-access[0])>lngRadius||Math.abs(point[1]-access[1])>latRadius)continue;
+    if(!graph.edges.get(nodeId)?.length)continue;
+    const distance=meters(access,point);
+    if(distance<bestDistance){bestDistance=distance;bestId=nodeId;}
+   }
   }
   if(bestId!==undefined&&bestDistance<=maxDistanceMeters){
    connected.push({portId:port.id,roadNodeId:bestId,roadPoint:graph.nodes.get(bestId)!,distanceMeters:bestDistance});
   }else{
-   unconnected.push({portId:port.id,reason:bestId===undefined?'Road network not loaded':'No drivable road node within boarding radius'});
+   unconnected.push({portId:port.id,reason:graph.nodeKeys.length===0?'Road network not loaded':'No routable road node within boarding radius'});
   }
  }
  return {connected,unconnected};
