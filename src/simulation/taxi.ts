@@ -556,10 +556,11 @@ function turnSpeedKph(previous:Point,junction:Point,next:Point):number{
  if(angle<125)return 20;
  return 12;
 }
-export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[]}{
- if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[]};
+export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[];distanceMeters:number}{
+ if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[],distanceMeters:0};
  const t={...taxi};
  const crossed:string[]=[];
+ let distanceMeters=0;
  let time=Math.min(realSeconds,5)*GAME_SPEED;
  const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:1.9;
  const braking=3.5;
@@ -592,6 +593,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   const distance=(current+nextSpeed)/2*dt;
   const moved=Math.min(distance,remaining);
   t.distanceIntoLeg+=moved;
+  distanceMeters+=moved;
   const fraction=length>0?clamp(t.distanceIntoLeg/length,0,1):1;
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
   if(t.distanceIntoLeg>=length-0.0001){
@@ -605,29 +607,29 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   }
   time-=distance>0?dt*(moved/distance):dt;
  }
- return{taxi:t,crossed};
+ return{taxi:t,crossed,distanceMeters};
 }
-export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[]}{
- if(taxi.status==='IDLE'||taxi.status==='REFUELLING')return{taxi,earned:0,finished:false,discovered:[]};
+export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
+ if(taxi.status==='IDLE'||taxi.status==='REFUELLING')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
  const advanced=advanceTaxi(taxi,graph,seconds);
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...advanced.crossed]};
- if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
+ if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
   const next=discoveredRoads?routeDiscovered(graph,from,to,discoveredRoads):route(graph,from,to);
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
-   return{taxi:t,earned:0,finished:false,discovered:advanced.crossed};
+   return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
   }
  }
  if(t.status==='RETURNING'&&t.refillDestination){
   t={...t,status:'REFUELLING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,refillUntil:undefined,journeyEdges:[]};
-  return{taxi:t,earned:0,finished:false,discovered:[]};
+  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
  }
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=[...new Set(t.journeyEdges??[])];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
- return{taxi:t,earned,finished:earned>0,discovered};
+ return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
 }
