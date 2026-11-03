@@ -3,7 +3,6 @@ import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
-import {connectFerryTerminals} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
@@ -78,7 +77,7 @@ function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)re
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
- useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const owned=new Set(purchasedFerryRouteIds);const connections=graph?connectFerryTerminals(ferryNetwork,graph):undefined;const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,connections)};/* styledata fires for source setData too, creating an expensive feedback loop. */instance.on('style.load',update);update();return()=>{instance.off('style.load',update)}},[ferryNetwork,purchasedFerryRouteIds,graph]);
+ useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const owned=new Set(purchasedFerryRouteIds);/* Road-node verification is not needed to draw ferry lines and must not run on the UI thread for every graph refresh. */const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned)};instance.on('style.load',update);update();return()=>{instance.off('style.load',update)}},[ferryNetwork,purchasedFerryRouteIds]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
