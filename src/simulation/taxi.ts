@@ -426,7 +426,7 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],allowedRoads?:Set<string>,discoveryAllowed?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
