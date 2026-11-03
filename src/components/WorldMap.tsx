@@ -375,7 +375,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const ctx=canvas.getContext('2d');
   if(!ctx){canvas.remove();return;}
   let frame=0;
+  let lastDraw=0;
   const draw=()=>{
+   lastDraw=performance.now();
    frame=0;
    const width=host.clientWidth,height=host.clientHeight;
    if(!width||!height)return;
@@ -404,7 +406,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const south=bounds.getSouth()-0.03,north=bounds.getNorth()+0.03;
    // Batch strokes by approximate width to avoid a canvas draw call per road.
    const batches=new Map<number,Path2D>();
-   for(const segments of persistentSegments.current.values())for(const [a,b] of segments){
+   let drawnSegments=0;
+   const MAX_FOG_SEGMENTS=4500;
+   fogSegments:for(const segments of persistentSegments.current.values())for(const [a,b] of segments){
     if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||
        Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
     const p=instance.project(a),q=instance.project(b);
@@ -415,12 +419,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     let path=batches.get(width);
     if(!path){path=new Path2D();batches.set(width,path);}
     path.moveTo(p.x,p.y);path.lineTo(q.x,q.y);
+    if(++drawnSegments>=MAX_FOG_SEGMENTS)break fogSegments;
    }
    ctx.lineCap='round';ctx.lineJoin='round';
    for(const [width,path] of batches){ctx.lineWidth=width;ctx.stroke(path);}
    ctx.globalCompositeOperation='source-over';
   };
-  const schedule=()=>{if(document.hidden)return;if(!frame)frame=requestAnimationFrame(draw);};
+  // Avoid expensive full fog redraws on every pan frame, especially on iOS.
+  const schedule=()=>{if(document.hidden||frame)return;frame=requestAnimationFrame(()=>{if(performance.now()-lastDraw<90){frame=0;return;}draw();});};
   const onVisibilityChange=()=>{if(!document.hidden)schedule();};
   document.addEventListener('visibilitychange',onVisibilityChange);
   fogDraw.current=schedule;
