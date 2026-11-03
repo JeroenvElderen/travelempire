@@ -10,9 +10,23 @@ const LABELS='travelempire-ferry-labels';
 
 export function syncFerryMapLayer(map:maplibregl.Map,network:FerryNetwork,purchased:ReadonlySet<string>,connections?:FerryConnectionResult):void{
  const connected=new Set(connections?.connected.map(c=>c.portId)??[]);
+ // Adjacent OSM ferry endpoints often represent the same visible harbour.
+ // Collapse display markers only; keep every original port/route ID for routing.
+ const displayPorts:typeof network.ports=[];
+ for(const port of network.ports){
+  const existing=displayPorts.find(p=>{
+   const dx=(p.position[0]-port.position[0])*111320*Math.cos(port.position[1]*Math.PI/180);
+   const dy=(p.position[1]-port.position[1])*111320;
+   return Math.hypot(dx,dy)<35;
+  });
+  if(!existing)displayPorts.push(port);
+  else if(connected.has(port.id)&&!connected.has(existing.id)){
+   displayPorts[displayPorts.indexOf(existing)]=port;
+  }
+ }
  const features:GeoJSON.Feature[]=[
   ...network.routes.map(r=>({type:'Feature' as const,properties:{id:r.id,name:r.name||r.id,owned:purchased.has(r.id)},geometry:{type:'LineString' as const,coordinates:r.geometry}})),
-  ...network.ports.map(p=>({type:'Feature' as const,properties:{id:p.id,name:p.name,port:true,connected:connected.has(p.id)},geometry:{type:'Point' as const,coordinates:p.position}})),
+  ...displayPorts.map(p=>({type:'Feature' as const,properties:{id:p.id,name:p.name,port:true,connected:connected.has(p.id)},geometry:{type:'Point' as const,coordinates:p.position}})),
  ];
  const data:GeoJSON.FeatureCollection={type:'FeatureCollection',features};
  if(map.getSource(SOURCE)){(map.getSource(SOURCE) as maplibregl.GeoJSONSource).setData(data);return;}
