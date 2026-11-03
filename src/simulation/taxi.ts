@@ -470,7 +470,12 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   t.speedKph=speed*3.6;
   const distance=(previous+speed)/2*dt;
   const available=Math.max(0,length-t.distanceIntoLeg);
+  // Consume only the time needed to reach the next junction. Carry the
+  // remaining tick time into the following edge instead of discarding motion.
   const moved=Math.min(distance,available);
+  const usedDt=distance>0&&moved<distance
+   ?dt*(moved/distance)
+   :dt;
   t.distanceIntoLeg+=moved;
   const fraction=length>0?Math.min(1,t.distanceIntoLeg/length):1;
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
@@ -478,7 +483,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    const id=t.edgeIds[t.leg];if(id)crossed.push(id);
    t.leg++;t.distanceIntoLeg=0;t.position=b;
   }
-  time-=dt;
+  time-=usedDt;
  }
  return{taxi:t,crossed};
 }
