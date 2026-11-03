@@ -18,7 +18,7 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,onSailed?:(routeId:string,from:Coordinate,to:Coordinate)=>void):()=>void{
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(r.geometry.length<2||r.durationMinutes<=0)return [];
   const cumulative=[0];
@@ -28,6 +28,7 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
  });
  const markers=new Map<string,maplibregl.Marker>();
  const started=performance.now();
+ const lastSailed=new Map<string,{point:Coordinate;cycle:number}>();
  let stopped=false;
  const refresh=()=>{
   if(stopped)return;
@@ -41,6 +42,10 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
    const forward=cycle<1;
    const progress=forward?cycle:2-cycle;
    const {point,bearing}=position(sailing,progress);
+   const prior=lastSailed.get(sailing.id);
+   const cycleIndex=Math.floor(now/sailing.durationMs);
+   if(prior&&prior.cycle===cycleIndex&&distance(prior.point,point)>1)onSailed?.(sailing.id,prior.point,point);
+   lastSailed.set(sailing.id,{point,cycle:cycleIndex});
    if(!bounds.contains(point))continue;
    active.add(sailing.id);
    let marker=markers.get(sailing.id);
@@ -60,5 +65,5 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
  };
  const timer=window.setInterval(()=>{if(!document.hidden)refresh()},250);
  refresh();
- return()=>{stopped=true;window.clearInterval(timer);for(const marker of markers.values())marker.remove();markers.clear();};
+ return()=>{stopped=true;window.clearInterval(timer);for(const marker of markers.values())marker.remove();markers.clear();lastSailed.clear();};
 }
