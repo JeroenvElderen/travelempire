@@ -27,6 +27,16 @@ def parse_duration(value):
         return None
     return None
 
+def estimate_duration(coords):
+    """Estimate crossing minutes from route length at 20 km/h plus 5 min docking."""
+    metres = 0.0
+    for a, b in zip(coords, coords[1:]):
+        lat = math.radians((a[1] + b[1]) / 2)
+        east = (b[0] - a[0]) * 111320 * math.cos(lat)
+        north = (b[1] - a[1]) * 111320
+        metres += math.hypot(east, north)
+    return max(5, round(metres / 1000 / 20 * 60 + 5))
+
 def build(source):
     ports, routes = {}, []
     for index, feature in enumerate(source.get("features", [])):
