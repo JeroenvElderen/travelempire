@@ -135,7 +135,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil)continue;
-    const scout=dispatchScout(taxis[index],graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
+    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
