@@ -23,6 +23,7 @@ export type Taxi = {
   journeyEdges?: string[];
   scoutingRuns?: number;
   pauseAtHome?: boolean;
+  depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
   discoveryEdgeIds?: string[];
   speedKph?: number;
