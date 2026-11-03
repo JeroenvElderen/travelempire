@@ -15,6 +15,7 @@ variables or commit it to Git. Will NOT overwrite remote data with zero routes.
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,10 +24,25 @@ from build_ferry_network import build
 
 BUCKET = "travelempire-ferries"
 OBJECT = "GRC.json"
-QUERY = '''[out:json][timeout:180];
-area["ISO3166-1"="GR"]["admin_level"="2"]->.greece;
-way["route"="ferry"](area.greece);
-out geom tags;'''
+# Split Greece into smaller areas; include an overlap to avoid boundary gaps.
+# OSM area filter prevents importing nearby foreign routes from the bounding boxes.
+REGIONS = [
+    (34.5, 19.0, 38.4, 24.5),
+    (34.5, 24.4, 38.4, 30.2),
+    (38.3, 19.0, 42.2, 24.5),
+    (38.3, 24.4, 42.2, 30.2),
+]
+ENDPOINTS = [
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.nchc.org.tw/api/interpreter",
+]
+def query_for(region):
+    south,west,north,east=region
+    return (f'[out:json][timeout:80];'
+            f'area["ISO3166-1"="GR"]["admin_level"="2"]->.greece;'
+            f'way["route"="ferry"]({south},{west},{north},{east})(area.greece);'
+            f'out geom tags;')
 
 def request_json(url, *, method="GET", payload=None, key=None, content_type="application/json", timeout=240):
     headers={"User-Agent":"TravelEmpireFerryImporter/2.2.3.1"}
@@ -44,9 +60,33 @@ def request_json(url, *, method="GET", payload=None, key=None, content_type="app
         raise RuntimeError(f"{method} {url.split('?')[0]} returned HTTP {exc.code}: {detail}") from exc
 
 def fetch_osm():
-    endpoint=os.environ.get("OVERPASS_URL","https://overpass.kumi.systems/api/interpreter")
-    data=urllib.parse.urlencode({"data":QUERY}).encode()
-    return request_json(endpoint,method="POST",payload=data,content_type="application/x-www-form-urlencoded")
+    configured=os.environ.get("OVERPASS_URL")
+    endpoints=[configured] if configured else ENDPOINTS
+    elements={}
+    for index,region in enumerate(REGIONS,1):
+        payload=urllib.parse.urlencode({"data":query_for(region)}).encode()
+        errors=[]
+        for attempt in range(3):
+            endpoint=endpoints[attempt % len(endpoints)]
+            print(f"Fetching region {index}/{len(REGIONS)}, attempt {attempt+1}...",flush=True)
+            try:
+                result=request_json(endpoint,method="POST",payload=payload,
+                                    content_type="application/x-www-form-urlencoded",timeout=105)
+                if "elements" not in result:
+                    raise RuntimeError("Overpass returned no elements field")
+                for element in result["elements"]:
+                    if element.get("type")=="way" and "id" in element:
+                        elements[element["id"]]=element
+                print(f"Region {index} complete; {len(elements)} unique ways so far",flush=True)
+                break
+            except (RuntimeError,urllib.error.URLError,TimeoutError,ValueError) as exc:
+                errors.append(str(exc)[:180])
+                print(f"Overpass attempt failed: {errors[-1]}",flush=True)
+                if attempt<2:time.sleep(3*(attempt+1))
+        else:
+            raise RuntimeError(f"Region {index} failed on all endpoints. "
+                               f"Refusing partial Supabase upload. Errors: {errors}")
+    return {"elements":list(elements.values())}
 
 def main():
     url=os.environ.get("SUPABASE_URL","").rstrip("/")
