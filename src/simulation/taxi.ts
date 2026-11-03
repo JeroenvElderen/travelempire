@@ -70,6 +70,20 @@ export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meter
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
 // Road speeds are in km/h; gameplay fallbacks are used only when OSM maxspeed is absent.
+// Deterministic, Greece-local traffic model. No external traffic feed or map overlay.
+export function trafficFactor(speedKph:number,at=Date.now()):number{
+ const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'}).format(at));
+ const weekday=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Athens',weekday:'short'}).format(at);
+ const weekend=weekday==='Sat'||weekday==='Sun';
+ const rush=!weekend&&((hour>=7&&hour<10)||(hour>=16&&hour<19));
+ const busy=!weekend&&hour>=11&&hour<16;
+ // Posted speed is never exceeded; slower urban streets experience heavier congestion.
+ const density=speedKph<=50?1:speedKph<=80?0.55:0.18;
+ return Math.max(0.3,1-density*(rush?0.48:busy?0.22:weekend?0.10:0.07));
+}
+export function trafficTravelSeconds(meters:number,speedKph:number,at=Date.now()):number{
+ return meters/(Math.max(5,speedKph)*trafficFactor(speedKph,at)/3.6);
+}
 export const GAME_SPEED = 1;
 const DEFAULT_SPEED: Record<string,number> = {
  motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
@@ -336,7 +350,7 @@ export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered
   if(k===to)break;
   for(const edge of graph.edges.get(k)??[]){
    if(!discovered.has(edge.id))continue;
-   const nd=d+edge.meters;
+   const nd=d+trafficTravelSeconds(edge.meters,edge.speedKph);
    if(nd<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,nd);prev.set(edge.to,{from:k,id:edge.id});heap.push([nd,edge.to]);
    }
@@ -573,8 +587,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   const length=meters(a,b);
   const edge=graph.edges.get(key(a))?.find(e=>e.to===key(b)&&e.id===t.edgeIds[t.leg]);
   const roadLimit=clamp(edge?.speedKph??50,5,160)/3.6;
-  const cruiseFactor=t.kind==='surveyor'?0.93:t.kind==='explorer'?0.95:0.97;
-  const cruise=roadLimit*cruiseFactor;
+  const cruise=roadLimit*trafficFactor(edge?.speedKph??50);
   const remaining=Math.max(0,length-t.distanceIntoLeg);
   const nextIndex=t.leg+1;
   let junctionLimit=roadLimit;
@@ -584,6 +597,8 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    const nextLimit=clamp(nextEdge?.speedKph??50,5,160)/3.6;
    const curveLimit=turnSpeedKph(a,b,c)/3.6;
    junctionLimit=Math.min(nextLimit,curveLimit);
+   // Slow through urban junctions; do not simulate a full stop without signal data.
+   if((edge?.speedKph??50)<=50&&(nextEdge?.speedKph??50)<=50)junctionLimit=Math.min(junctionLimit,12/3.6);
   }
   // v² = u² + 2as: brake early enough to respect the next road and turn.
   const safeApproach=Math.sqrt(Math.max(0,junctionLimit*junctionLimit+2*braking*remaining));

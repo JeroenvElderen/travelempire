@@ -1,6 +1,6 @@
 import {energyPercent} from './energy';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,territoryDiscoveryEdges,route,nearest,meters,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,territoryDiscoveryEdges,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -74,7 +74,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      const to=nearest(activeGraph,assigned.path[j+1]);
      const edge=activeGraph.edges.get(from)?.find(e=>e.to===to&&e.id===assigned.edgeIds[j]);
      const distance=edge?.meters??meters(assigned.path[j],assigned.path[j+1]);
-     etaSeconds+=distance/(Math.max(10,edge?.speedKph??50)/3.6);
+     etaSeconds+=trafficTravelSeconds(distance,edge?.speedKph??50,now);
     }
     // Include approximate time to accelerate from a stop.
     etaSeconds+=Math.min(12,assigned.edgeIds.length*0.5+4);
