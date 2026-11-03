@@ -73,10 +73,12 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onRoadViewport?:(points:[number,number][])=>void;onExplorerCommand?:(id:string,action:'home'|'resume')=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onRoadViewport,onExplorerCommand}:Props){
+ const viewportCallbackRef=useRef(onRoadViewport);
+ viewportCallbackRef.current=onRoadViewport;
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
  const [ferryConnections,setFerryConnections]=useState<FerryConnectionResult|undefined>(undefined);
@@ -358,10 +360,22 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
    setRoadStatus(`${features.filter(f=>f.properties?.explored===true).length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
   };
+  // Fetch the actual OSM road tiles for the viewport, not just HQ and vehicle routes.
+  // Only trigger after the user finishes panning; never enqueue on every frame.
+  const requestViewport=()=>{
+   if(cancelled||!viewportCallbackRef.current)return;
+   const bounds=instance.getBounds();
+   const center=instance.getCenter();
+   const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
+   const points:[number,number][]=[[center.lng,center.lat],[west,south],[west,north],[east,south],[east,north]];
+   viewportCallbackRef.current(points);
+  };
+  instance.on('moveend',requestViewport);
+  requestViewport();
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  return()=>{cancelled=true;instance.off('moveend',update);instance.off('style.load',update);};
+  return()=>{cancelled=true;instance.off('moveend',requestViewport);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap,exploredEdgeIds]);
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
