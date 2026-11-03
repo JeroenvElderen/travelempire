@@ -4,7 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
-import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
+import {type Taxi,type RoadGraph} from '../simulation/taxi';
 import {deliveryPosition} from '../dealership';
 import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
 import {energySpec,energyRangeKm} from '../simulation/energy';
@@ -141,7 +141,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  // Render one simulation tick behind the authoritative state. This avoids running
  // the road integrator on every animation frame and prevents one-second jumps.
  const graphRef=useRef(graph);graphRef.current=graph;
- const taxiSnapshots=useRef(new Map<string,{from:Taxi;to:Taxi;forecast:Taxi;at:number}>());
+ const taxiSnapshots=useRef(new Map<string,{from:Taxi;to:Taxi;at:number;duration:number}>());
  const taxiHeadingState=useRef(new Map<string,{angle:number;position:[number,number];at:number}>());
  // Render-only state. Simulation position, job status and saved coordinates are untouched.
  const renderedPosition=useRef(new Map<string,[number,number]>());
@@ -159,7 +159,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  };
  useEffect(()=>{const now=performance.now();const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);}}for(const taxi of taxis){if(taxi.deliveryUntil && taxi.deliveryUntil> Date.now())continue;const previous=taxiSnapshots.current.get(taxi.id);
   if(!previous || previous.to.position[0]!==taxi.position[0] || previous.to.position[1]!==taxi.position[1]){
-   const forecast=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
+   // Use confirmed simulation samples only. Never predict ahead of the game clock.
    // Preserve the last rendered position across simulation ticks to avoid
    // one-frame jumps when the simulation and animation clocks differ.
    // Only do this on the same route; a new job must not interpolate from
@@ -171,11 +171,13 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     const distance=Math.hypot((displayed[0]-taxi.position[0])*111320*Math.cos(taxi.position[1]*Math.PI/180),(displayed[1]-taxi.position[1])*111320);
     if(distance>5)recordMovement(taxi.id,taxi.name+' drift '+Math.round(distance)+'m · leg '+taxi.leg+' · '+taxi.status);
    }
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
-   taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
+   // A new route or idle state must not animate from a stale road position.
+   const from=sameRoute&&taxi.status!=='IDLE'&&previous?previous.to:taxi;
+   const duration=previous?Math.max(100,Math.min(1500,now-previous.at)):1000;
+   taxiSnapshots.current.set(taxi.id,{from,to:taxi,at:now,duration});
   }else{
    // Keep route/status current without restarting the animation clock.
-   taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
+   if(previous)taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
  useEffect(()=>{
   let frame=0;
@@ -199,11 +201,10 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
     const marker=taxiMarkers.current.get(id);if(!marker)continue;
     const taxi=snapshot.to;
     const elapsed=Math.max(0,(now-snapshot.at)/1000);
-    // Continue a short distance along the actual road after a late simulation tick.
-    // Forecast is computed only when authoritative state changes, never per frame.
-    const position=elapsed<=1
-      ?positionOnTravelledRoute(snapshot.from,snapshot.to,Math.min(1,elapsed))
-      :positionOnTravelledRoute(snapshot.to,snapshot.forecast,Math.min(1,(elapsed-1)/0.65));
+    // One-tick delayed interpolation between confirmed states. No extrapolation.
+    // Freeze at the last authoritative position if a simulation update is late.
+    const progress=taxi.status==='IDLE'?1:Math.min(1,elapsed*1000/snapshot.duration);
+    const position=positionOnTravelledRoute(snapshot.from,snapshot.to,progress);
     const lastRendered=renderedPosition.current.get(id);
     if(!lastRendered||Math.abs(lastRendered[0]-position[0])+Math.abs(lastRendered[1]-position[1])>1e-9){
      marker.setLngLat(position);
