@@ -332,7 +332,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
  const persistGeometry=async()=>{const id=explorationCompany.current;if(!id||persistBusy.current){persistAgain.current=true;return;}persistBusy.current=true;
   try{do{persistAgain.current=false;const old=await readExploration(id);const segments={...(old?.segments??{})};
    for(const [key,value] of persistentSegments.current)segments['territory:'+key]=value;
-   await writeExploration(id,{ids:[...new Set([...(old?.ids??[]),...explorationInputs.current.territoryEdgeIds])],segments});
+   await writeExploration(id,{ids:old?.ids??[],segments});
   }while(persistAgain.current&&explorationCompany.current===id)}catch(error){console.error('[TravelEmpire] Geometry save failed',error)}finally{persistBusy.current=false;}
  };
  // Build a stable edge geometry index only when the graph changes.
