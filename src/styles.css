@@ -15,3 +15,43 @@
 }
 @media(max-width:390px){.phase{font-size:8px;padding:5px 7px}.breadcrumbs{font-size:9px}.map-overlay{max-height:45dvh;overflow:auto}}
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none!important}}
+
+
+/* TravelEmpire 2.1 — unified visual system */
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--ui-bg:#0b1119;--ui-surface:#121b27;--ui-raised:#192535;--ui-border:#293748;--ui-text:#eaf0f7;--ui-muted:#9aabba;--ui-accent:#5fd4bd;color:var(--ui-text);background:var(--ui-bg)}
+body{background:var(--ui-bg)}
+.sidebar{width:252px;background:#0e1722;border-color:var(--ui-border)}
+.brand{padding:26px 20px 32px}.brand-mark{background:linear-gradient(140deg,#75e0c9,#49a9d5);border-radius:12px;box-shadow:0 8px 24px #38c4b424}
+.brand strong{font-size:13px;letter-spacing:1px}.brand small{font-size:9px;letter-spacing:.9px;color:var(--ui-muted)}
+.side-label{color:#8c9cad;font-weight:700}.navigation{gap:5px;padding:0 12px}.navigation button{font-weight:550;border-radius:11px;padding:12px 14px;color:#a8b8c7;transition:background .16s,color .16s}
+.navigation button:hover{background:#1d2a39;color:#eaf4f6}.navigation button.selected{background:#203b40;color:#80e9d2;box-shadow:inset 3px 0 #5fd4bd}
+.sidebar-bottom{border-color:var(--ui-border);color:var(--ui-text)}
+.topbar{height:70px;background:#101a26;border-color:var(--ui-border);padding-inline:30px}.breadcrumbs{font-weight:650;color:#93a8b8}.breadcrumbs b{color:#edf5fa}
+.phase{border:1px solid #345b60;background:#17353a;color:#8be6d2;font-weight:700;letter-spacing:.6px}
+.company-dashboard,.finance-panel,.fleet-v2,.placeholder{width:min(1280px,100%);margin-inline:auto;padding:34px clamp(18px,3vw,44px) 72px}
+.company-dashboard h1,.fleet-v2 h1,.finance-panel h1{font-size:clamp(26px,3vw,38px);font-weight:760;letter-spacing:-1.2px;line-height:1.16;margin:9px 0 22px}
+.company-dashboard h2,.fleet-v2 h2,.finance-panel h2{font-size:20px;letter-spacing:-.4px;margin:30px 0 15px}
+.company-dashboard p,.fleet-v2 p,.finance-panel p{color:#a7b7c5;line-height:1.65;max-width:850px}
+.eyebrow{font-size:10px;letter-spacing:1.8px;font-weight:800;color:#76dfca}
+.company-metrics,.fleet-metrics,.fleet-stat-grid{gap:14px}
+.company-metrics article,.fleet-metrics article,.fleet-stat-grid article,.fleet-compact-card,.fleet-driver-card,.fleet-offer,.placeholder-card{background:#162130;border:1px solid #2a3949;border-radius:15px;box-shadow:0 7px 25px #050b131f}
+.company-metrics article,.fleet-metrics article,.fleet-stat-grid article{padding:20px;min-width:0}
+.company-metrics article small,.fleet-metrics article small,.fleet-stat-grid article small{display:block;color:#94a8b9;letter-spacing:1px;font-size:10px;font-weight:750;line-height:1.5;margin-bottom:9px}
+.company-metrics article strong,.fleet-metrics article strong,.fleet-stat-grid article strong{color:#eef7fb;font-size:clamp(16px,2vw,24px);letter-spacing:-.5px;overflow-wrap:anywhere}
+.ui-section-tabs,.fleet-tabs,.fleet-subnav{display:flex;align-items:center;gap:6px;overflow-x:auto;max-width:100%;scrollbar-width:thin;border-bottom:1px solid #2b3949;padding:5px 0 12px;margin:16px 0 24px}
+.ui-section-tabs button,.fleet-tabs button,.fleet-subnav button{border:1px solid transparent;background:transparent;color:#9db0bf;border-radius:9px;padding:11px 17px;font-size:13px;font-weight:700;white-space:nowrap;flex-shrink:0}
+.ui-section-tabs button:hover,.fleet-tabs button:hover,.fleet-subnav button:hover{background:#213040;color:#e9f5f5}
+.ui-section-tabs button.active,.fleet-tabs button.active,.fleet-subnav button.active{background:#244443;color:#9af0db;border-color:#396c66}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #65dfca;outline-offset:3px}
+.company-dashboard button,.finance-panel button,.fleet-v2 button{min-height:38px}
+.company-dashboard input,.company-dashboard select,.fleet-v2 select,.fleet-v2 input,.finance-panel select,.finance-panel input{max-width:100%;background:#0f1b28;color:#edf5f7;border:1px solid #394b5d;border-radius:9px;padding:10px}
+.fleet-compact-details{border-color:#314456}.fleet-compact-heading{gap:10px}
+.fleet-stat-table{overflow-x:auto}.fleet-stat-table table{min-width:640px}
+.operations-metrics article{display:none}
+.operations-overview article:nth-child(-n+4),.operations-overview article:nth-child(10),.operations-overview article:nth-child(11){display:block}
+.operations-exploration article:nth-child(n+5):nth-child(-n+9),.operations-exploration article:nth-child(12){display:block}
+.operations-diagnostics article:nth-child(n+13){display:block}
+.map-legend,.map-overlay{border-color:#395467;background:#101c2af0;box-shadow:0 20px 55px #0006}
+.mobile-tabs{background:#111b29;border-color:#314354}.mobile-tabs button.active{color:#7de6d0}
+@media(max-width:800px){.sidebar{width:min(290px,84vw)}.topbar{padding:10px 14px}.company-dashboard,.finance-panel,.fleet-v2,.placeholder{padding:22px 14px 110px}.company-metrics,.fleet-metrics,.fleet-stat-grid{gap:9px}.company-metrics article,.fleet-metrics article,.fleet-stat-grid article{padding:14px}.ui-section-tabs{margin:8px 0 18px}.ui-section-tabs button{padding:11px 13px}.phase{font-size:9px}.mobile-tabs{box-shadow:0 -10px 30px #02080f70}.world{min-height:calc(100dvh - 145px)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
