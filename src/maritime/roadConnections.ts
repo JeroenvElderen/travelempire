@@ -26,7 +26,7 @@ export function connectFerryTerminals(
   const nearestId=nearest(graph,access);
   let bestId=nearestId&&graph.edges.get(nearestId)?.length?nearestId:undefined;
   let bestDistance=bestId?meters(access,graph.nodes.get(bestId)!):Infinity;
-  if(!bestId||bestDistance>maxDistanceMeters){
+  if(!bestId&&nearestId){
    // The absolute nearest node can be a disconnected dead-end or have no
    // outgoing edges. Search only nearby candidates in that case.
    const latRadius=maxDistanceMeters/111320;
