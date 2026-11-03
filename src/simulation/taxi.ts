@@ -63,7 +63,7 @@ export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meter
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
 // Road speeds are in km/h; gameplay fallbacks are used only when OSM maxspeed is absent.
-export const GAME_SPEED = 4;
+export const GAME_SPEED = 1;
 const DEFAULT_SPEED: Record<string,number> = {
  motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
  secondary:70,secondary_link:45,tertiary:50,tertiary_link:40,
@@ -76,6 +76,8 @@ export function roadSpeedKph(properties:Record<string,unknown>):number {
  if(typeof raw==='number'&&Number.isFinite(raw)&&raw>0)return Math.min(160,raw);
  if(typeof raw!=='string')return fallback;
  const value=raw.trim().toLowerCase().split(';')[0].trim();
+ // OSM may use conditional or country-specific values; fall back to road class.
+ if(value.includes('@')||value.includes(':'))return fallback;
  if(!value||['none','signals','variable','walk','national','implicit','unknown'].includes(value))return fallback;
  const match=value.match(/^(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh|kph)?$/);
  if(!match)return fallback;
@@ -450,7 +452,7 @@ export function dispatchScout(
   pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
-// Acceleration/deceleration is expressed in simulated seconds (4x wall time).
+// Acceleration/deceleration is expressed in real seconds (1x wall time).
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[]}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[]};
  let t={...taxi};
@@ -466,16 +468,21 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   const dt=Math.min(0.1,time);
   const previous=Math.max(0,t.speedKph??0)/3.6;
   const acceleration=target>=previous?2:3.5;
-  const speed=previous+Math.sign(target-previous)*Math.min(Math.abs(target-previous),acceleration*dt);
+  const speed=Math.min(target,Math.max(0,previous+Math.sign(target-previous)*Math.min(Math.abs(target-previous),acceleration*dt)));
   t.speedKph=speed*3.6;
   const distance=(previous+speed)/2*dt;
   const available=Math.max(0,length-t.distanceIntoLeg);
   // Consume only the time needed to reach the next junction. Carry the
   // remaining tick time into the following edge instead of discarding motion.
   const moved=Math.min(distance,available);
+  // For constant acceleration, distance = v0*t + 0.5*a*t².
+  // Solve for actual time to reach the junction, preserving the remaining tick.
+  const actualAcceleration=(speed-previous)/dt;
   const usedDt=distance>0&&moved<distance
-   ?dt*(moved/distance)
+   ?Math.abs(actualAcceleration)<1e-9?moved/Math.max(previous,1e-9)
+    :Math.max(0,Math.min(dt,(-previous+Math.sqrt(Math.max(0,previous*previous+2*actualAcceleration*moved)))/actualAcceleration))
    :dt;
+  if(usedDt<dt)t.speedKph=Math.min(limitKph,(previous+actualAcceleration*usedDt)*3.6);
   t.distanceIntoLeg+=moved;
   const fraction=length>0?Math.min(1,t.distanceIntoLeg/length):1;
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
