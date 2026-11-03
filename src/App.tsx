@@ -270,12 +270,26 @@ export default function App(){
     const initialDiscoveryCount=discovered.size;
     const territory=new Set(old.territoryEdgeIds??[]);
     const initialTerritoryCount=territory.size;
-    let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
+    let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,serviceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     const taxis=old.taxis.map(t=>{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
+     // Automatic scheduled service: vehicles stop accepting work at 60% condition.
+     // Service is billed on completion; insufficient cash postpones completion.
+     if(delivered.status==='SERVICING'){
+      const until=delivered.serviceUntil??now+120000;
+      if(now<until)return {...delivered,serviceUntil:until};
+      const cost=150;
+      if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,serviceUntil:now+60000};
+      pendingCashRef.current-=cost;serviceExpense+=cost;
+      transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic scheduled service`,amount:-cost});
+      return {...delivered,status:'IDLE' as const,serviceUntil:undefined,vehicleCondition:Math.min(100,(delivered.vehicleCondition??100)+40),serviceCount:(delivered.serviceCount??0)+1,lastServiceKm:delivered.operatingKm??0};
+     }
+     if(delivered.status==='IDLE'&&(delivered.vehicleCondition??100)<=60){
+      return {...delivered,status:'SERVICING' as const,serviceUntil:now+120000,path:[],edgeIds:[],speedKph:0};
+     }
      if(delivered.status==='REFUELLING'){
       const spec=energySpec(delivered);
       const until=delivered.refillUntil??(now+(spec.unit==='L'?180000:delivered.refillAtDepot?3600000:1200000));
@@ -343,14 +357,14 @@ export default function App(){
     // A small office/depot overhead accrues in simulated time, including idle periods.
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
     const loanTick=advanceLoans(old.loans??[],4);
-    const net=revenue-fuelExpense-maintenanceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
+    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     return{...old,drivers,taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
-      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
+      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
       loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal,transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
@@ -423,7 +437,7 @@ export default function App(){
  const go=(name:Page)=>{setPage(name);setDrawerOpen(false);};
  const onLocation=(value:Headquarters)=>{setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  return <div className="shell"><aside className={`sidebar ${drawerOpen?'open':''}`}><header className="brand"><div className="brand-mark">T</div><div><strong>TRAVELEMPIRE</strong><small>WORLDFRONT 2.0</small></div><button className="close-menu" aria-label="Close menu" onClick={()=>setDrawerOpen(false)}><X size={19}/></button></header><div className="side-label">MANAGEMENT</div><nav className="navigation" aria-label="Main navigation">{navigation.map(({name,icon:Icon})=><button key={name} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><span className="status-dot"/>{company?company.name:'Foundation preview'}<small>{company?'Saved locally · backend not connected':'Simulation not connected'}</small></div></aside>
- {drawerOpen&&<button className="backdrop" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/>}<main className="main"><header className="topbar"><button className="menu-toggle" aria-label="Open navigation" onClick={()=>setDrawerOpen(true)}><Menu size={21}/></button><div className="breadcrumbs">TRAVELEMPIRE <span>/</span> <b>{page.toUpperCase()}</b></div><div className="phase">GEOGRAPHIC ROAD TILES · V2.0-K · WORKER · PERFORMANCE{roadPackages>0?` · ${roadPackages} LOADED`:""}</div></header>
+ {drawerOpen&&<button className="backdrop" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/>}<main className="main"><header className="topbar"><button className="menu-toggle" aria-label="Open navigation" onClick={()=>setDrawerOpen(true)}><Menu size={21}/></button><div className="breadcrumbs">TRAVELEMPIRE <span>/</span> <b>{page.toUpperCase()}</b></div><div className="phase">GEOGRAPHIC ROAD TILES · V2.0-L · WORKER · PERFORMANCE{roadPackages>0?` · ${roadPackages} LOADED`:""}</div></header>
  <section className="world" style={{display:page==='World'?'block':'none'}}><WorldMap companyId={company?.id} selecting={selecting} onLocationSelected={onLocation} headquarters={company?.headquarters??null} taxis={fleet.taxis} exploredEdgeIds={(fleet.exploredEdgeIds??[]).filter(id=>territoryDiscoveryAllowedRef.current.has(id))} territoryEdgeIds={fleet.territoryEdgeIds??[]} graph={graph}/>{selecting&&<div className="location-hint"><strong>Choose headquarters</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPage('Company');}}>Cancel</button></div>}</section>
  {page==='Company'&&(!company||showSetup)?<CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/>:null}
  {page==='Company'&&company&&!showSetup&&<section className="company-dashboard"><span className="eyebrow">COMPANY OVERVIEW · LOCAL PREVIEW</span><h1>{company.name}</h1><p>Your company profile is saved in this browser. Taxi operations run locally while this browser tab is open.</p><div className="company-metrics"><article><small>AVAILABLE CAPITAL</small><strong>€{company.cash.toLocaleString('en-IE')}</strong></article><article><small>HEADQUARTERS</small><strong>{company.headquarters.label}</strong></article><article><small>FLEET</small><strong>{fleet.taxis.filter(t=>(!t.kind||t.kind==='taxi')).length} taxis · {fleet.taxis.filter(t=>t.kind==='explorer').length} road explorers · {fleet.taxis.filter(t=>t.kind==='surveyor').length} black explorers</strong></article></div><p className="setup-disclaimer">No administrative ownership restrictions. Greek roads load automatically near headquarters and active taxis from Supabase.</p><button className="setup-secondary" onClick={()=>setPage('World')}>View headquarters on map</button><button className="danger-button" onClick={()=>{if(window.confirm('Delete this locally saved company? This cannot be undone.')){Research.clear(company.id);void clearExploration(company.id);clearCompany();localStorage.removeItem(`travelempire.fleet.v0.8.${company.id}`);setFleet({taxis:[],revenue:0,completed:0});setCompany(null);setSelection(null);setShowSetup(false);}}}>Delete local company</button></section>}
