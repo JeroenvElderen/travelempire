@@ -397,7 +397,9 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    for(const [width,path] of batches){ctx.lineWidth=width;ctx.stroke(path);}
    ctx.globalCompositeOperation='source-over';
   };
-  const schedule=()=>{if(!frame)frame=requestAnimationFrame(draw);};
+  const schedule=()=>{if(document.hidden)return;if(!frame)frame=requestAnimationFrame(draw);};
+  const onVisibilityChange=()=>{if(!document.hidden)schedule();};
+  document.addEventListener('visibilitychange',onVisibilityChange);
   fogDraw.current=schedule;
   instance.on('move',schedule);
   instance.on('moveend',schedule);
@@ -408,6 +410,7 @@ export default function WorldMap({companyId,selecting,onLocationSelected,headqua
    fogDraw.current=null;
    instance.off('move',schedule);instance.off('moveend',schedule);instance.off('resize',schedule);
    instance.off('style.load',schedule);
+   document.removeEventListener('visibilitychange',onVisibilityChange);
    if(frame)cancelAnimationFrame(frame);
    canvas.remove();
   };
