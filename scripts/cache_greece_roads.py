@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """One-time Greece PBF -> 0.1 degree gzip road tiles -> resumable Supabase manifest."""
-import argparse,gzip,json,math,os,sqlite3,time,urllib.request,urllib.error
+import argparse,gzip,json,math,os,random,sqlite3,time,urllib.request,urllib.error
 from pathlib import Path
 import osmium
 BUCKET="travelempire-road-tiles"
@@ -18,10 +18,12 @@ def storage(name,data=None,kind="application/json"):
         except urllib.error.HTTPError as e:
             detail=e.read().decode("utf-8","replace")
             if data is None and (e.code==404 or (e.code==400 and ("not_found" in detail.lower() or "not found" in detail.lower()))):return None
-            if e.code not in (429,500,502,503,504) or attempt==4:raise RuntimeError(f"{name}: HTTP {e.code}: {detail[:200]}") from e
+            if e.code not in (408,425,429,500,502,503,504,520,522,524) or attempt==4:raise RuntimeError(f"{name}: HTTP {e.code}: {detail[:200]}") from e
         except (TimeoutError,urllib.error.URLError):
             if attempt==4:raise
-        time.sleep(2**attempt)
+        delay=min(30,2**attempt)+random.uniform(0,1)
+        print(f"Transient storage failure for {name}; retry {attempt+1}/5 in {delay:.1f}s",flush=True)
+        time.sleep(delay)
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--pbf",type=Path,required=True)
