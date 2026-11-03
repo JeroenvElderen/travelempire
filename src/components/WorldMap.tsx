@@ -3,6 +3,7 @@ import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
+import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
@@ -133,6 +134,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   update();
   return()=>{instance.off('style.load',update);};
  },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
+ useEffect(()=>{if(!ready||!ferryNetwork||!map.current)return;return startAutomaticFerryMarkers(map.current,ferryNetwork);},[ready,ferryNetwork]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
