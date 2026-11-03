@@ -22,11 +22,14 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
  const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
-  const from=ports.get(r.from);
-  if(!from)return [];
+  const from=ports.get(r.from),to=ports.get(r.to);
+  if(!from||!to)return [];
+  // OSM 'from' is an import direction, not the player's departure harbour.
+  // For automatic service start at the endpoint closest to headquarters.
+  const origin=home&&distance(home,to)<distance(home,from)?to:from;
   // OSM way geometry can be stored in either direction. Start at the
   // route's declared origin harbour, not at an arbitrary OSM endpoint.
-  const geometry=distance(r.geometry[0],from)<=distance(r.geometry[r.geometry.length-1],from)
+  const geometry=distance(r.geometry[0],origin)<=distance(r.geometry[r.geometry.length-1],origin)
    ?r.geometry:[...r.geometry].reverse();
   const cumulative=[0];
   for(let i=1;i<geometry.length;i++)cumulative.push(cumulative[i-1]+distance(geometry[i-1],geometry[i]));
