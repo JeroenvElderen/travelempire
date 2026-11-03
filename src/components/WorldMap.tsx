@@ -1,6 +1,8 @@
 import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
+import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
+import {syncFerryMapLayer} from './FerryMapLayer';
 import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
@@ -69,10 +71,15 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v2':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand}:Props){
+ const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
+ useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
+ const purchasedFerryIds=useRef<string[]>(purchasedFerryRouteIds);purchasedFerryIds.current=purchasedFerryRouteIds;
+ const ferryNetworkRef=useRef(ferryNetwork);ferryNetworkRef.current=ferryNetwork;
+ useEffect(()=>{const instance=map.current;if(!instance||!ferryNetwork)return;const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,new Set(purchasedFerryRouteIds))};instance.on('styledata',update);update();return()=>{instance.off('styledata',update)}},[ferryNetwork,purchasedFerryRouteIds]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
