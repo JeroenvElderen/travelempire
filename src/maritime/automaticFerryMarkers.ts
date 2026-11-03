@@ -18,13 +18,20 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void):()=>void{
+ const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
-  if(r.geometry.length<2||r.durationMinutes<=0)return [];
+  if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
+  const from=ports.get(r.from);
+  if(!from)return [];
+  // OSM way geometry can be stored in either direction. Start at the
+  // route's declared origin harbour, not at an arbitrary OSM endpoint.
+  const geometry=distance(r.geometry[0],from)<=distance(r.geometry[r.geometry.length-1],from)
+   ?r.geometry:[...r.geometry].reverse();
   const cumulative=[0];
-  for(let i=1;i<r.geometry.length;i++)cumulative.push(cumulative[i-1]+distance(r.geometry[i-1],r.geometry[i]));
+  for(let i=1;i<geometry.length;i++)cumulative.push(cumulative[i-1]+distance(geometry[i-1],geometry[i]));
   const length=cumulative[cumulative.length-1];
-  return length>1?[{id:r.id,geometry:r.geometry,cumulative,length,durationMs:Math.max(60000,r.durationMinutes*60000/4)}]:[];
+  return length>1?[{id:r.id,geometry,cumulative,length,durationMs:Math.max(60000,r.durationMinutes*60000/4)}]:[];
  });
  const markers=new Map<string,maplibregl.Marker>();
  const started=performance.now();
