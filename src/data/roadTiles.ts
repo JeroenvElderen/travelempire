@@ -1,6 +1,7 @@
 /** Geographic road tiles. No administrative regions are used at runtime. */
 export interface RoadSegment {id:string;a:number;b:number;coordinates:[[number,number],[number,number]];length:number;highway:string;speed:number;oneway:number}
-type Manifest={format:string;tileSize:number;tiles:Record<string,{file:string;edges:number}>};
+type TileInfo={file:string;edges:number;source?:'bundled'|'supabase'};
+type Manifest={format:string;tileSize:number;tiles:Record<string,TileInfo>};
 let manifestPromise:Promise<Manifest>|undefined;
 const cache=new Map<string,RoadSegment[]>();
 const pending=new Map<string,Promise<RoadSegment[]>>();
@@ -19,8 +20,16 @@ export async function roadTileManifest():Promise<Manifest>{
    const response=await fetch(url,{cache:'no-store'});
    if(!response.ok)return bundled;
    const supplemental=await response.json() as Manifest;
-   if(supplemental.tileSize!==bundled.tileSize||!supplemental.tiles)return bundled;
-   return {...bundled,tiles:{...bundled.tiles,...supplemental.tiles}};
+   if(!supplemental.tiles)return bundled;
+   // Nationwide PBF cache uses 0.2-degree tiles (floor(lng*5)), while
+   // original gameplay tiles use 0.1 degrees. Keep both address spaces.
+   // Prefix nationwide keys to prevent collisions with bundled tiles.
+   const tiles:Record<string,TileInfo>={};
+   for(const [id,info] of Object.entries(bundled.tiles))tiles[id]={...info,source:'bundled'};
+   for(const [id,info] of Object.entries(supplemental.tiles)){
+    tiles[`national:${id}`]={...info,source:'supabase'};
+   }
+   return {...bundled,tiles};
   }catch{return bundled;}
  })().catch(e=>{manifestPromise=undefined;throw e});
  return manifestPromise;
@@ -34,7 +43,7 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
  const saved=cache.get(id);if(saved)return Promise.resolve(saved);
  const inflight=pending.get(id);if(inflight)return inflight;
  const task=(async()=>{const manifest=await roadTileManifest();const info=manifest.tiles[id];if(!info)return [];
-  const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
+  const url=info.source==='supabase'&&storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
   const request=++serial;const result=new Promise<RoadSegment[]>((resolve,reject)=>callbacks.set(request,{resolve,reject}));
   parser().postMessage({id:request,regionId:id,url});const roads=await result;cache.set(id,roads);return roads;
  })().finally(()=>pending.delete(id));pending.set(id,task);return task;

@@ -24,7 +24,11 @@ export class RoadNetworkManager {
   const id=tileId(point[0],point[1],this.tileSize);
   // Load tiles around HQ before dispatch; an empty centre tile is allowed.
   const nearby=this.idsNear(point,1500);
-  await Promise.all(nearby.filter(k=>this.available.has(k)).map(k=>this.load(k)));
+  // Limit startup work; nationwide tiles can contain far more road segments.
+  const initial=nearby.filter(k=>this.available.has(k)&&!k.startsWith('national:'));
+  const nationwide=nearby.filter(k=>this.available.has(k)&&k.startsWith('national:'));
+  await Promise.all(initial.map(k=>this.load(k)));
+  if(!this.graph.nodeKeys.length&&nationwide.length)await this.load(nationwide[0]);
   if(!this.graph.nodeKeys.length)throw Error(`No road tiles near headquarters (${id}). Upload geographic tiles first.`);
   this.consider([point]);return this.graph;
  }
@@ -33,6 +37,10 @@ export class RoadNetworkManager {
   const ids:string[]=[];const s=this.tileSize;
   for(let x=Math.floor((p[0]-dx)/s);x<=Math.floor((p[0]+dx)/s);x++)
    for(let y=Math.floor((p[1]-dy)/s);y<=Math.floor((p[1]+dy)/s);y++)ids.push(`${x}_${y}`);
+  // Nationwide Supabase cache is indexed at 0.2 degrees; request its
+  // overlapping tiles separately, without fetching the entire country.
+  for(let x=Math.floor((p[0]-dx)/0.2);x<=Math.floor((p[0]+dx)/0.2);x++)
+   for(let y=Math.floor((p[1]-dy)/0.2);y<=Math.floor((p[1]+dy)/0.2);y++)ids.push(`national:${x}_${y}`);
   return ids;
  }
  considerPoint(p:Point){this.consider([p]);}
