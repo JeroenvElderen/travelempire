@@ -1,5 +1,7 @@
 import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} from './roadTiles';
 import type {Point,RoadGraph} from '../simulation/taxi';
+import type {FerryNetwork} from '../maritime/ferries';
+import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
 const PREFETCH_METERS=10000;
 const MAX_CONCURRENT=2;
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
@@ -9,6 +11,10 @@ export class RoadNetworkManager {
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
  constructor(private onGraph:(graph:RoadGraph,count:number)=>void,private onError:(message:string)=>void,private onRoads?:(roads:RoadSegment[])=>void){}
+ /** Request road tiles around ferry boarding points without crossing water. */
+ considerFerryTerminals(network:FerryNetwork){this.consider(network.ports.map(p=>p.roadAccess??p.position));}
+ /** Resolve currently loaded ferry terminals to real road nodes; repeat after tile loads. */
+ ferryConnections(network:FerryNetwork,maxDistanceMeters=250):FerryConnectionResult{return connectFerryTerminals(network,this.graph,maxDistanceMeters);}
  get loadedCount(){return this.loaded.size;}
  get queuedCount(){return this.queue.length+this.inFlight;}
  get nodeCount(){return this.graph.nodeKeys.length;}
