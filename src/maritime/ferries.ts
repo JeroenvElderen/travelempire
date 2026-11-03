@@ -27,7 +27,20 @@ export function ferryTransfers(network:FerryNetwork,portId:string):FerryTransfer
   return [];
  });
 }
+/** Ferry data is served from public Supabase Storage, matching the road-tile pattern.
+ * Falls back to bundled data if the bucket is unavailable.
+ * Never place a service-role key in frontend environment variables.
+ */
 export async function loadFerryNetwork(url='/data/ferries/GRC.json'):Promise<FerryNetwork>{
+ const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\\/+$/,'');
+ if(storage){
+  const remote=`${storage}/storage/v1/object/public/travelempire-ferries/GRC.json`;
+  try{
+   const response=await fetch(remote);
+   if(!response.ok)throw new Error(`Ferry storage HTTP ${response.status}`);
+   return validateFerryNetwork(await response.json());
+  }catch(error){console.warn('Supabase ferry data unavailable; using bundled fallback',error);}
+ }
  const response=await fetch(url);if(!response.ok)throw new Error('Ferry network data unavailable');
  return validateFerryNetwork(await response.json());
 }
