@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 350">
+<defs>
+<linearGradient id="hull" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a4b0b2"/><stop offset=".14" stop-color="#f8fbfa"/><stop offset=".5" stop-color="#e9efee"/><stop offset=".85" stop-color="#f9fbfa"/><stop offset="1" stop-color="#829093"/></linearGradient>
+<linearGradient id="deck" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".5" stop-color="#eaf1f0"/><stop offset="1" stop-color="#fff"/></linearGradient>
+<linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#151e22"/><stop offset=".55" stop-color="#56646a"/><stop offset="1" stop-color="#111b20"/></linearGradient>
+</defs>
+<!-- precise top-down passenger ferry silhouette -->
+<path d="M23 48 Q350 46 716 46 Q851 48 942 82 Q976 94 981 121 L981 229 Q975 256 940 268 Q853 302 716 304 L23 302 Q16 301 16 291 L16 59 Q16 48 23 48Z" fill="url(#hull)" stroke="#657175" stroke-width="5"/>
+<path d="M31 58 707 58 Q848 59 932 91 Q964 103 966 123 L966 226 Q959 248 932 258 Q846 291 707 292 L31 291Z" fill="#e8eeee" stroke="#fff" stroke-width="3"/>
+<!-- side rails -->
+<path d="M37 65 710 65 Q846 65 930 99 M37 284 710 284 Q846 283 930 251" fill="none" stroke="#6d797b" stroke-width="3"/>
+<path d="M39 72 710 72 Q845 73 927 106 M39 278 710 278 Q845 277 927 244" fill="none" stroke="#fff" stroke-width="5"/>
+<!-- rear service platform -->
+<rect x="31" y="78" width="94" height="194" rx="3" fill="#566367"/>
+<path d="M45 85 V265 M57 85 V265 M69 85 V265" stroke="#9aa8aa" stroke-width="3"/>
+<rect x="76" y="87" width="42" height="176" fill="#a3aaab" stroke="#475258" stroke-width="3"/>
+<path d="M82 96 105 112 105 238 82 253Z" fill="#d7dddc"/>
+<!-- orange rescue equipment -->
+<g fill="#f16620" stroke="#ad401a" stroke-width="2">
+<path d="M85 100 Q113 119 93 137 Q73 122 85 100Z"/>
+<path d="M85 145 Q113 163 93 181 Q73 164 85 145Z"/>
+<path d="M85 190 Q113 208 93 226 Q73 209 85 190Z"/>
+<path d="M85 232 Q113 249 93 261 Q73 250 85 232Z"/>
+</g>
+<!-- deck main rectangular superstructure -->
+<path d="M127 83 691 83 Q722 85 739 99 L758 114 758 236 739 251 Q720 266 691 267 L127 267Z" fill="url(#deck)" stroke="#c6d0d0" stroke-width="4"/>
+<!-- red side accent stripes -->
+<path d="M126 91 H681 M126 259 H681" stroke="#b65a53" stroke-width="3"/>
+<path d="M126 97 H650 M126 253 H650" stroke="#fff" stroke-width="4"/>
+<!-- upper roof panel -->
+<rect x="147" y="101" width="510" height="148" rx="5" fill="#f8fbfa" stroke="#e1e7e6" stroke-width="2"/>
+<path d="M158 112 H642 M158 237 H642" stroke="#fff" stroke-width="3"/>
+<!-- rooftop equipment -->
+<g fill="#f4f8f7" stroke="#cbd4d3" stroke-width="2">
+<rect x="335" y="66" width="34" height="26" rx="5"/>
+<rect x="335" y="259" width="34" height="26" rx="5"/>
+<rect x="594" y="66" width="42" height="25" rx="5"/>
+<rect x="594" y="260" width="42" height="25" rx="5"/>
+</g>
+<path d="M686 90 V259" stroke="#d9e0de" stroke-width="6"/>
+<!-- bridge housing / forward observation lounge -->
+<path d="M718 99 Q780 101 801 140 L811 162 811 188 800 210 Q779 248 718 250 L700 237 Q761 225 777 191 L777 159 Q761 125 700 112Z" fill="#fbfdfb" stroke="#a9b4b4" stroke-width="3"/>
+<path d="M783 134 Q807 150 810 173 Q807 197 783 213 L765 204 Q787 173 765 143Z" fill="url(#glass)" stroke="#303c40" stroke-width="3"/>
+<path d="M735 126 Q755 134 763 146 M735 224 Q755 215 763 202" stroke="#d6e4e5" stroke-width="3" fill="none"/>
+<!-- bow foredeck -->
+<path d="M819 83 Q901 92 940 110 L950 125 V225 Q935 251 819 266Z" fill="#d9e1df" stroke="#b4bfbd" stroke-width="2"/>
+<path d="M837 96 Q901 105 935 119 L935 232 Q901 246 837 255Z" fill="#9ba8a9" opacity=".25"/>
+<g fill="#333d40"><rect x="920" y="121" width="10" height="13" rx="2"/><rect x="943" y="140" width="9" height="12" rx="2"/><rect x="943" y="198" width="9" height="12" rx="2"/><rect x="920" y="216" width="10" height="13" rx="2"/></g>
+<!-- bridge mast and deck details -->
+<path d="M671 104 V75 M671 246 V275" stroke="#c1cbca" stroke-width="6"/>
+<path d="M660 175 H735" stroke="#e5ebea" stroke-width="3"/>
+<g fill="#d6dddc" stroke="#aeb9b8" stroke-width="1.5">
+<circle cx="252" cy="174" r="5"/><circle cx="449" cy="174" r="5"/><circle cx="598" cy="174" r="5"/>
+</g>
+<!-- side windows / portholes -->
+<g fill="#7d8f94"><rect x="190" y="69" width="28" height="5" rx="2"/><rect x="270" y="69" width="28" height="5" rx="2"/><rect x="485" y="69" width="28" height="5" rx="2"/><rect x="190" y="276" width="28" height="5" rx="2"/><rect x="270" y="276" width="28" height="5" rx="2"/><rect x="485" y="276" width="28" height="5" rx="2"/></g>
+</svg>
