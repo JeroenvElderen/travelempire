@@ -23,6 +23,8 @@ export type Taxi = {
   journeyEdges?: string[];
   scoutingRuns?: number;
   explorationMode?: 'local'|'frontier';
+  drivingPolicy?: 'economy'|'balanced'|'performance';
+  serviceThreshold?: number;
   discoveredKm?: number;
   pauseAtHome?: boolean;
   depotId?: string;
@@ -582,7 +584,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  const crossed:string[]=[];
  let distanceMeters=0;
  let time=Math.min(realSeconds,5)*GAME_SPEED;
- const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:1.9;
+ const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:t.drivingPolicy==='economy'?1.2:t.drivingPolicy==='performance'?2.5:1.9;
  const braking=3.5;
  // Fixed small time steps preserve smooth animation and prevent junction overshoot.
  while(time>0.00001&&t.leg<t.path.length-1){
@@ -590,7 +592,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   const length=meters(a,b);
   const edge=graph.edges.get(key(a))?.find(e=>e.to===key(b)&&e.id===t.edgeIds[t.leg]);
   const roadLimit=clamp(edge?.speedKph??50,5,160)/3.6;
-  const cruise=roadLimit*trafficFactor(edge?.speedKph??50);
+  const cruise=roadLimit*trafficFactor(edge?.speedKph??50)*(t.drivingPolicy==='economy'?0.82:t.drivingPolicy==='performance'?1:0.97);
   const remaining=Math.max(0,length-t.distanceIntoLeg);
   const nextIndex=t.leg+1;
   let junctionLimit=roadLimit;
