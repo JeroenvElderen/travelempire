@@ -518,32 +518,70 @@ export function dispatchScout(
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in real seconds (1x wall time).
+// PR D: Road-speed-aware vehicle dynamics. Only speed integration changes;
+// existing route, discovery, dispatch and arrival handling remain untouched.
+const clamp=(value:number,low:number,high:number)=>Math.max(low,Math.min(high,value));
+function turnSpeedKph(previous:Point,junction:Point,next:Point):number{
+ const latitude=junction[1]*Math.PI/180;
+ const x=Math.cos(latitude);
+ const ux=(junction[0]-previous[0])*x,uy=junction[1]-previous[1];
+ const vx=(next[0]-junction[0])*x,vy=next[1]-junction[1];
+ const magnitude=Math.hypot(ux,uy)*Math.hypot(vx,vy);
+ if(magnitude<1e-12)return 50;
+ const angle=Math.acos(clamp((ux*vx+uy*vy)/magnitude,-1,1))*180/Math.PI;
+ if(angle<15)return 160;
+ if(angle<35)return 70;
+ if(angle<60)return 45;
+ if(angle<90)return 30;
+ if(angle<125)return 20;
+ return 12;
+}
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[]}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[]};
- let t={...taxi};
+ const t={...taxi};
  const crossed:string[]=[];
  let time=Math.min(realSeconds,5)*GAME_SPEED;
- // Short steps avoid overshooting junctions and make transitions smooth.
+ const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:1.9;
+ const braking=3.5;
+ // Fixed small time steps preserve smooth animation and prevent junction overshoot.
  while(time>0.00001&&t.leg<t.path.length-1){
   const a=t.path[t.leg],b=t.path[t.leg+1];
   const length=meters(a,b);
   const edge=graph.edges.get(key(a))?.find(e=>e.to===key(b)&&e.id===t.edgeIds[t.leg]);
-  const limitKph=edge?.speedKph??50;
-  const target=limitKph/3.6;
+  const roadLimit=clamp(edge?.speedKph??50,5,160)/3.6;
+  const cruiseFactor=t.kind==='surveyor'?0.93:t.kind==='explorer'?0.95:0.97;
+  const cruise=roadLimit*cruiseFactor;
+  const remaining=Math.max(0,length-t.distanceIntoLeg);
+  const nextIndex=t.leg+1;
+  let junctionLimit=roadLimit;
+  if(nextIndex<t.path.length-1){
+   const c=t.path[nextIndex+1];
+   const nextEdge=graph.edges.get(key(b))?.find(e=>e.to===key(c)&&e.id===t.edgeIds[nextIndex]);
+   const nextLimit=clamp(nextEdge?.speedKph??50,5,160)/3.6;
+   const curveLimit=turnSpeedKph(a,b,c)/3.6;
+   junctionLimit=Math.min(nextLimit,curveLimit);
+  }
+  // v² = u² + 2as: brake early enough to respect the next road and turn.
+  const safeApproach=Math.sqrt(Math.max(0,junctionLimit*junctionLimit+2*braking*remaining));
+  const target=Math.min(cruise,roadLimit,safeApproach);
   const dt=Math.min(0.1,time);
-  const previous=Math.min(target,Math.max(0,t.speedKph??0)/3.6);
-  const acceleration=target>=previous?2:3.5;
-  const speed=previous+Math.sign(target-previous)*Math.min(Math.abs(target-previous),acceleration*dt);
-  t.speedKph=speed*3.6;
-  const distance=(previous+speed)/2*dt;
-  const available=Math.max(0,length-t.distanceIntoLeg);
-  const moved=Math.min(distance,available);
+  const current=clamp((t.speedKph??0)/3.6,0,roadLimit);
+  const change=target-current;
+  const nextSpeed=clamp(current+clamp(change,-braking*dt,acceleration*dt),0,roadLimit);
+  t.speedKph=nextSpeed*3.6;
+  const distance=(current+nextSpeed)/2*dt;
+  const moved=Math.min(distance,remaining);
   t.distanceIntoLeg+=moved;
-  const fraction=length>0?Math.min(1,t.distanceIntoLeg/length):1;
+  const fraction=length>0?clamp(t.distanceIntoLeg/length,0,1):1;
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
   if(t.distanceIntoLeg>=length-0.0001){
    const id=t.edgeIds[t.leg];if(id)crossed.push(id);
    t.leg++;t.distanceIntoLeg=0;t.position=b;
+   if(t.leg<t.path.length-1){
+    const next=t.path[t.leg+1];
+    const nextEdge=graph.edges.get(key(b))?.find(e=>e.to===key(next)&&e.id===t.edgeIds[t.leg]);
+    t.speedKph=Math.min(t.speedKph??0,clamp(nextEdge?.speedKph??50,5,160));
+   }
   }
   time-=distance>0?dt*(moved/distance):dt;
  }
