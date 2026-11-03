@@ -2,13 +2,13 @@ import type {Taxi} from './taxi';
 
 export type EnergyKind='petrol'|'diesel'|'hybrid'|'electric';
 export type EnergySpec={kind:EnergyKind;capacity:number;per100km:number;unit:'L'|'kWh';pricePerUnit:number};
-// Double consumption gameplay setting (all fuels and EVs). Approximate assumptions for Greece, not live station prices or model-specific homologation figures.
+// Triple original consumption gameplay setting (all fuels and EVs). Approximate assumptions for Greece, not live station prices or model-specific homologation figures.
 export function energySpec(t:Pick<Taxi,'vehicleFuel'>):EnergySpec {
  const fuel=(t.vehicleFuel??'petrol').toLowerCase();
- if(fuel.includes('electric'))return {kind:'electric',capacity:60,per100km:34,unit:'kWh',pricePerUnit:0.35};
- if(fuel.includes('hybrid'))return {kind:'hybrid',capacity:45,per100km:9,unit:'L',pricePerUnit:1.85};
- if(fuel.includes('diesel'))return {kind:'diesel',capacity:55,per100km:11,unit:'L',pricePerUnit:1.65};
- return {kind:'petrol',capacity:50,per100km:14,unit:'L',pricePerUnit:1.85};
+ if(fuel.includes('electric'))return {kind:'electric',capacity:60,per100km:51,unit:'kWh',pricePerUnit:0.35};
+ if(fuel.includes('hybrid'))return {kind:'hybrid',capacity:45,per100km:13.5,unit:'L',pricePerUnit:1.85};
+ if(fuel.includes('diesel'))return {kind:'diesel',capacity:55,per100km:16.5,unit:'L',pricePerUnit:1.65};
+ return {kind:'petrol',capacity:50,per100km:21,unit:'L',pricePerUnit:1.85};
 }
 export function energyRemaining(t:Taxi):number {
  const spec=energySpec(t);
