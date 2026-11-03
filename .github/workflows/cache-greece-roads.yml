@@ -1,0 +1,35 @@
+name: Cache complete Greece OSM road network
+on:
+  workflow_dispatch:
+    inputs:
+      max_tiles:
+        description: 'Maximum tiles to upload this run (0 = all remaining)'
+        required: false
+        default: '0'
+permissions:
+  contents: read
+concurrency:
+  group: missing-ferry-road-tiles
+  cancel-in-progress: false
+jobs:
+  nationwide-roads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PBF parser
+        run: python3 -m pip install osmium
+      - name: Download complete Greece OSM extract
+        run: |
+          mkdir -p /tmp/travelempire-osm
+          curl --fail --location --retry 5 --retry-delay 15 --connect-timeout 30 --output /tmp/travelempire-osm/greece.osm.pbf https://download.geofabrik.de/europe/greece-latest.osm.pbf
+          ls -lh /tmp/travelempire-osm/greece.osm.pbf
+      - name: Build and upload missing nationwide road tiles
+        run: |
+          python3 scripts/cache_greece_roads.py --pbf /tmp/travelempire-osm/greece.osm.pbf --max-tiles "${{ inputs.max_tiles || '0' }}"
