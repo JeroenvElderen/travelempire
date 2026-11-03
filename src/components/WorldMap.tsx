@@ -131,7 +131,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,ferryConnections)};
   instance.on('style.load',update);
   update();
-  return()=>instance.off('style.load',update);
+  return()=>{instance.off('style.load',update);};
  },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
