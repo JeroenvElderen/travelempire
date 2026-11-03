@@ -65,7 +65,12 @@ def ensure_bucket(storage,key):
         bucket=request_json(f"{storage}/bucket/{BUCKET}",key=key)
         print("Using existing bucket:",bucket.get("name",BUCKET),flush=True)
     except RuntimeError as exc:
-        if "HTTP 404" not in str(exc):raise
+        # Supabase Storage may return HTTP 400 while its JSON payload reports
+        # statusCode 404 / code NoSuchBucket for a missing bucket.
+        message=str(exc)
+        if not ("HTTP 404" in message or
+                ("HTTP 400" in message and '"code":"NoSuchBucket"' in message)):
+            raise
         request_json(f"{storage}/bucket",method="POST",payload=json.dumps(
             {"id":BUCKET,"name":BUCKET,"public":True,"file_size_limit":52428800,
              "allowed_mime_types":["application/json"]}).encode(),key=key)
