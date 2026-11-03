@@ -1,5 +1,6 @@
 import {readExploration,writeExploration,clearExploration,syncExploration,cloudExplorationEnabled} from './data/explorationStore';
-import {energySpec,energyRemaining,energyUsed} from './simulation/energy';
+import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
+import {loadStationTile,type Station} from './data/stations';
 import {demandAt} from './simulation/demand';
 import { useEffect, useState } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Menu, X } from "lucide-react";
@@ -8,7 +9,7 @@ import FleetPanel from "./components/FleetPanel";
 import FinancePanel from "./components/FinancePanel";
 import {advanceLoans,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
 import type {EconomyUpgrade} from "./simulation/taxi";
-import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
+import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -28,6 +29,8 @@ export default function App(){
  const [page,setPage]=useState<Page>('World');const [drawerOpen,setDrawerOpen]=useState(false);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);
  const [graph,setGraph]=useState<RoadGraph|null>(null);
  const networkRef=useRef<RoadNetworkManager|null>(null);
+ const stationsRef=useRef<Map<string,Station>>(new Map());
+ const stationLoadedRef=useRef<Set<string>>(new Set());
  const [roadPackages,setRoadPackages]=useState(0);
  const [roadDiagnostics,setRoadDiagnostics]=useState({queued:0,edges:0,workerEdges:0});
  const [missionQueue,setMissionQueue]=useState<PassengerRequest[]>([]);
@@ -45,6 +48,19 @@ export default function App(){
  const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
  const pendingCashRef=useRef(0);
+ useEffect(()=>{
+  if(!company)return;
+  const timer=window.setInterval(()=>{
+   const points:[[number,number],...Array<[number,number]>]=[[company.headquarters.lng,company.headquarters.lat],...taxisRef.current.map(t=>t.position)];
+   for(const [lng,lat] of points){
+    const tile=`${Math.floor(lng*10)}_${Math.floor(lat*10)}`;
+    if(stationLoadedRef.current.has(tile))continue;
+    stationLoadedRef.current.add(tile);
+    void loadStationTile(lng,lat).then(stations=>{for(const station of stations)stationsRef.current.set(station.id,station)}).catch(()=>stationLoadedRef.current.delete(tile));
+   }
+  },5000);
+  return()=>window.clearInterval(timer);
+ },[company?.id]);
  const taxisRef=useRef(fleet.taxis);
  taxisRef.current=fleet.taxis;
  const [simError,setSimError]=useState('');
@@ -260,8 +276,48 @@ export default function App(){
     const taxis=old.taxis.map(t=>{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
-     const next=tickTaxi(delivered,graph,1,discovered);
-     const km=meters(delivered.position,next.taxi.position)/1000;
+     if(delivered.status==='REFUELLING'){
+      const spec=energySpec(delivered);
+      const until=delivered.refillUntil??(now+(spec.unit==='L'?180000:delivered.refillAtDepot?3600000:1200000));
+      if(now<until)return {...delivered,refillUntil:until};
+      const quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
+      const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1);
+      if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,refillUntil:now+60000};
+      pendingCashRef.current-=cost;fuelExpense+=cost;
+      transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic ${spec.unit==='L'?'refuel':'charge'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-cost});
+      return {...delivered,status:'IDLE',energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
+       fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
+     }
+     let working=delivered;
+     if(delivered.status==='IDLE'&&(energyPercent(delivered)<=20||delivered.refillRequested)){
+      const start=nearest(graph,delivered.position);
+      const hq:[number,number]=[company!.headquarters.lng,company!.headquarters.lat];
+      const stations=[...stationsRef.current.values()].filter(st=>st.kind===(energySpec(delivered).kind==='electric'?'charging':'fuel')&&st.access!=='private')
+       .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,12);
+      const targets=[...stations.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
+      for(const target of targets){
+       const end=nearest(graph,target.point);if(!start||!end)continue;
+       const path=route(graph,start,end);if(!path)continue;
+       const routeKm=path.path.reduce((sum,p,i)=>i?sum+meters(p,path.path[i-1])/1000:sum,0);
+       if(routeKm>energyRangeKm(delivered)*0.95)continue;
+       if(path.path.length<2){working={...delivered,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};break;}
+       working={...delivered,status:'RETURNING',path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,
+        refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};break;
+      }
+     }
+     const next=tickTaxi(working,graph,1,discovered);
+     // Sum actual route legs, not straight-line displacement across junctions.
+     let travelled=0;
+     if(working.path.length>1){
+      const last=next.taxi.status===working.status?Math.min(next.taxi.leg,working.path.length-1):working.path.length-1;
+      if(last===working.leg)travelled=Math.max(0,next.taxi.distanceIntoLeg-working.distanceIntoLeg);
+      else{
+       travelled=Math.max(0,meters(working.path[working.leg],working.path[working.leg+1])-working.distanceIntoLeg);
+       for(let j=working.leg+1;j<last;j++)travelled+=meters(working.path[j],working.path[j+1]);
+       if(last<working.path.length-1)travelled+=next.taxi.distanceIntoLeg;
+      }
+     }
+     const km=travelled/1000;
      const spec=energySpec(delivered);
      const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
      const experience=person?.completedTrips??0;
@@ -289,6 +345,7 @@ export default function App(){
      return {...next.taxi,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
+       refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=spec.capacity*0.20,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
     });
