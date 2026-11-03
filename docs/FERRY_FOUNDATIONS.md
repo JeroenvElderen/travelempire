@@ -22,3 +22,13 @@ This separation avoids disrupting existing taxi and Explorer movement before the
 **Data limitation:** The Greece ferry dataset is still empty. Before crossings can be activated, import ferry route geometry and verify port road-access coordinates. Ferry routes are allowed to carry all player vehicles as a gameplay rule, regardless of real-world ferry restrictions.
 
 **Safety:** A port within 250 m of a road node is a candidate connection, not proof that the road reaches a boarding ramp. Actual ramp connectivity must be verified before enabling vehicle movement.
+
+## v2.2.2 — route purchase and multimodal journey planning
+
+- Ferry routes are purchased individually for a starting price of **€2,000**, once per company; both directions unlock together.
+- Purchases are saved in the existing company record as `purchasedFerryRouteIds` and deducted from cash, with a transaction recorded in fleet finance history.
+- Operations shows available ferry routes and their purchase state.
+- `planFerryJourney` combines existing road-router results with ferry transfer links only for purchased routes and road-connected terminals. This returns an itinerary; it does **not** yet assign it to vehicles or implement ferry boarding.
+- Greece's bundled ferry dataset is empty. Routes must be imported before players can purchase one.
+- The planner uses a simple all-pairs road-segment search between connected terminals, appropriate for small initial networks; benchmark or replace before importing a large network.
+- Do not confuse itinerary planning with live taxi navigation. Boarding, movement, save/recovery and ferry markers are separate milestones.
