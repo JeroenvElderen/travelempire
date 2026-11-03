@@ -9,6 +9,8 @@ import './ferry-routes.css';
 export default function FerryRoutesPanel({company,onPurchase,graph,exploredEdgeIds}:{company:Company|null;onPurchase:(routeId:string,price:number)=>void;graph:RoadGraph|null;exploredEdgeIds:string[]}){
  const [network,setNetwork]=useState<FerryNetwork|null>(null);
  const [error,setError]=useState('');
+ const [reloading,setReloading]=useState(false);
+ const [lastReloaded,setLastReloaded]=useState('');
  useEffect(()=>{let active=true;loadFerryNetwork().then(value=>{if(active)setNetwork(value)}).catch(e=>{if(active)setError(String(e))});return()=>{active=false}},[]);
  const reloadData=async()=>{
   if(reloading)return;
