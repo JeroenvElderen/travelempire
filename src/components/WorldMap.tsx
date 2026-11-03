@@ -424,7 +424,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{seaLast.current.clear();seaDirty.current=false;},[companyId]);
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),(routeId,sailedSegments)=>{
+  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,(routeId,sailedSegments)=>{
    if(!explorationCompany.current||!sailedSegments.length)return;
    // v2 avoids reusing legacy straight-chord sea discoveries.
    const key='sea:v2:'+routeId;
@@ -437,7 +437,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   });
   const save=window.setInterval(()=>{if(seaDirty.current){seaDirty.current=false;void persistGeometry();}},30000);
   return()=>{stop();window.clearInterval(save);if(seaDirty.current){seaDirty.current=false;void persistGeometry();}};
- },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|')]);
+ },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
 
  useEffect(()=>{
   const instance=map.current;
