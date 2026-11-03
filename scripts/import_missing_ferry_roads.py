@@ -16,6 +16,9 @@ ROAD_BUCKET = "travelempire-road-tiles"
 FERRY_BUCKET = "travelempire-ferries"
 TILE_SIZE = 0.1
 MAX_TILES = 6
+SPARSE_EDGE_THRESHOLD = 25
+# Makronisos harbour lies in tile 241_376, which has only 10 bundled edges.
+PRIORITY_TILES = [(241, 376), (241, 377)]
 OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
@@ -115,15 +118,25 @@ def main():
     supplemental = json.loads(existing) if existing else {"format": bundled["format"], "tileSize": TILE_SIZE, "tiles": {}}
     candidates = []
     seen = set()
+    def needs_import(key):
+        if key in supplemental["tiles"]:
+            return False
+        bundled_edges = bundled["tiles"].get(key, {}).get("edges", 0)
+        return bundled_edges < SPARSE_EDGE_THRESHOLD
+    for x, y in PRIORITY_TILES:
+        key = f"{x}_{y}"
+        if needs_import(key):
+            candidates.append((x, y, key))
+            seen.add(key)
     for port in network["ports"]:
         point = port.get("roadAccess") or port["position"]
         x, y = math.floor(point[0]/TILE_SIZE), math.floor(point[1]/TILE_SIZE)
         key = f"{x}_{y}"
-        if key in seen or key in bundled["tiles"] or key in supplemental["tiles"]:
+        if key in seen or not needs_import(key):
             continue
         seen.add(key)
         candidates.append((x, y, key))
-    print(f"{len(candidates)} ferry-terminal tiles missing from road manifests", flush=True)
+    print(f"{len(candidates)} missing or sparse ferry-terminal tiles to process (Makronisos first)", flush=True)
     # Recover tile objects uploaded by earlier canceled runs before fetching again.
     uploaded = 0
     def publish():
