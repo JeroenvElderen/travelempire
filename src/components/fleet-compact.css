@@ -28,3 +28,71 @@
 
 /* v1.9.2 management tabs and compact employee roster */
 .fleet-subnav{display:flex;gap:.6rem;flex-wrap:wrap;margin:1.1rem 0}.fleet-subnav button{padding:.65rem 1rem;border:1px solid #315951;background:#102a29;color:#bcd5d0;border-radius:9px;cursor:pointer}.fleet-subnav button.active{background:#20574c;color:#80f5d1}.fleet-hire{display:flex;flex-wrap:wrap;gap:.75rem;margin:1rem 0}.fleet-hire input,.fleet-compact-edit select{min-width:170px;padding:.7rem;border:1px solid #3b6961;background:#112b2a;color:#e7f4ef;border-radius:8px}.fleet-hire button,.fleet-driver-card button{padding:.65rem 1rem;border:1px solid #4b8e7d;background:#1b5045;color:#e6fff5;border-radius:8px}.fleet-hire button:disabled,.fleet-driver-card button:disabled{opacity:.45;cursor:not-allowed}.fleet-driver-grid,.fleet-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem}.fleet-driver-card,.fleet-stat-grid article{display:flex;flex-direction:column;align-items:flex-start;gap:.65rem;padding:1rem;border:1px solid #315951;border-radius:12px;background:#132d2b}.fleet-driver-card small,.fleet-stat-grid small{color:#9bbcb5}.fleet-stat-grid strong{font-size:1.35rem}.fleet-stat-table{overflow-x:auto;margin-top:1.2rem}.fleet-stat-table table{width:100%;border-collapse:collapse;text-align:left}.fleet-stat-table th,.fleet-stat-table td{padding:.8rem;border-bottom:1px solid #315951;white-space:nowrap}.fleet-stat-table small{display:block;margin-top:.6rem;color:#9bbcb5}
+
+
+/* v2.1.1 — Fleet workspace redesign */
+.fleet-v2{max-width:1320px;margin:0 auto;padding:clamp(20px,3vw,42px)}
+.fleet-page-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}
+.fleet-page-heading h1{margin:8px 0 8px;letter-spacing:-1.2px;font-size:clamp(28px,3vw,40px)}
+.fleet-page-heading p{margin:0;color:#a8b8c7;font-size:14px}
+.fleet-heading-tag{font-size:10px;letter-spacing:1.3px;font-weight:800;color:#7edcca;background:#1b353a;border:1px solid #325f60;padding:11px 15px;border-radius:100px;white-space:nowrap}
+.fleet-v2 .fleet-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 26px}
+.fleet-v2 .fleet-metrics article{min-width:0;padding:18px 16px;background:#172432;border:1px solid #2c4050;border-radius:14px;box-shadow:0 10px 28px #0002}
+.fleet-v2 .fleet-metrics small{font-size:10px;letter-spacing:1px;color:#99adbc}
+.fleet-v2 .fleet-metrics strong{display:block;margin-top:10px;font-size:clamp(18px,2vw,25px);letter-spacing:-.6px;color:#f2f8fa;overflow-wrap:anywhere}
+.fleet-v2 .fleet-primary-tabs{margin:0 0 8px}
+.fleet-v2 .fleet-subnav{margin:0 0 22px}
+.fleet-section-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:0 0 16px}
+.fleet-section-heading h2{margin:0 0 6px;font-size:21px}
+.fleet-section-heading p{margin:0;font-size:13px}
+.fleet-count-label{white-space:nowrap;color:#8be0d0;border:1px solid #345f60;border-radius:100px;padding:7px 12px;font-size:11px;font-weight:750}
+.fleet-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 22px;flex-wrap:wrap}
+.fleet-search{display:flex;flex-direction:column;gap:7px;flex:1 1 245px;max-width:400px}
+.fleet-search span{font-size:11px;color:#a6bbc9;font-weight:750}
+.fleet-v2 .fleet-search input{width:100%;min-height:43px;background:#101c29;border:1px solid #34495b;border-radius:10px;padding:10px 13px;color:#eff8fa}
+.fleet-filter-pills{display:flex;gap:6px;flex-wrap:wrap}
+.fleet-filter-pills button{background:#172635;border:1px solid #344859;border-radius:9px;color:#b7c8d5;padding:10px 12px;font-size:12px;font-weight:700}
+.fleet-filter-pills button.active{background:#254c4c;border-color:#468a80;color:#b1f4e4}
+.fleet-v2 .fleet-cards.fleet-cards-compact{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
+.fleet-v2 .fleet-cards-compact .fleet-compact-card{padding:19px;background:#152331;border:1px solid #2e4352;border-radius:17px;box-shadow:0 12px 35px #0002;transition:border-color .18s,transform .18s}
+.fleet-v2 .fleet-compact-card:hover{border-color:#49736f;transform:translateY(-2px)}
+.fleet-v2 .fleet-card-alert{border-color:#806a49}
+.fleet-v2 .fleet-compact-heading{gap:12px}
+.fleet-v2 .fleet-compact-heading strong{font-size:16px;letter-spacing:-.2px}
+.fleet-v2 .fleet-compact-heading small{font-size:12px;color:#a0b3c2;margin-top:3px}
+.fleet-v2 .fleet-pill{border-radius:100px;font-size:10px;line-height:1.3;padding:5px 9px;white-space:normal}
+.fleet-health-bars{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0 15px}
+.fleet-health-bars>div{display:grid;grid-template-columns:1fr auto;gap:6px}
+.fleet-health-bars span{color:#9db4c2;font-size:11px}
+.fleet-health-bars strong{font-size:12px;color:#eaf6f6}
+.fleet-health-bars progress{grid-column:1/-1;width:100%;height:7px;appearance:none;border:0;border-radius:20px;overflow:hidden;background:#2b3c4a}
+.fleet-health-bars progress::-webkit-progress-bar{background:#2b3c4a;border-radius:20px}
+.fleet-health-bars progress::-webkit-progress-value{background:#62d8bf;border-radius:20px}
+.fleet-health-bars progress::-moz-progress-bar{background:#62d8bf;border-radius:20px}
+.fleet-v2 .fleet-compact-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;border-top:1px solid #2a3b4b;padding-top:16px;margin-top:0}
+.fleet-v2 .fleet-compact-stats>div{gap:5px}
+.fleet-v2 .fleet-compact-stats small,.fleet-v2 .fleet-compact-finance small{color:#95a9ba;font-size:11px}
+.fleet-v2 .fleet-compact-stats strong{font-size:12px;line-height:1.5;color:#e9f2f7}
+.fleet-v2 .fleet-compact-finance{border-color:#314554;padding-top:15px;margin-top:17px}
+.fleet-v2 .fleet-compact-finance strong{font-size:18px;letter-spacing:-.4px}
+.fleet-v2 .fleet-compact-details{border-color:#314554;padding-top:15px}
+.fleet-v2 .fleet-compact-details summary{font-size:13px;font-weight:750;color:#89e5d0;padding:6px 0}
+.fleet-v2 .fleet-compact-details-body{display:grid;gap:12px;padding-top:16px}
+.fleet-v2 .fleet-compact-details-body label{display:grid;gap:7px;font-size:12px;color:#b7cbd5}
+.fleet-v2 .fleet-compact-details-body label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:9px}
+.fleet-v2 .fleet-compact-details-body input[type=checkbox]{width:16px;height:16px;flex-shrink:0}
+.fleet-v2 .fleet-compact-details-body select{width:100%;min-width:0}
+.fleet-v2 .fleet-compact-details dl{border-top:1px solid #304252;border-bottom:1px solid #304252;padding:12px 0}
+.fleet-v2 .fleet-compact-details dl>div{padding:5px 0}
+.fleet-v2 .fleet-compact-service{border-radius:9px;padding:10px 12px}
+.fleet-empty-state{padding:40px 20px;text-align:center;background:#152331;border:1px dashed #3b5663;border-radius:16px}
+.fleet-empty-state strong{font-size:18px}.fleet-empty-state p{margin:8px auto 0;font-size:13px}
+.fleet-v2 .fleet-driver-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:14px}
+.fleet-v2 .fleet-driver-card{background:#172534;border:1px solid #304657;border-radius:15px;padding:20px}
+.fleet-v2 .fleet-stat-grid{gap:12px}
+.fleet-v2 .fleet-stat-table{background:#152331;border:1px solid #304555;border-radius:14px;padding:8px 14px}
+.fleet-v2 .fleet-offers{gap:16px}
+.fleet-v2 .fleet-offer{border-radius:16px;background:#172534;border:1px solid #304656;box-shadow:0 10px 30px #0002}
+@media(max-width:1050px){.fleet-v2 .fleet-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.fleet-v2{padding:20px 14px 105px}.fleet-page-heading{align-items:flex-start}.fleet-heading-tag{display:none}.fleet-v2 .fleet-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.fleet-v2 .fleet-metrics article{padding:13px}.fleet-toolbar{align-items:stretch;gap:10px}.fleet-search{max-width:none;flex-basis:100%}.fleet-filter-pills{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}.fleet-filter-pills button{flex-shrink:0}.fleet-v2 .fleet-cards.fleet-cards-compact{grid-template-columns:1fr}.fleet-v2 .fleet-compact-card:hover{transform:none}.fleet-v2 .fleet-compact-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.fleet-v2 .fleet-compact-card{transition:none}}
