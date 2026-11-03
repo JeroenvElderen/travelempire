@@ -57,19 +57,33 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier);
    if(request){queue.push(request);generatedMission=true;}
   }
-  for(let i=queue.length-1;i>=0;i--){
-   const mission=queue[i];
-   const candidates=taxis.map((t,index)=>({index,d:(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>20?meters(t.position,mission.pickup):Infinity}))
-    .filter(c=>Number.isFinite(c.d)).sort((a,b)=>a.d-b.d).slice(0,3);
-   let best:{index:number;taxi:Taxi;distance:number}|null=null;
-   for(const candidate of candidates){
-    const assigned=assignPassenger(taxis[candidate.index],graph,mission,validDiscovered);
+  // Prioritise older waiting passengers, then choose the fastest reachable taxi.
+  // Evaluate actual discovered-road routes, never straight-line proximity alone.
+  queue.sort((a,b)=>a.createdAt-b.createdAt);
+  const pending:PassengerRequest[]=[];
+  for(const mission of queue){
+   let best:{index:number;taxi:Taxi;etaSeconds:number}|null=null;
+   for(let index=0;index<taxis.length;index++){
+    const taxi=taxis[index];
+    if((taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=20)continue;
+    const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered);
     if(!assigned)continue;
-    const distance=assigned.path.reduce((sum,p,j)=>j?sum+meters(p,assigned.path[j-1]):sum,0);
-    if(!best||distance<best.distance)best={index:candidate.index,taxi:assigned,distance};
+    let etaSeconds=0;
+    for(let j=0;j<assigned.edgeIds.length;j++){
+     const from=nearest(activeGraph,assigned.path[j]);
+     const to=nearest(activeGraph,assigned.path[j+1]);
+     const edge=activeGraph.edges.get(from)?.find(e=>e.to===to&&e.id===assigned.edgeIds[j]);
+     const distance=edge?.meters??meters(assigned.path[j],assigned.path[j+1]);
+     etaSeconds+=distance/(Math.max(10,edge?.speedKph??50)/3.6);
+    }
+    // Include approximate time to accelerate from a stop.
+    etaSeconds+=Math.min(12,assigned.edgeIds.length*0.5+4);
+    if(!best||etaSeconds<best.etaSeconds)best={index,taxi:assigned,etaSeconds};
    }
-   if(best){taxis[best.index]=best.taxi;queue.splice(i,1);}
+   if(best)taxis[best.index]=best.taxi;
+   else pending.push(mission);
   }
+  queue.length=0;queue.push(...pending);
   // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
   if(msg.allowScout){
