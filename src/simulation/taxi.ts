@@ -3,7 +3,7 @@ import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
   id: string;
-  kind?: 'taxi' | 'explorer' | 'surveyor'; // Older saves default to taxi.
+  kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
@@ -29,6 +29,8 @@ export type Taxi = {
   uniqueDiscoveredKm?: number;
   autoDepotService?: boolean;
   pauseAtHome?: boolean;
+  shiftParked?: boolean;
+  recoveryPending?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
   discoveryEdgeIds?: string[];
