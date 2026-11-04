@@ -339,10 +339,25 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=200&&d<=4000;});
   if(!near.length)continue;
   const to=near[Math.floor(Math.random()*near.length)];
-  // No passenger journey may traverse an undiscovered road.
-  const trip=routeDiscovered(graph,from,to,explored);
+  // Pickup and drop-off are on Explorer-discovered roads within the revealed area.
+  // Travel between those stops may use undiscovered roads without revealing them.
+  const trip=route(graph,from,to);
   if(!trip||trip.length<150||trip.length>5000)continue;
   return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
+ }
+ // Fallback: find a reachable pair of discovered-road stops without relying
+ // on random sampling, so sparse explored networks can still produce jobs.
+ for(let i=0;i<Math.min(eligible.length,120);i++){
+  const from=eligible[i];
+  const origin=graph.nodes.get(from)!;
+  for(const to of eligible){
+   if(to===from)continue;
+   const direct=meters(origin,graph.nodes.get(to)!);
+   if(direct<150||direct>4000)continue;
+   const trip=route(graph,from,to);
+   if(!trip||trip.length<150||trip.length>5000)continue;
+   return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
+  }
  }
  return null;
 }
