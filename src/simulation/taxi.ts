@@ -33,6 +33,9 @@ export type Taxi = {
   autoDepotService?: boolean;
   pauseAtHome?: boolean;
   shiftParked?: boolean;
+  scheduledBreakUntil?: number;
+  scheduledBreakPending?: boolean;
+  scheduledRestPending?: boolean;
   recoveryPending?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
