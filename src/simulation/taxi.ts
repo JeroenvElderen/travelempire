@@ -91,7 +91,7 @@ export function trafficFactor(speedKph:number,at=Date.now()):number{
 export function trafficTravelSeconds(meters:number,speedKph:number,at=Date.now()):number{
  return meters/(Math.max(5,speedKph)*trafficFactor(speedKph,at)/3.6);
 }
-export const GAME_SPEED = 1;
+export const GAME_SPEED = 4;
 const DEFAULT_SPEED: Record<string,number> = {
  motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
  secondary:70,secondary_link:45,tertiary:50,tertiary_link:40,
@@ -604,8 +604,8 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    const nextLimit=clamp(nextEdge?.speedKph??50,5,160)/3.6;
    const curveLimit=turnSpeedKph(a,b,c)/3.6;
    junctionLimit=Math.min(nextLimit,curveLimit);
-   // Slow through urban junctions; do not simulate a full stop without signal data.
-   if((edge?.speedKph??50)<=50&&(nextEdge?.speedKph??50)<=50)junctionLimit=Math.min(junctionLimit,12/3.6);
+   // Respect actual corner curvature; straight-through intersections must not
+   // force vehicles to crawl at 12 km/h on otherwise faster roads.
   }
   // v² = u² + 2as: brake early enough to respect the next road and turn.
   const safeApproach=Math.sqrt(Math.max(0,junctionLimit*junctionLimit+2*braking*remaining));
