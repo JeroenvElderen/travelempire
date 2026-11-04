@@ -155,7 +155,7 @@ export default function App(){
     const pickup=buildRoute(depot,t.position);
     if(!pickup)continue;
     const candidates=purpose==='fuel'?
-     [...stationsRef.current.values()].filter(st=>st.kind===(energySpec(t).kind==='electric'?'charging':'fuel')&&st.access!=='private')
+     [...stationsRef.current.values()].filter(st=>st.kind===('fuel')&&st.access!=='private')
       .map(st=>({point:[st.lng,st.lat] as [number,number],atDepot:false})).concat([{point:depot,atDepot:true}]):
      [{point:depot,atDepot:true}];
     const options=candidates.map(c=>({...c,path:buildRoute(t.position,c.point)})).filter(c=>!!c.path).sort((a,b)=>a.path!.length-b.path!.length);
@@ -451,8 +451,8 @@ export default function App(){
      }
      if(delivered.status==='REFUELLING'){
       const spec=energySpec(delivered);
-      // Quick fuel stop (5s); electric charging takes longer (30s at a station, 45s at depot).
-       const until=delivered.refillUntil??(now+(spec.unit==='L'?5000:delivered.refillAtDepot?45000:30000));
+      // Petrol refuelling takes 5 seconds at a station or depot.
+       const until=delivered.refillUntil??(now+5000);
       if(now<until)return {...delivered,refillUntil:until};
       const quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
       const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1);
@@ -471,7 +471,7 @@ export default function App(){
       const start=nearest(graph,working.position);
       const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
       const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
-      const stations=[...stationsRef.current.values()].filter(st=>st.kind===(energySpec(delivered).kind==='electric'?'charging':'fuel')&&st.access!=='private')
+      const stations=[...stationsRef.current.values()].filter(st=>st.kind===('fuel')&&st.access!=='private')
        .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,12);
       const targets=[...stations.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
       for(const target of targets){
@@ -579,7 +579,7 @@ export default function App(){
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
   const now=Date.now();
   const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
-   vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
+   vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:'Petrol',vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
    deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,hq)};
   const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
   saveCompany(updated);setCompany(updated);setFleet(old=>({...old,drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
