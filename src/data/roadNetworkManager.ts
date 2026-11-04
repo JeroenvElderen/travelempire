@@ -50,6 +50,38 @@ export class RoadNetworkManager {
    for(let y=Math.floor((p[1]-dy)/0.2);y<=Math.floor((p[1]+dy)/0.2);y++)ids.push(`national:${x}_${y}`);
   return ids;
  }
+ /** Load the roads immediately around a viewed location or ferry port first.
+  * Unlike speculative 10 km prefetch, this never fills the queue with distant tiles. */
+ considerPriority(points:Point[]){if(this.disposed)return;const now=Date.now();
+  const prioritized:string[]=[];
+  for(const p of points){
+   if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))continue;
+   // Both legacy 0.1-degree and nationwide 0.2-degree Supabase tiles.
+   // Prefer the nationwide cache where present, especially on islands.
+   const ids=this.idsNear(p,1200).filter(id=>this.available.has(id));
+   ids.sort((a,b)=>Number(b.startsWith('national:'))-Number(a.startsWith('national:')));
+   for(const id of ids){
+    if(this.loaded.has(id)||(this.failedUntil.get(id)??0)>now)continue;
+    if(!prioritized.includes(id))prioritized.push(id);
+   }
+  }
+  // Reorder already queued tiles instead of duplicating requests.
+  for(let i=prioritized.length-1;i>=0;i--){
+   const id=prioritized[i];
+   const existing=this.queue.indexOf(id);
+   if(existing>=0)this.queue.splice(existing,1);
+   else if(this.queued.has(id))continue; // Currently downloading.
+   else{
+    if(this.queue.length>=MAX_PENDING_TILES){
+     const dropped=this.queue.pop();
+     if(dropped)this.queued.delete(dropped);
+    }
+    this.queued.add(id);
+   }
+   this.queue.unshift(id);
+  }
+  this.pump();
+ }
  considerPoint(p:Point){this.consider([p]);}
  considerRoute(path:Point[]){if(!path.length)return;const points:Point[]=[path[0]];
   for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i];const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),dy=(b[1]-a[1])*111320;
