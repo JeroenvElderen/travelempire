@@ -489,7 +489,7 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>,incomingNode?:string
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -533,6 +533,7 @@ export function dispatchScout(
   if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
+   if(node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     if(taxi.kind==='surveyor'&&territoryCovered){
