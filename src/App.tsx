@@ -300,7 +300,7 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,territory:fleetSaveRef.current.territoryEdgeIds??[],
-    hq:[company.headquarters.lng,company.headquarters.lat],availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!taxiSchedule(t.id,gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
