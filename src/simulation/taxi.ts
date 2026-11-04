@@ -91,7 +91,7 @@ export function trafficFactor(speedKph:number,at=Date.now()):number{
 export function trafficTravelSeconds(meters:number,speedKph:number,at=Date.now()):number{
  return meters/(Math.max(5,speedKph)*trafficFactor(speedKph,at)/3.6);
 }
-export const GAME_SPEED = 4;
+export const GAME_SPEED = 1;
 const DEFAULT_SPEED: Record<string,number> = {
  motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
  secondary:70,secondary_link:45,tertiary:50,tertiary_link:40,
