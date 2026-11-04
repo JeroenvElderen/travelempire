@@ -4,13 +4,14 @@ import {accountingOf,vatIncluded} from './accounting';
 import {depotCapacity,depotDailyTotal,upgradesFor,DEPOT_UPGRADES} from './depotFinance';
 import {OFFERS,type VehicleOffer} from './dealership';
 import {financeQuote,leaseQuote} from './economy';
+import {corporateOf} from './corporate';
 
 export type ForecastScenario='conservative'|'expected'|'optimistic';
 export type ForecastHorizon=7|30|90|180;
 export type ExpansionMode='none'|'cash'|'finance'|'lease';
 export type ForecastPlan={scenario:ForecastScenario;days:ForecastHorizon;vehicleId:string;vehicleCount:number;mode:ExpansionMode;depositPercent:number;financeDays:30|60|90|180;depotId:string;depotUpgrade:string;newDepot:boolean};
-export type ForecastDay={day:number;date:string;revenue:number;operatingExpenses:number;loanPayments:number;leasePayments:number;taxPayments:number;savingsTransfer:number;capitalSpending:number;cash:number;savings:number;profit:number};
-export type ForecastResult={points:ForecastDay[];startCash:number;closingCash:number;closingSavings:number;totalRevenue:number;totalOperatingExpenses:number;totalLoanPayments:number;totalLeasePayments:number;totalTaxes:number;totalInvestments:number;totalSavingsTransfers:number;breakEvenDailyRevenue:number;breakEvenTrips:number|null;historicalTripsPerGameDay:number;baselineDailyRevenue:number;baselineDailyExpenses:number;historyRealDays:number;capacityAvailable:number;investmentCost:number;estimatedPaybackDays:number|null;alerts:string[];warnings:string[];estimatedVehicleDailyProfit:number;minimumCash:number;taxLiabilityAtEnd:number};
+export type ForecastDay={day:number;date:string;revenue:number;operatingExpenses:number;loanPayments:number;leasePayments:number;taxPayments:number;savingsTransfer:number;capitalSpending:number;cash:number;savings:number;profit:number;groupCash:number};
+export type ForecastResult={points:ForecastDay[];startCash:number;closingCash:number;closingSavings:number;totalRevenue:number;totalOperatingExpenses:number;totalLoanPayments:number;totalLeasePayments:number;totalTaxes:number;totalInvestments:number;totalSavingsTransfers:number;breakEvenDailyRevenue:number;breakEvenTrips:number|null;historicalTripsPerGameDay:number;baselineDailyRevenue:number;baselineDailyExpenses:number;historyRealDays:number;capacityAvailable:number;investmentCost:number;estimatedPaybackDays:number|null;alerts:string[];warnings:string[];estimatedVehicleDailyProfit:number;minimumCash:number;taxLiabilityAtEnd:number;closingGroupCash:number;closingSubsidiaryCash:number;corporateLoanPayments:number};
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const addDays=(epoch:number,days:number)=>new Date(epoch+days*86400000).toISOString().slice(0,10);
 const monthOf=(epoch:number)=>new Date(epoch).toISOString().slice(0,7);
@@ -86,6 +87,10 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  const extraRevenue=addedDailyRevenue+upgradeRevenue;
  const extraCost=addedDailyExpenses+incrementalFacility+newDepotDaily-upgradeSavings;
  const loans=(fleet.loans??[]).map(l=>({...l}));
+ const corporate=corporateOf(fleet.corporate);
+ const corporateLoans=corporate.loans.map(l=>({...l}));
+ let subsidiaryCash=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.cash,0);
+ let corporateLoanPayments=0;
  const leases=(fleet.leases??[]).map(l=>({...l}));
  if(plan.mode==='finance')for(let i=0;i<addedCount;i++)loans.push({id:'projection-'+i,principal:quote.principal,balance:quote.principal,annualRate:.09,termDays:plan.financeDays,remainingDays:plan.financeDays,dailyPayment:quote.instalment,accruedGameSeconds:0});
  if(plan.mode==='lease')for(let i=0;i<addedCount;i++)leases.push({id:'projection-'+i,vehicleId:'projection-'+i,vehicleName:selectedOffer.model,dailyPayment:lease.daily,remainingDays:plan.financeDays,termDays:plan.financeDays,accruedGameSeconds:0,totalPaid:0});
@@ -95,7 +100,7 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  let monthlyRevenue=0,monthlyExpense=0,monthlyInputVAT=0,monthlyOutputVAT=0;
  let totalRevenue=0,totalOperatingExpenses=0,totalLoanPayments=0,totalLeasePayments=0,totalTaxes=0,totalSavingsTransfers=0;
  let minimumCash=cash;
- const points:ForecastDay[]=[{day:0,date:addDays(gameEpochMs,0),revenue:0,operatingExpenses:0,loanPayments:0,leasePayments:0,taxPayments:0,savingsTransfer:0,capitalSpending:investmentCost,cash,savings,profit:0}];
+ const points:ForecastDay[]=[{day:0,date:addDays(gameEpochMs,0),revenue:0,operatingExpenses:0,loanPayments:0,leasePayments:0,taxPayments:0,savingsTransfer:0,capitalSpending:investmentCost,cash,savings,profit:0,groupCash:cash+savings+subsidiaryCash}];
  const alerts:string[]=[];
  const taxSettlement=(dateMonth:string)=>{
   if(dateMonth===currentMonth)return 0;
@@ -118,6 +123,14 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
    l.balance=Math.max(0,l.balance-(payment.paid-payment.interest));l.remainingDays--;
   }
   for(const l of leases){if(l.remainingDays>0){leasePayments+=l.dailyPayment;l.remainingDays--;}}
+  for(const l of corporateLoans){
+   if(l.remainingDays<=0||l.balance<=0)continue;
+   const interest=Math.round(l.balance*l.annualRate/365*100)/100;
+   const paid=Math.min(Math.round((l.balance+interest)*100)/100,l.remainingDays===1?Math.round((l.balance+interest)*100)/100:l.dailyPayment);
+   l.balance=Math.max(0,Math.round((l.balance-(paid-interest))*100)/100);l.remainingDays--;
+   loanPayments+=paid;loanInterest+=interest;corporateLoanPayments+=paid;
+  }
+  subsidiaryCash+=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.revenuePerDay-s.expensesPerDay-Math.max(0,(s.revenuePerDay-s.expensesPerDay)*settings.corporateRate/100),0);
   const revenue=baseRevenue+extraRevenue;
   const operatingExpenses=baseExpenses+extraCost+loanInterest+leasePayments;
   const inputVat=vatIncluded(Math.max(0,(baseExpenses+extraCost)*.3),settings.vatRate);
@@ -128,7 +141,7 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
   cash-=savingsTransfer;savings+=savingsTransfer;
   totalRevenue+=revenue;totalOperatingExpenses+=operatingExpenses;totalLoanPayments+=loanPayments;totalLeasePayments+=leasePayments;totalTaxes+=paidAtBoundary;totalSavingsTransfers+=savingsTransfer;
   minimumCash=Math.min(minimumCash,cash);
-  points.push({day,date,revenue,operatingExpenses,loanPayments,leasePayments,taxPayments:paidAtBoundary,savingsTransfer,capitalSpending:0,cash,savings,profit:revenue-operatingExpenses});
+  points.push({day,date,revenue,operatingExpenses,loanPayments,leasePayments,taxPayments:paidAtBoundary,savingsTransfer,capitalSpending:0,cash,savings,profit:revenue-operatingExpenses,groupCash:cash+savings+subsidiaryCash});
  }
  const dailyObligations=(fleet.loans??[]).reduce((a,l)=>a+(l.remainingDays>0?l.dailyPayment:0),0)+(fleet.leases??[]).reduce((a,l)=>a+(l.remainingDays>0?l.dailyPayment:0),0);
  const breakEvenDailyRevenue=(baseExpenses+extraCost+dailyObligations+(plan.mode==='finance'?quote.instalment*addedCount:plan.mode==='lease'?lease.daily*addedCount:0))/(1-settings.vatRate/(100+settings.vatRate));
@@ -142,5 +155,5 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  if(pendingTax>0&&cash<pendingTax)alerts.push('Projected unpaid tax liabilities exceed closing operating cash.');
  if(loans.some(l=>l.remainingDays>0)||leases.some(l=>l.remainingDays>0))alerts.push('Loan and lease payments remain due after the forecast horizon.');
  if(addedCount>0&&estimatedPaybackDays===null)alerts.push('Planned expansion does not achieve positive incremental daily cash flow under this scenario.');
- return {points,startCash:company.cash,closingCash:cash,closingSavings:savings,totalRevenue,totalOperatingExpenses,totalLoanPayments,totalLeasePayments,totalTaxes,totalInvestments:investmentCost,totalSavingsTransfers,breakEvenDailyRevenue,breakEvenTrips,historicalTripsPerGameDay:history.tripsPerDay,baselineDailyRevenue:history.revenuePerDay,baselineDailyExpenses:history.expensesPerDay,historyRealDays:history.realDays,capacityAvailable,investmentCost,estimatedPaybackDays,alerts,warnings,estimatedVehicleDailyProfit:perVehicleRevenue-perVehicleVariableCost-15,minimumCash,taxLiabilityAtEnd:pendingTax};
+ return {points,startCash:company.cash,closingCash:cash,closingSavings:savings,totalRevenue,totalOperatingExpenses,totalLoanPayments,totalLeasePayments,totalTaxes,totalInvestments:investmentCost,totalSavingsTransfers,breakEvenDailyRevenue,breakEvenTrips,historicalTripsPerGameDay:history.tripsPerDay,baselineDailyRevenue:history.revenuePerDay,baselineDailyExpenses:history.expensesPerDay,historyRealDays:history.realDays,capacityAvailable,investmentCost,estimatedPaybackDays,alerts,warnings,estimatedVehicleDailyProfit:perVehicleRevenue-perVehicleVariableCost-15,minimumCash,taxLiabilityAtEnd:pendingTax,closingGroupCash:cash+savings+subsidiaryCash,closingSubsidiaryCash:subsidiaryCash,corporateLoanPayments};
 }
