@@ -314,6 +314,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Discovery updates must not depend on the map moving or on a full graph scan.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
  const explorationDebugPrevious=useRef<Set<string>>(new Set());
+ const [debugOpen,setDebugOpen]=useState(false);
+ const [debugEntries,setDebugEntries]=useState<string[]>([]);
+ const debugStarted=useRef(false);
+ const addDebug=(message:string)=>{
+  const entry=`${new Date().toLocaleTimeString()}  ${message}`;
+  setDebugEntries(previous=>[...previous.slice(-79),entry]);
+ };
+
 
  const currentExploredRoads=useRef<Set<string>>(new Set());
  currentExploredRoads.current=new Set(exploredEdgeIds);
@@ -324,6 +332,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const explored=currentExploredRoads.current;
   const newlyDiscovered=[...explored].filter(id=>!explorationDebugPrevious.current.has(id));
   explorationDebugPrevious.current=new Set(explored);
+  if(!debugStarted.current){
+   debugStarted.current=true;
+   addDebug(`Initial exploration: ${explored.size} saved road IDs`);
+  }else if(newlyDiscovered.length){
+   addDebug(`+${newlyDiscovered.length} completed edges; ${newlyDiscovered.filter(id=>visibleIds.has(id)).length} in visible road cache; source ${source?'OK':'MISSING'}`);
+  }
   const visibleIds=new Set(visibleRoadFeatures.current.map(feature=>String(feature.properties?.roadId??'')));
   if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] New road IDs received by map',{count:newlyDiscovered.length,ids:newlyDiscovered.slice(0,20),visible:newlyDiscovered.filter(id=>visibleIds.has(id)).length,missingFromVisibleGeometry:newlyDiscovered.filter(id=>!visibleIds.has(id)).slice(0,20),sourceExists:!!source,styleLoaded:instance.isStyleLoaded()});
   if(!source){
@@ -332,6 +346,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   }
   const features=visibleRoadFeatures.current.filter(feature=>explored.has(String(feature.properties?.roadId??'')));
   source.setData({type:'FeatureCollection',features});
+  if(newlyDiscovered.length)addDebug(`Map repainted: ${features.length} purple / ${visibleRoadFeatures.current.length} visible road edges`);
   if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] Purple GeoJSON updated',{renderedEdges:features.length,cachedVisibleEdges:visibleRoadFeatures.current.length});
   instance.triggerRepaint();
  },[exploredEdgeIds,ready]);
@@ -593,5 +608,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   fogDraw.current?.();
  },[graph,territoryEdgeIds,explorationVisible]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
- return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control"><button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Standard</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 150 m Black Explorer corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = territory revealed by the Black Explorer (150 m radius). Purple Explorer-discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ return <div className="map-container"><div style={{position:'absolute',bottom:78,left:12,zIndex:30,maxWidth:'calc(100% - 24px)',pointerEvents:'auto'}}>
+ <button type="button" onClick={()=>setDebugOpen(value=>!value)} style={{background:'#14243a',color:'white',border:'1px solid #64748b',borderRadius:8,padding:'9px 12px',fontSize:13,fontWeight:700}}>🛠 Exploration log ({debugEntries.length})</button>
+ {debugOpen&&<div style={{width:'min(420px,calc(100vw - 24px))',maxHeight:270,overflowY:'auto',background:'rgba(9,18,32,.97)',color:'#d1fae5',border:'1px solid #64748b',borderRadius:8,padding:10,fontSize:11,marginTop:6,boxSizing:'border-box',fontFamily:'monospace',whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>
+ <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginBottom:8}}><button type="button" onClick={()=>{void navigator.clipboard?.writeText(debugEntries.join('\\n'));}} style={{color:'white',background:'#334155',border:0,borderRadius:4,padding:'5px 8px'}}>Copy logs</button><button type="button" onClick={()=>setDebugEntries([])} style={{color:'white',background:'#334155',border:0,borderRadius:4,padding:'5px 8px'}}>Clear</button></div>
+ {debugEntries.length?debugEntries.map((entry,index)=><div key={index} style={{padding:'3px 0',borderBottom:'1px solid #25344a'}}>{entry}</div>):'Waiting for road discovery events…'}
+ </div>}
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control"><button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Standard</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 150 m Black Explorer corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = territory revealed by the Black Explorer (150 m radius). Purple Explorer-discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
