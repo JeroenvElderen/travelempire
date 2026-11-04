@@ -222,7 +222,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // the old job's unrelated path.
    const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
     previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
-   const displayed=renderedPosition.current.get(taxi.id);
    // At 8×, the vehicle can cross multiple junctions per tick. Never pair a
    // rendered point with the old leg index: that produces a straight-line
    // shortcut through the intervening road turns.
