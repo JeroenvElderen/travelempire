@@ -41,3 +41,25 @@
 .finance-v214 h3{font-size:17px;margin:13px 0 0}
 @media(max-width:1000px){.finance-overview-kpis .company-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.finance-v214{padding:20px 14px 110px}.finance-heading{align-items:flex-start;flex-direction:column;gap:12px}.finance-live-badge{font-size:9px}.finance-tabs button{padding:11px 12px;font-size:12px}.finance-overview-kpis .company-metrics{gap:9px}.finance-v214 .company-metrics article{padding:14px}.finance-v214 .company-metrics article strong{font-size:19px}.finance-section-heading{align-items:flex-start}.finance-section-heading>span{font-size:10px}.finance-v214 .finance-rows>div,.finance-v214 .finance-loan{align-items:flex-start;flex-direction:column;gap:6px;padding:13px}.finance-v214 .finance-rows strong{white-space:normal}.finance-intro{font-size:9px}}
+
+/* Finance Phase 1: responsive cash-flow charts, ledger and operating budgets */
+.finance-trend{margin:18px 0 24px;padding:16px;border:1px solid rgba(130,165,185,.25);border-radius:14px;background:rgba(13,34,49,.32)}
+.finance-trend h3{margin:0 0 12px;font-size:1rem}
+.finance-trend-legend{display:flex;gap:18px;font-size:.8rem;margin-bottom:12px;color:#b6c7d2}
+.finance-trend-legend span:first-child{color:#51d2ad}
+.finance-trend-legend span:last-child{color:#eeaa77}
+.finance-trend-bars{display:flex;align-items:stretch;gap:5px;overflow-x:auto;min-height:160px;padding:8px 0}
+.finance-trend-day{min-width:19px;flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;text-align:center}
+.finance-trend-pair{height:130px;display:flex;align-items:flex-end;gap:2px}
+.finance-trend-pair span{display:block;flex:1;min-height:2px;border-radius:3px 3px 0 0;background:#51d2ad}
+.finance-trend-pair span+span{background:#eeaa77}
+.finance-trend-day small{font-size:.62rem;color:#9daeb9;white-space:nowrap}
+.finance-ledger-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin:14px 0}
+.finance-ledger-controls select,.finance-budget-row input{color:inherit;background:rgba(22,46,63,.8);border:1px solid rgba(143,176,192,.45);border-radius:8px;padding:8px}
+.finance-budget-list{display:grid;gap:10px;margin:18px 0}
+.finance-budget-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(130,165,185,.25);border-radius:10px}
+.finance-budget-row>span:first-child{display:grid;gap:4px}
+.finance-budget-row small{color:#a6b7c5}
+.finance-budget-row input{width:112px;max-width:35vw}
+.finance-budget-alert{padding:12px;border:1px solid #e7ad62;border-radius:10px;color:#f0c58c;background:rgba(167,97,25,.13)}
+@media(max-width:520px){.finance-trend{padding:10px}.finance-trend-day{min-width:22px;flex:0 0 22px}.finance-budget-row{font-size:.85rem}}
