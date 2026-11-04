@@ -21,6 +21,9 @@ export type Taxi = {
   fare: number;
   completed: number;
   journeyEdges?: string[];
+  // Last completed road approach, retained across separate assignments.
+  lastRoadFrom?: string;
+  lastRoadTo?: string;
   scoutingRuns?: number;
   explorationMode?: 'local'|'frontier';
   drivingPolicy?: 'economy'|'balanced'|'performance';
@@ -223,12 +226,12 @@ function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:stri
 }
 // Turn-aware Dijkstra: the state includes the incoming road node. A shortest
 // path to an intersection must not erase another valid approach direction.
-function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false):{path:Point[];edgeIds:string[];length:number}|null{
+function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false,incoming=''):{path:Point[];edgeIds:string[];length:number}|null{
  if(!graph.nodes.has(from)||!graph.nodes.has(to))return null;
  if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
  type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
- const states:State[]=[{node:from,incoming:'',cost:0,parent:-1,edgeId:''}];
- const best=new Map<string,number>([[JSON.stringify([from,'']),0]]);
+ const states:State[]=[{node:from,incoming,cost:0,parent:-1,edgeId:''}];
+ const best=new Map<string,number>([[JSON.stringify([from,incoming]),0]]);
  const heap:number[]=[0];
  const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
  const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
@@ -256,7 +259,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  keys.reverse();ids.reverse();
  return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:states[finish].cost};
 }
-export function route(graph:RoadGraph,from:string,to:string){return turnAwareRoute(graph,from,to);}
+export function route(graph:RoadGraph,from:string,to:string,incoming=''){return turnAwareRoute(graph,from,to,undefined,false,incoming);}
 export const fleetKey=(id:string)=>`travelempire.fleet.v0.8.${id}`;
 export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(localStorage.getItem(fleetKey(id))??'null') as FleetState|null;if(saved&&Array.isArray(saved.taxis)){
   // Migrate legacy saves without changing any existing taxi assignment.
@@ -403,8 +406,8 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
  }
  return null;
 }
-export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>):ReturnType<typeof route>{
- return turnAwareRoute(graph,from,to,discovered,true);
+export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming=''):ReturnType<typeof route>{
+ return turnAwareRoute(graph,from,to,discovered,true,incoming);
 }
 export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
@@ -415,7 +418,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
   if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
  }
  // Passenger stops must be discovered, but taxis may travel over any road without exploring it.
- const toPickup=route(graph,start,pickup);
+ const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
@@ -494,6 +497,7 @@ export function dispatchScout(
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
+ incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
  const revealed=new Set(exploredRoadNodes(graph,explored,hq));
  // Dijkstra from the current vehicle position: one search replaces dozens of
  // independent full-graph routes, and yields the cheapest road-by-road approach.
@@ -672,6 +676,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
   if(t.distanceIntoLeg>=length-0.0001){
    const id=t.edgeIds[t.leg];if(id)crossed.push(id);
+   t.lastRoadFrom=key(a);t.lastRoadTo=key(b);
    t.leg++;t.distanceIntoLeg=0;t.position=b;
    if(t.leg<t.path.length-1){
     const next=t.path[t.leg+1];
@@ -693,7 +698,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
-  const next=route(graph,from,to);
+  const next=route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
    return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
