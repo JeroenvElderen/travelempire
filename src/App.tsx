@@ -277,6 +277,12 @@ export default function App(){
        t.edgeIds.every((id,i)=>assigned.edgeIds[i]===id)){
      return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns};
     }
+    // Accept parking, returning, and automatic wake-up for purple Explorers.
+    if(t.kind==='explorer'&&assigned&&
+       ((t.status==='IDLE'&&assigned.status==='RETURNING'&&assigned.shiftParked)||
+        (t.status==='IDLE'&&assigned.status==='PAUSED'&&assigned.shiftParked)||
+        (t.status==='PAUSED'&&t.shiftParked&&assigned.status==='EXPLORING')))
+     return {...assigned,position:t.position};
     // Never overwrite a taxi that became busy while the worker was calculating.
     return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
    })}));
@@ -300,7 +306,7 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,territory:fleetSaveRef.current.territoryEdgeIds??[],
-    hq:[company.headquarters.lng,company.headquarters.lat],availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.

@@ -8,7 +8,8 @@ type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;availableTaxiIds?:string[]};
+const parkedRetryAt=new Map<string,number>();
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
@@ -171,6 +172,39 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
+    }
+   }
+   // Purple Explorers park only after a genuine failed scout search. The
+   // return route uses normal road movement and never counts as exploration.
+   for(let index=0;index<taxis.length;index++){
+    const taxi=taxis[index];
+    if(taxi.kind!=='explorer'||taxi.deliveryUntil||taxi.refillRequested)continue;
+    if(taxi.status==='PAUSED'&&taxi.shiftParked){
+     if(now<(parkedRetryAt.get(taxi.id)??0))continue;
+     parkedRetryAt.set(taxi.id,now+5000);
+     const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:false},graph,explored,hq,
+      reservedTargets,reservedEdges,undefined,allowedRoads,discoveryEligible);
+     if(candidate.status==='EXPLORING')taxis[index]={...candidate,shiftParked:false};
+     continue;
+    }
+    if(taxi.status!=='IDLE'||taxi.shiftParked||energyPercent(taxi)<=10)continue;
+    // Only park if there is no reachable exploration route. The scout pass
+    // above has already attempted to assign one.
+    const start=nearest(graph,taxi.position);
+    if(!start)continue;
+    const destinations=[hq,...(msg.stations??[])];
+    let best:ReturnType<typeof route>|null=null;
+    for(const point of destinations){
+     const end=nearest(graph,point);
+     if(!end)continue;
+     const candidate=route(graph,start,end);
+     if(candidate&&candidate.path.length>=2&&(!best||candidate.length<best.length))best=candidate;
+    }
+    if(best){
+     taxis[index]={...taxi,status:'RETURNING',pauseAtHome:true,shiftParked:true,
+      path:best.path,edgeIds:best.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[]};
+    }else if(destinations.some(point=>meters(taxi.position,point)<80)){
+     taxis[index]={...taxi,status:'PAUSED',shiftParked:true,path:[],edgeIds:[],speedKph:0};
     }
    }
   }
