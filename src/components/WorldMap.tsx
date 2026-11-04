@@ -310,42 +310,36 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   frame=requestAnimationFrame(animate);
   return()=>cancelAnimationFrame(frame);
  },[]);
- // Cache only visible road features so discovery changes can repaint immediately,
- // without rescanning the nationwide routing graph on every vehicle tick.
+ // Keep visible road geometry separate from the fast-changing purple overlay.
+ // Discovery updates must not depend on the map moving or on a full graph scan.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
  const currentExploredRoads=useRef<Set<string>>(new Set());
  currentExploredRoads.current=new Set(exploredEdgeIds);
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready||!instance.isStyleLoaded())return;
-  const source=instance.getSource('active-road-network') as maplibregl.GeoJSONSource|undefined;
-  if(!source||!visibleRoadFeatures.current.length)return;
+  const source=instance.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
+  if(!source)return;
   const explored=currentExploredRoads.current;
-  let changed=false;
-  const features=visibleRoadFeatures.current.map(feature=>{
-   const roadId=feature.properties?.roadId as string|undefined;
-   const discovered=Boolean(roadId&&explored.has(roadId));
-   if(feature.properties?.explored===discovered)return feature;
-   changed=true;
-   return {...feature,properties:{...feature.properties,explored:discovered}};
-  });
-  if(!changed)return;
-  visibleRoadFeatures.current=features;
+  const features=visibleRoadFeatures.current.filter(feature=>explored.has(String(feature.properties?.roadId??'')));
   source.setData({type:'FeatureCollection',features});
+  instance.triggerRepaint();
  },[exploredEdgeIds,ready]);
- // Display the same regional OSM graph that taxis use. Never fetch preview.geojson.
- // Only road segments inside the visible viewport are sent to MapLibre.
+ // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
   const instance=map.current;
   if(!instance)return;
   let cancelled=false;
   const sourceId='active-road-network';
+  const purpleSourceId='explored-road-network-source';
   const exploredLayerId='explored-road-network';
   const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   const remove=()=>{
    if(instance.getLayer(exploredLayerId))instance.removeLayer(exploredLayerId);
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
+   if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
+   visibleRoadFeatures.current=[];
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -366,21 +360,24 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const b=graph.nodes.get(edge.to);
      if(!b)continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
-     features.push({type:'Feature',properties:{roadId:edge.id,explored:exploredSet.has(edge.id)},geometry:{type:'LineString',coordinates:[a,b]}});
+     features.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
      if(features.length>=MAX_VISIBLE)break outer;
     }
    }
    visibleRoadFeatures.current=features;
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
+   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:features.filter(feature=>exploredSet.has(String(feature.properties?.roadId??'')))};
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
    if(existing)existing.setData(data);
-   else{
-    instance.addSource(sourceId,{type:'geojson',data});
-    instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
-    instance.addLayer({id:exploredLayerId,type:'line',source:sourceId,filter:['==',['get','explored'],true],paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
-   }
+   else instance.addSource(sourceId,{type:'geojson',data});
+   const purpleSource=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
+   if(purpleSource)purpleSource.setData(purple);
+   else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
+   if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
-   setRoadStatus(`${features.filter(f=>f.properties?.explored===true).length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
+   setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
+   instance.triggerRepaint();
   };
   instance.on('moveend',update);
   instance.on('style.load',update);
