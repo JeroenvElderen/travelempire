@@ -380,7 +380,8 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
   const eligible=passengerRoadNodes(graph,discovered);
   if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
  }
- const toPickup=discovered?routeDiscovered(graph,start,pickup,discovered):route(graph,start,pickup);
+ // Passenger stops must be discovered, but taxis may travel over any road without exploring it.
+ const toPickup=route(graph,start,pickup);
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
