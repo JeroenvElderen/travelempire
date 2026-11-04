@@ -428,7 +428,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
    if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
-   if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
+   if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,2.2,13,3.6,17,5.5],'line-opacity':1}});
+   // Style changes and other overlays can insert layers above discovered roads.
+   // Always keep the purple network above the red road network and basemap.
+   // This changes rendering only; vehicle simulation and discovery stay intact.
+   if(instance.getLayer(exploredLayerId))instance.moveLayer(exploredLayerId);
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
