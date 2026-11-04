@@ -663,7 +663,9 @@ export default function App(){
 
  const buyExplorer=()=>{if(!company||!graph)return;try{
   const cost=15000;
-  if(fleet.taxis.some(t=>t.kind==='surveyor'||(t.kind==='explorer'&&(t.vehicleModel==='Black Explorer'||t.name==='Black Explorer'))))throw Error('Only one Black Explorer is allowed per company.');
+  const blackCount=fleet.taxis.filter(t=>t.kind==='surveyor'||(t.kind==='explorer'&&(t.vehicleModel==='Black Explorer'||t.name==='Black Explorer'))).length;
+  const maxBlack=1+Research.level(Research.settle(research),'secondSurveyor');
+  if(blackCount>=maxBlack)throw Error(maxBlack===1?'Research Second Black Explorer to unlock another vehicle.':'Maximum of two Black Explorers reached.');
   if(company.cash<cost)throw Error('Insufficient company funds for an Explorer (€15,000).');
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
