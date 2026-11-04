@@ -346,7 +346,9 @@ export default function App(){
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned?.status==='EXPLORING'&&
        assigned.edgeIds.length>t.edgeIds.length&&
        t.edgeIds.every((id,i)=>assigned.edgeIds[i]===id)){
-     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns};
+     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns,
+      explorationSection:assigned.explorationSection,explorationSectionCompleted:assigned.explorationSectionCompleted,
+      explorationSectionTotal:assigned.explorationSectionTotal};
     }
     // Accept parking, returning, and automatic wake-up for purple Explorers.
     if(t.kind==='explorer'&&assigned&&
@@ -355,6 +357,10 @@ export default function App(){
         (t.status==='PAUSED'&&t.shiftParked&&assigned.status==='EXPLORING')))
      return {...assigned,position:t.position};
     // Never overwrite a taxi that became busy while the worker was calculating.
+    if(t.kind==='explorer'&&assigned&&t.status==='EXPLORING')
+     return {...t,explorationSection:assigned.explorationSection,
+      explorationSectionCompleted:assigned.explorationSectionCompleted,
+      explorationSectionTotal:assigned.explorationSectionTotal};
     return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
    })}));
    const queue=message.queue.filter(q=>q.expiresAt>Date.now());
