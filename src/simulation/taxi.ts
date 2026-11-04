@@ -586,8 +586,6 @@ export function dispatchScout(
   if(taxi.kind!=='surveyor'&&taxi.kind!=='explorer'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
-   if(taxi.kind==='explorer'&&previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
-   if(taxi.kind==='explorer'&&node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     if(taxi.kind==='surveyor'&&territoryCovered){
@@ -675,7 +673,7 @@ export function dispatchScout(
    (taxi.kind!=='explorer'||!selectedSection||(()=>{const a=graph.nodes.get(cursor)!,b=graph.nodes.get(edge.to)!;return roadSection([(a[0]+b[0])/2,(a[1]+b[1])/2])===selectedSection;})())&&
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&
-   (taxi.kind!=='explorer'||keys.length<2||!forbiddenUTurn(graph,keys[keys.length-2],cursor,edge.to))
+   true
   );
   if(!links.length)break;
   // Black Explorer expands into unrevealed territory; Purple Explorer stays
