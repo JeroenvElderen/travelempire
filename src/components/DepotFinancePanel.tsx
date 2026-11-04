@@ -30,6 +30,7 @@ export default function DepotFinancePanel({company,fleet,onUpgrade}:Props){
  const totalExpenses=total.vehicleExpenses+total.facilityExpenses+total.allocatedOverhead;
  const alerts=summary.flatMap(d=>[
   ...(d.vehicles.length>d.capacity?[`${d.name}: parking capacity exceeded`]:[]),
+  ...(d.records.length&&d.totals.facilityExpenses>d.totals.revenue?[`${d.name}: facility costs exceed depot revenue`]:[]),
   ...(d.records.length&&d.profit<0?[`${d.name}: operating loss of ${money(-d.profit)} in the selected period`]:[]),
   ...(d.vehicles.length<Math.max(1,Math.floor(d.capacity*.25))?[`${d.name}: low utilisation (${d.vehicles.length}/${d.capacity} spaces)`]:[])
  ]);
@@ -46,6 +47,10 @@ export default function DepotFinancePanel({company,fleet,onUpgrade}:Props){
    <h4>Monthly facility cost estimate</h4><div className="depot-finance-costs">{Object.entries(depotDailyCost(d.id==='main',d.upgrades,d.capacity)).map(([name,value])=><div key={name}><span>{name}</span><strong>{money(value*30)}</strong></div>)}</div>
    <h4>Facility upgrades</h4><div className="depot-finance-upgrades">{DEPOT_UPGRADES.map(u=><article key={u.id}><strong>{u.name} · Level {d.upgrades[u.id]??0}/{u.max}</strong><small>{u.description}</small><button disabled={(d.upgrades[u.id]??0)>=u.max||company.cash<u.cost} onClick={()=>onUpgrade(d.id,u.id)}>{(d.upgrades[u.id]??0)>=u.max?'Max level':`Upgrade · ${money(u.cost)}`}</button></article>)}</div>
   </section>)}
+  <button className="depot-finance-toggle" onClick={()=>{const rows=history.filter(r=>selected==='all'||r.depotId===selected);
+   const csv=['Date,Depot,Revenue,Vehicle expenses,Facility expenses,Allocated overhead,Trips,Kilometres',...rows.map(r=>[r.day,JSON.stringify(r.depotName),r.revenue.toFixed(2),r.vehicleExpenses.toFixed(2),r.facilityExpenses.toFixed(2),r.allocatedOverhead.toFixed(2),r.trips,r.km.toFixed(2)].join(','))].join('\\n');
+   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='travelempire-depot-finances.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }}>Export depot report (CSV)</button>
   <button className="depot-finance-toggle" onClick={()=>setDetail(!detail)}>{detail?'Hide':'Show'} financial history</button>
   {detail&&<><label>Group performance <select value={groupBy} onChange={e=>setGroupBy(e.target.value as typeof groupBy)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
   <div className="depot-finance-history">{(()=>{const groups=new Map<string,{name:string;revenue:number;expenses:number}>();
