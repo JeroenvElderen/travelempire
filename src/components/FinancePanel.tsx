@@ -23,7 +23,7 @@ export default function FinancePanel({company,fleet,onLoan,onUpgrade,onWageChang
   try{
    const raw=localStorage.getItem('travelempire.finance.budgets.v1.'+company.id);
    const parsed=raw?JSON.parse(raw) as Partial<Budgets>:null;
-   setBudgets(Object.fromEntries(budgetCategories.map(k=>[k,typeof parsed?.[k]==='number'&&Number.isFinite(parsed[k])?Math.max(0,parsed[k]):defaultBudgets[k]])) as Budgets);
+   setBudgets(Object.fromEntries(budgetCategories.map(k=>{const value=parsed?.[k];return [k,typeof value==='number'&&Number.isFinite(value)?Math.max(0,value):defaultBudgets[k]];})) as Budgets);
   }catch{setBudgets(defaultBudgets);}
   setBudgetEnabled(true);
  },[company?.id]);
