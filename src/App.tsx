@@ -458,9 +458,13 @@ export default function App(){
       return {...delivered,status:'IDLE' as const,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
-     let working=delivered;
-     if(delivered.status==='IDLE'&&(energyPercent(delivered)<=10||delivered.refillRequested)){
-      const start=nearest(graph,delivered.position);
+     // Low energy interrupts exploration at the next simulation tick; passenger
+     // taxis complete their current fare before heading to a station.
+     const needsEnergy=energyPercent(delivered)<=10||!!delivered.refillRequested;
+     const stopExploring=needsEnergy&&delivered.status==='EXPLORING';
+     let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:delivered;
+     if(working.status==='IDLE'&&needsEnergy){
+      const start=nearest(graph,working.position);
       const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
       const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
       const stations=[...stationsRef.current.values()].filter(st=>st.kind===(energySpec(delivered).kind==='electric'?'charging':'fuel')&&st.access!=='private')
@@ -471,8 +475,8 @@ export default function App(){
        const path=route(graph,start,end);if(!path)continue;
        const routeKm=path.path.reduce((sum,p,i)=>i?sum+meters(p,path.path[i-1])/1000:sum,0);
        if(routeKm>energyRangeKm(delivered)*0.95)continue;
-       if(path.path.length<2){working={...delivered,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};break;}
-       working={...delivered,status:'RETURNING',path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,
+       if(path.path.length<2){working={...working,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};break;}
+       working={...working,status:'RETURNING',path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,
         refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};break;
       }
      }
