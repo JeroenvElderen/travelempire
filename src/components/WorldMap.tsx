@@ -309,19 +309,23 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     // that drive the actual visible vehicle marker.
     if(taxi.kind==='explorer'){
      const previous=purplePrevious.current.get(id);
-     purplePrevious.current.set(id,position);
-     // The displayed marker is the authoritative source for the live trail.
-     // Only mark motion on an actual exploration route, not refuelling,
-     // returning home, job transitions or position corrections.
-     if(previous&&taxi.status==='EXPLORING'&&taxi.path.length>1&&taxi.edgeIds.length>0){
+     // Accumulate sub-centimetre animation steps against the last *recorded*
+     // point. Comparing only adjacent frames drops slow movement forever.
+     // The Explorer's rendered position drives this overlay independently of
+     // status/edge-ID updates, which can lag behind its visible motion.
+     if(!previous){
+      purplePrevious.current.set(id,position);
+     }else{
       const dx=(position[0]-previous[0])*111320*Math.cos((position[1]+previous[1])*Math.PI/360);
       const dy=(position[1]-previous[1])*111320;
       const distance=Math.hypot(dx,dy);
-      // The marker advances in tiny increments at 60 fps. Do not discard
-      // these increments: accumulate them until a visible segment exists.
-      if(distance>0.015&&distance<40){
+      if(distance>=0.015&&distance<40){
        purpleTrail.current.push({type:'Feature',properties:{vehicleId:id},geometry:{type:'LineString',coordinates:[previous,position]}});
+       purplePrevious.current.set(id,position);
        purpleDirty.current=true;
+      }else if(distance>=40){
+       // Never draw across teleports, corrections or a new route spawn.
+       purplePrevious.current.set(id,position);
       }
      }
     }
