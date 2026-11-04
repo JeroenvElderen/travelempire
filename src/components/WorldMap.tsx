@@ -315,8 +315,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
  const refreshRoadLines=useRef<(()=>void)|null>(null);
  const explorationDebugPrevious=useRef<Set<string>>(new Set());
- const [debugOpen,setDebugOpen]=useState(false);
- const [debugEntries,setDebugEntries]=useState<string[]>([]);
  const debugStarted=useRef(false);
  const lastExplorerTelemetry=useRef<Map<string,{leg:number;edge:string;status:string}>>(new Map());
  useEffect(()=>{
@@ -336,10 +334,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   }
  },[taxis,exploredEdgeIds]);
 
- const addDebug=(message:string)=>{
-  const entry=`${new Date().toLocaleTimeString()}  ${message}`;
-  setDebugEntries(previous=>[...previous.slice(-79),entry]);
- };
+ const addDebug=(_message:string)=>{};
 
 
  const currentExploredRoads=useRef<Set<string>>(new Set());
