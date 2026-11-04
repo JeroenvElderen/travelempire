@@ -532,6 +532,21 @@ export function roadSection(point:Point):string{
  return x+':'+y;
 }
 
+/** Unique eligible road coverage for one 600m section. */
+export function sectionCoverage(graph:RoadGraph,allowed:Set<string>,discovered:Set<string>,section:string):{completed:number;total:number}{
+ const ids=new Set<string>();
+ for(const [from,links] of graph.edges){
+  const a=graph.nodes.get(from);if(!a)continue;
+  for(const edge of links){
+   if(!allowed.has(edge.id)||ids.has(edge.id))continue;
+   const b=graph.nodes.get(edge.to);if(!b)continue;
+   if(roadSection([(a[0]+b[0])/2,(a[1]+b[1])/2])===section)ids.add(edge.id);
+  }
+ }
+ let completed=0;for(const id of ids)if(discovered.has(id))completed++;
+ return {completed,total:ids.size};
+}
+
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
@@ -636,24 +651,8 @@ export function dispatchScout(
  best=taxi.kind==='explorer'?(bestInSection??bestPurple??best??bestOutside):taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
  if(!best)return taxi;
  const selectedSection=taxi.kind==='explorer'?(bestInSection??bestPurple)?.section:undefined;
- // Compute actual section coverage from eligible graph edges, not route scores.
- // The road ID set prevents counting two-way segments twice.
- let sectionTotal=0,sectionCompleted=0;
- if(taxi.kind==='explorer'&&selectedSection){
-  const all=new Set<string>(),done=new Set<string>();
-  for(const [from,links] of graph.edges){
-   const a=graph.nodes.get(from);if(!a)continue;
-   for(const edge of links){
-    if(_allowedRoads&&!_allowedRoads.has(edge.id))continue;
-    if(discoveryAllowed&&!discoveryAllowed.has(edge.id))continue;
-    const b=graph.nodes.get(edge.to);if(!b)continue;
-    if(roadSection([(a[0]+b[0])/2,(a[1]+b[1])/2])!==selectedSection)continue;
-    all.add(edge.id);
-    if(explored.has(edge.id))done.add(edge.id);
-   }
-  }
-  sectionTotal=all.size;sectionCompleted=done.size;
- }
+ const coverage=taxi.kind==='explorer'&&selectedSection?
+  sectionCoverage(graph,discoveryAllowed??_allowedRoads??new Set<string>(),explored,selectedSection):{completed:0,total:0};
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
  while(node!==start){
@@ -702,7 +701,7 @@ export function dispatchScout(
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
   edgeIds:ids,discoveryEdgeIds:discoveryAllowed?ids.filter(id=>discoveryAllowed.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,explorationSection:selectedSection??taxi.explorationSection,explorationSectionCompleted:sectionCompleted,explorationSectionTotal:sectionTotal,scoutingRuns:(taxi.scoutingRuns??0)+1};
+  pickup:undefined,dropoff:undefined,fare:0,explorationSection:selectedSection??taxi.explorationSection,explorationSectionCompleted:coverage.completed,explorationSectionTotal:coverage.total,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in real seconds (1x wall time).
