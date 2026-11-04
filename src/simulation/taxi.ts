@@ -545,6 +545,8 @@ export function dispatchScout(
  // Complete nearby streets within the revealed territory, then expand outward.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
+ // Purple Explorer: reward unique discoveries, penalise travel over known roads.
+ let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  // Surveyor: prioritise roads outside the existing 150 m territory corridor.
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
@@ -557,7 +559,7 @@ export function dispatchScout(
   if(distance>maxSearchMeters)break;
   // Once the nearest inside road is found, only finish nodes with shorter
   // approach distances; avoid searching the entire connected road network.
-  if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
+  if(taxi.kind!=='surveyor'&&taxi.kind!=='explorer'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
    if(taxi.kind==='explorer'&&node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
@@ -581,7 +583,13 @@ export function dispatchScout(
     }
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
-    if(inside){
+    if(taxi.kind==='explorer'){
+     // +50 points per new km; -10 points per km of approach travel.
+     // Using metres avoids rewarding artificial road segmentation.
+     const score=Math.min(edge.meters,1200)*0.05-distance*0.01+(inside?5:0);
+     if(!bestPurple||score>bestPurple.score||(score===bestPurple.score&&candidate.distance<bestPurple.distance))
+      bestPurple={...candidate,score};
+    }else if(inside){
      if(!best||candidate.distance<best.distance)best=candidate;
     }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
    }
@@ -591,7 +599,7 @@ export function dispatchScout(
    }
   }
  }
- best=taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
+ best=taxi.kind==='explorer'?(bestPurple??best??bestOutside):taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
  if(!best)return taxi;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
