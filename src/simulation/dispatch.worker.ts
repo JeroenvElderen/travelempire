@@ -183,7 +183,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     const purpleCluster=taxi.kind==='explorer'?clusterFor(taxi):undefined;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?clusterFor(taxi):undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,undefined,
+     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?clusterFor(taxi):undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,
      taxi.kind==='explorer'&&taxi.path.length>=2?nearest(graph,taxi.path[taxi.path.length-2]):undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
