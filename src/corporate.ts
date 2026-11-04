@@ -110,9 +110,9 @@ export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:numb
    if(!sub.active||sub.lastSettledDay>=dayOf(tickMs))continue;
    const dailyRevenue=sub.revenuePerDay;
    const dailyExpenses=sub.expensesPerDay;
-   const tax=Math.max(0,round((dailyRevenue-dailyExpenses)*corporateTaxRate/100));
+   const tax=Math.max(0,round((dailyRevenue-dailyExpenses)*(sub.foreignTaxRate??corporateTaxRate)/100));
    const net=round(dailyRevenue-dailyExpenses-tax);
-   sub.cash=round(sub.cash+net);sub.retainedEarnings=round(sub.retainedEarnings+net);sub.accumulatedRevenue=round(sub.accumulatedRevenue+dailyRevenue);sub.accumulatedExpenses=round(sub.accumulatedExpenses+dailyExpenses);sub.taxPaid=round(sub.taxPaid+tax);sub.lastSettledDay=dayOf(tickMs);
+   sub.cash=round(sub.cash+net);if(sub.fxRateToEUR&&sub.countryCode&&sub.countryCode!=='GRC')sub.localCash=round(sub.cash/sub.fxRateToEUR);sub.retainedEarnings=round(sub.retainedEarnings+net);sub.accumulatedRevenue=round(sub.accumulatedRevenue+dailyRevenue);sub.accumulatedExpenses=round(sub.accumulatedExpenses+dailyExpenses);sub.taxPaid=round(sub.taxPaid+tax);sub.lastSettledDay=dayOf(tickMs);
    revenue+=dailyRevenue;expenses+=dailyExpenses;taxes+=tax;
   }
   for(const loan of loans){
