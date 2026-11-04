@@ -345,53 +345,18 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const currentExploredRoads=useRef<Set<string>>(new Set());
  currentExploredRoads.current=new Set(exploredEdgeIds);
  useEffect(()=>{
-  const instance=map.current;
-  if(!instance||!ready||!instance.isStyleLoaded())return;
-  const source=instance.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
   const explored=currentExploredRoads.current;
   const newlyDiscovered=[...explored].filter(id=>!explorationDebugPrevious.current.has(id));
   explorationDebugPrevious.current=new Set(explored);
-  const visibleIds=new Set(visibleRoadFeatures.current.map(feature=>String(feature.properties?.roadId??'')));
   if(!debugStarted.current){
    debugStarted.current=true;
    addDebug(`Initial exploration: ${explored.size} saved road IDs`);
   }else if(newlyDiscovered.length){
-   addDebug(`+${newlyDiscovered.length} completed edges; ${newlyDiscovered.filter(id=>visibleIds.has(id)).length} in visible road cache; source ${source?'OK':'MISSING'}`);
+   addDebug(`+${newlyDiscovered.length} completed road edges; refreshing purple lines`);
   }
-  if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] New road IDs received by map',{count:newlyDiscovered.length,ids:newlyDiscovered.slice(0,20),visible:newlyDiscovered.filter(id=>visibleIds.has(id)).length,missingFromVisibleGeometry:newlyDiscovered.filter(id=>!visibleIds.has(id)).slice(0,20),sourceExists:!!source,styleLoaded:instance.isStyleLoaded()});
-  if(!source){
-   if(newlyDiscovered.length)console.warn('[TravelEmpire:exploration] Purple road source missing; cannot repaint completed edges');
-   return;
-  }
-  // A newly completed edge may not yet exist in the viewport cache.
-  // Resolve its actual graph geometry immediately instead of waiting for moveend.
-  const missing=new Set([...explored].filter(id=>!visibleIds.has(id)));
-  if(missing.size&&graph){
-   const bounds=instance.getBounds();
-   for(const [from,edges] of graph.edges){
-    const a=graph.nodes.get(from);
-    if(!a)continue;
-    for(const edge of edges){
-     if(!missing.has(edge.id))continue;
-     const b=graph.nodes.get(edge.to);
-     if(!b)continue;
-     if(!bounds.contains(a)&&!bounds.contains(b))continue;
-     visibleRoadFeatures.current.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
-     visibleIds.add(edge.id);
-     missing.delete(edge.id);
-    }
-    if(!missing.size)break;
-   }
-   if(newlyDiscovered.length)addDebug(`Resolved visible geometry for completed roads; ${missing.size} offscreen/not loaded`);
-  }
-  const features=visibleRoadFeatures.current.filter(feature=>explored.has(String(feature.properties?.roadId??'')));
-  source.setData({type:'FeatureCollection',features});
-  if(newlyDiscovered.length)addDebug(`Map repainted: ${features.length} purple / ${visibleRoadFeatures.current.length} visible road edges`);
-  if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] Purple GeoJSON updated',{renderedEdges:features.length,cachedVisibleEdges:visibleRoadFeatures.current.length});
-  // Rebuild the complete visible line geometry when exploration state changes.
-  // This does not depend on a pan, zoom or the 1.5-second reconciliation timer.
+  // Only the viewport renderer writes to the purple GeoJSON source.
+  // Trigger it immediately when road exploration changes, without map movement.
   refreshRoadLines.current?.();
-  instance.triggerRepaint();
  },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
@@ -424,10 +389,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     for(const edge of edges){
      if(!roadsVisible&&!exploredSet.has(edge.id))continue;
      if(seen.has(edge.id))continue;
-     seen.add(edge.id);
      const b=graph.nodes.get(edge.to);
      if(!b)continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
+     seen.add(edge.id);
      features.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
      if(features.length>=MAX_VISIBLE)break outer;
     }
