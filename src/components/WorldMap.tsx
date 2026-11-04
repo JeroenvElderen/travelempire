@@ -318,6 +318,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const [debugEntries,setDebugEntries]=useState<string[]>([]);
  const debugStarted=useRef(false);
  const lastExplorerTelemetry=useRef<Map<string,{leg:number;edge:string;status:string}>>(new Map());
+ const completedEdgeQueue=useRef<Set<string>>(new Set());
  useEffect(()=>{
   for(const taxi of taxis){
    if(taxi.kind!=='explorer')continue;
@@ -326,7 +327,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(!previous||previous.leg!==taxi.leg||previous.edge!==edge||previous.status!==taxi.status){
     if(previous&&previous.leg!==taxi.leg){
      const completed=taxi.edgeIds[Math.max(0,taxi.leg-1)]??previous.edge;
-     addDebug(`NODE reached: ${taxi.name}, leg ${previous.leg}→${taxi.leg}, edge ${completed.slice(0,24)}, saved=${exploredEdgeIds.includes(completed)}`);
+     completedEdgeQueue.current.add(completed);
+     addDebug(`NODE reached: ${taxi.name}, leg ${previous.leg}→${taxi.leg}, edge ${completed.slice(0,24)}, state=${exploredEdgeIds.includes(completed)?'explored':'PENDING'}`);
     }else if(!previous||previous.status!==taxi.status){
      addDebug(`Explorer ${taxi.name}: ${taxi.status}, leg ${taxi.leg}, route edges ${taxi.edgeIds.length}`);
     }
@@ -478,6 +480,43 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{cancelled=true;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
+ // Directly reconcile completed Explorer edges against the visible purple source.
+ // This is independent of map panning and of the whole explored-ID array identity.
+ useEffect(()=>{
+  if(!ready||!graph||!map.current?.isStyleLoaded())return;
+  const instance=map.current;
+  const source=instance.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
+  if(!source)return;
+  const explored=currentExploredRoads.current;
+  const ids=new Set(visibleRoadFeatures.current.map(f=>String(f.properties?.roadId??'')));
+  let added=0,already=0,pending=0,outside=0;
+  const bounds=instance.getBounds();
+  for(const id of completedEdgeQueue.current){
+   if(!explored.has(id)){pending++;continue;}
+   if(ids.has(id)){already++;completedEdgeQueue.current.delete(id);continue;}
+   let found=false;
+   for(const [from,edges] of graph.edges){
+    const a=graph.nodes.get(from);
+    if(!a)continue;
+    for(const edge of edges){
+     if(edge.id!==id)continue;
+     const b=graph.nodes.get(edge.to);
+     if(!b||(!bounds.contains(a)&&!bounds.contains(b)))continue;
+     visibleRoadFeatures.current.push({type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[a,b]}});
+     ids.add(id);added++;found=true;break;
+    }
+    if(found)break;
+   }
+   if(!found)outside++;
+   completedEdgeQueue.current.delete(id);
+  }
+  if(added||already||pending||outside){
+   const features=visibleRoadFeatures.current.filter(f=>explored.has(String(f.properties?.roadId??'')));
+   source.setData({type:'FeatureCollection',features});
+   instance.triggerRepaint();
+   addDebug(`Edge render: +${added} geometry, ${already} cached, ${pending} pending state, ${outside} offscreen/missing; purple=${features.length}`);
+  }
+ },[taxis,exploredEdgeIds,graph,ready]);
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
  const explorationInputs=useRef({graph,territoryEdgeIds,headquarters});
