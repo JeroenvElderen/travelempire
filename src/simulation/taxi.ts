@@ -635,7 +635,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  }
  return{taxi:t,crossed,distanceMeters};
 }
-export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
+export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.status==='REFUELLING'||taxi.status==='PAUSED')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
  const advanced=advanceTaxi(taxi,graph,seconds);
  // Only completed graph edges are discovered. advanceTaxi reports an edge
