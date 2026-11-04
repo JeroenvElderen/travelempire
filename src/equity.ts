@@ -17,7 +17,10 @@ export function valueCompany(company:Company,fleet:FleetState,gameEpochMs:number
  const sheet=balanceSheet(fleet,company.cash);
  const depots=company.depots??[];
  const depotAssets=depots.length*10000+sum(DEPOT_UPGRADES.map(u=>Object.values(fleet.depotUpgrades??{}).reduce((a,levels)=>a+(levels[u.id]??0)*u.cost,0)));
- const assetValue=sheet.equity+depotAssets;
+ const corporateSubsidiaries=(fleet.corporate?.subsidiaries??[]).filter(s=>s.active);
+ const subsidiaryNetAssets=sum(corporateSubsidiaries.map(s=>s.cash+s.vehicleAssets+s.depotAssets+(s.goodwill??0)-s.externalDebt));
+ const acquisitionDebt=sum((fleet.corporate?.loans??[]).map(l=>l.balance));
+ const assetValue=sheet.equity+depotAssets+subsidiaryNetAssets-acquisitionDebt;
  const periods=accountingOf(fleet.accounting).periods.slice(-3);
  const profit=sum(periods.map(p=>p.netRevenue-p.netExpenses-p.depreciation-p.corporateTax));
  const observedDays=Math.max(1,periods.length*30);
