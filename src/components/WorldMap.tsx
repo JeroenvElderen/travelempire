@@ -441,7 +441,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    previous.set(vehicle.id,vehicle);
    if(!prior||vehicle.status!=='EXPLORING'||prior.status!=='EXPLORING')continue;
    const a=prior.position,b=vehicle.position;
-   const distance=meters(a,b);
+   const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360);
+   const dy=(b[1]-a[1])*111320;
+   const distance=Math.hypot(dx,dy);
    // Skip teleports, loading corrections, stationary ticks and route resets.
    if(distance<0.4||distance>180||prior.leg>vehicle.leg)continue;
    const sameRoute=prior.edgeIds.length===vehicle.edgeIds.length&&prior.edgeIds.every((edge,i)=>edge===vehicle.edgeIds[i]);
