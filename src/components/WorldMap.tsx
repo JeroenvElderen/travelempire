@@ -313,6 +313,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Keep visible road geometry separate from the fast-changing purple overlay.
  // Discovery updates must not depend on the map moving or on a full graph scan.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
+ const refreshRoadLines=useRef<(()=>void)|null>(null);
  const explorationDebugPrevious=useRef<Set<string>>(new Set());
  const [debugOpen,setDebugOpen]=useState(false);
  const [debugEntries,setDebugEntries]=useState<string[]>([]);
@@ -387,6 +388,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   source.setData({type:'FeatureCollection',features});
   if(newlyDiscovered.length)addDebug(`Map repainted: ${features.length} purple / ${visibleRoadFeatures.current.length} visible road edges`);
   if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] Purple GeoJSON updated',{renderedEdges:features.length,cachedVisibleEdges:visibleRoadFeatures.current.length});
+  // Rebuild the complete visible line geometry when exploration state changes.
+  // This does not depend on a pan, zoom or the 1.5-second reconciliation timer.
+  refreshRoadLines.current?.();
   instance.triggerRepaint();
  },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
@@ -443,6 +447,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
   };
+  refreshRoadLines.current=update;
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
@@ -475,7 +480,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    }
   };
   const refreshTimer=window.setInterval(reconcile,1500);
-  return()=>{cancelled=true;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
+  return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
