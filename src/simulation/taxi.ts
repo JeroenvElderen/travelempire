@@ -606,7 +606,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  let distanceMeters=0;
  // Purple Road Explorers advance four simulation seconds per real second.
  // Taxi and Black Explorer timing, road physics, and discovery remain unchanged.
- const vehicleTimeScale=t.kind==='explorer'?4:1;
+ const vehicleTimeScale=t.kind==='explorer'||t.kind==='recovery'?4:1;
  let time=Math.min(realSeconds,5)*GAME_SPEED*vehicleTimeScale;
  const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:t.drivingPolicy==='economy'?1.2:t.drivingPolicy==='performance'?2.5:1.9;
  const braking=3.5;
