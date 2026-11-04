@@ -505,6 +505,7 @@ export function dispatchScout(
  // Surveyor: prioritise roads outside the existing 150 m territory corridor.
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
+ let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  let visits=0;
  const maxSearchMeters=taxi.explorationMode==='frontier'?5000:3500;
  while(heap.length&&visits++<12000){
@@ -514,7 +515,7 @@ export function dispatchScout(
   if(distance>maxSearchMeters)break;
   // Once the nearest inside road is found, only finish nodes with shorter
   // approach distances; avoid searching the entire connected road network.
-  if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
+  if(taxi.kind!=='surveyor'&&taxi.kind!=='explorer'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
@@ -534,6 +535,17 @@ export function dispatchScout(
      if(!bestSurvey||score>bestSurvey.score)
       bestSurvey={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:false,score};
     }
+    // Purple Road Explorer: sweep outward through concentric road rings
+    // within the already eligible territory. Unlike the black surveyor,
+    // never choose an edge outside discoveryAllowed.
+    if(taxi.kind==='explorer'){
+     const ringRadius=Math.min(4500,250+Math.floor((taxi.scoutingRuns??0)/12)*250);
+     const target=graph.nodes.get(edge.to)??hq;
+     const ringError=Math.abs(meters(hq,target)-ringRadius);
+     const score=-ringError*1.6-distance*0.8+Math.min(edge.meters,500)*0.25;
+     if(!bestPurple||score>bestPurple.score)
+      bestPurple={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:true,score};
+    }
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
     if(inside){
@@ -546,7 +558,7 @@ export function dispatchScout(
    }
   }
  }
- best=taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
+ best=taxi.kind==='surveyor'&&bestSurvey?bestSurvey:taxi.kind==='explorer'&&bestPurple?bestPurple:(best??bestOutside);
  if(!best)return taxi;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
