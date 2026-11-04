@@ -6,6 +6,7 @@ let activeRevision=0;
 const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
+const idleFallbackAt=new Map<string,number>();
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
@@ -187,9 +188,21 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     const purpleCluster=taxis[index].kind==='explorer'?discoveryEligible:undefined;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxis[index].kind==='explorer'?purpleAllowedRoads:allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined,undefined,sectionOwners);
-    if(scout.status!=='IDLE'){
-     taxis[index]=scout;
-     if(scout.kind==='explorer'&&scout.explorationSection)sectionOwners.add(scout.explorationSection);
+    let assignment=scout;
+    // A saved section may have remaining roads but no reachable target from
+    // this vehicle. Search eligible connected roads without stale ownership
+    // or soft reservations, then release the old section if reassigned.
+    if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&
+       now>=(idleFallbackAt.get(taxis[index].id)??0)){
+     idleFallbackAt.set(taxis[index].id,now+5000);
+     assignment=dispatchScout({...taxis[index],explorationSection:undefined,
+      shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),
+      undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,new Set<string>());
+    }
+    if(assignment.status!=='IDLE'){
+     taxis[index]=assignment;
+     if(assignment.kind==='explorer'&&assignment.explorationSection)
+      sectionOwners.add(assignment.explorationSection);
      assignedCount++;
     }
    }
