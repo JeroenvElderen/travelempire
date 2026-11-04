@@ -585,7 +585,7 @@ export function dispatchScout(
  let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  // Purple Explorer: reward unique discoveries, penalise travel over known roads.
  let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number;section:string}|null=null;
- let bestInSection:typeof bestPurple=null;
+ let bestInSection:{from:string;to:string;id:string;distance:number;inside:boolean;score:number;section:string}|null=null;
  // Surveyor: prioritise roads outside the existing 150 m territory corridor.
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
