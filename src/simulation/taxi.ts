@@ -221,7 +221,42 @@ export function nearest(graph: RoadGraph, point: Point): string {
 function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string):boolean{
  return previous===next&&(graph.edges.get(current)??[]).some(edge=>edge.to!==previous);
 }
-export function route(graph:RoadGraph,from:string,to:string):{path:Point[];edgeIds:string[];length:number}|null{if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};const dist=new Map([[from,0]]),prev=new Map<string,{from:string;id:string}>();const heap:Array<[number,string]>=[[0,from]];const push=(item:[number,string])=>{heap.push(item);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=item[0])break;heap[i]=heap[p];i=p;}heap[i]=item;};const pop=():[number,string]|undefined=>{if(!heap.length)return;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&heap[c+1][0]<heap[c][0])c++;if(heap[c][0]>=last[0])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};let visits=0;while(heap.length&&visits++<150000){const [d,k]=pop()!;if(d!==(dist.get(k)??Infinity))continue;if(k===to)break;for(const e of graph.edges.get(k)??[]){if(prev.has(k)&&forbiddenUTurn(graph,prev.get(k)!.from,k,e.to))continue;const nd=d+e.meters;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,{from:k,id:e.id});push([nd,e.to]);}}}if(!dist.has(to))return null;const keys=[to],ids:string[]=[];let cur=to;while(cur!==from){const p=prev.get(cur);if(!p)return null;ids.push(p.id);keys.push(p.from);cur=p.from;}keys.reverse();ids.reverse();return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};}
+// Turn-aware Dijkstra: the state includes the incoming road node. A shortest
+// path to an intersection must not erase another valid approach direction.
+function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false):{path:Point[];edgeIds:string[];length:number}|null{
+ if(!graph.nodes.has(from)||!graph.nodes.has(to))return null;
+ if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
+ type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
+ const states:State[]=[{node:from,incoming:'',cost:0,parent:-1,edgeId:''}];
+ const best=new Map<string,number>([[JSON.stringify([from,'']),0]]);
+ const heap:number[]=[0];
+ const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
+ const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
+ let finish=-1,visits=0;
+ while(heap.length&&visits++<150000){
+  const id=pop()!,state=states[id];
+  if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
+  if(state.node===to){finish=id;break;}
+  const links=graph.edges.get(state.node)??[];
+  // A U-turn is legal only when no alternative permitted outgoing road exists.
+  const hasExit=links.some(e=>e.to!==state.incoming&&(!allowed||allowed.has(e.id)));
+  for(const edge of links){
+   if(allowed&&!allowed.has(edge.id))continue;
+   if(state.incoming&&edge.to===state.incoming&&hasExit)continue;
+   const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph):edge.meters);
+   const k=JSON.stringify([edge.to,state.node]);
+   if(cost>=(best.get(k)??Infinity))continue;
+   best.set(k,cost);const next=states.length;
+   states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id});push(next);
+  }
+ }
+ if(finish<0)return null;
+ const keys:string[]=[],ids:string[]=[];
+ for(let id=finish;id>=0;id=states[id].parent){keys.push(states[id].node);if(states[id].parent>=0)ids.push(states[id].edgeId);}
+ keys.reverse();ids.reverse();
+ return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:states[finish].cost};
+}
+export function route(graph:RoadGraph,from:string,to:string){return turnAwareRoute(graph,from,to);}
 export const fleetKey=(id:string)=>`travelempire.fleet.v0.8.${id}`;
 export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(localStorage.getItem(fleetKey(id))??'null') as FleetState|null;if(saved&&Array.isArray(saved.taxis)){
   // Migrate legacy saves without changing any existing taxi assignment.
@@ -369,31 +404,7 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
  return null;
 }
 export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>):ReturnType<typeof route>{
- if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
- const dist=new Map<string,number>([[from,0]]),prev=new Map<string,{from:string;id:string}>();
- const heap:Array<[number,string]>=[[0,from]];
- while(heap.length){
-  heap.sort((a,b)=>b[0]-a[0]);
-  const [d,k]=heap.pop()!;
-  if(d!==(dist.get(k)??Infinity))continue;
-  if(k===to)break;
-  for(const edge of graph.edges.get(k)??[]){
-   if(!discovered.has(edge.id))continue;
-   if(prev.has(k)&&forbiddenUTurn(graph,prev.get(k)!.from,k,edge.to))continue;
-   const nd=d+trafficTravelSeconds(edge.meters,edge.speedKph);
-   if(nd<(dist.get(edge.to)??Infinity)){
-    dist.set(edge.to,nd);prev.set(edge.to,{from:k,id:edge.id});heap.push([nd,edge.to]);
-   }
-  }
- }
- if(!dist.has(to))return null;
- const keys=[to],ids:string[]=[];let current=to;
- while(current!==from){
-  const step=prev.get(current);if(!step)return null;
-  ids.push(step.id);keys.push(step.from);current=step.from;
- }
- keys.reverse();ids.reverse();
- return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};
+ return turnAwareRoute(graph,from,to,discovered,true);
 }
 export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
