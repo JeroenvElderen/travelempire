@@ -47,6 +47,7 @@ export type Taxi = {
   speedKph?: number;
 
   // Dealership vehicle information
+  ownership?: 'owned' | 'leased';
   vehicleModel?: string;
   vehicleYear?: number;
   vehicleFuel?: string;
@@ -81,14 +82,15 @@ export type MissionRecord={pickup:string;dropoff:string};
 export type DriverRecord={id:string;name:string;hiredAt:number;completedTrips?:number;distanceKm?:number;revenueGenerated?:number;wagesEarned?:number};
 export const driverLevel=(trips:number)=>trips>=100?'Expert':trips>=30?'Experienced':trips>=10?'Developing':'Novice';
 export const driverSkill=(trips:number)=>Math.min(5,1+Math.floor(Math.max(0,trips)/25));
-export type BusinessLoan={vehicleId?:string;purpose?:'business'|'vehicle';id:string;principal:number;balance:number;annualRate:number;termDays:number;remainingDays:number;dailyPayment:number;accruedGameSeconds:number};
+export type LeaseContract={id:string;vehicleId:string;vehicleName:string;dailyPayment:number;remainingDays:number;termDays:number;accruedGameSeconds:number;totalPaid:number};
+export type BusinessLoan={paymentsMade?:number;vehicleId?:string;purpose?:'business'|'vehicle';id:string;principal:number;balance:number;annualRate:number;termDays:number;remainingDays:number;dailyPayment:number;accruedGameSeconds:number};
 export type EconomyUpgrade='fuel'|'workshop'|'dispatch'|'training'|'depot-capacity';
 export type FinanceCategories={fuel:number;maintenance:number;exploration:number;payroll:number;insurance:number;overhead:number;interest:number};
 export type VehicleFinancePeriod={day:string;taxiId:string;name:string;revenue:number;expenses:number;km:number;trips:number};
 export type FinancePeriod={day:string;revenue:number;expenses:number;trips:number;categories?:FinanceCategories};
 export type BankEntry={id:string;time:number;description:string;amount:number;account:'operating'|'savings'|'reserve';type:'transfer'|'loan'|'repayment'|'purchase'};
 export type BankSettings={savings:number;reserve:number;autoSavePercent:number;minimumOperatingCash:number;lastAutoSaveDay?:string;entries:BankEntry[]};
-export type FleetState={bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
+export type FleetState={leases?:LeaseContract[];leaseExpense?:number;bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
 export type FinancialTransaction={id:string;time:number;taxiId?:string;description:string;amount:number};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
