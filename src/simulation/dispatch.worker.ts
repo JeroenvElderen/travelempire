@@ -7,6 +7,9 @@ const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 const idleFallbackAt=new Map<string,number>();
+const explorerIdleSince=new Map<string,number>();
+const explorerDepotCooldown=new Map<string,number>();
+const EXPLORER_IDLE_RETURN_MS=60000;
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
@@ -14,6 +17,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
+   explorerIdleSince.clear();explorerDepotCooldown.clear();idleFallbackAt.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -200,11 +204,41 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
       undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,new Set<string>());
     }
     if(assignment.status!=='IDLE'){
+     explorerIdleSince.delete(taxis[index].id);
      taxis[index]=assignment;
      if(assignment.kind==='explorer'&&assignment.explorationSection)
       sectionOwners.add(assignment.explorationSection);
      assignedCount++;
     }
+   }
+   // After a full minute without an assignment, drive home along roads.
+   // Use wall-clock time: dispatch messages arrive every 500 ms, while the
+   // simulation clock runs faster. Never teleport or call roadside recovery.
+   const realNow=Date.now();
+   for(let index=0;index<taxis.length;index++){
+    const t=taxis[index];
+    if(t.kind!=='explorer'||t.recoveryPending||t.refillRequested||t.deliveryUntil){
+     explorerIdleSince.delete(t.id);continue;
+    }
+    if(t.status!=='IDLE'){
+     explorerIdleSince.delete(t.id);continue;
+    }
+    if(!explorerIdleSince.has(t.id))explorerIdleSince.set(t.id,realNow);
+    if(realNow-(explorerIdleSince.get(t.id)??realNow)<EXPLORER_IDLE_RETURN_MS||
+       realNow<(explorerDepotCooldown.get(t.id)??0))continue;
+    const from=nearest(graph,t.position),to=nearest(graph,hq);
+    if(!from||!to||from===to){
+     explorerDepotCooldown.set(t.id,realNow+60000);continue;
+    }
+    const home=route(graph,from,to);
+    if(!home||home.path.length<2){
+     explorerDepotCooldown.set(t.id,realNow+60000);continue;
+    }
+    taxis[index]={...t,status:'RETURNING',pauseAtHome:false,shiftParked:false,
+     path:home.path,edgeIds:home.edgeIds,leg:0,distanceIntoLeg:0,
+     speedKph:0,journeyEdges:[],explorationSection:undefined};
+    explorerIdleSince.delete(t.id);
+    explorerDepotCooldown.set(t.id,realNow+120000);
    }
    // Explorers stay IDLE when no reachable discovery target exists.
    // Do not park or pause them: the next dispatch automatically retries as
