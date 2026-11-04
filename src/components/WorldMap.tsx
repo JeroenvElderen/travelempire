@@ -222,8 +222,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // the old job's unrelated path.
    const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
     previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
-   const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
+   // Use the authoritative previous road segment index, not a rendered position with a stale leg.
+   const from=sameRoute?previous!.to:taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }else{
    // Keep route/status current without restarting the animation clock.
