@@ -329,8 +329,21 @@ export default function App(){
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic scheduled service`,amount:-cost});
       return {...delivered,status:'IDLE' as const,serviceUntil:undefined,vehicleCondition:Math.min(100,(delivered.vehicleCondition??100)+40),serviceCount:(delivered.serviceCount??0)+1,lastServiceKm:delivered.operatingKm??0};
      }
-     if(delivered.status==='IDLE'&&(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??60)){
-      return {...delivered,status:'SERVICING' as const,serviceUntil:now+120000,path:[],edgeIds:[],speedKph:0};
+     // All vehicle types travel to the main headquarters workshop before service.
+     // Do not teleport to the workshop or service on the roadside if routing fails.
+     const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??60)
+      ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
+     if(delivered.status==='IDLE'&&serviceDue){
+      const start=nearest(graph,delivered.position);
+      const home:[number,number]=[company!.headquarters.lng,company!.headquarters.lat];
+      const end=nearest(graph,home);
+      const path=start&&end?route(graph,start,end):null;
+      if(path){
+       if(path.path.length<2)return {...delivered,status:'SERVICING' as const,serviceUntil:now+120000,path:[],edgeIds:[],speedKph:0,serviceDestination:undefined};
+       return {...delivered,status:'RETURNING' as const,serviceDestination:home,refillDestination:undefined,pauseAtHome:false,
+        path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+      }
+      return delivered;
      }
      if(delivered.status==='REFUELLING'){
       const spec=energySpec(delivered);
@@ -345,7 +358,7 @@ export default function App(){
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
      let working=delivered;
-     if(delivered.status==='IDLE'&&(energyPercent(delivered)<=20||delivered.refillRequested)){
+     if(delivered.status==='IDLE'&&(energyPercent(delivered)<=10||delivered.refillRequested)){
       const start=nearest(graph,delivered.position);
       const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
       const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
@@ -403,7 +416,7 @@ export default function App(){
      return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer'||t.kind==='surveyor')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
-       refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=spec.capacity*0.20,
+       refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=spec.capacity*0.10,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
     });
