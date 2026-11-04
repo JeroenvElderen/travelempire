@@ -217,7 +217,11 @@ export function nearest(graph: RoadGraph, point: Point): string {
   if (ring > 100000) return best;
  }
 }
-export function route(graph:RoadGraph,from:string,to:string):{path:Point[];edgeIds:string[];length:number}|null{if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};const dist=new Map([[from,0]]),prev=new Map<string,{from:string;id:string}>();const heap:Array<[number,string]>=[[0,from]];const push=(item:[number,string])=>{heap.push(item);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=item[0])break;heap[i]=heap[p];i=p;}heap[i]=item;};const pop=():[number,string]|undefined=>{if(!heap.length)return;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&heap[c+1][0]<heap[c][0])c++;if(heap[c][0]>=last[0])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};let visits=0;while(heap.length&&visits++<150000){const [d,k]=pop()!;if(d!==(dist.get(k)??Infinity))continue;if(k===to)break;for(const e of graph.edges.get(k)??[]){const nd=d+e.meters;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,{from:k,id:e.id});push([nd,e.to]);}}}if(!dist.has(to))return null;const keys=[to],ids:string[]=[];let cur=to;while(cur!==from){const p=prev.get(cur);if(!p)return null;ids.push(p.id);keys.push(p.from);cur=p.from;}keys.reverse();ids.reverse();return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};}
+// Do not reverse onto the incoming road unless it is a dead end.
+function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string):boolean{
+ return previous===next&&(graph.edges.get(current)??[]).some(edge=>edge.to!==previous);
+}
+export function route(graph:RoadGraph,from:string,to:string):{path:Point[];edgeIds:string[];length:number}|null{if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};const dist=new Map([[from,0]]),prev=new Map<string,{from:string;id:string}>();const heap:Array<[number,string]>=[[0,from]];const push=(item:[number,string])=>{heap.push(item);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=item[0])break;heap[i]=heap[p];i=p;}heap[i]=item;};const pop=():[number,string]|undefined=>{if(!heap.length)return;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&heap[c+1][0]<heap[c][0])c++;if(heap[c][0]>=last[0])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};let visits=0;while(heap.length&&visits++<150000){const [d,k]=pop()!;if(d!==(dist.get(k)??Infinity))continue;if(k===to)break;for(const e of graph.edges.get(k)??[]){if(prev.has(k)&&forbiddenUTurn(graph,prev.get(k)!.from,k,e.to))continue;const nd=d+e.meters;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,{from:k,id:e.id});push([nd,e.to]);}}}if(!dist.has(to))return null;const keys=[to],ids:string[]=[];let cur=to;while(cur!==from){const p=prev.get(cur);if(!p)return null;ids.push(p.id);keys.push(p.from);cur=p.from;}keys.reverse();ids.reverse();return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:dist.get(to)!};}
 export const fleetKey=(id:string)=>`travelempire.fleet.v0.8.${id}`;
 export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(localStorage.getItem(fleetKey(id))??'null') as FleetState|null;if(saved&&Array.isArray(saved.taxis)){
   // Migrate legacy saves without changing any existing taxi assignment.
@@ -375,6 +379,7 @@ export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered
   if(k===to)break;
   for(const edge of graph.edges.get(k)??[]){
    if(!discovered.has(edge.id))continue;
+   if(prev.has(k)&&forbiddenUTurn(graph,prev.get(k)!.from,k,edge.to))continue;
    const nd=d+trafficTravelSeconds(edge.meters,edge.speedKph);
    if(nd<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,nd);prev.set(edge.to,{from:k,id:edge.id});heap.push([nd,edge.to]);
@@ -516,6 +521,7 @@ export function dispatchScout(
   // approach distances; avoid searching the entire connected road network.
   if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
+   if(previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     if(taxi.kind==='surveyor'&&territoryCovered){
@@ -564,7 +570,8 @@ export function dispatchScout(
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
-   !reservedTargets.has(edge.to)&&edge.meters>0
+   !reservedTargets.has(edge.to)&&edge.meters>0&&
+   (keys.length<2||!forbiddenUTurn(graph,keys[keys.length-2],cursor,edge.to))
   );
   if(!links.length)break;
   // Black Explorer expands into unrevealed territory; Purple Explorer stays
