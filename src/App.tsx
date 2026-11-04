@@ -788,7 +788,34 @@ export default function App(){
  const setAutoDepotService=(id:string,enabled:boolean)=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,autoDepotService:enabled}:t)}));
  const setVehiclePolicy=(id:string,policy:'economy'|'balanced'|'performance')=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,drivingPolicy:policy}:t)}));
  const setServiceThreshold=(id:string,threshold:number)=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,serviceThreshold:threshold}:t)}));
- const sellVehicle=(id:string)=>{const t=fleet.taxis.find(x=>x.id===id);if(!t||!companyRef.current)return;if(t.status!=='IDLE'&&t.status!=='PAUSED'){setSimError('Vehicle must be idle or parked before selling.');return;}if(t.deliveryUntil&&t.deliveryUntil>Date.now()){setSimError('Cannot sell a vehicle awaiting delivery.');return;}const otherBlack=fleet.taxis.filter(x=>x.id!==id&&x.kind==='surveyor');if(t.kind==='surveyor'&&otherBlack.length){setSimError('Invalid Black Explorer fleet state.');return;}const age=Math.max(0,new Date().getFullYear()-(t.vehicleYear??new Date().getFullYear()));const value=Math.max(1000,Math.round(15000*Math.pow(.88,age)*Math.pow(.92,(t.vehicleMileage??0)/30000)*(t.vehicleCondition??100)/100));pendingCashRef.current+=value;setFleet(old=>({...old,taxis:old.taxis.filter(x=>x.id!==id),transactions:[{id:crypto.randomUUID(),time:Date.now(),taxiId:id,description:`${t.name} · vehicle sale`,amount:value},...(old.transactions??[])].slice(0,100)}));setSimError('');};
+ const sellVehicle=(id:string)=>{
+  const t=fleet.taxis.find(x=>x.id===id);if(!t||!companyRef.current)return;
+  if(t.status!=='IDLE'&&t.status!=='PAUSED'){setSimError('Vehicle must be idle or parked before selling.');return;}
+  if(t.deliveryUntil&&t.deliveryUntil>Date.now()){setSimError('Cannot sell a vehicle awaiting delivery.');return;}
+  if(t.ownership==='leased'||(fleet.leases??[]).some(l=>l.vehicleId===id)){setSimError('Leased vehicles cannot be sold. The vehicle returns when the lease ends.');return;}
+  const otherBlack=fleet.taxis.filter(x=>x.id!==id&&x.kind==='surveyor');
+  if(t.kind==='surveyor'&&otherBlack.length){setSimError('Invalid Black Explorer fleet state.');return;}
+  const age=Math.max(0,new Date().getFullYear()-(t.vehicleYear??new Date().getFullYear()));
+  const value=Math.max(1000,Math.round(15000*Math.pow(.88,age)*Math.pow(.92,(t.vehicleMileage??0)/30000)*(t.vehicleCondition??100)/100));
+  const balance=(fleet.loans??[]).filter(l=>l.vehicleId===id).reduce((a,l)=>a+l.balance,0);
+  if(value+companyRef.current.cash+pendingCashRef.current<balance){setSimError('Insufficient funds to settle outstanding vehicle finance.');return;}
+  const proceeds=Math.round((value-balance)*100)/100;
+  pendingCashRef.current+=proceeds;
+  setFleet(old=>({...old,taxis:old.taxis.filter(x=>x.id!==id),loans:(old.loans??[]).filter(l=>l.vehicleId!==id),
+   bank:appendBankEntries(bankOf(old.bank),[bankEntry('Vehicle sale · '+t.name,value,'operating','purchase'),...(balance>0?[bankEntry('Vehicle finance settlement · '+t.name,-balance,'operating','repayment')]:[])]),
+   loanPrincipalPaid:(old.loanPrincipalPaid??0)+balance,
+   transactions:[{id:crypto.randomUUID(),time:Date.now(),taxiId:id,description:`${t.name} · vehicle sale (net of finance)`,amount:proceeds},...(old.transactions??[])].slice(0,100)}));setSimError('');
+ };
+ const repayVehicleLoan=(loanId:string)=>{
+  const loan=(fleet.loans??[]).find(l=>l.id===loanId&&l.purpose==='vehicle');
+  if(!loan||!companyRef.current)return;
+  const amount=Math.round(loan.balance*100)/100;
+  if(companyRef.current.cash+pendingCashRef.current<amount){setSimError('Insufficient operating cash to repay this loan.');return;}
+  pendingCashRef.current-=amount;
+  setFleet(old=>({...old,loans:(old.loans??[]).filter(l=>l.id!==loanId),loanPrincipalPaid:(old.loanPrincipalPaid??0)+amount,
+   bank:appendBankEntries(bankOf(old.bank),[bankEntry('Early vehicle finance payoff',-amount,'operating','repayment')]),
+   transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Early vehicle finance payoff',amount:-amount},...(old.transactions??[])].slice(0,100)}));setSimError('');
+ };
  const resumeDepotTaxi=(id:string)=>{setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id&&t.status==='PAUSED'?{...t,status:'IDLE' as const,pauseAtHome:false}:t)}));setSimError('');};
  const returnToDepot=(id:string)=>{
   const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||!graph||!company||taxi.status!=='IDLE'&&taxi.status!=='PAUSED'){setSimError('Vehicle must be idle or paused to return to depot.');return;}
@@ -879,7 +906,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
