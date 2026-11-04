@@ -3,16 +3,22 @@ import {BarChart3,Receipt,Wallet,CreditCard,History} from 'lucide-react';
 import type {Company} from '../company';
 import type {FleetState,EconomyUpgrade} from '../simulation/taxi';
 import {LOAN_OFFERS,UPGRADES} from '../economy';
+import {bankOf} from '../banking';
 import '../finance.css';
 type BudgetCategory='fuel'|'maintenance'|'exploration'|'payroll'|'insurance'|'overhead';
 type Budgets=Record<BudgetCategory,number>;
 const defaultBudgets:Budgets={fuel:1000,maintenance:1000,exploration:2000,payroll:2500,insurance:750,overhead:1500};
 const budgetLabels:Record<BudgetCategory,string>={fuel:'Fuel and charging',maintenance:'Maintenance and servicing',exploration:'Exploration',payroll:'Driver payroll',insurance:'Insurance',overhead:'Office and depot overhead'};
 const budgetCategories=Object.keys(defaultBudgets) as BudgetCategory[];
-type Props={company:Company|null;fleet:FleetState;onLoan:(amount:number)=>void;onUpgrade:(id:EconomyUpgrade)=>void;onWageChange:(multiplier:number)=>void;error:string};
+type Props={company:Company|null;fleet:FleetState;onLoan:(amount:number)=>void;onTransfer:(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>void;onBankSettings:(percent:number,minimum:number)=>void;onUpgrade:(id:EconomyUpgrade)=>void;onWageChange:(multiplier:number)=>void;error:string};
 const money=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
-export default function FinancePanel({company,fleet,onLoan,onUpgrade,onWageChange,error}:Props){
- const [tab,setTab]=useState<'overview'|'performance'|'costs'|'capital'|'activity'|'budgets'>('overview');
+export default function FinancePanel({company,fleet,onLoan,onTransfer,onBankSettings,onUpgrade,onWageChange,error}:Props){
+ const [tab,setTab]=useState<'overview'|'performance'|'costs'|'capital'|'activity'|'budgets'|'banking'|'reports'>('overview');
+ const [transferFrom,setTransferFrom]=useState<'operating'|'savings'|'reserve'>('operating');
+ const [transferTo,setTransferTo]=useState<'operating'|'savings'|'reserve'>('savings');
+ const [transferAmount,setTransferAmount]=useState('');
+ const [bankSearch,setBankSearch]=useState('');
+ const [reportRange,setReportRange]=useState<7|30|90>(30);
  const [periodDays,setPeriodDays]=useState<7|30|90>(30);
  const [ledgerSearch,setLedgerSearch]=useState('');
  const [ledgerVehicle,setLedgerVehicle]=useState('all');
@@ -33,6 +39,9 @@ export default function FinancePanel({company,fleet,onLoan,onUpgrade,onWageChang
   setBudgetEnabled(true);
  },[company?.id]);
  useEffect(()=>{if(company&&budgetEnabled)localStorage.setItem('travelempire.finance.budgets.v1.'+company.id,JSON.stringify(budgets))},[company?.id,budgets,budgetEnabled]);
+ const bank=bankOf(fleet.bank);
+ const cashAvailable=(company?.cash??0);
+ const bankTotal=cashAvailable+bank.savings+bank.reserve;
  const debt=(fleet.loans??[]).reduce((a,l)=>a+l.balance,0);
  const expenses=(fleet.fuelExpense??0)+(fleet.maintenanceExpense??0)+(fleet.explorationExpense??0)+(fleet.driverWages??0)+(fleet.insuranceExpense??0)+(fleet.serviceExpense??0)+(fleet.overheadExpense??0)+(fleet.loanInterestExpense??0);
  const profit=fleet.revenue-expenses;
@@ -92,7 +101,7 @@ export default function FinancePanel({company,fleet,onLoan,onUpgrade,onWageChang
  const forecastDays=history.slice(-30);
  const dailyAverage=forecastDays.length?forecastDays.reduce((sum,h)=>sum+h.revenue-h.expenses,0)/forecastDays.length:0;
 
- return <section className="company-dashboard finance-page finance-v214"><div className="finance-heading"><div><span className="eyebrow">FINANCIAL MANAGEMENT · PHASE 1</span><h1>Finance</h1><p>Understand cash flow, profitability and the financial health of your transport business.</p></div><span className="finance-live-badge">● LIVE COMPANY DATA</span></div><div className="finance-tabs" role="tablist" aria-label="Finance sections">{([['overview','Overview',Wallet],['performance','Performance',BarChart3],['costs','Costs & fleet',Receipt],['capital','Loans & upgrades',CreditCard],['activity','Transactions',History],['budgets','Budgets',Wallet]] as const).map(([id,label,Icon])=><button key={id} role="tab" aria-selected={tab===id} className={tab===id?'active':''} onClick={e=>{setTab(id);if(window.matchMedia('(max-width: 650px)').matches)e.currentTarget.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}}><Icon size={16}/>{label}</button>)}</div><div className="finance-intro"><span>FINANCIAL HISTORY · RECORDED DAYS</span><span>Values reflect saved game records, not real-world accounts</span></div><div className="finance-overview-kpis">
+ return <section className="company-dashboard finance-page finance-v214"><div className="finance-heading"><div><span className="eyebrow">FINANCIAL MANAGEMENT · PHASE 1</span><h1>Finance</h1><p>Understand cash flow, profitability and the financial health of your transport business.</p></div><span className="finance-live-badge">● LIVE COMPANY DATA</span></div><div className="finance-tabs" role="tablist" aria-label="Finance sections">{([['overview','Overview',Wallet],['performance','Performance',BarChart3],['costs','Costs & fleet',Receipt],['capital','Loans & upgrades',CreditCard],['activity','Transactions',History],['budgets','Budgets',Wallet],['banking','Banking',CreditCard],['reports','Reports',BarChart3]] as const).map(([id,label,Icon])=><button key={id} role="tab" aria-selected={tab===id} className={tab===id?'active':''} onClick={e=>{setTab(id);if(window.matchMedia('(max-width: 650px)').matches)e.currentTarget.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}}><Icon size={16}/>{label}</button>)}</div><div className="finance-intro"><span>FINANCIAL HISTORY · RECORDED DAYS</span><span>Values reflect saved game records, not real-world accounts</span></div><div className="finance-overview-kpis">
  <div className="company-metrics"><article><small>AVAILABLE CASH</small><strong>{money(company?.cash??0)}</strong></article><article><small>PASSENGER REVENUE</small><strong>{money(fleet.revenue)}</strong></article><article><small>OPERATING PROFIT</small><strong>{money(profit)}</strong></article><article><small>OUTSTANDING DEBT</small><strong>{money(debt)}</strong></article><article><small>EST. FLEET ASSETS</small><strong>{money(value)}</strong></article><article><small>EST. EQUITY</small><strong>{money((company?.cash??0)+value-debt)}</strong></article></div>
  </div>{tab==='overview'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Operating analytics</h2><span>Lifetime business efficiency</span></div><p>Lifetime performance from saved simulation totals. Rates include exploration kilometres and exclude vehicle purchases; values are not daily forecasts.</p><div className="company-metrics"><article><small>REVENUE / KM</small><strong>{money(fleet.distanceKm&&fleet.distanceKm>0?fleet.revenue/fleet.distanceKm:0)}</strong></article><article><small>OPERATING PROFIT / KM</small><strong>{money(fleet.distanceKm&&fleet.distanceKm>0?profit/fleet.distanceKm:0)}</strong></article><article><small>REVENUE / COMPLETED TRIP</small><strong>{money(fleet.completed>0?fleet.revenue/fleet.completed:0)}</strong></article><article><small>FLEET DISTANCE</small><strong>{(fleet.distanceKm??0).toFixed(1)} km</strong></article><article><small>ACTIVE VEHICLES</small><strong>{fleet.taxis.filter(t=>t.status!=='IDLE'&&!t.deliveryUntil).length} / {fleet.taxis.length}</strong></article><article><small>EXPLORATION COST</small><strong>{money(fleet.explorationExpense??0)}</strong></article></div>
  <div className="finance-section-heading"><h2>Cash flow overview</h2><span>Based on recorded daily activity</span></div>
@@ -125,5 +134,33 @@ export default function FinancePanel({company,fleet,onLoan,onUpgrade,onWageChang
  {totalOperatingBudget===0&&monthRecordedExpenses>0&&<p className="finance-budget-alert" role="alert">No operating budget allocated, but expenses have been recorded.</p>}
  <div className="finance-budget-list">{budgetCategories.map(k=><label className="finance-budget-row" key={k}><span>{budgetLabels[k]}<small>{hasMonthlyCategories?`This month: ${money(monthCategories[k])}`:`Lifetime recorded: ${money(budgetActual[k])}`}</small></span><span>€ <input aria-label={budgetLabels[k]+' monthly budget'} type="number" min="0" step="50" value={budgets[k]} onChange={e=>setBudgets(old=>({...old,[k]:Math.max(0,Number(e.target.value)||0)}))}/></span></label>)}</div>
  <p>Budgets are planning targets, not spending caps. They do not automatically block purchases or payments.</p>
+ </div>}{tab==='banking'&&<div className="finance-tab-content">
+ <div className="finance-section-heading"><h2>Business banking</h2><span>Company funds · simulated euros</span></div>
+ <div className="company-metrics"><article><small>OPERATING ACCOUNT</small><strong>{money(cashAvailable)}</strong></article><article><small>SAVINGS</small><strong>{money(bank.savings)}</strong></article><article><small>EMERGENCY RESERVE</small><strong>{money(bank.reserve)}</strong></article><article><small>TOTAL CASH ACROSS ACCOUNTS</small><strong>{money(bankTotal)}</strong></article></div>
+ <h3>Transfer between accounts</h3><div className="finance-bank-controls">
+ <label>From <select value={transferFrom} onChange={e=>setTransferFrom(e.target.value as typeof transferFrom)}>{(['operating','savings','reserve'] as const).map(a=><option key={a} value={a}>{a}</option>)}</select></label>
+ <label>To <select value={transferTo} onChange={e=>setTransferTo(e.target.value as typeof transferTo)}>{(['operating','savings','reserve'] as const).map(a=><option key={a} value={a}>{a}</option>)}</select></label>
+ <label>Amount € <input type="number" min="0.01" step="0.01" value={transferAmount} onChange={e=>setTransferAmount(e.target.value)}/></label>
+ <button disabled={!company||transferFrom===transferTo||!(Number(transferAmount)>0)} onClick={()=>{onTransfer(transferFrom,transferTo,Number(transferAmount));setTransferAmount('');}}>Transfer funds</button></div>
+ <h3>Automatic savings policy</h3><p>At the close of each recorded day, transfer a percentage of positive operating profit into savings, keeping your minimum operating balance untouched. This is a cash transfer, not an expense.</p>
+ <div className="finance-bank-controls"><label>Save daily profit <select value={bank.autoSavePercent} onChange={e=>onBankSettings(Number(e.target.value),bank.minimumOperatingCash)}>{[0,5,10,15,20,25,50].map(p=><option key={p} value={p}>{p}%</option>)}</select></label>
+ <label>Minimum operating cash € <input type="number" min="0" step="500" value={bank.minimumOperatingCash} onChange={e=>onBankSettings(bank.autoSavePercent,Number(e.target.value))}/></label></div>
+ {cashAvailable<bank.minimumOperatingCash&&<p role="alert" className="finance-budget-alert">Low operating cash: balance is below your configured minimum.</p>}
+ {cashAvailable<0&&<p role="alert" className="finance-budget-alert">Operating account has a negative balance.</p>}
+ <h3>Bank account ledger</h3><label>Search bank transactions <input value={bankSearch} onChange={e=>setBankSearch(e.target.value)} placeholder="Transfer, loan, repayment…"/></label>
+ <div className="finance-rows">{bank.entries.filter(e=>e.description.toLowerCase().includes(bankSearch.toLowerCase())).slice(0,100).map(e=><div key={e.id}><span>{new Date(e.time).toLocaleString()} · {e.account.toUpperCase()} · {e.description}</span><strong>{money(e.amount)}</strong></div>)}{!bank.entries.length&&<p>No bank transfers recorded yet.</p>}</div>
+ <p>Bank ledger records transfers, loan movements and financed vehicle purchases from this update onward. Operating cash still uses the existing company cash balance.</p>
+ </div>}{tab==='reports'&&<div className="finance-tab-content">
+ <div className="finance-section-heading"><h2>Financial reports</h2><span>Saved activity only</span></div>
+ <label>Reporting period <select value={reportRange} onChange={e=>setReportRange(Number(e.target.value) as 7|30|90)}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></label>
+ {(()=>{const cutoff=new Date(Date.now()-(reportRange-1)*86400000).toISOString().slice(0,10);
+ const records=history.filter(h=>h.day>=cutoff);const income=records.reduce((a,h)=>a+h.revenue,0);const spent=records.reduce((a,h)=>a+h.expenses,0);
+ const cashflow=income-spent;const filename='travelempire-finance-'+reportRange+'d.csv';
+ const csv=['Date,Revenue,Expenses,Profit,Trips',...records.map(h=>[h.day,h.revenue.toFixed(2),h.expenses.toFixed(2),(h.revenue-h.expenses).toFixed(2),h.trips].join(','))].join('\n');
+ return <><div className="company-metrics"><article><small>REVENUE</small><strong>{money(income)}</strong></article><article><small>EXPENSES</small><strong>{money(spent)}</strong></article><article><small>OPERATING PROFIT</small><strong>{money(cashflow)}</strong></article><article><small>COMPLETED TRIPS</small><strong>{records.reduce((a,h)=>a+h.trips,0)}</strong></article></div>
+ <button className="finance-export" onClick={()=>{const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>Export report as CSV</button>
+ {chart(records,'Revenue and expenses · '+reportRange+' days')}</>;})()}
+ <h3>Upcoming loan repayments</h3><div className="finance-rows">{(fleet.loans??[]).map(l=><div key={l.id}><span>{l.purpose==='vehicle'?'Vehicle financing':'Business loan'} · {l.remainingDays} game days remaining · {(l.annualRate*100).toFixed(1)}% annual interest</span><strong>{money(l.dailyPayment)} / game day</strong></div>)}{!(fleet.loans??[]).length&&<p>No active loans.</p>}</div>
+ <p>Reports use available daily snapshots. Cash-flow projections exclude capital purchases and loan principal; historical records may be incomplete.</p>
  </div>}{error&&<p role="alert" className="finance-error">{error}</p>}<p className="finance-note">Fleet asset value is an indicative gameplay estimate, not a market appraisal. Maintenance reserves are expensed as accrued, while servicing is a separate expense. Purchases and loan principal affect cash and assets/debt, not operating profit.</p></section>;
 }
