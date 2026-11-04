@@ -180,6 +180,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(!from)continue;
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
+    const purpleCluster=taxi.kind==='explorer'?clusterFor(taxi):undefined;
+    if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
      graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?clusterFor(taxi):undefined,taxi.kind==='surveyor'?discoveryEligible:undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
@@ -191,6 +193,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
+    const purpleCluster=taxis[index].kind==='explorer'?clusterFor(taxis[index]):undefined;
+    if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?clusterFor(taxis[index]):undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
