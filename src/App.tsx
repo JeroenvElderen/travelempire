@@ -12,6 +12,7 @@ import OperationsPanel from "./components/OperationsPanel";
 import FinancePanel from "./components/FinancePanel";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
 import {advanceLoans,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
+import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import "./taxi.css";
@@ -462,6 +463,28 @@ export default function App(){
   window.addEventListener('pagehide',flush);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',flush);flush()};
  },[company?.id]);
+ // Automatic savings runs once per completed UTC financial day. Transfers are
+ // balance movements, never income or operating expenses.
+ useEffect(()=>{if(!company)return;
+  const timer=window.setInterval(()=>{
+   const current=companyRef.current;if(!current)return;
+   const state=fleetSaveRef.current;const bank=bankOf(state.bank);
+   const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+   const record=(state.financeHistory??[]).find(h=>h.day===yesterday);
+   if(!record||bank.autoSavePercent<=0||bank.lastAutoSaveDay===yesterday)return;
+   const profit=Math.max(0,record.revenue-record.expenses);
+   const available=Math.max(0,current.cash+pendingCashRef.current-bank.minimumOperatingCash);
+   const amount=Math.floor(Math.min(available,profit*bank.autoSavePercent/100)*100)/100;
+   pendingCashRef.current-=amount;
+   setFleet(old=>{const currentBank=bankOf(old.bank);if(currentBank.lastAutoSaveDay===yesterday)return old;
+    return {...old,bank:{...appendBankEntries(currentBank,amount>0?[
+      bankEntry('Automatic profit savings',-amount,'operating','transfer'),
+      bankEntry('Automatic profit savings',amount,'savings','transfer')]:[]),
+      savings:currentBank.savings+amount,lastAutoSaveDay:yesterday}};
+   });
+  },15000);
+  return()=>window.clearInterval(timer);
+ },[company?.id]);
  // Persist discoveries promptly rather than waiting for a five-second fleet snapshot.
  // IndexedDB merges the IDs transactionally with geometry written by WorldMap.
  useEffect(()=>{if(!company)return;const id=company.id;let busy=false;let pending=false;
@@ -664,6 +687,7 @@ export default function App(){
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
       financeHistory:(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0);if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
       vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];for(const entry of vehicleFinanceDeltas){const existing=list.find(v=>v.day===entry.day&&v.taxiId===entry.taxiId);if(existing){existing.revenue+=entry.revenue;existing.expenses+=entry.expenses;existing.km+=entry.km;existing.trips+=entry.trips;}else list.push(entry);}const cutoff=new Date(now-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
+      bank:loanTick.payments>0?appendBankEntries(bankOf(old.bank),[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]):old.bank,
       loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal,transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
    });
   },1000);
@@ -693,19 +717,39 @@ export default function App(){
   const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
   saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:'Road Explorer vehicle purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
  }catch(e){setSimError(String(e))}};
- const buyTaxi=(driver:string,offer:VehicleOffer)=>{if(!company||!graph)return;try{
+ const bankTransfer=(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{const result=transferBank(bankOf(fleet.bank),from,to,amount,current.cash+pendingCashRef.current);
+   pendingCashRef.current+=result.operatingDelta;
+   setFleet(old=>({...old,bank:result.bank}));setSimError('');
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const bankSettings=(percent:number,minimum:number)=>{
+  if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
+  setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
+ };
+ const buyTaxi=(driver:string,offer:VehicleOffer,finance=false)=>{if(!company||!graph)return;try{
   if(!driver.trim())throw Error('Enter a driver name.');
   const discount=Research.level(research,'procurement')*0.04;
   const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
-  if(company.cash<cost)throw Error('Insufficient company funds.');
+  const financed=finance?Math.round(offer.price*(1-discount)*.75*100)/100:0;
+  const cashDue=cost-financed;
+  if(finance&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
+  if(finance&&(fleet.loans??[]).reduce((a,l)=>a+l.balance,0)+financed>75000)throw Error('Borrowing limit of €75,000 exceeded.');
+  if(company.cash+pendingCashRef.current<cashDue)throw Error('Insufficient company funds.');
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
   const now=Date.now();
   const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
    vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:'Petrol',vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
    deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,hq)};
-  const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
-  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
+  const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cashDue)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;
+  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,
+   loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,90),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
+   bank:financed>0?appendBankEntries(bankOf(old.bank),[bankEntry('Taxi finance disbursement · '+taxi.name,financed,'operating','loan'),bankEntry('Vehicle purchase · '+taxi.name,-cost,'operating','purchase')]):appendBankEntries(bankOf(old.bank),[bankEntry('Vehicle purchase · '+taxi.name,-cost,'operating','purchase')]),
+   transactions:[{id:crypto.randomUUID(),time:now,taxiId:taxi.id,description:'Vehicle purchase · '+taxi.name,amount:-cost},...(old.transactions??[])].slice(0,100),
+   drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
  }catch(e){setSimError(String(e))}};
  const hireDriver=(name:string)=>{const cleaned=name.trim();if(!cleaned){setSimError('Enter a driver name.');return;}if((fleet.drivers??[]).some(d=>d.name.toLowerCase()===cleaned.toLowerCase())){setSimError('This driver is already employed.');return;}if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<DRIVER_COST){setSimError('Insufficient funds to hire a driver.');return;}pendingCashRef.current-=DRIVER_COST;setFleet(old=>({...old,drivers:[...(old.drivers??[]),{id:crypto.randomUUID(),name:cleaned,hiredAt:Date.now()}],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:`Driver onboarding · ${cleaned}`,amount:-DRIVER_COST},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
@@ -814,7 +858,7 @@ export default function App(){
   const debt=(fleet.loans??[]).reduce((n,l)=>n+l.balance,0);
   if(debt+amount>75000){setSimError('Total borrowing limit is €75,000.');return;}
   pendingCashRef.current+=amount;
-  setFleet(old=>({...old,loans:[...(old.loans??[]),createLoan(offer.amount,offer.rate,offer.days)],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Business loan disbursement',amount},...(old.transactions??[])].slice(0,100)}));setSimError('');};
+  setFleet(old=>({...old,bank:appendBankEntries(bankOf(old.bank),[bankEntry('Business loan disbursement',amount,'operating','loan')]),loans:[...(old.loans??[]),createLoan(offer.amount,offer.rate,offer.days)],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Business loan disbursement',amount},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const buyUpgrade=(id:EconomyUpgrade)=>{const offer=UPGRADES.find(u=>u.id===id);if(!offer||!companyRef.current)return;
   if((fleet.upgrades??[]).includes(id))return;
   if(companyRef.current.cash+pendingCashRef.current<offer.cost){setSimError('Insufficient cash for this upgrade.');return;}
@@ -832,7 +876,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
