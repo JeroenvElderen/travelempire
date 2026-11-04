@@ -42,7 +42,7 @@ export default function FinancePanel({company,fleet,onLoan,onEarlyRepayment,onTr
  const bank=bankOf(fleet.bank);
  const cashAvailable=(company?.cash??0);
  const bankTotal=cashAvailable+bank.savings+bank.reserve;
- const score=creditScore(cashAvailable,fleet.loans??[],(fleet.leases??[]).length);
+ const score=creditScore(cashAvailable,fleet.loans??[],(fleet.leases??[]).length,fleet.financePaymentsMade??0);
  const debt=(fleet.loans??[]).reduce((a,l)=>a+l.balance,0);
  const expenses=(fleet.fuelExpense??0)+(fleet.maintenanceExpense??0)+(fleet.explorationExpense??0)+(fleet.driverWages??0)+(fleet.insuranceExpense??0)+(fleet.serviceExpense??0)+(fleet.overheadExpense??0)+(fleet.loanInterestExpense??0)+(fleet.leaseExpense??0);
  const profit=fleet.revenue-expenses;
