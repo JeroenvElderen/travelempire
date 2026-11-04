@@ -25,6 +25,8 @@ export type Taxi = {
   lastRoadFrom?: string;
   lastRoadTo?: string;
   scoutingRuns?: number;
+  // Persist the local road section across dispatches and page reloads.
+  explorationSection?: string;
   explorationMode?: 'local'|'frontier';
   drivingPolicy?: 'economy'|'balanced'|'performance';
   serviceThreshold?: number;
@@ -521,16 +523,24 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
  return allowed;
 }
 
+// Stable ~600m road sections. Longitude width is latitude-adjusted.
+export function roadSection(point:Point):string{
+ const y=Math.floor(point[1]*111320/600);
+ const x=Math.floor(point[0]*111320*Math.cos(point[1]*Math.PI/180)/600);
+ return x+':'+y;
+}
+
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>,incomingNode?:string
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>,incomingNode?:string,sectionOwners?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
  incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
  const revealed=new Set(exploredRoadNodes(graph,explored,hq));
+ const activeSection=taxi.kind==='explorer'?taxi.explorationSection:undefined;
  // Dijkstra from the current vehicle position: one search replaces dozens of
  // independent full-graph routes, and yields the cheapest road-by-road approach.
  const dist=new Map<string,number>([[start,0]]);
@@ -555,7 +565,7 @@ export function dispatchScout(
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  // Purple Explorer: reward unique discoveries, penalise travel over known roads.
- let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
+ let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number;section:string}|null=null;
  // Surveyor: prioritise roads outside the existing 150 m territory corridor.
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
@@ -594,11 +604,19 @@ export function dispatchScout(
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
     if(taxi.kind==='explorer'){
-     // +50 points per new km; -10 points per km of approach travel.
-     // Using metres avoids rewarding artificial road segmentation.
-     const score=Math.min(edge.meters,1200)*0.05-distance*0.01+(inside?5:0);
+     const section=roadSection(graph.nodes.get(edge.to)!);
+     // Stay in the assigned section while any reachable roads remain there.
+     // Other Explorers reserve their sections; loops beat dead-end branches.
+     const exits=(graph.edges.get(edge.to)??[]).filter(next=>
+      (!_allowedRoads||_allowedRoads.has(next.id))&&next.to!==node);
+     const loop=exits.some(next=>revealed.has(next.to)||explored.has(next.id));
+     const fresh=exits.filter(next=>!explored.has(next.id)&&!reservedEdges.has(next.id));
+     const score=(activeSection===section?100000:0)-
+      (sectionOwners?.has(section)&&section!==activeSection?30000:0)-
+      distance*0.12+Math.min(3,fresh.length)*28+(loop?45:0)-
+      (exits.length===0?35:0)+Math.min(edge.meters,300)*0.03;
      if(!bestPurple||score>bestPurple.score||(score===bestPurple.score&&candidate.distance<bestPurple.distance))
-      bestPurple={...candidate,score};
+      bestPurple={...candidate,score,section};
     }else if(inside){
      if(!best||candidate.distance<best.distance)best=candidate;
     }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
@@ -611,6 +629,7 @@ export function dispatchScout(
  }
  best=taxi.kind==='explorer'?(bestPurple??best??bestOutside):taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
  if(!best)return taxi;
+ const selectedSection=taxi.kind==='explorer'?bestPurple?.section:undefined;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
  while(node!==start){
@@ -639,6 +658,14 @@ export function dispatchScout(
     const ai=territoryCovered.has(a.id)?1:0,bi=territoryCovered.has(b.id)?1:0;
     return ai-bi||b.meters-a.meters;
    }
+   if(taxi.kind==='explorer'&&selectedSection){
+    const ai=roadSection(graph.nodes.get(a.to)!)===selectedSection?0:1;
+    const bi=roadSection(graph.nodes.get(b.to)!)===selectedSection?0:1;
+    if(ai!==bi)return ai-bi;
+    const loopRank=(edge:typeof a)=> (graph.edges.get(edge.to)??[]).some(next=>
+     next.to!==cursor&&(revealed.has(next.to)||keys.includes(next.to)))?0:1;
+    if(loopRank(a)!==loopRank(b))return loopRank(a)-loopRank(b);
+   }
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
    return ai-bi||a.meters-b.meters;
   });
@@ -650,7 +677,7 @@ export function dispatchScout(
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
   edgeIds:ids,discoveryEdgeIds:discoveryAllowed?ids.filter(id=>discoveryAllowed.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,scoutingRuns:(taxi.scoutingRuns??0)+1};
+  pickup:undefined,dropoff:undefined,fare:0,explorationSection:selectedSection??taxi.explorationSection,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in real seconds (1x wall time).
