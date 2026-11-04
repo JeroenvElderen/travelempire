@@ -119,7 +119,8 @@ export default function App(){
      const lastDay=history[history.length-1];
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
-     return {...old,bank:updatedBank,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+     const ferryAccounting=bookAccounting(old.accounting,periodMonth(currentHour),gross,costs,costs,0);
+     return {...old,accounting:ferryAccounting,bank:updatedBank,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       financeHistory:history.slice(-365),
       transactions:[{id:crypto.randomUUID(),time:Date.now(),
        description:'Ferry ticket revenue · '+owned.length+' route(s)',amount:Math.round(gross*100)/100},
