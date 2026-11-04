@@ -382,7 +382,36 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  return()=>{cancelled=true;instance.off('moveend',update);instance.off('style.load',update);};
+  // The routing graph is incrementally mutated as Supabase tiles arrive.
+  // A stationary map otherwise keeps a stale viewport cache until moveend.
+  // Reconcile only when a discovered edge is absent from the cached viewport
+  // or when graph geometry grows; never rebuild the graph every animation frame.
+  let previousNodeCount=graph?.nodes.size??0;
+  let previousEdgeCount=graph?.edges.size??0;
+  const reconcile=()=>{
+   if(cancelled||!instance.isStyleLoaded()||!graph)return;
+   const nodeCount=graph.nodes.size,edgeCount=graph.edges.size;
+   const visibleIds=new Set(visibleRoadFeatures.current.map(f=>String(f.properties?.roadId??'')));
+   const bounds=instance.getBounds();
+   const missingVisibleDiscovery=[...currentExploredRoads.current].some(id=>{
+    if(visibleIds.has(id))return false;
+    // Only trigger a rebuild for a newly discovered edge that is actually
+    // in the viewport, not for thousands of distant saved discoveries.
+    for(const [from,edges] of graph.edges){
+     const edge=edges.find(e=>e.id===id);
+     if(!edge)continue;
+     const a=graph.nodes.get(from),b=graph.nodes.get(edge.to);
+     return Boolean(a&&b&&(bounds.contains(a)||bounds.contains(b)));
+    }
+    return false;
+   });
+   if(missingVisibleDiscovery||nodeCount!==previousNodeCount||edgeCount!==previousEdgeCount){
+    previousNodeCount=nodeCount;previousEdgeCount=edgeCount;
+    update();
+   }
+  };
+  const refreshTimer=window.setInterval(reconcile,1500);
+  return()=>{cancelled=true;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
