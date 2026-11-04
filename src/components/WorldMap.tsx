@@ -443,8 +443,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Draw Purple Explorer travel directly from vehicle movement. This visual trail
  // does not wait for OSM edge completion, discovery persistence or map movement.
  // Persisted explored road IDs continue to provide the canonical saved network.
- const purpleTrail=useRef<GeoJSON.Feature[]>([]);
- const purplePrevious=useRef<Map<string,Taxi>>(new Map());
  useEffect(()=>{purpleTrail.current=[];purplePrevious.current.clear();purpleDirty.current=false;},[companyId]);
  useEffect(()=>{
   const instance=map.current;
