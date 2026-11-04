@@ -9,6 +9,7 @@ export default function DepotFinancePanel({company,fleet,onUpgrade}:Props){
  const [days,setDays]=useState<7|30|90>(30);
  const [selected,setSelected]=useState('all');
  const [detail,setDetail]=useState(false);
+ const [groupBy,setGroupBy]=useState<'daily'|'weekly'|'monthly'>('daily');
  if(!company)return <p>Create a company to manage depot finances.</p>;
  const depots=[{id:'main',name:'Headquarters',capacity:5},...(company.depots??[])];
  const cutoff=new Date(Date.now()-(days-1)*86400000).toISOString().slice(0,10);
@@ -45,8 +46,18 @@ export default function DepotFinancePanel({company,fleet,onUpgrade}:Props){
    <h4>Monthly facility cost estimate</h4><div className="depot-finance-costs">{Object.entries(depotDailyCost(d.id==='main',d.upgrades,d.capacity)).map(([name,value])=><div key={name}><span>{name}</span><strong>{money(value*30)}</strong></div>)}</div>
    <h4>Facility upgrades</h4><div className="depot-finance-upgrades">{DEPOT_UPGRADES.map(u=><article key={u.id}><strong>{u.name} · Level {d.upgrades[u.id]??0}/{u.max}</strong><small>{u.description}</small><button disabled={(d.upgrades[u.id]??0)>=u.max||company.cash<u.cost} onClick={()=>onUpgrade(d.id,u.id)}>{(d.upgrades[u.id]??0)>=u.max?'Max level':`Upgrade · ${money(u.cost)}`}</button></article>)}</div>
   </section>)}
-  <button className="depot-finance-toggle" onClick={()=>setDetail(!detail)}>{detail?'Hide':'Show'} daily history</button>
-  {detail&&<div className="depot-finance-history">{history.filter(r=>selected==='all'||r.depotId===selected).sort((a,b)=>b.day.localeCompare(a.day)).slice(0,100).map(r=><div key={r.day+r.depotId}><span>{r.day} · {r.depotName}</span><strong>{money(r.revenue-r.vehicleExpenses-r.facilityExpenses-r.allocatedOverhead)}</strong></div>)}</div>}
+  <button className="depot-finance-toggle" onClick={()=>setDetail(!detail)}>{detail?'Hide':'Show'} financial history</button>
+  {detail&&<><label>Group performance <select value={groupBy} onChange={e=>setGroupBy(e.target.value as typeof groupBy)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+  <div className="depot-finance-history">{(()=>{const groups=new Map<string,{name:string;revenue:number;expenses:number}>();
+    for(const r of history.filter(r=>selected==='all'||r.depotId===selected)){
+     const dt=new Date(r.day+'T12:00:00Z');
+     if(groupBy==='weekly'){const day=dt.getUTCDay()||7;dt.setUTCDate(dt.getUTCDate()-day+1);}
+     const key=(groupBy==='monthly'?r.day.slice(0,7):dt.toISOString().slice(0,10))+'|'+r.depotId;
+     const item=groups.get(key)??{name:r.depotName,revenue:0,expenses:0};
+     item.revenue+=r.revenue;item.expenses+=r.vehicleExpenses+r.facilityExpenses+r.allocatedOverhead;groups.set(key,item);
+    }
+    return [...groups].sort((a,b)=>b[0].localeCompare(a[0])).slice(0,100).map(([key,value])=><div key={key}><span>{key.split('|')[0]} · {value.name}</span><strong>{money(value.revenue-value.expenses)}</strong></div>);
+   })()}</div></>}
   {!hasHistory&&<p>Depot financial history begins with this update. Previous vehicle expenses cannot be reliably attributed retroactively.</p>}
   <p className="depot-finance-note">Existing office overhead and vehicle costs are allocated for reporting only, not charged twice. Facility rent, utilities, insurance, maintenance facilities and administration are additional expenses. Upgrades are capital purchases, not operating costs.</p>
  </div>;
