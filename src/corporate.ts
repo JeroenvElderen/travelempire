@@ -79,6 +79,23 @@ export function restructureSubsidiary(stateValue:CorporateState|undefined,id:str
  const e=event('restructure',id,'Reallocate subsidiary fleet/depot assets',Math.abs(cashDelta),0,cashDelta,gameMs);
  return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===id?{...s,fleetCount:s.fleetCount+deltaVehicles,depotCount:s.depotCount+deltaDepots,drivers:Math.max(0,s.drivers+deltaVehicles),cash:round(s.cash+cashDelta),vehicleAssets:round(s.vehicleAssets+deltaVehicles*vehiclePrice),depotAssets:round(s.depotAssets+deltaDepots*depotPrice),revenuePerDay:Math.max(0,round(s.revenuePerDay+deltaVehicles*65)),expensesPerDay:Math.max(0,round(s.expensesPerDay+deltaVehicles*45+deltaDepots*35))}:s),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
 }
+export function transferSubsidiaryAssets(stateValue:CorporateState|undefined,sourceId:string,targetId:string,vehicles:number,depots:number,gameMs:number){
+ const state=corporateOf(stateValue);
+ const source=state.subsidiaries.find(s=>s.id===sourceId&&s.active),target=state.subsidiaries.find(s=>s.id===targetId&&s.active);
+ if(!source||!target||source.id===target.id)throw Error('Select two different active subsidiaries.');
+ if(!Number.isSafeInteger(vehicles)||!Number.isSafeInteger(depots)||vehicles<0||depots<0||(!vehicles&&!depots))throw Error('Select a positive whole number of vehicles or depots.');
+ if(vehicles>source.fleetCount||depots>source.depotCount)throw Error('Insufficient assets at the source subsidiary.');
+ const vehicleAssets=round(source.fleetCount?source.vehicleAssets*vehicles/source.fleetCount:0);
+ const depotAssets=round(source.depotCount?source.depotAssets*depots/source.depotCount:0);
+ const revenue=round(source.fleetCount?source.revenuePerDay*vehicles/source.fleetCount:0);
+ const expenseFraction=Math.min(1,(source.fleetCount?vehicles/source.fleetCount*.85:0)+(source.depotCount?depots/source.depotCount*.15:0));
+ const expenses=round(source.expensesPerDay*expenseFraction);
+ const drivers=Math.min(source.drivers,vehicles);
+ const nextSource={...source,fleetCount:source.fleetCount-vehicles,depotCount:source.depotCount-depots,drivers:source.drivers-drivers,vehicleAssets:round(source.vehicleAssets-vehicleAssets),depotAssets:round(source.depotAssets-depotAssets),revenuePerDay:round(source.revenuePerDay-revenue),expensesPerDay:round(source.expensesPerDay-expenses)};
+ const nextTarget={...target,fleetCount:target.fleetCount+vehicles,depotCount:target.depotCount+depots,drivers:target.drivers+drivers,vehicleAssets:round(target.vehicleAssets+vehicleAssets),depotAssets:round(target.depotAssets+depotAssets),revenuePerDay:round(target.revenuePerDay+revenue),expensesPerDay:round(target.expensesPerDay+expenses)};
+ const e=event('asset-transfer',target.id,'Move '+vehicles+' vehicles and '+depots+' depots from '+source.name+' to '+target.name,vehicleAssets+depotAssets,0,0,gameMs);
+ return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===sourceId?nextSource:s.id===targetId?nextTarget:s),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
+}
 export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:number,corporateTaxRate=22){
  const state=corporateOf(stateValue);
  const today=dayOf(gameMs);
