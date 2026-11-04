@@ -806,7 +806,7 @@ export default function App(){
   if(!taxi||taxi.status!=='IDLE'&&taxi.status!=='PAUSED'){setSimError('Vehicle must be idle or paused before changing depots.');return;}
   const target=depotId==='main'?null:depots.find(d=>d.id===depotId);
   if(depotId!=='main'&&!target)return;
-  const capacity=target?.capacity??(5+5*(fleet.upgrades??[]).filter(u=>u==='depot-capacity').length);
+  const capacity=depotCapacity(target??{capacity:5+5*(fleet.upgrades??[]).filter(u=>u==='depot-capacity').length},upgradesFor(fleet,depotId));
   const occupied=fleet.taxis.filter(t=>t.id!==id&&(t.depotId??'main')===depotId).length;
   if(occupied>=capacity){setSimError('That depot has no available parking spaces.');return;}
   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,depotId}:t)}));setSimError('');
