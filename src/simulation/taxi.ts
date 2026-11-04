@@ -522,7 +522,15 @@ export function dispatchScout(
      // A road outside the covered corridor expands the map. Prefer it even
      // when a covered but untravelled road is closer. Penalise long detours.
      const newTerritory=!territoryCovered.has(edge.id);
-     const score=(newTerritory?(taxi.explorationMode==='local'?1500:6000):0)+Math.min(edge.meters,600)*2-distance*(taxi.explorationMode==='local'?1.6:0.8);
+     // Depot-centred expanding rings: work around each ring before moving
+     // outward. Targets remain actual connected roads, never straight lines.
+     const completedRuns=taxi.scoutingRuns??0;
+     const ringRadius=Math.min(4500,350+Math.floor(completedRuns/12)*350);
+     const targetPoint=graph.nodes.get(edge.to)??hq;
+     const radialDistance=meters(hq,targetPoint);
+     const ringError=Math.abs(radialDistance-ringRadius);
+     // Prefer fresh coverage on the current ring, while limiting detours.
+     const score=(newTerritory?6500:0)-ringError*1.7-distance*0.65+Math.min(edge.meters,600)*0.4;
      if(!bestSurvey||score>bestSurvey.score)
       bestSurvey={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:false,score};
     }
