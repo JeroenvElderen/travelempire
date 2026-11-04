@@ -14,7 +14,7 @@ import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
 import {deliveryPosition} from '../dealership';
 import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
-import {energySpec,energyRangeKm} from '../simulation/energy';
+import {energyRangeKm} from '../simulation/energy';
 import {reachableStations,type StationRoute} from '../data/stationRouting';
 
 // The delivery SVG faces right (east) at zero rotation. Rotate it to the
