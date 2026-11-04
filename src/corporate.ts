@@ -107,7 +107,7 @@ export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:numb
  for(let i=0;i<elapsed;i++){
   const tickMs=Date.parse(state.lastProcessedDay)+(i+1)*86400000;
   for(const sub of subsidiaries){
-   if(!sub.active)continue;
+   if(!sub.active||sub.lastSettledDay>=dayOf(tickMs))continue;
    const dailyRevenue=sub.revenuePerDay;
    const dailyExpenses=sub.expensesPerDay;
    const tax=Math.max(0,round((dailyRevenue-dailyExpenses)*corporateTaxRate/100));
@@ -159,9 +159,5 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt),cashFlow};
 }
 export function corporateValuation(company:Company,fleet:FleetState,gameMs:number){
- const valuation=valueCompany(company,fleet,gameMs);
- const state=corporateOf(fleet.corporate);
- const netSubsidiaryAssets=sum(state.subsidiaries.filter(s=>s.active).map(s=>s.cash+s.vehicleAssets+s.depotAssets+s.goodwill-s.externalDebt));
- const acquisitionDebt=sum(state.loans.map(l=>l.balance));
- return round(Math.max(1000,valuation.value+netSubsidiaryAssets-acquisitionDebt));
+ return valueCompany(company,fleet,gameMs).value;
 }
