@@ -313,16 +313,26 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Keep visible road geometry separate from the fast-changing purple overlay.
  // Discovery updates must not depend on the map moving or on a full graph scan.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
+ const explorationDebugPrevious=useRef<Set<string>>(new Set());
+
  const currentExploredRoads=useRef<Set<string>>(new Set());
  currentExploredRoads.current=new Set(exploredEdgeIds);
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready||!instance.isStyleLoaded())return;
   const source=instance.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
-  if(!source)return;
   const explored=currentExploredRoads.current;
+  const newlyDiscovered=[...explored].filter(id=>!explorationDebugPrevious.current.has(id));
+  explorationDebugPrevious.current=new Set(explored);
+  const visibleIds=new Set(visibleRoadFeatures.current.map(feature=>String(feature.properties?.roadId??'')));
+  if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] New road IDs received by map',{count:newlyDiscovered.length,ids:newlyDiscovered.slice(0,20),visible:newlyDiscovered.filter(id=>visibleIds.has(id)).length,missingFromVisibleGeometry:newlyDiscovered.filter(id=>!visibleIds.has(id)).slice(0,20),sourceExists:!!source,styleLoaded:instance.isStyleLoaded()});
+  if(!source){
+   if(newlyDiscovered.length)console.warn('[TravelEmpire:exploration] Purple road source missing; cannot repaint completed edges');
+   return;
+  }
   const features=visibleRoadFeatures.current.filter(feature=>explored.has(String(feature.properties?.roadId??'')));
   source.setData({type:'FeatureCollection',features});
+  if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] Purple GeoJSON updated',{renderedEdges:features.length,cachedVisibleEdges:visibleRoadFeatures.current.length});
   instance.triggerRepaint();
  },[exploredEdgeIds,ready]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
