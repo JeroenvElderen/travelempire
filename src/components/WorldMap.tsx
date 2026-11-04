@@ -414,6 +414,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
+   // Road geometry is rebuilt on moveend and as tiles arrive. Preserve the
+   // live Explorer trail above every newly mounted road layer.
+   if(instance.getLayer('purple-live-travel-layer'))instance.moveLayer('purple-live-travel-layer');
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
   };
@@ -463,6 +466,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   if(!instance.getSource(id))instance.addSource(id,{type:'geojson',data:empty});
   if(!instance.getLayer(layer))instance.addLayer({id:layer,type:'line',source:id,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
+  // Other road/fog layers may be mounted after this effect. Keep the live
+  // vehicle trail above those overlays so it is visible without a map pan.
+  instance.moveLayer(layer);
   const source=instance.getSource(id) as maplibregl.GeoJSONSource;
   source.setData({type:'FeatureCollection',features:purpleTrail.current});
  },[ready,basemap]);
