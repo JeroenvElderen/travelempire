@@ -590,8 +590,10 @@ export function dispatchScout(
  // Covered roads remain available as transit routes, not preferred survey targets.
  let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  let visits=0;
- const maxSearchMeters=taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&visits++<(taxi.kind==='explorer'&&taxi.shiftParked?16000:12000)){
+ const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
+ const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ while(heap.length&&(fullRetry||visits< (taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+  visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
