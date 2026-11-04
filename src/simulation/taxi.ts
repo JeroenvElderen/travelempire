@@ -48,6 +48,8 @@ export type Taxi = {
 
   // Dealership vehicle information
   ownership?: 'owned' | 'leased';
+  purchasePrice?:number;
+  accumulatedDepreciation?:number;
   vehicleModel?: string;
   vehicleYear?: number;
   vehicleFuel?: string;
@@ -93,7 +95,10 @@ export type BankSettings={savings:number;reserve:number;autoSavePercent:number;m
 export type DepotFinanceRecord={day:string;depotId:string;depotName:string;revenue:number;vehicleExpenses:number;facilityExpenses:number;allocatedOverhead:number;trips:number;km:number};
 export type DepotUpgradeKind='workshop'|'charging'|'fuel'|'dispatch'|'capacity';
 export type DepotUpgradeState=Partial<Record<DepotUpgradeKind,number>>;
-export type FleetState={depotFinanceHistory?:DepotFinanceRecord[];depotUpgrades?:Record<string,DepotUpgradeState>;depotFacilityExpense?:number;financePaymentsMade?:number;leases?:LeaseContract[];leaseExpense?:number;bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
+export type AccountingPeriod={month:string;grossRevenue:number;netRevenue:number;grossExpenses:number;netExpenses:number;vatCollected:number;vatInput:number;depreciation:number;corporateTax:number;vatPaid:number;corporateTaxPaid:number;closed:boolean};
+export type AccountingSettings={corporateRate:number;vatRate:number;settlement:'monthly'};
+export type AccountingState={settings:AccountingSettings;periods:AccountingPeriod[];lastSettledMonth?:string};
+export type FleetState={accounting?:AccountingState;depotFinanceHistory?:DepotFinanceRecord[];depotUpgrades?:Record<string,DepotUpgradeState>;depotFacilityExpense?:number;financePaymentsMade?:number;leases?:LeaseContract[];leaseExpense?:number;bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
 export type FinancialTransaction={id:string;time:number;taxiId?:string;description:string;amount:number};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
