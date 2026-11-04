@@ -88,7 +88,20 @@ export default function App(){
  const taxisRef=useRef(fleet.taxis);
  taxisRef.current=fleet.taxis;
  // A single depot-based recovery truck serves the entire fleet.
- const [recovery,setRecovery]=useState<RecoveryJob|null>(null);
+ const [recovery,setRecovery]=useState<RecoveryJob|null>(()=>{
+  if(!company)return null;
+  try{
+   const saved=localStorage.getItem('travelempire.recovery.'+company.id);
+   if(!saved)return null;
+   const job=JSON.parse(saved) as RecoveryJob;
+   return job?.truck?.kind==='recovery'&&job.targetId&&['pickup','transport','return'].includes(job.phase)?job:null;
+  }catch{return null;}
+ });
+ useEffect(()=>{
+  if(!company)return;
+  const storageKey='travelempire.recovery.'+company.id;
+  try{if(recovery)localStorage.setItem(storageKey,JSON.stringify(recovery));else localStorage.removeItem(storageKey)}catch(error){console.warn('[TravelEmpire] Recovery save failed',error)}
+ },[company?.id,recovery]);
  const recoveryRef=useRef<RecoveryJob|null>(null);recoveryRef.current=recovery;
  const idleWatch=useRef(new Map<string,{position:[number,number];since:number}>());
  useEffect(()=>{
