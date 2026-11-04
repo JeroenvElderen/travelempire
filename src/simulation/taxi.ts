@@ -637,8 +637,15 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
 export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.status==='REFUELLING'||taxi.status==='PAUSED')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
  const advanced=advanceTaxi(taxi,graph,seconds);
- let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...advanced.crossed]};
- if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
+ // Purple Explorer discovers the road it is actively travelling on, rather
+ // than waiting until it reaches the far end of a potentially long OSM edge.
+ // Other vehicle types keep their existing completed-edge behaviour.
+ const activeRoad=taxi.kind==='explorer'&&taxi.status==='EXPLORING'&&advanced.distanceMeters>0
+  ?advanced.taxi.edgeIds[advanced.taxi.leg]
+  :undefined;
+ const newlyDiscovered=activeRoad?[...advanced.crossed,activeRoad]:advanced.crossed;
+ let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
+ if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
   const next=discoveredRoads?routeDiscovered(graph,from,to,discoveredRoads):route(graph,from,to);
