@@ -14,6 +14,7 @@ import FerryRoutesPanel from "./components/FerryRoutesPanel";
 import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
+import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
 import {bookAccounting,settleAccounting,periodMonth,depreciationTick,accountingOf} from './accounting';
 import type {AccountingSettings} from './simulation/taxi';
 import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
@@ -462,6 +463,22 @@ export default function App(){
  },[company?.id]);
  // Persist periodically instead of serialising the entire explored-road set every second.
  const fleetSaveRef=useRef(fleet);fleetSaveRef.current=fleet;
+ // Persist one valuation snapshot per simulated day without affecting operating profit.
+ useEffect(()=>{
+  if(!company)return;
+  const snapshot=()=>{
+   const current=companyRef.current,clock=gameClockRef.current,old=fleetSaveRef.current;
+   if(!current||!clock)return;
+   const day=new Date(clock.epochMs).toISOString().slice(0,10);
+   if(old.equity?.lastValuationDay===day)return;
+   const next=recordValuation(old.equity,valueCompany({...current,cash:current.cash+pendingCashRef.current},old,clock.epochMs),clock.epochMs);
+   const updated={...old,equity:next};
+   fleetSaveRef.current=updated;setFleet(updated);
+  };
+  snapshot();
+  const timer=window.setInterval(snapshot,15000);
+  return()=>window.clearInterval(timer);
+ },[company?.id]);
  // Keep synchronous localStorage writes outside the one-second movement callback.
  // Financial deltas are accumulated and flushed together with fleet persistence.
  useEffect(()=>{if(!company)return;const id=company.id;
@@ -769,6 +786,60 @@ export default function App(){
   const settings:AccountingSettings={corporateRate:Math.max(0,Math.min(40,corporateRate)),vatRate:Math.max(0,Math.min(25,vatRate)),settlement:'monthly'};
   setFleet(old=>({...old,accounting:{...accountingOf(old.accounting),settings}}));
  };
+ const commitEquity=(next:ReturnType<typeof equityOf>,cashDelta:number,description:string,events:import('./simulation/taxi').EquityEvent[])=>{
+  const current=companyRef.current;if(!current)return;
+  const now=Date.now();
+  pendingCashRef.current=Math.round((pendingCashRef.current+cashDelta)*100)/100;
+  const old=fleetSaveRef.current;
+  const entries=events.map(event=>bankEntry(description+' · '+event.holderName,event.amount,'operating',event.type==='investment'||event.type==='issue'?'loan':'purchase'));
+  const updated={...old,equity:next,bank:appendBankEntries(bankOf(old.bank),entries),transactions:[{id:crypto.randomUUID(),time:now,description,amount:cashDelta},...(old.transactions??[])].slice(0,100)};
+  fleetSaveRef.current=updated;setFleet(updated);setSimError('');
+ };
+ const investInCompany=(investorId:string)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const valuation=valueCompany({...current,cash:current.cash+pendingCashRef.current},old,gameClockRef.current?.epochMs??Date.now());
+   const offer=investorOffers(valuation,equityOf(old.equity)).find(o=>o.id===investorId);
+   if(!offer)throw Error('Investor offer is no longer available.');
+   const issued=issueShares(old.equity,offer.id,offer.name,offer.amount,offer.preMoney,gameClockRef.current?.epochMs??Date.now());
+   commitEquity(issued.state,issued.cashDelta,'Investor share subscription',[issued.event]);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const issueCompanyShares=(investorId:string,amount:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   if(!Number.isFinite(amount)||amount<100||amount>1000000)throw Error('Investment must be between €100 and €1,000,000.');
+   const old=fleetSaveRef.current;
+   const valuation=valueCompany({...current,cash:current.cash+pendingCashRef.current},old,gameClockRef.current?.epochMs??Date.now());
+   const names=['Hellenic Mobility Partners','Aegean Growth Capital','Urban Transit Ventures'];
+   const index=Number(investorId.replace('investor-',''));
+   if(!Number.isInteger(index)||index<0||index>=names.length)throw Error('Unknown investor.');
+   if(valuation.investorConfidence<35)throw Error('Investor confidence is too low to issue external equity.');
+   const issued=issueShares(old.equity,investorId,names[index],Math.round(amount*100)/100,valuation.value,gameClockRef.current?.epochMs??Date.now());
+   commitEquity(issued.state,issued.cashDelta,'New shares issued',[issued.event]);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const distributeDividend=(amount:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const cash=current.cash+pendingCashRef.current;
+   const reserve=bankOf(old.bank).minimumOperatingCash;
+   const result=payDividend(old.equity,amount,cash,distributableProfit(old,equityOf(old.equity)),reserve,gameClockRef.current?.epochMs??Date.now());
+   commitEquity(result.state,result.cashDelta,'Shareholder dividend',result.events);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const repurchaseShares=(holderId:string,shares:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const cash=current.cash+pendingCashRef.current;
+   const value=valueCompany({...current,cash},old,gameClockRef.current?.epochMs??Date.now()).value;
+   const result=buybackShares(old.equity,holderId,shares,value,cash,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitEquity(result.state,result.cashDelta,'Share buyback',[result.event]);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
  const bankSettings=(percent:number,minimum:number)=>{
   if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
   setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
@@ -968,7 +1039,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
