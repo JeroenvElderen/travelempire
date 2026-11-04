@@ -123,3 +123,13 @@
  .finance-v214 .finance-rows>div{grid-template-columns:minmax(0,1fr);gap:5px}
  .finance-v214 .finance-rows strong{text-align:left}
 }
+
+/* Finance 1.1 mobile controls */
+.finance-v214 .finance-ledger-controls input{background:#122433;color:#edf9fa;border:1px solid #3a5364;border-radius:10px;padding:11px 13px;min-width:0}
+.finance-v214 .finance-ledger-controls{display:flex;flex-wrap:wrap;gap:10px}
+.finance-v214 .finance-ledger-controls label{min-width:150px;flex:1;display:flex;align-items:center;gap:7px}
+@media(max-width:650px){
+ .finance-v214 .finance-ledger-controls label{width:100%;min-width:0;justify-content:space-between;gap:10px}
+ .finance-v214 .finance-ledger-controls input,.finance-v214 .finance-ledger-controls select{min-width:0;max-width:70%;width:65%;min-height:44px;font-size:16px}
+ .finance-v214 .finance-budget-alert{font-size:12px;line-height:1.5}
+}
