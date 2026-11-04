@@ -242,6 +242,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const purpleTrail=useRef<GeoJSON.Feature[]>([]);
  const purplePrevious=useRef<Map<string,[number,number]>>(new Map());
  const purpleDirty=useRef(false);
+ const purpleLastFlush=useRef(0);
  useEffect(()=>{
   let frame=0;
   const animate=()=>{
@@ -309,11 +310,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     if(taxi.kind==='explorer'){
      const previous=purplePrevious.current.get(id);
      purplePrevious.current.set(id,position);
-     if(previous&&taxi.status==='EXPLORING'){
+     // The displayed marker is the authoritative source for the live trail.
+     // Only mark motion on an actual exploration route, not refuelling,
+     // returning home, job transitions or position corrections.
+     if(previous&&taxi.status==='EXPLORING'&&taxi.path.length>1&&taxi.edgeIds.length>0){
       const dx=(position[0]-previous[0])*111320*Math.cos((position[1]+previous[1])*Math.PI/360);
       const dy=(position[1]-previous[1])*111320;
       const distance=Math.hypot(dx,dy);
-      if(distance>=0.35&&distance<25){
+      // The marker advances in tiny increments at 60 fps. Do not discard
+      // these increments: accumulate them until a visible segment exists.
+      if(distance>0.015&&distance<40){
        purpleTrail.current.push({type:'Feature',properties:{vehicleId:id},geometry:{type:'LineString',coordinates:[previous,position]}});
        purpleDirty.current=true;
       }
@@ -323,12 +329,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
     if(marker.getElement().title!==title)marker.getElement().title=title;
    }
-   if(purpleDirty.current&&map.current?.isStyleLoaded()){
+   if(purpleDirty.current&&now-purpleLastFlush.current>=120&&map.current?.isStyleLoaded()){
     const source=map.current.getSource('purple-live-travel-source') as maplibregl.GeoJSONSource|undefined;
     if(source){
      if(purpleTrail.current.length>4000)purpleTrail.current.splice(0,purpleTrail.current.length-4000);
      source.setData({type:'FeatureCollection',features:purpleTrail.current});
      purpleDirty.current=false;
+     purpleLastFlush.current=now;
+     map.current.triggerRepaint();
     }
    }
    frame=requestAnimationFrame(animate);
@@ -443,7 +451,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Draw Purple Explorer travel directly from vehicle movement. This visual trail
  // does not wait for OSM edge completion, discovery persistence or map movement.
  // Persisted explored road IDs continue to provide the canonical saved network.
- useEffect(()=>{purpleTrail.current=[];purplePrevious.current.clear();purpleDirty.current=false;},[companyId]);
+ useEffect(()=>{purpleTrail.current=[];purplePrevious.current.clear();purpleDirty.current=false;purpleLastFlush.current=0;},[companyId]);
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready||!instance.isStyleLoaded())return;
