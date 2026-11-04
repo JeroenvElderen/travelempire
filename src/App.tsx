@@ -553,7 +553,7 @@ export default function App(){
       if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,serviceUntil:now+60000};
       pendingCashRef.current-=cost;serviceExpense+=cost;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic scheduled service`,amount:-cost});
-      return {...delivered,status:'IDLE' as const,serviceUntil:undefined,vehicleCondition:Math.min(100,(delivered.vehicleCondition??100)+40),serviceCount:(delivered.serviceCount??0)+1,lastServiceKm:delivered.operatingKm??0};
+      return {...delivered,maintenanceExpense:(t.maintenanceExpense??0)+cost,status:'IDLE' as const,serviceUntil:undefined,vehicleCondition:Math.min(100,(delivered.vehicleCondition??100)+40),serviceCount:(delivered.serviceCount??0)+1,lastServiceKm:delivered.operatingKm??0};
      }
      // All vehicle types travel to the main headquarters workshop before service.
      // Do not teleport to the workshop or service on the roadside if routing fails.
