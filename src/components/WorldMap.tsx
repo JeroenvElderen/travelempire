@@ -465,14 +465,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    ctx.fillStyle='rgba(211,107,107,0.58)';
    ctx.fillRect(0,0,width,height);
    ctx.globalCompositeOperation='destination-out';
-   const clearCircle=(lng:number,lat:number,radiusMeters:number)=>{
-    const center=instance.project([lng,lat]);
-    const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
-    const edge=instance.project([lng+radiusMeters/metersPerDegree,lat]);
-    const radius=Math.max(0.5,Math.abs(edge.x-center.x));
-    ctx.beginPath();ctx.arc(center.x,center.y,radius,0,Math.PI*2);ctx.fill();
-   };
-   clearCircle(headquarters.lng,headquarters.lat,500);
+   // No free headquarters reveal: exploration requires the Black Explorer.
    // One path per segment. A 150 m radius remains geographic at every zoom.
    const bounds=instance.getBounds();
    const west=bounds.getWest()-0.03,east=bounds.getEast()+0.03;
