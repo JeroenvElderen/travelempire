@@ -223,7 +223,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
     previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
    const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
+   // At 8×, the vehicle can cross multiple junctions per tick. Never pair a
+   // rendered point with the old leg index: that produces a straight-line
+   // shortcut through the intervening road turns.
+   const from=sameRoute?previous!.to:taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }else{
    // Keep route/status current without restarting the animation clock.
