@@ -15,6 +15,7 @@ import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFER
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
+import {establishForeignSubsidiary,acquireForeignBusiness,crossBorderTransfer} from './international';
 import {acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,transferSubsidiaryAssets,advanceCorporate,corporateCreditCapacity} from './corporate';
 import type {CorporateState,CorporateEvent} from './simulation/taxi';
 import {bookAccounting,settleAccounting,periodMonth,depreciationTick,accountingOf} from './accounting';
@@ -913,6 +914,30 @@ export default function App(){
    commitCorporate(result.state,0,result.events,'Intercompany asset transfer');
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
+ const foundForeign=(name:string,city:string,countryCode:string,capital:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=establishForeignSubsidiary(old.corporate,name,city,countryCode as import('./international').CountryCode,capital,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'International subsidiary: '+result.subsidiary.name);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const acquireForeign=(id:string,loanPercent:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=acquireForeignBusiness(old.corporate,old,id,loanPercent,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'Foreign acquisition: '+result.subsidiary.name);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const transferForeign=(id:string,amount:number,direction:'to'|'from')=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=crossBorderTransfer(old.corporate,id,amount,direction,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'Cross-border cash transfer');
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
  const bankSettings=(percent:number,minimum:number)=>{
   if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
   setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
@@ -1112,7 +1137,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
