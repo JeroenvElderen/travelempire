@@ -197,14 +197,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const timer=setTimeout(()=>{
    const output:Record<string,StationRoute|null>={};
    for(const t of taxis.slice(0,8)){
-    const kind=energySpec(t).unit==='kWh'?'charging':'fuel';
+    const kind='fuel';
     output[t.id]=reachableStations(graph,t.position,stations,kind,energyRangeKm(t))[0]??null;
    }
    if(!cancelled)setStationRoutes(output);
   },100);
   return()=>{cancelled=true;clearTimeout(timer);};
  },[graph,stations,stationsVisible,taxis.map(t=>`${t.id}:${Math.floor(t.position[0]*1000)}:${Math.floor(t.position[1]*1000)}`).join('|')]);
- const nearestInfo=taxis.slice(0,4).map(t=>{const kind=energySpec(t).unit==='kWh'?'charging':'fuel';const point={lng:t.position[0],lat:t.position[1]};const match=stationRoutes[t.id]??null;return {taxi:t.name,kind,match,distance:match?.roadKm??null,straight:match?stationDistanceKm(point,match.station):null};});
+ const nearestInfo=taxis.slice(0,4).map(t=>{const kind='fuel';const point={lng:t.position[0],lat:t.position[1]};const match=stationRoutes[t.id]??null;return {taxi:t.name,kind,match,distance:match?.roadKm??null,straight:match?stationDistanceKm(point,match.station):null};});
  const taxisRef=useRef(taxis);taxisRef.current=taxis;
  // Render one simulation tick behind the authoritative state. This avoids running
  // the road integrator on every animation frame and prevents one-second jumps.
