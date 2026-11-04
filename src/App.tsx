@@ -447,7 +447,8 @@ export default function App(){
      }
      if(delivered.status==='REFUELLING'){
       const spec=energySpec(delivered);
-      const until=delivered.refillUntil??(now+(spec.unit==='L'?180000:delivered.refillAtDepot?3600000:1200000));
+      // Quick fuel stop (5s); electric charging takes longer (30s at a station, 45s at depot).
+       const until=delivered.refillUntil??(now+(spec.unit==='L'?5000:delivered.refillAtDepot?45000:30000));
       if(now<until)return {...delivered,refillUntil:until};
       const quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
       const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1);
