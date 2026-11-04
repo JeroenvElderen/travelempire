@@ -29,6 +29,8 @@ import {loadGameClock,advanceGameClock,saveGameClock,isShiftActive,type GameCloc
 
 const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Empire",icon:BarChart3},{name:"Research",icon:FlaskConical}] as const;
 type Page=(typeof navigation)[number]['name'];
+type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
+
 export default function App(){
  const [page,setPage]=useState<Page>('World');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
@@ -85,6 +87,89 @@ export default function App(){
  },[company?.id]);
  const taxisRef=useRef(fleet.taxis);
  taxisRef.current=fleet.taxis;
+ // A single depot-based recovery truck serves the entire fleet.
+ const [recovery,setRecovery]=useState<RecoveryJob|null>(null);
+ const recoveryRef=useRef<RecoveryJob|null>(null);recoveryRef.current=recovery;
+ const idleWatch=useRef(new Map<string,{position:[number,number];since:number}>());
+ useEffect(()=>{
+  if(!company||!graph)return;
+  const depot:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+  const buildRoute=(a:[number,number],b:[number,number])=>{
+   const from=nearest(graph,a),to=nearest(graph,b);
+   return from&&to?route(graph,from,to):null;
+  };
+  const timer=window.setInterval(()=>{
+   const now=Date.now();
+   const vehicles=taxisRef.current;
+   const ids=new Set(vehicles.map(t=>t.id));
+   for(const id of idleWatch.current.keys())if(!ids.has(id))idleWatch.current.delete(id);
+   for(const t of vehicles){
+    if(t.deliveryUntil&&t.deliveryUntil>now)continue;
+    const previous=idleWatch.current.get(t.id);
+    if(!previous||meters(previous.position,t.position)>10||t.status==='TO_PICKUP'||t.status==='TO_DROPOFF'){
+     idleWatch.current.set(t.id,{position:[...t.position],since:now});
+    }
+   }
+   const job=recoveryRef.current;
+   if(job){
+    const moving=tickTaxi(job.truck,graph,1).taxi;
+    if(moving.status!=='PAUSED'){
+     const next={...job,truck:moving};
+     recoveryRef.current=next;setRecovery(next);
+     if(job.phase==='transport')setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===job.targetId?{...t,position:moving.position}:t)}));
+     return;
+    }
+    if(job.phase==='pickup'){
+     const path=buildRoute(moving.position,job.destination);
+     if(!path)return;
+     const next:RecoveryJob={...job,phase:'transport',truck:{...moving,status:'RETURNING',pauseAtHome:true,path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[]}};
+     setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===job.targetId?{...t,status:'PAUSED',recoveryPending:true,position:moving.position,path:[],edgeIds:[],speedKph:0}:t)}));
+     recoveryRef.current=next;setRecovery(next);return;
+    }
+    if(job.phase==='transport'){
+     setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===job.targetId?{
+      ...t,position:moving.position,recoveryPending:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
+      status:job.purpose==='fuel'?'REFUELLING':job.purpose==='service'?'SERVICING':'PAUSED',
+      refillDestination:job.purpose==='fuel'?job.destination:undefined,refillAtDepot:job.purpose==='fuel'?job.atDepot:undefined,
+      refillUntil:undefined,serviceUntil:undefined,pauseAtHome:false,shiftParked:job.purpose==='depot'&&(!t.kind||t.kind==='taxi')
+     }:t)}));
+     const path=buildRoute(moving.position,depot);
+     if(!path){recoveryRef.current=null;setRecovery(null);return;}
+     const next:RecoveryJob={...job,phase:'return',truck:{...moving,status:'RETURNING',pauseAtHome:true,path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[]}};
+     recoveryRef.current=next;setRecovery(next);return;
+    }
+    recoveryRef.current=null;setRecovery(null);return;
+   }
+   for(const t of vehicles){
+    if(t.recoveryPending||t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING'||(t.deliveryUntil??0)>now)continue;
+    const watch=idleWatch.current.get(t.id);
+    const stalled=!!watch&&now-watch.since>=120000;
+    const empty=energyPercent(t)<=0;
+    const stranded=empty||((t.status==='IDLE'||t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
+    if(!stranded)continue;
+    const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??60)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
+    const purpose:RecoveryJob['purpose']=serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
+    const pickup=buildRoute(depot,t.position);
+    if(!pickup)continue;
+    const candidates=purpose==='fuel'?
+     [...stationsRef.current.values()].filter(st=>st.kind===(energySpec(t).kind==='electric'?'charging':'fuel')&&st.access!=='private')
+      .map(st=>({point:[st.lng,st.lat] as [number,number],atDepot:false})).concat([{point:depot,atDepot:true}]):
+     [{point:depot,atDepot:true}];
+    const options=candidates.map(c=>({...c,path:buildRoute(t.position,c.point)})).filter(c=>!!c.path).sort((a,b)=>(a.path!.length)-(b.path!.length));
+    const destination=options[0];
+    if(!destination)continue;
+    const start=graph.nodes.get(nearest(graph,depot))??depot;
+    const truck:Taxi={id:'heavy-recovery-truck',kind:'recovery',name:'Heavy Recovery Truck',driver:'Roadside Assistance',position:start,
+     status:'RETURNING',pauseAtHome:true,path:pickup.path,edgeIds:pickup.edgeIds,leg:0,distanceIntoLeg:0,fare:0,completed:0,journeyEdges:[]};
+    const next:RecoveryJob={truck,targetId:t.id,phase:'pickup',destination:destination.point,purpose,atDepot:destination.atDepot};
+    recoveryRef.current=next;setRecovery(next);
+    setFleet(old=>({...old,taxis:old.taxis.map(v=>v.id===t.id?{...v,status:'PAUSED',recoveryPending:true,path:[],edgeIds:[],speedKph:0}:v)}));
+    break;
+   }
+  },1000);
+  return()=>window.clearInterval(timer);
+ },[company?.id,graph]);
+
  const [simError,setSimError]=useState('');
  const [research,setResearch]=useState<Research.ResearchState>(()=>company?Research.settle(Research.load(company.id)):Research.empty());
  const [researchError,setResearchError]=useState('');
