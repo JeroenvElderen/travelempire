@@ -350,24 +350,45 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const explored=currentExploredRoads.current;
   const newlyDiscovered=[...explored].filter(id=>!explorationDebugPrevious.current.has(id));
   explorationDebugPrevious.current=new Set(explored);
+  const visibleIds=new Set(visibleRoadFeatures.current.map(feature=>String(feature.properties?.roadId??'')));
   if(!debugStarted.current){
    debugStarted.current=true;
    addDebug(`Initial exploration: ${explored.size} saved road IDs`);
   }else if(newlyDiscovered.length){
    addDebug(`+${newlyDiscovered.length} completed edges; ${newlyDiscovered.filter(id=>visibleIds.has(id)).length} in visible road cache; source ${source?'OK':'MISSING'}`);
   }
-  const visibleIds=new Set(visibleRoadFeatures.current.map(feature=>String(feature.properties?.roadId??'')));
   if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] New road IDs received by map',{count:newlyDiscovered.length,ids:newlyDiscovered.slice(0,20),visible:newlyDiscovered.filter(id=>visibleIds.has(id)).length,missingFromVisibleGeometry:newlyDiscovered.filter(id=>!visibleIds.has(id)).slice(0,20),sourceExists:!!source,styleLoaded:instance.isStyleLoaded()});
   if(!source){
    if(newlyDiscovered.length)console.warn('[TravelEmpire:exploration] Purple road source missing; cannot repaint completed edges');
    return;
+  }
+  // A newly completed edge may not yet exist in the viewport cache.
+  // Resolve its actual graph geometry immediately instead of waiting for moveend.
+  const missing=new Set(newlyDiscovered.filter(id=>!visibleIds.has(id)));
+  if(missing.size&&graph){
+   const bounds=instance.getBounds();
+   for(const [from,edges] of graph.edges){
+    const a=graph.nodes.get(from);
+    if(!a)continue;
+    for(const edge of edges){
+     if(!missing.has(edge.id))continue;
+     const b=graph.nodes.get(edge.to);
+     if(!b)continue;
+     if(!bounds.contains(a)&&!bounds.contains(b))continue;
+     visibleRoadFeatures.current.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
+     visibleIds.add(edge.id);
+     missing.delete(edge.id);
+    }
+    if(!missing.size)break;
+   }
+   addDebug(`Resolved ${newlyDiscovered.length-missing.size} completed edges into visible road geometry; ${missing.size} outside viewport/not loaded`);
   }
   const features=visibleRoadFeatures.current.filter(feature=>explored.has(String(feature.properties?.roadId??'')));
   source.setData({type:'FeatureCollection',features});
   if(newlyDiscovered.length)addDebug(`Map repainted: ${features.length} purple / ${visibleRoadFeatures.current.length} visible road edges`);
   if(newlyDiscovered.length)console.info('[TravelEmpire:exploration] Purple GeoJSON updated',{renderedEdges:features.length,cachedVisibleEdges:visibleRoadFeatures.current.length});
   instance.triggerRepaint();
- },[exploredEdgeIds,ready]);
+ },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
   const instance=map.current;
