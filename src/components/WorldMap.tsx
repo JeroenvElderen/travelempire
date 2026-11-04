@@ -441,35 +441,25 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  // The routing graph is incrementally mutated as Supabase tiles arrive.
-  // A stationary map otherwise keeps a stale viewport cache until moveend.
-  // Reconcile only when a discovered edge is absent from the cached viewport
-  // or when graph geometry grows; never rebuild the graph every animation frame.
+  // Independently reconcile explored road geometry every two seconds.
+  // Only update MapLibre sources when discovery or graph geometry changes;
+  // the vehicle animation loop is deliberately untouched.
   let previousNodeCount=graph?.nodes.size??0;
   let previousEdgeCount=graph?.edges.size??0;
+  let previousExploredSignature='';
   const reconcile=()=>{
    if(cancelled||!instance.isStyleLoaded()||!graph)return;
+   const explored=currentExploredRoads.current;
+   const signature=[...explored].sort().join('|');
    const nodeCount=graph.nodes.size,edgeCount=graph.edges.size;
-   const visibleIds=new Set(visibleRoadFeatures.current.map(f=>String(f.properties?.roadId??'')));
-   const bounds=instance.getBounds();
-   const missingIds=new Set([...currentExploredRoads.current].filter(id=>!visibleIds.has(id)));
-   let missingVisibleDiscovery=false;
-   if(missingIds.size)for(const [from,edges] of graph.edges){
-    const a=graph.nodes.get(from);
-    if(!a)continue;
-    for(const edge of edges){
-     if(!missingIds.has(edge.id))continue;
-     const b=graph.nodes.get(edge.to);
-     if(b&&(bounds.contains(a)||bounds.contains(b))){missingVisibleDiscovery=true;break;}
-    }
-    if(missingVisibleDiscovery)break;
-   }
-   if(missingVisibleDiscovery||nodeCount!==previousNodeCount||edgeCount!==previousEdgeCount){
-    previousNodeCount=nodeCount;previousEdgeCount=edgeCount;
+   if(signature!==previousExploredSignature||nodeCount!==previousNodeCount||edgeCount!==previousEdgeCount||!instance.getSource(purpleSourceId)){
+    previousExploredSignature=signature;
+    previousNodeCount=nodeCount;
+    previousEdgeCount=edgeCount;
     update();
    }
   };
-  const refreshTimer=window.setInterval(reconcile,1500);
+  const refreshTimer=window.setInterval(reconcile,2000);
   return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
