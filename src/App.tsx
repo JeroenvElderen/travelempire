@@ -47,6 +47,78 @@ export default function App(){
   window.addEventListener('pagehide',update);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',update);saveGameClock(id,current);};
  },[company?.id]);
+ // Settle owned ferry routes once per simulated hour (24x game time).
+ // Route income is independent of taxi dispatch and survives page reloads.
+ useEffect(()=>{
+  if(!company?.id)return;
+  let cancelled=false;
+  let busy=false;
+  let ferryRoutes=new Map<string,{durationMinutes:number;name:string}>();
+  void loadFerryNetwork().then(network=>{
+   if(cancelled)return;
+   ferryRoutes=new Map(network.routes.map(route=>[route.id,{
+    durationMinutes:route.durationMinutes,name:route.name??route.id
+   }]));
+  }).catch(error=>console.warn('[TravelEmpire] Ferry revenue data unavailable',error));
+  const settle=()=>{
+   if(cancelled||busy||!ferryRoutes.size)return;
+   const current=companyRef.current;
+   const clock=gameClockRef.current;
+   if(!current||current.id!==company.id||!clock)return;
+   const owned=current.purchasedFerryRouteIds??[];
+   if(!owned.length)return;
+   const hourMs=3600000;
+   const currentHour=Math.floor(clock.epochMs/hourMs)*hourMs;
+   // First ownership check starts at the current hour; no retroactive windfall.
+   const last=current.lastFerrySettlementAt??currentHour;
+   const hours=Math.min(24,Math.max(0,Math.floor((currentHour-last)/hourMs)));
+   if(!hours){
+    if(current.lastFerrySettlementAt===undefined){
+     const updated={...current,lastFerrySettlementAt:currentHour};
+     companyRef.current=updated;saveCompany(updated);setCompany(updated);
+    }
+    return;
+   }
+   busy=true;
+   let gross=0,costs=0;
+   for(let h=0;h<hours;h++){
+    const hour=new Date(currentHour-(hours-1-h)*hourMs).getUTCHours();
+    const demand=hour>=7&&hour<10||hour>=16&&hour<20?1.45:hour>=22||hour<6?0.35:1;
+    for(const id of owned){
+     const route=ferryRoutes.get(id);
+     if(!route)continue;
+     const duration=Math.max(10,Math.min(240,route.durationMinutes));
+     const crossings=Math.max(1,Math.floor(60/Math.max(30,duration)));
+     const passengers=Math.round((12+Math.min(55,duration*0.22))*demand);
+     const ticket=4+duration*0.16;
+     gross+=crossings*passengers*ticket;
+     costs+=crossings*(24+duration*0.9);
+    }
+   }
+   const net=Math.round((gross-costs)*100)/100;
+   const updated={...current,lastFerrySettlementAt:currentHour};
+   companyRef.current=updated;saveCompany(updated);setCompany(updated);
+   if(net!==0){
+    pendingCashRef.current+=net;
+    setFleet(old=>{
+     const day=new Date(currentHour).toISOString().slice(0,10);
+     const history=[...(old.financeHistory??[])];
+     const lastDay=history[history.length-1];
+     if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
+     else history.push({day,revenue:gross,expenses:costs,trips:0});
+     return {...old,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+      financeHistory:history.slice(-365),
+      transactions:[{id:crypto.randomUUID(),time:Date.now(),
+       description:'Ferry ticket revenue · '+owned.length+' route(s)',amount:Math.round(gross*100)/100},
+       {id:crypto.randomUUID(),time:Date.now(),description:'Ferry operating costs',amount:-Math.round(costs*100)/100},
+       ...(old.transactions??[])].slice(0,100)};
+    });
+   }
+   busy=false;
+  };
+  const timer=window.setInterval(settle,5000);
+  return()=>{cancelled=true;window.clearInterval(timer)};
+ },[company?.id]);
  const [graph,setGraph]=useState<RoadGraph|null>(null);
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
