@@ -15,6 +15,8 @@ import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFER
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
+import {corporateOf,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate} from './corporate';
+import type {CorporateState,CorporateEvent} from './simulation/taxi';
 import {bookAccounting,settleAccounting,periodMonth,depreciationTick,accountingOf} from './accounting';
 import type {AccountingSettings} from './simulation/taxi';
 import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
@@ -479,6 +481,24 @@ export default function App(){
   const timer=window.setInterval(snapshot,15000);
   return()=>window.clearInterval(timer);
  },[company?.id]);
+ // Corporate subsidiaries and acquisition loans settle on simulated day boundaries.
+ // Parent cash and its accounting remain separate from subsidiary operating income.
+ useEffect(()=>{
+  if(!company)return;
+  const settle=()=>{
+   const current=companyRef.current,clock=gameClockRef.current,old=fleetSaveRef.current;
+   if(!current||!clock||!old.corporate)return;
+   const result=advanceCorporate(old.corporate,clock.epochMs,accountingOf(old.accounting).settings.corporateRate);
+   if(result.state.lastProcessedDay===old.corporate.lastProcessedDay)return;
+   pendingCashRef.current=Math.round((pendingCashRef.current+result.parentCashDelta)*100)/100;
+   const entries=result.events.filter(e=>e.kind==='repayment').map(e=>bankEntry(e.description,e.parentCashDelta,'operating','repayment'));
+   const updated={...old,corporate:result.state,accounting:result.interest>0?bookAccounting(old.accounting,periodMonth(clock.epochMs),0,result.interest,0,0):old.accounting,bank:entries.length?appendBankEntries(bankOf(old.bank),entries):old.bank,transactions:result.parentCashDelta!==0?[{id:crypto.randomUUID(),time:Date.now(),description:'Acquisition loan repayments',amount:result.parentCashDelta},...(old.transactions??[])].slice(0,100):old.transactions};
+   fleetSaveRef.current=updated;setFleet(updated);
+  };
+  settle();
+  const timer=window.setInterval(settle,10000);
+  return()=>window.clearInterval(timer);
+ },[company?.id]);
  // Keep synchronous localStorage writes outside the one-second movement callback.
  // Financial deltas are accumulated and flushed together with fleet persistence.
  useEffect(()=>{if(!company)return;const id=company.id;
@@ -840,6 +860,52 @@ export default function App(){
    commitEquity(result.state,result.cashDelta,'Share buyback',[result.event]);
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
+ const commitCorporate=(state:CorporateState,parentCashDelta:number,events:CorporateEvent[],label:string)=>{
+  const current=companyRef.current;if(!current)return;
+  pendingCashRef.current=Math.round((pendingCashRef.current+parentCashDelta)*100)/100;
+  const old=fleetSaveRef.current;
+  const entries=events.filter(e=>e.parentCashDelta!==0).map(e=>bankEntry(e.description,e.parentCashDelta,'operating',e.kind==='loan'?'loan':e.kind==='repayment'?'repayment':'corporate'));
+  const updated={...old,corporate:state,bank:entries.length?appendBankEntries(bankOf(old.bank),entries):old.bank,transactions:parentCashDelta!==0?[{id:crypto.randomUUID(),time:Date.now(),description:label,amount:parentCashDelta},...(old.transactions??[])].slice(0,100):old.transactions};
+  fleetSaveRef.current=updated;setFleet(updated);setSimError('');
+ };
+ const acquireSubsidiary=(id:string,discount:number,loanPercent:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=acquireCompany(old.corporate,old,id,discount,loanPercent,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'Acquisition of '+result.subsidiary.name);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const createSubsidiary=(name:string,city:string,capital:number)=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=foundSubsidiary(old.corporate,name,city,capital,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'Subsidiary formation: '+result.subsidiary.name);
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const transferSubsidiary=(id:string,amount:number,direction:'to'|'from')=>{
+  const current=companyRef.current;if(!current)return;
+  try{
+   const old=fleetSaveRef.current;
+   const result=transferCorporateCash(old.corporate,id,amount,direction,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,result.parentCashDelta,result.events,'Intercompany transfer');
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const mergeCorporate=(sourceId:string,targetId:string)=>{
+  try{
+   const old=fleetSaveRef.current;
+   const result=mergeSubsidiaries(old.corporate,sourceId,targetId,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,0,result.events,'Subsidiary merger');
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
+ const restructureCorporate=(id:string,vehicles:number,depots:number)=>{
+  try{
+   const old=fleetSaveRef.current;
+   const result=restructureSubsidiary(old.corporate,id,vehicles,depots,gameClockRef.current?.epochMs??Date.now());
+   commitCorporate(result.state,0,result.events,'Subsidiary restructuring');
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
+ };
  const bankSettings=(percent:number,minimum:number)=>{
   if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
   setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
@@ -1039,7 +1105,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
