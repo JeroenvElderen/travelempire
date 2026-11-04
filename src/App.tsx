@@ -11,7 +11,7 @@ import FleetPanel from "./components/FleetPanel";
 import OperationsPanel from "./components/OperationsPanel";
 import FinancePanel from "./components/FinancePanel";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
-import {advanceLoans,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
+import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
@@ -661,7 +661,8 @@ export default function App(){
     // A small office/depot overhead accrues in simulated time, including idle periods.
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
     const loanTick=advanceLoans(old.loans??[],4);
-    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
+    const leaseTick=advanceLeases(old.leases??[],4);
+    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments-leaseTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     // Sweep a percentage of each passenger-income settlement immediately.
     // Loan proceeds, transfers and asset sales are not operating income.
@@ -673,17 +674,18 @@ export default function App(){
       bankEntry('Automatic savings · passenger income',-savingsAmount,'operating','transfer'),
       bankEntry('Automatic savings · passenger income',savingsAmount,'savings','transfer')
     ]):old.bank;
+    const expiredLeaseIds=new Set(leaseTick.expired.map(l=>l.vehicleId));
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
-    return{...old,drivers,taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
+    return{...old,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
-      financeHistory:(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0);if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
+      financeHistory:(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
       vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];for(const entry of vehicleFinanceDeltas){const existing=list.find(v=>v.day===entry.day&&v.taxiId===entry.taxiId);if(existing){existing.revenue+=entry.revenue;existing.expenses+=entry.expenses;existing.km+=entry.km;existing.trips+=entry.trips;}else list.push(entry);}const cutoff=new Date(now-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
-      bank:loanTick.payments>0?appendBankEntries(bankOf(updatedBank),[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]):updatedBank,
+      bank:loanTick.payments>0||leaseTick.payments>0?appendBankEntries(bankOf(updatedBank),[...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[])]):updatedBank,
       loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal,transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
    });
   },1000);
@@ -724,27 +726,32 @@ export default function App(){
   if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
   setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
  };
- const buyTaxi=(driver:string,offer:VehicleOffer,finance=false)=>{if(!company||!graph)return;try{
+ const buyTaxi=(driver:string,offer:VehicleOffer,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90)=>{if(!company||!graph)return;try{
   if(!driver.trim())throw Error('Enter a driver name.');
   const discount=Research.level(research,'procurement')*0.04;
   const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
-  const financed=finance?Math.round(offer.price*(1-discount)*.75*100)/100:0;
-  const cashDue=cost-financed;
-  if(finance&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
-  if(finance&&(fleet.loans??[]).reduce((a,l)=>a+l.balance,0)+financed>75000)throw Error('Borrowing limit of €75,000 exceeded.');
+  if(![30,60,90,180].includes(termDays)||![10,20,25,30,40,50].includes(depositPercent))throw Error('Invalid finance terms.');
+  const price=Math.round(offer.price*(1-discount)*100)/100;
+  const quote=financeQuote(price,depositPercent,termDays);
+  const lease=leaseQuote(price,termDays);
+  const financed=mode==='finance'?quote.principal:0;
+  const cashDue=mode==='cash'?cost:mode==='finance'?quote.deposit+DRIVER_COST:lease.upfront+DRIVER_COST;
+  if(mode==='finance'&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
+  if(mode==='finance'&&(fleet.loans??[]).reduce((a,l)=>a+l.balance,0)+financed>75000)throw Error('Borrowing limit of €75,000 exceeded.');
   if(company.cash+pendingCashRef.current<cashDue)throw Error('Insufficient company funds.');
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
   const now=Date.now();
-  const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
+  const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,ownership:mode==='lease'?'leased':'owned',driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
    vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:'Petrol',vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
    deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,hq)};
   const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cashDue)*100)/100};
   pendingCashRef.current=0;companyRef.current=updated;
   saveCompany(updated);setCompany(updated);setFleet(old=>({...old,
-   loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,90),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
-   bank:financed>0?appendBankEntries(bankOf(old.bank),[bankEntry('Taxi finance disbursement · '+taxi.name,financed,'operating','loan'),bankEntry('Vehicle purchase · '+taxi.name,-cost,'operating','purchase')]):appendBankEntries(bankOf(old.bank),[bankEntry('Vehicle purchase · '+taxi.name,-cost,'operating','purchase')]),
-   transactions:[{id:crypto.randomUUID(),time:now,taxiId:taxi.id,description:'Vehicle purchase · '+taxi.name,amount:-cost},...(old.transactions??[])].slice(0,100),
+   loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,termDays),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
+   leases:mode==='lease'?[...(old.leases??[]),{id:crypto.randomUUID(),vehicleId:taxi.id,vehicleName:taxi.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0}]:old.leases,
+   bank:appendBankEntries(bankOf(old.bank),[...(financed>0?[bankEntry('Taxi finance disbursement · '+taxi.name,financed,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,-(mode==='lease'?cashDue:cost),'operating','purchase')]),
+   transactions:[{id:crypto.randomUUID(),time:now,taxiId:taxi.id,description:(mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,amount:-(mode==='lease'?cashDue:cost)},...(old.transactions??[])].slice(0,100),
    drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
  }catch(e){setSimError(String(e))}};
  const hireDriver=(name:string)=>{const cleaned=name.trim();if(!cleaned){setSimError('Enter a driver name.');return;}if((fleet.drivers??[]).some(d=>d.name.toLowerCase()===cleaned.toLowerCase())){setSimError('This driver is already employed.');return;}if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<DRIVER_COST){setSimError('Insufficient funds to hire a driver.');return;}pendingCashRef.current-=DRIVER_COST;setFleet(old=>({...old,drivers:[...(old.drivers??[]),{id:crypto.randomUUID(),name:cleaned,hiredAt:Date.now()}],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:`Driver onboarding · ${cleaned}`,amount:-DRIVER_COST},...(old.transactions??[])].slice(0,100)}));setSimError('');};
