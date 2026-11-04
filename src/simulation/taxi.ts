@@ -486,15 +486,7 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
   const t=len?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len)):0;
   return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);
  };
- const close=(a:Point,b:Point,c:Point,d:Point)=>{
-  const latitude=(a[1]+b[1]+c[1]+d[1])/4*Math.PI/180;
-  const x=111320*Math.cos(latitude),y=111320;
-  const A:[number,number]=[a[0]*x,a[1]*y],B:[number,number]=[b[0]*x,b[1]*y];
-  const C:[number,number]=[c[0]*x,c[1]*y],D:[number,number]=[d[0]*x,d[1]*y];
-  const cross=(u:[number,number],v:[number,number],w:[number,number])=>(v[0]-u[0])*(w[1]-u[1])-(v[1]-u[1])*(w[0]-u[0]);
-  if(cross(A,B,C)*cross(A,B,D)<=0&&cross(C,D,A)*cross(C,D,B)<=0)return true;
-  return Math.min(pointSegmentDistance(A,C,D),pointSegmentDistance(B,C,D),pointSegmentDistance(C,A,B),pointSegmentDistance(D,A,B))<=radius;
- };
+
  for(const [from,links] of graph.edges){
   const a=graph.nodes.get(from);if(!a)continue;
   for(const edge of links){
@@ -506,7 +498,24 @@ export function territoryDiscoveryEdges(graph:RoadGraph,territory:Set<string>,ra
    const maxY=Math.floor((Math.max(a[1],b[1])+0.002)/cell);
    for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++)
     for(const seg of grid.get(cellKey(x,y))??[])candidates.add(seg);
-   for(const seg of candidates)if(close(a,b,seg.a,seg.b)){allowed.add(edge.id);break;}
+   // A crossing or endpoint overlap does not make the whole road eligible.
+   // All samples must remain within the Black Surveyor's 150m corridor.
+   const nearby=[...candidates];
+   if(!nearby.length)continue;
+   const steps=Math.max(1,Math.ceil(meters(a,b)/20));
+   let fullyInside=true;
+   for(let step=0;step<=steps;step++){
+    const t=step/steps;
+    const p:Point=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+    const latitude=p[1]*Math.PI/180;
+    const sx=111320*Math.cos(latitude),sy=111320;
+    const point:[number,number]=[p[0]*sx,p[1]*sy];
+    if(!nearby.some(seg=>pointSegmentDistance(point,
+     [seg.a[0]*sx,seg.a[1]*sy],[seg.b[0]*sx,seg.b[1]*sy])<=radius)){
+     fullyInside=false;break;
+    }
+   }
+   if(fullyInside)allowed.add(edge.id);
   }
  }
  return allowed;
@@ -561,6 +570,7 @@ export function dispatchScout(
   // approach distances; avoid searching the entire connected road network.
   if(taxi.kind!=='surveyor'&&taxi.kind!=='explorer'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
+   if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    if(taxi.kind==='explorer'&&previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
    if(taxi.kind==='explorer'&&node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
@@ -616,6 +626,7 @@ export function dispatchScout(
  let extraMeters=0;
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
+   (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&
    (taxi.kind!=='explorer'||keys.length<2||!forbiddenUTurn(graph,keys[keys.length-2],cursor,edge.to))
