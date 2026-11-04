@@ -1,6 +1,6 @@
 import type {Company} from './company';
-import type {FleetState,BusinessLoan,LeaseContract,FinancePeriod} from './simulation/taxi';
-import {accountingOf,periodLiability,vatIncluded} from './accounting';
+import type {FleetState,BusinessLoan,FinancePeriod} from './simulation/taxi';
+import {accountingOf,vatIncluded} from './accounting';
 import {depotCapacity,depotDailyTotal,upgradesFor,DEPOT_UPGRADES} from './depotFinance';
 import {OFFERS,type VehicleOffer} from './dealership';
 import {financeQuote,leaseQuote} from './economy';
