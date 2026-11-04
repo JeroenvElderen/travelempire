@@ -414,6 +414,55 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{cancelled=true;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
+ // Draw Purple Explorer travel directly from vehicle movement. This visual trail
+ // does not wait for OSM edge completion, discovery persistence or map movement.
+ // Persisted explored road IDs continue to provide the canonical saved network.
+ const purpleTrail=useRef<GeoJSON.Feature[]>([]);
+ const purplePrevious=useRef<Map<string,Taxi>>(new Map());
+ useEffect(()=>{purpleTrail.current=[];purplePrevious.current.clear();},[companyId]);
+ useEffect(()=>{
+  const instance=map.current;
+  if(!instance||!ready||!instance.isStyleLoaded())return;
+  const id='purple-live-travel-source',layer='purple-live-travel-layer';
+  const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
+  if(!instance.getSource(id))instance.addSource(id,{type:'geojson',data:empty});
+  if(!instance.getLayer(layer))instance.addLayer({id:layer,type:'line',source:id,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
+  const source=instance.getSource(id) as maplibregl.GeoJSONSource;
+  source.setData({type:'FeatureCollection',features:purpleTrail.current});
+ },[ready,basemap]);
+ useEffect(()=>{
+  const previous=purplePrevious.current;
+  let changed=false;
+  const currentIds=new Set<string>();
+  for(const vehicle of taxis){
+   if(vehicle.kind!=='explorer')continue;
+   currentIds.add(vehicle.id);
+   const prior=previous.get(vehicle.id);
+   previous.set(vehicle.id,vehicle);
+   if(!prior||vehicle.status!=='EXPLORING'||prior.status!=='EXPLORING')continue;
+   const a=prior.position,b=vehicle.position;
+   const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360);
+   const dy=(b[1]-a[1])*111320;
+   const distance=Math.hypot(dx,dy);
+   // Skip teleports, loading corrections, stationary ticks and route resets.
+   if(distance<0.4||distance>180||prior.leg>vehicle.leg)continue;
+   const sameRoute=prior.edgeIds.length===vehicle.edgeIds.length&&prior.edgeIds.every((edge,i)=>edge===vehicle.edgeIds[i]);
+   if(!sameRoute)continue;
+   const coordinates:[number,number][]=[a];
+   if(vehicle.leg>prior.leg)for(let leg=prior.leg+1;leg<=vehicle.leg&&leg<vehicle.path.length;leg++)coordinates.push(vehicle.path[leg]);
+   coordinates.push(b);
+   purpleTrail.current.push({type:'Feature',properties:{vehicleId:vehicle.id},geometry:{type:'LineString',coordinates}});
+   changed=true;
+  }
+  for(const id of previous.keys())if(!currentIds.has(id))previous.delete(id);
+  if(!changed)return;
+  // Bound memory on mobile; saved OSM discovery remains authoritative.
+  if(purpleTrail.current.length>4000)purpleTrail.current.splice(0,purpleTrail.current.length-4000);
+  const instance=map.current;
+  if(!instance||!instance.isStyleLoaded())return;
+  const source=instance.getSource('purple-live-travel-source') as maplibregl.GeoJSONSource|undefined;
+  if(source){source.setData({type:'FeatureCollection',features:purpleTrail.current});instance.triggerRepaint();}
+ },[taxis]);
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
  const explorationInputs=useRef({graph,territoryEdgeIds,headquarters});
