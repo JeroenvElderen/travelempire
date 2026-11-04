@@ -15,7 +15,7 @@ import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFER
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
-import {corporateOf,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate} from './corporate';
+import {corporateOf,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate,corporateCreditCapacity} from './corporate';
 import type {CorporateState,CorporateEvent} from './simulation/taxi';
 import {bookAccounting,settleAccounting,periodMonth,depreciationTick,accountingOf} from './accounting';
 import type {AccountingSettings} from './simulation/taxi';
@@ -921,7 +921,7 @@ export default function App(){
   const financed=mode==='finance'?quote.principal:0;
   const cashDue=mode==='cash'?cost:mode==='finance'?quote.deposit+DRIVER_COST:lease.upfront+DRIVER_COST;
   if(mode==='finance'&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
-  if(mode==='finance'&&(fleet.loans??[]).reduce((a,l)=>a+l.balance,0)+financed>75000)throw Error('Borrowing limit of €75,000 exceeded.');
+  if(mode==='finance'&&financed>corporateCreditCapacity(fleet))throw Error('Borrowing limit of €75,000 exceeded.');
   if(company.cash+pendingCashRef.current<cashDue)throw Error('Insufficient company funds.');
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
@@ -1084,8 +1084,8 @@ export default function App(){
  const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
  const takeLoan=(amount:number)=>{const offer=LOAN_OFFERS.find(l=>l.amount===amount);if(!offer||!companyRef.current)return;
   if((fleet.loans??[]).length>=2){setSimError('Maximum two active loans.');return;}
-  const debt=(fleet.loans??[]).reduce((n,l)=>n+l.balance,0);
-  if(debt+amount>75000){setSimError('Total borrowing limit is €75,000.');return;}
+  const credit=corporateCreditCapacity(fleetSaveRef.current);
+  if(amount>credit){setSimError('Total borrowing limit is €75,000.');return;}
   pendingCashRef.current+=amount;
   setFleet(old=>({...old,bank:appendBankEntries(bankOf(old.bank),[bankEntry('Business loan disbursement',amount,'operating','loan')]),loans:[...(old.loans??[]),createLoan(offer.amount,offer.rate,offer.days)],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Business loan disbursement',amount},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const buyUpgrade=(id:EconomyUpgrade)=>{const offer=UPGRADES.find(u=>u.id===id);if(!offer||!companyRef.current)return;
