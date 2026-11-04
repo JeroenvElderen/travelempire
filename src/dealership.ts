@@ -1,14 +1,14 @@
 import type {Point,Taxi,RoadGraph} from './simulation/taxi';
 import {meters,nearest,route} from './simulation/taxi';
 
-export type VehicleOffer={id:string;model:string;year:number;fuel:'Hybrid'|'Diesel'|'Electric'|'Petrol';className:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';price:number;mileage:number;condition:number;seats:number;kind:'New'|'Used'};
+export type VehicleOffer={id:string;model:string;year:number;fuel:'Petrol';className:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';price:number;mileage:number;condition:number;seats:number;kind:'New'|'Used'};
 export const OFFERS:VehicleOffer[]=[
- {id:'prius-used',model:'Toyota Prius',year:2018,fuel:'Hybrid',className:'Economy',price:10500,mileage:165000,condition:74,seats:4,kind:'Used'},
- {id:'octavia-used',model:'Skoda Octavia',year:2021,fuel:'Diesel',className:'Standard',price:17900,mileage:82000,condition:89,seats:4,kind:'Used'},
- {id:'corolla-new',model:'Toyota Corolla Hybrid',year:2026,fuel:'Hybrid',className:'Standard',price:26500,mileage:0,condition:100,seats:4,kind:'New'},
- {id:'eclass-used',model:'Mercedes E-Class',year:2023,fuel:'Diesel',className:'Premium',price:49900,mileage:45000,condition:94,seats:4,kind:'Used'},
- {id:'model3-new',model:'Tesla Model 3',year:2026,fuel:'Electric',className:'Comfort',price:38500,mileage:0,condition:100,seats:4,kind:'New'},
- {id:'multivan-new',model:'Volkswagen Multivan',year:2026,fuel:'Diesel',className:'XL',price:57000,mileage:0,condition:100,seats:6,kind:'New'},
+ {id:'prius-used',model:'Toyota Prius',year:2018,fuel:'Petrol',className:'Economy',price:10500,mileage:165000,condition:74,seats:4,kind:'Used'},
+ {id:'octavia-used',model:'Skoda Octavia',year:2021,fuel:'Petrol',className:'Standard',price:17900,mileage:82000,condition:89,seats:4,kind:'Used'},
+ {id:'corolla-new',model:'Toyota Corolla',year:2026,fuel:'Petrol',className:'Standard',price:26500,mileage:0,condition:100,seats:4,kind:'New'},
+ {id:'eclass-used',model:'Mercedes E-Class',year:2023,fuel:'Petrol',className:'Premium',price:49900,mileage:45000,condition:94,seats:4,kind:'Used'},
+ {id:'model3-new',model:'Volkswagen Passat',year:2026,fuel:'Petrol',className:'Comfort',price:38500,mileage:0,condition:100,seats:4,kind:'New'},
+ {id:'multivan-new',model:'Volkswagen Multivan',year:2026,fuel:'Petrol',className:'XL',price:57000,mileage:0,condition:100,seats:6,kind:'New'},
 ];
 export const DELIVERY_MS=90_000; // 90 real-world seconds for initial mobile testing.
 export const eur=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
