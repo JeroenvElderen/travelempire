@@ -146,7 +146,7 @@ export default function App(){
    for(const t of vehicles){
     if(updated.some(job=>job.targetId===t.id)||t.recoveryPending||t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING'||(t.deliveryUntil??0)>now)continue;
     const watch=idleWatch.current.get(t.id);
-    const stalled=!!watch&&now-watch.since>=120000;
+    const stalled=!!watch&&now-watch.since>=30000;
     const empty=energyPercent(t)<=0;
     const stranded=empty||((t.status==='IDLE'||t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
     if(!stranded||meters(t.position,depot)<75)continue;
