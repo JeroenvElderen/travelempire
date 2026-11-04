@@ -9,6 +9,7 @@ type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles')
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
 const parkedRetryAt=new Map<string,number>();
+const parkedAttempts=new Map<string,{signature:string;count:number}>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
@@ -46,6 +47,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    eligibilityCache=territoryDiscoveryEdges(graph,territoryExplored);
   }
   const discoveryEligible=eligibilityCache;
+  const retrySignature=cacheKey+':'+msg.discovered.length;
   const taxis=msg.taxis.map(t=>
    t.kind==='surveyor'&&t.status==='PAUSED'&&!t.recoveryPending
     ?{...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false}:t);
@@ -199,11 +201,15 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     const taxi=taxis[index];
     if(taxi.kind!=='explorer'||taxi.deliveryUntil||taxi.refillRequested)continue;
     if(taxi.status==='PAUSED'&&!taxi.recoveryPending&&energyPercent(taxi)>10&&!taxi.refillRequested){
-     if(now<(parkedRetryAt.get(taxi.id)??0))continue;
+     const previous=parkedAttempts.get(taxi.id);
+     const attempt=previous?.signature===retrySignature?previous.count:0;
+     if(attempt>=3||now<(parkedRetryAt.get(taxi.id)??0))continue;
+     parkedAttempts.set(taxi.id,{signature:retrySignature,count:attempt+1});
      parkedRetryAt.set(taxi.id,now+5000);
      const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:true},graph,explored,hq,
       reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,sectionOwners);
      if(candidate.status==='EXPLORING'){
+      parkedAttempts.delete(taxi.id);
       taxis[index]={...candidate,shiftParked:false,pauseAtHome:false};
       if(candidate.explorationSection)sectionOwners.add(candidate.explorationSection);
      }
