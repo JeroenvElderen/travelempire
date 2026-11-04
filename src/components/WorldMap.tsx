@@ -228,7 +228,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   }else{
    // Keep route/status current without restarting the animation clock.
    taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='surveyor'?'car_black.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='surveyor'?'car_black.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
    if(taxi.kind==='explorer'||taxi.kind==='surveyor'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
