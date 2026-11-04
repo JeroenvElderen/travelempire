@@ -13,6 +13,8 @@ import FinancePanel from "./components/FinancePanel";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
 import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
+import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
+import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import "./taxi.css";
@@ -547,7 +549,7 @@ export default function App(){
      if(delivered.status==='SERVICING'){
       const until=delivered.serviceUntil??now+120000;
       if(now<until)return {...delivered,serviceUntil:until};
-      const cost=150;
+      const cost=150*(1-0.10*Math.min(3,upgradesFor(old,t.depotId??'main').workshop??0));
       if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,serviceUntil:now+60000};
       pendingCashRef.current-=cost;serviceExpense+=cost;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic scheduled service`,amount:-cost});
@@ -575,7 +577,9 @@ export default function App(){
        const until=delivered.refillUntil??(now+5000);
       if(now<until)return {...delivered,refillUntil:until};
       const quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
-      const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1);
+      const depotLevels=upgradesFor(old,t.depotId??'main');
+      const discount=spec.unit==='L'?0.08*(depotLevels.fuel??0):0.12*(depotLevels.charging??0);
+      const cost=quantity*spec.pricePerUnit*((old.upgrades??[]).includes('fuel')?0.95:1)*(1-discount);
       if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,refillUntil:now+60000};
       pendingCashRef.current-=cost;fuelExpense+=cost;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic ${spec.unit==='L'?'refuel':'charge'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-cost});
@@ -618,7 +622,8 @@ export default function App(){
      const serviceBonus=(skill-1)*0.02;
      const consumed=energyUsed(delivered,km,efficiencyBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.12:1);
      // Energy purchases are charged at refill time, never again per driven kilometre.
-     const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1);
+     const depotLevels=upgradesFor(old,t.depotId??'main');
+     const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
      const explorerTravelCost=(t.kind==='explorer'||t.kind==='surveyor')?km*2.50:0;
      explorationExpense+=explorerTravelCost;
      const wearPerKm=0.025*(1-careBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
@@ -626,7 +631,7 @@ export default function App(){
      const insurance=(t.kind==='explorer'||t.kind==='surveyor')?0.00045:0.00085; // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
-     const earned=next.earned*(1+0.05*Research.level(research,'pricing'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1);
+     const earned=next.earned*(1+0.05*Research.level(research,'pricing'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
      revenue+=earned;
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
@@ -654,16 +659,35 @@ export default function App(){
      const before=old.taxis[index];
      const delta=(field:'tripRevenue'|'fuelExpense'|'maintenanceExpense'|'explorationExpense'|'driverWages'|'insuranceExpense'|'operatingKm')=>Math.max(0,(t[field]??0)-(before[field]??0));
      const revenueDelta=delta('tripRevenue');
-     return {day:new Date(now).toISOString().slice(0,10),taxiId:t.id,name:t.name,revenue:revenueDelta,
+     return {day:new Date(now).toISOString().slice(0,10),taxiId:t.id,name:t.name,depotId:t.depotId??'main',revenue:revenueDelta,
       expenses:delta('fuelExpense')+delta('maintenanceExpense')+delta('explorationExpense')+delta('driverWages')+delta('insuranceExpense'),
       km:delta('operatingKm'),trips:Math.max(0,t.completed-before.completed)};
     }).filter(v=>v.revenue>0||v.expenses>0||v.km>0||v.trips>0);
     // A small office/depot overhead accrues in simulated time, including idle periods.
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
+    // Facility costs are NEW operating expenses; legacy office overhead remains separate.
+    const depotDefinitions=[{id:'main',name:'Headquarters',capacity:5},...(companyRef.current?.depots??[])];
+    const facilityByDepot=depotDefinitions.map(d=>{
+      const assigned=old.taxis.filter(t=>(t.depotId??'main')===d.id).length;
+      const daily=depotDailyTotal(d.id==='main',upgradesFor(old,d.id),depotCapacity(d,upgradesFor(old,d.id)));
+      return {id:d.id,name:d.name,assigned,cost:daily*4/86400};
+    });
+    const facilityCost=facilityByDepot.reduce((a,d)=>a+d.cost,0);
+    const depotHistory:DepotFinanceRecord[]=[...(old.depotFinanceHistory??[])];
+    const historyDay=new Date(now).toISOString().slice(0,10);
+    for(const d of facilityByDepot){
+      const related=vehicleFinanceDeltas.filter(v=>v.depotId===d.id);
+      const vehicleExpenses=related.reduce((a,v)=>a+v.expenses,0);
+      const income=related.reduce((a,v)=>a+v.revenue,0);
+      const allocatedOverhead=overhead*(old.taxis.length?d.assigned/old.taxis.length:d.id==='main'?1:0);
+      const entry=depotHistory.find(v=>v.day===historyDay&&v.depotId===d.id);
+      if(entry){entry.revenue+=income;entry.vehicleExpenses+=vehicleExpenses;entry.facilityExpenses+=d.cost;entry.allocatedOverhead+=allocatedOverhead;entry.trips+=related.reduce((a,v)=>a+v.trips,0);entry.km+=related.reduce((a,v)=>a+v.km,0);}
+      else depotHistory.push({day:historyDay,depotId:d.id,depotName:d.name,revenue:income,vehicleExpenses,facilityExpenses:d.cost,allocatedOverhead,trips:related.reduce((a,v)=>a+v.trips,0),km:related.reduce((a,v)=>a+v.km,0)});
+    }
     const loanTick=advanceLoans(old.loans??[],4);
     const leaseTick=advanceLeases(old.leases??[],4);
     const repaymentCount=(old.loans??[]).reduce((n,l)=>n+Math.max(0,l.remainingDays-(loanTick.loans.find(x=>x.id===l.id)?.remainingDays??0)),0);
-    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments-leaseTick.payments;
+    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-facilityCost-loanTick.payments-leaseTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     // Sweep a percentage of each passenger-income settlement immediately.
     // Loan proceeds, transfers and asset sales are not operating income.
@@ -680,11 +704,11 @@ export default function App(){
     const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
-    return{...old,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
+    return{...old,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(now-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
-      insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
-      financeHistory:(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
+      insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
+      financeHistory:(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead:overhead+facilityCost,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
       vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];for(const entry of vehicleFinanceDeltas){const existing=list.find(v=>v.day===entry.day&&v.taxiId===entry.taxiId);if(existing){existing.revenue+=entry.revenue;existing.expenses+=entry.expenses;existing.km+=entry.km;existing.trips+=entry.trips;}else list.push(entry);}const cutoff=new Date(now-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
       bank:loanTick.payments>0||leaseTick.payments>0?appendBankEntries(bankOf(updatedBank),[...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[])]):updatedBank,
       loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal,transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
@@ -828,6 +852,18 @@ export default function App(){
   const path=route(graph,start,end);if(!path){setSimError('No connected road route to assigned depot.');return;}
   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:path.path.length<2?{...t,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0}:{...t,status:'RETURNING' as const,pauseAtHome:true,path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,refillDestination:undefined,journeyEdges:[]})}));setSimError('');
  };
+ const upgradeDepot=(depotId:string,kind:DepotUpgradeKind)=>{
+  if(!companyRef.current)return;
+  if(depotId!=='main'&&!(companyRef.current.depots??[]).some(d=>d.id===depotId)){setSimError('Depot not found.');return;}
+  const offer=DEPOT_UPGRADES.find(u=>u.id===kind);if(!offer)return;
+  const level=upgradesFor(fleet,depotId)[kind]??0;
+  if(level>=offer.max){setSimError('Maximum upgrade level reached.');return;}
+  if(companyRef.current.cash+pendingCashRef.current<offer.cost){setSimError('Insufficient operating cash for depot upgrade.');return;}
+  pendingCashRef.current-=offer.cost;
+  setFleet(old=>({...old,depotUpgrades:{...old.depotUpgrades,[depotId]:{...upgradesFor(old,depotId),[kind]:(upgradesFor(old,depotId)[kind]??0)+1}},
+    transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Depot '+depotId+' · '+offer.name,amount:-offer.cost},...(old.transactions??[])].slice(0,100)}));
+  setSimError('');
+ };
  const addDepot=(location:Headquarters)=>{
   if(!companyRef.current||!graph)return;
   const cash=companyRef.current.cash+pendingCashRef.current;
@@ -909,7 +945,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
