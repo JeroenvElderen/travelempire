@@ -15,7 +15,7 @@ import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFER
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
-import {corporateOf,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate,corporateCreditCapacity} from './corporate';
+import {acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate,corporateCreditCapacity} from './corporate';
 import type {CorporateState,CorporateEvent} from './simulation/taxi';
 import {bookAccounting,settleAccounting,periodMonth,depreciationTick,accountingOf} from './accounting';
 import type {AccountingSettings} from './simulation/taxi';
