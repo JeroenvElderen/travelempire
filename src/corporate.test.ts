@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {CORPORATE_MARKET,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,restructureSubsidiary,advanceCorporate,consolidatedGroup,corporateCreditCapacity} from './corporate';
+import {CORPORATE_MARKET,acquireCompany,foundSubsidiary,transferCorporateCash,mergeSubsidiaries,transferSubsidiaryAssets,restructureSubsidiary,advanceCorporate,consolidatedGroup,corporateCreditCapacity} from './corporate';
 import type {FleetState} from './simulation/taxi';
 import type {Company} from './company';
 const date=Date.UTC(2026,10,4);
@@ -55,6 +55,18 @@ describe('corporate group finance',()=>{
   expect(updated.state.subsidiaries[0].cash).toBe(5000);
   expect(updated.state.subsidiaries[0].vehicleAssets).toBe(15000);
   expect(updated.state.totalRevenue).toBe(0);
+ });
+ it('moves assets between subsidiaries without changing consolidated assets or profit',()=>{
+  const bought=acquireCompany(undefined,fleet,'athens-city',0,0,300000,5000,date);
+  const second=foundSubsidiary(bought.state,'Second','Patras',20000,115000,5000,date);
+  const parentCash=95000;
+  const before=consolidatedGroup({...company,cash:parentCash},{...fleet,corporate:second.state});
+  const moved=transferSubsidiaryAssets(second.state,'athens-city',second.subsidiary.id,2,1,date);
+  const after=consolidatedGroup({...company,cash:parentCash},{...fleet,corporate:moved.state});
+  expect(moved.parentCashDelta).toBe(0);
+  expect(before.assets).toBe(after.assets);
+  expect(before.profit).toBe(after.profit);
+  expect(moved.state.subsidiaries.find(x=>x.id===second.subsidiary.id)?.fleetCount).toBe(2);
  });
  it('shares borrowing capacity with ordinary loans',()=>{
   expect(corporateCreditCapacity({...fleet,loans:[{id:'a',principal:20000,balance:20000,annualRate:.09,termDays:90,remainingDays:90,dailyPayment:100,accruedGameSeconds:0}]})).toBe(55000);
