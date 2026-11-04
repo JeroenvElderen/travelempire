@@ -35,7 +35,7 @@ export function acquireCompany(stateValue:CorporateState|undefined,fleet:FleetSt
  if(downPayment>operatingCash-minimumReserve)throw Error('Insufficient operating cash after the minimum reserve.');
  const annualRate=.09,term=180,dailyPayment=round(loanAmount*annualRate/365/(1-Math.pow(1+annualRate/365,-term)));
  const loan:CorporateLoan|undefined=loanAmount>0?{id:crypto.randomUUID(),principal:loanAmount,balance:loanAmount,annualRate,dailyPayment,remainingDays:term,targetId:offer.id}:undefined;
- const subsidiary:CorporateSubsidiary={id:offer.id,name:offer.name,city:offer.city,createdDay:dayOf(gameMs),source:'acquired',ownershipPercent:100,fleetCount:offer.fleetCount,depotCount:offer.depotCount,drivers:offer.fleetCount,cash:offer.cash,vehicleAssets:offer.vehicleAssets,depotAssets:offer.depotAssets,externalDebt:offer.externalDebt,revenuePerDay:offer.revenuePerDay,expensesPerDay:offer.expensesPerDay,retainedEarnings:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
+ const subsidiary:CorporateSubsidiary={id:offer.id,name:offer.name,city:offer.city,createdDay:dayOf(gameMs),source:'acquired',ownershipPercent:100,fleetCount:offer.fleetCount,depotCount:offer.depotCount,drivers:offer.fleetCount,cash:offer.cash,vehicleAssets:offer.vehicleAssets,depotAssets:offer.depotAssets,goodwill:round(price-(offer.cash+offer.vehicleAssets+offer.depotAssets-offer.externalDebt)),externalDebt:offer.externalDebt,revenuePerDay:offer.revenuePerDay,expensesPerDay:offer.expensesPerDay,retainedEarnings:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
  const events=[event('acquisition',offer.id,'Acquire '+offer.name,price,-price,0,gameMs)];
  if(loan)events.unshift(event('loan',offer.id,'Acquisition loan drawdown',loanAmount,loanAmount,0,gameMs));
  return {state:{...state,subsidiaries:[...state.subsidiaries,subsidiary],loans:loan?[...state.loans,loan]:state.loans,events:[...events,...state.events].slice(0,1000),totalAcquisitionSpend:state.totalAcquisitionSpend+price},parentCashDelta:-downPayment,events,subsidiary};
@@ -46,7 +46,7 @@ export function foundSubsidiary(stateValue:CorporateState|undefined,name:string,
  if(!Number.isFinite(capital)||capital<10000||capital>1000000)throw Error('Founding capital must be between €10,000 and €1,000,000.');
  if(capital>operatingCash-minimumReserve)throw Error('Insufficient operating cash after reserve.');
  const id=crypto.randomUUID();
- const subsidiary:CorporateSubsidiary={id,name:name.trim(),city:city.trim(),createdDay:dayOf(gameMs),source:'founded',ownershipPercent:100,fleetCount:0,depotCount:0,drivers:0,cash:round(capital),vehicleAssets:0,depotAssets:0,externalDebt:0,revenuePerDay:0,expensesPerDay:0,retainedEarnings:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
+ const subsidiary:CorporateSubsidiary={id,name:name.trim(),city:city.trim(),createdDay:dayOf(gameMs),source:'founded',ownershipPercent:100,fleetCount:0,depotCount:0,drivers:0,cash:round(capital),vehicleAssets:0,depotAssets:0,goodwill:0,externalDebt:0,revenuePerDay:0,expensesPerDay:0,retainedEarnings:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
  const e=event('formation',id,'Subsidiary capital contribution',capital,-capital,capital,gameMs);
  return {state:{...state,subsidiaries:[...state.subsidiaries,subsidiary],events:[e,...state.events].slice(0,1000)},parentCashDelta:-capital,events:[e],subsidiary};
 }
@@ -65,7 +65,7 @@ export function mergeSubsidiaries(stateValue:CorporateState|undefined,sourceId:s
  const source=state.subsidiaries.find(s=>s.id===sourceId&&s.active),target=state.subsidiaries.find(s=>s.id===targetId&&s.active);
  if(!source||!target||source.id===target.id)throw Error('Choose two different active subsidiaries.');
  if(source.ownershipPercent!==100||target.ownershipPercent!==100)throw Error('Only wholly owned subsidiaries can be merged.');
- const merged:CorporateSubsidiary={...target,fleetCount:target.fleetCount+source.fleetCount,depotCount:target.depotCount+source.depotCount,drivers:target.drivers+source.drivers,cash:round(target.cash+source.cash),vehicleAssets:round(target.vehicleAssets+source.vehicleAssets),depotAssets:round(target.depotAssets+source.depotAssets),externalDebt:round(target.externalDebt+source.externalDebt),revenuePerDay:round(target.revenuePerDay+source.revenuePerDay),expensesPerDay:round(target.expensesPerDay+source.expensesPerDay),retainedEarnings:round(target.retainedEarnings+source.retainedEarnings),taxPaid:round(target.taxPaid+source.taxPaid),accumulatedRevenue:round(target.accumulatedRevenue+source.accumulatedRevenue),accumulatedExpenses:round(target.accumulatedExpenses+source.accumulatedExpenses)};
+ const merged:CorporateSubsidiary={...target,fleetCount:target.fleetCount+source.fleetCount,depotCount:target.depotCount+source.depotCount,drivers:target.drivers+source.drivers,cash:round(target.cash+source.cash),vehicleAssets:round(target.vehicleAssets+source.vehicleAssets),depotAssets:round(target.depotAssets+source.depotAssets),goodwill:round(target.goodwill+source.goodwill),externalDebt:round(target.externalDebt+source.externalDebt),revenuePerDay:round(target.revenuePerDay+source.revenuePerDay),expensesPerDay:round(target.expensesPerDay+source.expensesPerDay),retainedEarnings:round(target.retainedEarnings+source.retainedEarnings),taxPaid:round(target.taxPaid+source.taxPaid),accumulatedRevenue:round(target.accumulatedRevenue+source.accumulatedRevenue),accumulatedExpenses:round(target.accumulatedExpenses+source.accumulatedExpenses)};
  const e=event('merger',target.id,'Merge '+source.name+' into '+target.name,0,0,0,gameMs);
  return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===sourceId?{...s,active:false,cash:0,vehicleAssets:0,depotAssets:0,externalDebt:0,revenuePerDay:0,expensesPerDay:0,retainedEarnings:0}:s.id===targetId?merged:s),loans:state.loans.map(l=>l.targetId===sourceId?{...l,targetId}:l),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
 }
@@ -114,7 +114,7 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  const active=state.subsidiaries.filter(s=>s.active);
  const parent=balanceSheet(fleet,company.cash);
  const subsidiaryCash=sum(active.map(s=>s.cash));
- const subsidiaryAssets=sum(active.map(s=>s.cash+s.vehicleAssets+s.depotAssets));
+ const subsidiaryAssets=sum(active.map(s=>s.cash+s.vehicleAssets+s.depotAssets+s.goodwill));
  const subsidiaryDebt=sum(active.map(s=>s.externalDebt));
  const acquisitionDebt=sum(state.loans.map(l=>l.balance));
  const parentPeriods=accountingOf(fleet.accounting).periods;
@@ -133,7 +133,7 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
 export function corporateValuation(company:Company,fleet:FleetState,gameMs:number){
  const valuation=valueCompany(company,fleet,gameMs);
  const state=corporateOf(fleet.corporate);
- const netSubsidiaryAssets=sum(state.subsidiaries.filter(s=>s.active).map(s=>s.cash+s.vehicleAssets+s.depotAssets-s.externalDebt));
+ const netSubsidiaryAssets=sum(state.subsidiaries.filter(s=>s.active).map(s=>s.cash+s.vehicleAssets+s.depotAssets+s.goodwill-s.externalDebt));
  const acquisitionDebt=sum(state.loans.map(l=>l.balance));
  return round(Math.max(1000,valuation.value+netSubsidiaryAssets-acquisitionDebt));
 }
