@@ -220,9 +220,29 @@ export function nearest(graph: RoadGraph, point: Point): string {
   if (ring > 100000) return best;
  }
 }
-// Do not reverse onto the incoming road unless it is a dead end.
-function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string):boolean{
- return previous===next&&(graph.edges.get(current)??[]).some(edge=>edge.to!==previous);
+// Compare the actual geometry, not just identical node IDs: OSM often
+// represents a straight reversal as two different short road segments.
+function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string,allowed?:Set<string>):boolean{
+ const a=graph.nodes.get(previous),b=graph.nodes.get(current),c=graph.nodes.get(next);
+ if(!a||!b||!c)return previous===next;
+ const lat=b[1]*Math.PI/180,scale=Math.cos(lat);
+ const ax=(b[0]-a[0])*scale,ay=b[1]-a[1];
+ const bx=(c[0]-b[0])*scale,by=c[1]-b[1];
+ const magnitude=Math.hypot(ax,ay)*Math.hypot(bx,by);
+ const reversal=magnitude>1e-15&&(ax*bx+ay*by)/magnitude < -0.94;
+ if(!reversal&&previous!==next)return false;
+ // A dead end has no legal forward/side exit; ignore the reversing option.
+ return (graph.edges.get(current)??[]).some(e=>
+  (!allowed||allowed.has(e.id))&&e.to!==next&&e.to!==previous&&
+  !forbiddenTurnGeometry(graph,previous,current,e.to));
+}
+function forbiddenTurnGeometry(graph:RoadGraph,previous:string,current:string,next:string):boolean{
+ const a=graph.nodes.get(previous),b=graph.nodes.get(current),c=graph.nodes.get(next);
+ if(!a||!b||!c)return previous===next;
+ const scale=Math.cos(b[1]*Math.PI/180);
+ const x=(b[0]-a[0])*scale,y=b[1]-a[1],u=(c[0]-b[0])*scale,v=c[1]-b[1];
+ const denom=Math.hypot(x,y)*Math.hypot(u,v);
+ return previous===next||(denom>1e-15&&(x*u+y*v)/denom < -0.94);
 }
 // Turn-aware Dijkstra: the state includes the incoming road node. A shortest
 // path to an intersection must not erase another valid approach direction.
@@ -242,10 +262,10 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
   if(state.node===to){finish=id;break;}
   const links=graph.edges.get(state.node)??[];
   // A U-turn is legal only when no alternative permitted outgoing road exists.
-  const hasExit=links.some(e=>e.to!==state.incoming&&(!allowed||allowed.has(e.id)));
+
   for(const edge of links){
    if(allowed&&!allowed.has(edge.id))continue;
-   if(state.incoming&&edge.to===state.incoming&&hasExit)continue;
+   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,allowed))continue;
    const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph):edge.meters);
    const k=JSON.stringify([edge.to,state.node]);
    if(cost>=(best.get(k)??Infinity))continue;
@@ -536,8 +556,8 @@ export function dispatchScout(
   // approach distances; avoid searching the entire connected road network.
   if(taxi.kind!=='surveyor'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
-   if(previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
-   if(node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
+   if(taxi.kind==='explorer'&&previous.has(node)&&forbiddenUTurn(graph,previous.get(node)!.from,node,edge.to))continue;
+   if(taxi.kind==='explorer'&&node===start&&incomingNode&&forbiddenUTurn(graph,incomingNode,node,edge.to))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     if(taxi.kind==='surveyor'&&territoryCovered){
@@ -587,7 +607,7 @@ export function dispatchScout(
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&
-   (keys.length<2||!forbiddenUTurn(graph,keys[keys.length-2],cursor,edge.to))
+   (taxi.kind!=='explorer'||keys.length<2||!forbiddenUTurn(graph,keys[keys.length-2],cursor,edge.to))
   );
   if(!links.length)break;
   // Black Explorer expands into unrevealed territory; Purple Explorer stays
