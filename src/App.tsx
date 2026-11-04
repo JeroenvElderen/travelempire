@@ -218,7 +218,11 @@ export default function App(){
     const watch=idleWatch.current.get(t.id);
     const stalled=!!watch&&now-watch.since>=30000;
     const empty=energyPercent(t)<=0;
-    const stranded=empty||((t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
+    // Explorers may wait for an eligible section or worker reroute.
+    // A 30-second movement timeout is not a breakdown: never tow them
+    // unless their battery/fuel is actually depleted.
+    const stranded=empty||((t.kind!=='explorer'&&t.kind!=='surveyor')&&
+     (t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
     if(!stranded||meters(t.position,depot)<75)continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
     const purpose:RecoveryJob['purpose']=serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
