@@ -24,7 +24,7 @@ import "./company.css";
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork} from './maritime/ferries';
 import {useRef} from 'react';
-import {loadGameClock,advanceGameClock,saveGameClock,isShiftActive,formatGameClock,type GameClock} from './simulation/gameClock';
+import {loadGameClock,advanceGameClock,saveGameClock,isShiftActive,type GameClock} from './simulation/gameClock';
 
 
 const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Empire",icon:BarChart3},{name:"Research",icon:FlaskConical}] as const;
