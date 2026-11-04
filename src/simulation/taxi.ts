@@ -798,7 +798,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   }
  }
  if(t.status==='RETURNING'&&t.pauseAtHome){
-  t={...t,status:'PAUSED',pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+  t={...t,status:t.kind==='surveyor'?'IDLE':'PAUSED',pauseAtHome:false,shiftParked:t.kind==='surveyor'?false:t.shiftParked,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
   return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.serviceDestination){
