@@ -935,7 +935,12 @@ export default function App(){
   try{
    const old=fleetSaveRef.current;
    const result=crossBorderTransfer(old.corporate,id,amount,direction,current.cash+pendingCashRef.current,bankOf(old.bank).minimumOperatingCash,gameClockRef.current?.epochMs??Date.now());
+   const expense=result.fee;
+   const accounting=bookAccounting(fleetSaveRef.current.accounting,periodMonth(gameClockRef.current?.epochMs??Date.now()),0,expense,0,0);
    commitCorporate(result.state,result.parentCashDelta,result.events,'Cross-border cash transfer');
+   const latest=fleetSaveRef.current;
+   const updated={...latest,accounting};
+   fleetSaveRef.current=updated;setFleet(updated);
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
  const bankSettings=(percent:number,minimum:number)=>{
