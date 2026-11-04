@@ -8,8 +8,6 @@ type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
-const parkedRetryAt=new Map<string,number>();
-const parkedAttempts=new Map<string,{signature:string;count:number;lastAttemptAt:number}>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
@@ -47,7 +45,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    eligibilityCache=territoryDiscoveryEdges(graph,territoryExplored);
   }
   const discoveryEligible=eligibilityCache;
-  const retrySignature=cacheKey+':'+msg.discovered.length+':'+msg.discovered.slice(-12).join('|');
   const taxis=msg.taxis.map(t=>
    (t.kind==='surveyor'||t.kind==='explorer')&&t.status==='PAUSED'&&
    !t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
