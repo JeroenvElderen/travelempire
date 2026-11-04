@@ -49,7 +49,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const discoveryEligible=eligibilityCache;
   const retrySignature=cacheKey+':'+msg.discovered.length+':'+msg.discovered.slice(-12).join('|');
   const taxis=msg.taxis.map(t=>
-   t.kind==='surveyor'&&t.status==='PAUSED'&&!t.recoveryPending
+   (t.kind==='surveyor'||t.kind==='explorer')&&t.status==='PAUSED'&&
+   !t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
     ?{...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false}:t);
 
   const activeGraph=graph;
@@ -195,55 +196,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      assignedCount++;
     }
    }
-   // Purple Explorers park only after a genuine failed scout search. The
-   // return route uses normal road movement and never counts as exploration.
-   for(let index=0;index<taxis.length;index++){
-    const taxi=taxis[index];
-    if(taxi.kind!=='explorer'||taxi.deliveryUntil||taxi.refillRequested)continue;
-    if(taxi.status==='PAUSED'&&!taxi.recoveryPending&&energyPercent(taxi)>10&&!taxi.refillRequested){
-     const previous=parkedAttempts.get(taxi.id);
-     const attempt=previous?.signature===retrySignature&&now-previous.lastAttemptAt<60000?previous.count:0;
-     if(attempt>=4||now<(parkedRetryAt.get(taxi.id)??0))continue;
-     parkedAttempts.set(taxi.id,{signature:retrySignature,count:attempt+1,lastAttemptAt:now});
-     parkedRetryAt.set(taxi.id,now+5000);
-     const retryTaxi={...taxi,status:'IDLE' as const,shiftParked:true,
-      explorationMode:attempt===3?'frontier' as const:taxi.explorationMode};
-     let candidate=dispatchScout(retryTaxi,graph,explored,hq,
-      reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,sectionOwners);
-     // Reservations and stale section ownership must not permanently block
-     // a reachable undiscovered road. A second pass tests the actual eligible
-     // connected graph without other Explorers' soft target reservations.
-     if(candidate.status!=='EXPLORING')
-      candidate=dispatchScout({...retryTaxi,explorationSection:undefined},graph,explored,hq,
-       new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,
-       discoveryEligible,undefined,undefined,new Set<string>());
-     if(candidate.status==='EXPLORING'){
-      parkedAttempts.delete(taxi.id);
-      taxis[index]={...candidate,shiftParked:false,pauseAtHome:false};
-      if(candidate.explorationSection)sectionOwners.add(candidate.explorationSection);
-     }
-     continue;
-    }
-    if(taxi.status!=='IDLE'||taxi.shiftParked||energyPercent(taxi)<=10)continue;
-    // Only park if there is no reachable exploration route. The scout pass
-    // above has already attempted to assign one.
-    const start=nearest(graph,taxi.position);
-    if(!start)continue;
-    const destinations=[hq,...(msg.stations??[])];
-    let best:ReturnType<typeof route>|null=null;
-    for(const point of destinations){
-     const end=nearest(graph,point);
-     if(!end)continue;
-     const candidate=route(graph,start,end);
-     if(candidate&&candidate.path.length>=2&&(!best||candidate.length<best.length))best=candidate;
-    }
-    if(best){
-     taxis[index]={...taxi,status:'RETURNING',pauseAtHome:true,shiftParked:true,
-      path:best.path,edgeIds:best.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[]};
-    }else if(destinations.some(point=>meters(taxi.position,point)<80)){
-     taxis[index]={...taxi,status:'PAUSED',shiftParked:true,path:[],edgeIds:[],speedKph:0};
-    }
-   }
+   // Explorers stay IDLE when no reachable discovery target exists.
+   // Do not park or pause them: the next dispatch automatically retries as
+   // new eligible roads and territory arrive.
   }
   self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,discoveryEligible:[...discoveryEligible]});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
