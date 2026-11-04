@@ -1,6 +1,6 @@
 import {energyPercent} from './energy';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,territoryDiscoveryEdges,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,sectionCoverage,territoryDiscoveryEdges,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -133,6 +133,16 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      break;
     }
    }
+   // Refresh section completion on every dispatch, including when the vehicle
+   // is already driving. Completed sections release their owner automatically.
+   for(let index=0;index<taxis.length;index++){
+    const t=taxis[index];
+    if(t.kind!=='explorer'||!t.explorationSection)continue;
+    const coverage=sectionCoverage(graph,discoveryEligible,explored,t.explorationSection);
+    taxis[index]={...t,explorationSectionCompleted:coverage.completed,
+     explorationSectionTotal:coverage.total,
+     explorationSection:coverage.total>0&&coverage.completed>=coverage.total?undefined:t.explorationSection};
+   }
    // Reserve each Purple Explorer's persisted section to avoid overlap.
    const sectionOwners=new Set(taxis.filter(t=>t.kind==='explorer'&&t.explorationSection).map(t=>t.explorationSection!));
    const reservedTargets=new Set<string>();
@@ -165,7 +175,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns,explorationSection:extension.explorationSection};
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns,explorationSection:extension.explorationSection,
+     explorationSectionCompleted:extension.explorationSectionCompleted,explorationSectionTotal:extension.explorationSectionTotal};
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
