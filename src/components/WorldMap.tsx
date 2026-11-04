@@ -439,23 +439,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  // Independently reconcile explored road geometry every two seconds.
-  // Only update MapLibre sources when discovery or graph geometry changes;
-  // the vehicle animation loop is deliberately untouched.
-  let previousNodeCount=graph?.nodes.size??0;
-  let previousEdgeCount=graph?.edges.size??0;
-  let previousExploredSignature='';
+  // Reconcile visible purple road geometry every two seconds even if the
+  // explored ID set and graph size remain unchanged. A newly loaded tile or
+  // map-style change can alter the visible features without changing counts.
   const reconcile=()=>{
    if(cancelled||!instance.isStyleLoaded()||!graph)return;
-   const explored=currentExploredRoads.current;
-   const signature=[...explored].sort().join('|');
-   const nodeCount=graph.nodes.size,edgeCount=graph.edges.size;
-   if(signature!==previousExploredSignature||nodeCount!==previousNodeCount||edgeCount!==previousEdgeCount||!instance.getSource(purpleSourceId)){
-    previousExploredSignature=signature;
-    previousNodeCount=nodeCount;
-    previousEdgeCount=edgeCount;
-    update();
-   }
+   update();
   };
   const refreshTimer=window.setInterval(reconcile,2000);
   return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
