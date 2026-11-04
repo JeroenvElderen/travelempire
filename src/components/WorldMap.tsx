@@ -1,6 +1,6 @@
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
-import {formatGameClock,isShiftActive,type GameClock} from '../simulation/gameClock';
+import {formatGameClock,type GameClock} from '../simulation/gameClock';
 import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
