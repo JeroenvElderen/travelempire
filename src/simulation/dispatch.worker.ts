@@ -6,6 +6,7 @@ let activeRevision=0;
 const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
+const purpleClusters=new Map<string,Set<string>>();
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean};
@@ -13,7 +14,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
+   graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();purpleClusters.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
   if(!graph||msg.revision!==activeRevision)return;
@@ -85,6 +86,34 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    else pending.push(mission);
   }
   queue.length=0;queue.push(...pending);
+  const claimed=new Set<string>();
+  for(const [id,cluster] of purpleClusters){
+   if(!taxis.some(t=>t.id===id&&t.kind==='explorer')||[...cluster].every(e=>explored.has(e))){purpleClusters.delete(id);continue;}
+   for(const edge of cluster)claimed.add(edge);
+  }
+  const clusterFor=(taxi:Taxi):Set<string>|undefined=>{
+   const previous=purpleClusters.get(taxi.id);
+   if(previous)return previous;
+   const candidates=new Set([...discoveryEligible].filter(id=>!claimed.has(id)&&!explored.has(id)));
+   const scout=dispatchScout({...taxi,status:'IDLE'},graph!,explored,hq,new Set(),new Set(),undefined,undefined,candidates);
+   const seed=scout.edgeIds.find(id=>candidates.has(id));
+   if(!seed)return undefined;
+   const cluster=new Set<string>([seed]);
+   const queue:string[]=[];
+   for(const [node,links] of graph!.edges){const edge=links.find(e=>e.id===seed);if(edge){queue.push(node,edge.to);break;}}
+   const seen=new Set<string>();
+   while(queue.length&&cluster.size<30&&seen.size<200){
+    const node=queue.shift()!;if(seen.has(node))continue;seen.add(node);
+    for(const edge of graph!.edges.get(node)??[]){
+     if(!candidates.has(edge.id))continue;
+     cluster.add(edge.id);if(!seen.has(edge.to))queue.push(edge.to);
+     if(cluster.size>=30)break;
+    }
+   }
+   purpleClusters.set(taxi.id,cluster);
+   for(const id of cluster)claimed.add(id);
+   return cluster;
+  };
   // Passenger assignments run first. Explorers systematically clear nearby undiscovered roads.
   let assignedCount=0;
   if(msg.allowScout){
@@ -152,7 +181,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?discoveryEligible:undefined,taxi.kind==='surveyor'?discoveryEligible:undefined);
+     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?clusterFor(taxi):undefined,taxi.kind==='surveyor'?discoveryEligible:undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -162,7 +191,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
-    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
+    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?clusterFor(taxis[index]):undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
