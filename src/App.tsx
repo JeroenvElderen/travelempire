@@ -387,7 +387,7 @@ export default function App(){
      if(roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
      next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
-      const eligible=t.kind==='explorer'&&territoryDiscoveryAllowedRef.current.has(id);
+      const eligible=t.kind==='explorer';
       const survey=t.kind==='surveyor';
       if(eligible&&!discovered.has(id)||survey&&!territory.has(id)){
        const length=roadLengthByIdRef.current.get(id)??0;

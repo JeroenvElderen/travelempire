@@ -47,7 +47,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   const discoveryEligible=eligibilityCache;
   const taxis=msg.taxis.slice();
   const activeGraph=graph;
-  const validDiscovered=new Set([...explored].filter(id=>discoveryEligible.has(id)));
+  // Purple Explorer's driven roads are valid for taxi jobs regardless of Black Explorer territory.
+  const validDiscovered=explored;
   const eligibleStops=passengerRoadNodes(activeGraph,validDiscovered);
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
