@@ -645,7 +645,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,discoveredRoad
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
-  const next=discoveredRoads?routeDiscovered(graph,from,to,discoveredRoads):route(graph,from,to);
+  const next=route(graph,from,to);
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
    return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
