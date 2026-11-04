@@ -133,6 +133,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      break;
     }
    }
+   // Reserve each Purple Explorer's persisted section to avoid overlap.
+   const sectionOwners=new Set(taxis.filter(t=>t.kind==='explorer'&&t.explorationSection).map(t=>t.explorationSection!));
    const reservedTargets=new Set<string>();
    const reservedEdges=new Set<string>();
    // Existing scouts reserve their remaining route, so new scouts avoid following them.
@@ -158,21 +160,22 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
      graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads,taxi.kind==='explorer'?discoveryEligible:undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,
-     taxi.kind==='explorer'&&taxi.path.length>=2?nearest(graph,taxi.path[taxi.path.length-2]):undefined);
+     taxi.kind==='explorer'&&taxi.path.length>=2?nearest(graph,taxi.path[taxi.path.length-2]):undefined,sectionOwners);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns};
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns,explorationSection:extension.explorationSection};
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
     const purpleCluster=taxis[index].kind==='explorer'?discoveryEligible:undefined;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxis[index].kind==='explorer'?purpleAllowedRoads:allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
+    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxis[index].kind==='explorer'?purpleAllowedRoads:allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined,undefined,sectionOwners);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
+     if(scout.kind==='explorer'&&scout.explorationSection)sectionOwners.add(scout.explorationSection);
      assignedCount++;
     }
    }
@@ -185,7 +188,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      if(now<(parkedRetryAt.get(taxi.id)??0))continue;
      parkedRetryAt.set(taxi.id,now+5000);
      const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:false},graph,explored,hq,
-      reservedTargets,reservedEdges,undefined,allowedRoads,discoveryEligible);
+      reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,sectionOwners);
      if(candidate.status==='EXPLORING')taxis[index]={...candidate,shiftParked:false};
      continue;
     }
