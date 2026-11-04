@@ -58,6 +58,7 @@ export type Taxi = {
   refillUntil?: number;
   refillRequested?: boolean;
   serviceUntil?: number;
+  serviceDestination?: Point;
 
   // Vehicle delivery information
   deliveryStartedAt?: number;
@@ -668,6 +669,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  }
  if(t.status==='RETURNING'&&t.pauseAtHome){
   t={...t,status:'PAUSED',pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
+ }
+ if(t.status==='RETURNING'&&t.serviceDestination){
+  t={...t,status:'SERVICING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,serviceUntil:undefined,serviceDestination:undefined,journeyEdges:[]};
   return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.refillDestination){
