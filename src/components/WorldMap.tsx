@@ -239,10 +239,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
    }
    const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
- const purpleTrail=useRef<GeoJSON.Feature[]>([]);
- const purplePrevious=useRef<Map<string,[number,number]>>(new Map());
- const purpleDirty=useRef(false);
- const purpleLastFlush=useRef(0);
  useEffect(()=>{
   let frame=0;
   const animate=()=>{
@@ -305,43 +301,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      taxiHeadingState.current.set(id,{angle:initial,position,at:now});
      marker.setRotation(initial);
     }
-    // Draw the Purple Explorer trail from the same interpolated coordinates
-    // that drive the actual visible vehicle marker.
-    if(taxi.kind==='explorer'){
-     const previous=purplePrevious.current.get(id);
-     // Accumulate sub-centimetre animation steps against the last *recorded*
-     // point. Comparing only adjacent frames drops slow movement forever.
-     // The Explorer's rendered position drives this overlay independently of
-     // status/edge-ID updates, which can lag behind its visible motion.
-     if(!previous){
-      purplePrevious.current.set(id,position);
-     }else{
-      const dx=(position[0]-previous[0])*111320*Math.cos((position[1]+previous[1])*Math.PI/360);
-      const dy=(position[1]-previous[1])*111320;
-      const distance=Math.hypot(dx,dy);
-      if(distance>=0.015&&distance<40){
-       purpleTrail.current.push({type:'Feature',properties:{vehicleId:id},geometry:{type:'LineString',coordinates:[previous,position]}});
-       purplePrevious.current.set(id,position);
-       purpleDirty.current=true;
-      }else if(distance>=40){
-       // Never draw across teleports, corrections or a new route spawn.
-       purplePrevious.current.set(id,position);
-      }
-     }
-    }
     // Avoid mutating DOM attributes on every animation frame.
     const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
     if(marker.getElement().title!==title)marker.getElement().title=title;
-   }
-   if(purpleDirty.current&&now-purpleLastFlush.current>=120&&map.current?.isStyleLoaded()){
-    const source=map.current.getSource('purple-live-travel-source') as maplibregl.GeoJSONSource|undefined;
-    if(source){
-     if(purpleTrail.current.length>4000)purpleTrail.current.splice(0,purpleTrail.current.length-4000);
-     source.setData({type:'FeatureCollection',features:purpleTrail.current});
-     purpleDirty.current=false;
-     purpleLastFlush.current=now;
-     map.current.triggerRepaint();
-    }
    }
    frame=requestAnimationFrame(animate);
   };
@@ -414,9 +376,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
-   // Road geometry is rebuilt on moveend and as tiles arrive. Preserve the
-   // live Explorer trail above every newly mounted road layer.
-   if(instance.getLayer('purple-live-travel-layer'))instance.moveLayer('purple-live-travel-layer');
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
   };
@@ -455,23 +414,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{cancelled=true;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
- // Draw Purple Explorer travel directly from vehicle movement. This visual trail
- // does not wait for OSM edge completion, discovery persistence or map movement.
- // Persisted explored road IDs continue to provide the canonical saved network.
- useEffect(()=>{purpleTrail.current=[];purplePrevious.current.clear();purpleDirty.current=false;purpleLastFlush.current=0;},[companyId]);
- useEffect(()=>{
-  const instance=map.current;
-  if(!instance||!ready||!instance.isStyleLoaded())return;
-  const id='purple-live-travel-source',layer='purple-live-travel-layer';
-  const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
-  if(!instance.getSource(id))instance.addSource(id,{type:'geojson',data:empty});
-  if(!instance.getLayer(layer))instance.addLayer({id:layer,type:'line',source:id,paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.0,13,1.8,17,2.8],'line-opacity':1}});
-  // Other road/fog layers may be mounted after this effect. Keep the live
-  // vehicle trail above those overlays so it is visible without a map pan.
-  instance.moveLayer(layer);
-  const source=instance.getSource(id) as maplibregl.GeoJSONSource;
-  source.setData({type:'FeatureCollection',features:purpleTrail.current});
- },[ready,basemap]);
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
  const explorationInputs=useRef({graph,territoryEdgeIds,headquarters});
