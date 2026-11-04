@@ -313,12 +313,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Cache only visible road features so discovery changes can repaint immediately,
  // without rescanning the nationwide routing graph on every vehicle tick.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
+ const currentExploredRoads=useRef<Set<string>>(new Set());
+ currentExploredRoads.current=new Set(exploredEdgeIds);
  useEffect(()=>{
   const instance=map.current;
   if(!instance||!ready||!instance.isStyleLoaded())return;
   const source=instance.getSource('active-road-network') as maplibregl.GeoJSONSource|undefined;
   if(!source||!visibleRoadFeatures.current.length)return;
-  const explored=new Set(exploredEdgeIds);
+  const explored=currentExploredRoads.current;
   let changed=false;
   const features=visibleRoadFeatures.current.map(feature=>{
    const roadId=feature.properties?.roadId as string|undefined;
@@ -339,7 +341,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let cancelled=false;
   const sourceId='active-road-network';
   const exploredLayerId='explored-road-network';
-  const exploredSet=new Set(exploredEdgeIds);
   const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   const remove=()=>{
    if(instance.getLayer(exploredLayerId))instance.removeLayer(exploredLayerId);
@@ -349,6 +350,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
    if(!graph){remove();setRoadStatus('Waiting for geographic road tiles');return;}
+   const exploredSet=currentExploredRoads.current;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    const features:GeoJSON.Feature[]=[];
@@ -384,7 +386,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
   return()=>{cancelled=true;instance.off('moveend',update);instance.off('style.load',update);};
- },[roadsVisible,graph,ready,basemap,exploredEdgeIds]);
+ },[roadsVisible,graph,ready,basemap]);
 
  // Keep the exploration overlay mounted while road discovery updates every tick.
  // The geometry worker is persistent: restarting it every second can prevent any result.
