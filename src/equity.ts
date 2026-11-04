@@ -46,6 +46,7 @@ export function valueCompany(company:Company,fleet:FleetState,gameEpochMs:number
 export type InvestorOffer={id:string;name:string;amount:number;equityPercent:number;preMoney:number;postMoney:number;confidence:number};
 const investorNames=['Hellenic Mobility Partners','Aegean Growth Capital','Urban Transit Ventures'];
 export function investorOffers(valuation:Valuation,state:EquityState):InvestorOffer[]{
+ void state;
  if(valuation.investorConfidence<35)return [];
  return investorNames.map((name,i)=>{
   const fraction=[.08,.14,.2][i];
