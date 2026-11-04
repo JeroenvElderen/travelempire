@@ -93,13 +93,15 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    // Only its actual exploration routes contribute to discovered territory.
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
+   const purpleAllowedRoads=discoveryEligible;
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='EXPLORING')continue;
-    const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!allowedRoads.has(id));
+    const permitted=taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads;
+    const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!permitted.has(id));
     if(firstForbidden<0)continue;
     if(firstForbidden<=taxi.leg){
      // A vehicle already traversing an invalid edge is held at its current
@@ -155,7 +157,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     const purpleCluster=taxi.kind==='explorer'?discoveryEligible:undefined;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxi.kind==='explorer'?discoveryEligible:undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,
+     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads,taxi.kind==='explorer'?discoveryEligible:undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,
      taxi.kind==='explorer'&&taxi.path.length>=2?nearest(graph,taxi.path[taxi.path.length-2]):undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
@@ -168,7 +170,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
     const purpleCluster=taxis[index].kind==='explorer'?discoveryEligible:undefined;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
+    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxis[index].kind==='explorer'?purpleAllowedRoads:allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
      assignedCount++;
