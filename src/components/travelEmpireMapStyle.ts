@@ -1,85 +1,82 @@
 import type maplibregl from 'maplibre-gl';
 
-/** TravelEmpire Natural Cinematic: retain MapTiler's realistic streets, labels,
- * road casings and land-use detail; tune only a few atmospheric accents. */
-export type MapDayPhase = 'day' | 'dusk' | 'night';
+/** Signature TravelEmpire cartography: distinct in daylight as well as at night.
+ * Paint-only updates never replace vector sources, fog, exploration or vehicles. */
+export type MapDayPhase='day'|'dusk'|'night';
 export function mapDayPhase(hour:number):MapDayPhase {
  return hour>=20||hour<5?'night':hour>=18||hour<7?'dusk':'day';
 }
+type Feature='land'|'water'|'waterway'|'forest'|'park'|'grass'|'farmland'|'building'|'motorway'|'major'|'minor'|'rail'|'border';
+const colors:Record<MapDayPhase,Record<Feature,string>>={
+ day:{land:'#f1e8d2',water:'#4aabd0',waterway:'#4aabd0',forest:'#4e9e6b',park:'#81c88b',grass:'#b8d9a1',farmland:'#dfd6a7',building:'#d7bba3',motorway:'#e6a35c',major:'#fff4dc',minor:'#ffffff',rail:'#9d958b',border:'#b0a48f'},
+ dusk:{land:'#cbbba7',water:'#367f9d',waterway:'#367f9d',forest:'#427e60',park:'#6a9d76',grass:'#9fb58a',farmland:'#b8a982',building:'#ae8f7c',motorway:'#e8a369',major:'#f3d7b7',minor:'#e9dfd1',rail:'#8b8179',border:'#91877e'},
+ night:{land:'#263943',water:'#173e5c',waterway:'#235779',forest:'#264d43',park:'#366354',grass:'#415f50',farmland:'#4c584b',building:'#55606a',motorway:'#d99b62',major:'#9dabb0',minor:'#667b83',rail:'#68747d',border:'#647079'},
+};
 const extrusionId='travelempire-3d-buildings';
-const palettes={
- day:{water:'#79b7d1',park:'#9bc99b',forest:'#76ad83',building:'#d9c9b5',extrusion:'#d5c3ad',road:'#f4d9a9'},
- dusk:{water:'#608da9',park:'#7ea789',forest:'#628c74',building:'#c2ad9e',extrusion:'#baa294',road:'#f1d3a6'},
- night:{water:'#345a76',park:'#567763',forest:'#405f51',building:'#7c7c7a',extrusion:'#767979',road:'#c3ae94'},
-} as const;
-const basemapOriginals=new WeakMap<maplibregl.Map,Map<string,{property:string;value:unknown}>>();
-const modifiedLayerIds=new WeakMap<maplibregl.Map,Set<string>>();
-const isGameLayer=(id:string)=>/travelempire|explor|territory|ferry|survey|purple|road-status|fog|owned|discovered/i.test(id);
-function naturalTarget(layer:{id:string;type:string;paint?:unknown;'source-layer'?:string}):'water'|'park'|'forest'|'building'|'road'|null {
+const originals=new WeakMap<maplibregl.Map,Map<string,unknown>>();
+const isGameLayer=(id:string)=>/travelempire|explor|territory|ferry|survey|purple|fog|discovered|owned|road-status/i.test(id);
+function feature(layer:{id:string;type:string;'source-layer'?:string;source?:unknown}):Feature|null{
  const id=layer.id.toLowerCase();
  if(isGameLayer(id))return null;
- const sourceLayer=('source-layer' in layer&&typeof layer['source-layer']==='string'?layer['source-layer']:'').toLowerCase();
+ const source=typeof layer.source==='string'?layer.source.toLowerCase():'';
+ // Only restyle MapTiler's vector basemap, never app-managed GeoJSON sources.
+ if(/explor|territory|ferry|travelempire|survey|roads-|graph|station/.test(source))return null;
+ const sourceLayer=layer['source-layer']?.toLowerCase()??'';
  const name=id+' '+sourceLayer;
+ if(layer.type==='background')return 'land';
  if(layer.type==='fill'){
-   if(/water|ocean|lake/.test(name))return 'water';
-   if(/forest|wood/.test(name))return 'forest';
-   if(/park|garden/.test(name))return 'park';
-   if(/building/.test(name))return 'building';
+  if(/water|ocean|lake|reservoir/.test(name))return 'water';
+  if(/building/.test(name))return 'building';
+  if(/forest|wood/.test(name))return 'forest';
+  if(/park|garden|recreation/.test(name))return 'park';
+  if(/farmland|farm|agricult/.test(name))return 'farmland';
+  if(/grass|meadow|scrub|landcover|landuse/.test(name))return 'grass';
+  if(/land|earth/.test(name))return 'land';
  }
- // Only tint high-priority roads slightly at dusk/night. Keep their widths,
- // outlines, tunnels, bridges, and ordinary local street colors untouched.
- if(layer.type==='line'&&/motorway|trunk/.test(id)&&/road|transportation|motorway|trunk/.test(name)&&!/casing|outline|bridge|tunnel/.test(id))return 'road';
+ if(layer.type==='line'){
+  if(/water|river|stream|canal/.test(name))return 'waterway';
+  if(/rail/.test(name))return 'rail';
+  if(/boundary|border/.test(name))return 'border';
+  // Preserve provider casings and bridges: only recolor road centerlines.
+  if(/casing|outline|tunnel|bridge/.test(id))return null;
+  if(/motorway|trunk/.test(name))return 'motorway';
+  if(/primary|secondary|tertiary/.test(name))return 'major';
+  if(/road|street|transportation|residential|service/.test(name))return 'minor';
+ }
  return null;
 }
-export function applyTravelEmpireStyle(map:maplibregl.Map,phase:MapDayPhase,threeD:boolean):void {
+export function applyTravelEmpireStyle(map:maplibregl.Map,phase:MapDayPhase,threeD:boolean):void{
  if(!map.isStyleLoaded())return;
  const layers=map.getStyle().layers??[];
- let originals=basemapOriginals.get(map);
- if(!originals){originals=new Map();basemapOriginals.set(map,originals);}
- let modified=modifiedLayerIds.get(map);
- if(!modified){modified=new Set();modifiedLayerIds.set(map,modified);}
- // When a provider basemap is reloaded, old layer IDs can be reused; restore
- // from the new style's actual paint values instead of stale cached values.
- const liveIds=new Set(layers.map(layer=>layer.id));
- for(const id of [...modified])if(!liveIds.has(id)){modified.delete(id);originals.delete(id);}
+ let original=originals.get(map);
+ if(!original){original=new Map();originals.set(map,original);}
  for(const layer of layers){
-   const target=naturalTarget(layer);
-   if(!target)continue;
-   const property=layer.type==='line'?'line-color':'fill-color';
-   if(layer.type!=='fill'&&layer.type!=='line')continue;
-   const key=layer.id;
-   if(!originals.has(key)){
-     const value=(layer.paint as Record<string,unknown>|undefined)?.[property];
-     if(value===undefined)continue;
-     originals.set(key,{property,value});
-   }
-   const original=originals.get(key);
-   if(!original)continue;
-   try{
-     // Daytime is the authentic MapTiler cartography. At dusk and night we
-     // selectively change natural areas, without flattening the whole map.
-     map.setPaintProperty(layer.id,property,phase==='day'?original.value:palettes[phase][target]);
-     modified.add(key);
-   }catch{/* Leave incompatible provider layers unchanged. */}
+  const kind=feature(layer);
+  if(!kind)continue;
+  const property=layer.type==='background'?'background-color':layer.type==='fill'?'fill-color':layer.type==='line'?'line-color':null;
+  if(!property)continue;
+  const key=layer.id+':'+property;
+  if(!original.has(key))original.set(key,(layer.paint as Record<string,unknown>|undefined)?.[property]);
+  try{map.setPaintProperty(layer.id,property,colors[phase][kind]);}catch{/* Retain unsupported provider paint layers. */}
  }
  if(map.getLayer(extrusionId)){
-   if(!threeD){map.removeLayer(extrusionId);return;}
-   map.setPaintProperty(extrusionId,'fill-extrusion-color',palettes[phase].extrusion);
-   return;
+  if(!threeD){map.removeLayer(extrusionId);return;}
+  map.setPaintProperty(extrusionId,'fill-extrusion-color',colors[phase].building);
+  return;
  }
  if(!threeD)return;
  const building=layers.find(layer=>layer.type==='fill'&&'source-layer' in layer&&layer['source-layer']==='building'&&'source' in layer&&typeof layer.source==='string');
  if(!building||!('source' in building)||typeof building.source!=='string')return;
  const firstLabel=layers.find(layer=>layer.type==='symbol'&&!isGameLayer(layer.id));
  try{
-   map.addLayer({
-     id:extrusionId,type:'fill-extrusion',source:building.source,'source-layer':'building',minzoom:15,
-     paint:{
-       'fill-extrusion-color':palettes[phase].extrusion,
-       'fill-extrusion-height':['interpolate',['linear'],['zoom'],15,0,16,['coalesce',['get','render_height'],['get','height'],12]],
-       'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],
-       'fill-extrusion-opacity':0.65,
-     },
-   },firstLabel?.id);
+  map.addLayer({
+   id:extrusionId,type:'fill-extrusion',source:building.source,'source-layer':'building',minzoom:15,
+   paint:{
+    'fill-extrusion-color':colors[phase].building,
+    'fill-extrusion-height':['interpolate',['linear'],['zoom'],15,0,16,['coalesce',['get','render_height'],['get','height'],12]],
+    'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],
+    'fill-extrusion-opacity':0.68,
+   },
+  },firstLabel?.id);
  }catch(error){console.warn('[TravelEmpire] 3D buildings unavailable',error);}
 }
