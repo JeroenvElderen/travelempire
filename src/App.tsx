@@ -150,7 +150,7 @@ export default function App(){
     const empty=energyPercent(t)<=0;
     const stranded=empty||((t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
     if(!stranded||meters(t.position,depot)<75)continue;
-    const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??60)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
+    const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
     const purpose:RecoveryJob['purpose']=serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
     const pickup=buildRoute(depot,t.position);
     if(!pickup)continue;
@@ -422,7 +422,7 @@ export default function App(){
       }
      }
 
-     // Automatic scheduled service: vehicles stop accepting work at 60% condition.
+     // Automatic scheduled service: vehicles stop accepting work at 40% condition.
      // Service is billed on completion; insufficient cash postpones completion.
      if(delivered.status==='SERVICING'){
       const until=delivered.serviceUntil??now+120000;
@@ -435,7 +435,7 @@ export default function App(){
      }
      // All vehicle types travel to the main headquarters workshop before service.
      // Do not teleport to the workshop or service on the roadside if routing fails.
-     const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??60)
+     const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??40)
       ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
      if(delivered.status==='IDLE'&&serviceDue&&energyPercent(delivered)>10&&!delivered.refillRequested){
       const start=nearest(graph,delivered.position);
