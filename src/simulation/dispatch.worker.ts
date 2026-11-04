@@ -66,7 +66,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    let best:{index:number;taxi:Taxi;etaSeconds:number}|null=null;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=20)continue;
+    if((taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered);
     if(!assigned)continue;
     let etaSeconds=0;
@@ -117,7 +117,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=20)continue;
+    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const start=nearest(graph,taxi.position);
     if(!start||permittedNodes.has(start))continue;
     const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
@@ -161,7 +161,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
-    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=20)continue;
+    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
     const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined);
     if(scout.status!=='IDLE'){
      taxis[index]=scout;
