@@ -1,7 +1,7 @@
 import type {Company} from './company';
 import type {EquityState,EquityHolder,EquityEvent,FleetState,ValuationPoint} from './simulation/taxi';
 import {balanceSheet,accountingOf} from './accounting';
-import {depotDailyTotal,depotCapacity,upgradesFor,DEPOT_UPGRADES} from './depotFinance';
+import {DEPOT_UPGRADES} from './depotFinance';
 
 export const FOUNDER_ID='founder';
 export const INITIAL_SHARES=10000;
