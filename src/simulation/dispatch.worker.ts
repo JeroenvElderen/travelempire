@@ -201,7 +201,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(taxi.status==='PAUSED'&&!taxi.recoveryPending&&energyPercent(taxi)>10&&!taxi.refillRequested){
      if(now<(parkedRetryAt.get(taxi.id)??0))continue;
      parkedRetryAt.set(taxi.id,now+5000);
-     const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:false},graph,explored,hq,
+     const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:true},graph,explored,hq,
       reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,sectionOwners);
      if(candidate.status==='EXPLORING'){
       taxis[index]={...candidate,shiftParked:false,pauseAtHome:false};
