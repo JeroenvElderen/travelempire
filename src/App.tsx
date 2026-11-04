@@ -642,16 +642,36 @@ export default function App(){
   setPlacingDepot(false);setSelecting(false);setPage('Company');setSimError('');
  };
  const resetVehicle=(id:string)=>{
+  const vehicle=fleet.taxis.find(t=>t.id===id);
+  if(!vehicle||!companyRef.current)return;
+  const spec=energySpec(vehicle);
+  const quantity=Math.max(0,spec.capacity-energyRemaining(vehicle));
+  const fuelCost=Math.round(quantity*spec.pricePerUnit*((fleet.upgrades??[]).includes('fuel')?0.95:1)*100)/100;
+  const serviceCost=150;
+  const total=fuelCost+serviceCost;
+  if(companyRef.current.cash+pendingCashRef.current<total){setSimError(`Reset requires €${total.toFixed(2)} for full ${spec.unit==='L'?'refuelling':'charging'} and service. Insufficient funds.`);return;}
   const remaining=recoveriesRef.current.filter(job=>job.targetId!==id);
   if(remaining.length!==recoveriesRef.current.length){recoveriesRef.current=remaining;setRecoveries(remaining);}
   idleWatch.current.delete(id);
-  setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:{...t,
-   status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
-   journeyEdges:[],pickup:undefined,dropoff:undefined,fare:0,
-   recoveryPending:false,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,
-   serviceDestination:undefined,serviceUntil:undefined,pauseAtHome:false,shiftParked:false,
-   refillRequested:energyPercent(t)<=10||!!t.refillRequested
-  })}));
+  pendingCashRef.current-=total;
+  const now=Date.now();
+  setFleet(old=>({...old,
+   fuelExpense:(old.fuelExpense??0)+fuelCost,
+   serviceExpense:(old.serviceExpense??0)+serviceCost,
+   transactions:[
+    {id:crypto.randomUUID(),time:now,taxiId:id,description:`${vehicle.name} · reset ${spec.unit==='L'?'refuel':'recharge'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-fuelCost},
+    {id:crypto.randomUUID(),time:now,taxiId:id,description:`${vehicle.name} · reset full service`,amount:-serviceCost},
+    ...(old.transactions??[])
+   ].slice(0,100),
+   taxis:old.taxis.map(t=>t.id!==id?t:{...t,
+    status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
+    journeyEdges:[],pickup:undefined,dropoff:undefined,fare:0,
+    recoveryPending:false,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,
+    serviceDestination:undefined,serviceUntil:undefined,pauseAtHome:false,shiftParked:false,
+    refillRequested:false,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
+    fuelExpense:(t.fuelExpense??0)+fuelCost,vehicleCondition:100,
+    serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0
+   })}));
   setSimError('');
  };
  const refillTaxi=(id:string)=>{const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||!companyRef.current)return;
