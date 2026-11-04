@@ -130,7 +130,7 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
    l.balance=Math.max(0,Math.round((l.balance-(paid-interest))*100)/100);l.remainingDays--;
    loanPayments+=paid;loanInterest+=interest;corporateLoanPayments+=paid;
   }
-  subsidiaryCash+=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.revenuePerDay-s.expensesPerDay-Math.max(0,(s.revenuePerDay-s.expensesPerDay)*settings.corporateRate/100),0);
+  subsidiaryCash+=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.revenuePerDay-s.expensesPerDay-Math.max(0,(s.revenuePerDay-s.expensesPerDay)*(s.foreignTaxRate??settings.corporateRate)/100),0);
   const revenue=baseRevenue+extraRevenue;
   const operatingExpenses=baseExpenses+extraCost+loanInterest+leasePayments;
   const inputVat=vatIncluded(Math.max(0,(baseExpenses+extraCost)*.3),settings.vatRate);
