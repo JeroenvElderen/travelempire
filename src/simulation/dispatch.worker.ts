@@ -206,8 +206,17 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      if(attempt>=4||now<(parkedRetryAt.get(taxi.id)??0))continue;
      parkedAttempts.set(taxi.id,{signature:retrySignature,count:attempt+1,lastAttemptAt:now});
      parkedRetryAt.set(taxi.id,now+5000);
-     const candidate=dispatchScout({...taxi,status:'IDLE',shiftParked:true,explorationMode:attempt===3?'frontier':taxi.explorationMode==='frontier'?'frontier':undefined},graph,explored,hq,
+     const retryTaxi={...taxi,status:'IDLE' as const,shiftParked:true,
+      explorationMode:attempt===3?'frontier' as const:taxi.explorationMode};
+     let candidate=dispatchScout(retryTaxi,graph,explored,hq,
       reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,sectionOwners);
+     // Reservations and stale section ownership must not permanently block
+     // a reachable undiscovered road. A second pass tests the actual eligible
+     // connected graph without other Explorers' soft target reservations.
+     if(candidate.status!=='EXPLORING')
+      candidate=dispatchScout({...retryTaxi,explorationSection:undefined},graph,explored,hq,
+       new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,
+       discoveryEligible,undefined,undefined,new Set<string>());
      if(candidate.status==='EXPLORING'){
       parkedAttempts.delete(taxi.id);
       taxis[index]={...candidate,shiftParked:false,pauseAtHome:false};
