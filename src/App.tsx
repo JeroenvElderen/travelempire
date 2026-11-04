@@ -354,6 +354,12 @@ export default function App(){
       explorationSection:assigned.explorationSection,explorationSectionCompleted:assigned.explorationSectionCompleted,
       explorationSectionTotal:assigned.explorationSectionTotal};
     }
+    // Worker state is authoritative for automatic Explorer parking. A stale
+    // PAUSED snapshot must not survive after the worker clears that state.
+    if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&
+       assigned?.status==='IDLE')
+     return {...t,status:'IDLE',shiftParked:false,pauseAtHome:false,
+      path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     // Black Surveyors must never remain paused unless a recovery truck owns
     // their state. Purple can wake from any non-recovery pause once the worker
     // finds a reachable eligible road, even after reloading an older save.
