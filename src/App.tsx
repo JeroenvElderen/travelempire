@@ -662,6 +662,7 @@ export default function App(){
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
     const loanTick=advanceLoans(old.loans??[],4);
     const leaseTick=advanceLeases(old.leases??[],4);
+    const repaymentCount=(old.loans??[]).reduce((n,l)=>n+Math.max(0,l.remainingDays-(loanTick.loans.find(x=>x.id===l.id)?.remainingDays??0)),0);
     const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments-leaseTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     // Sweep a percentage of each passenger-income settlement immediately.
@@ -679,7 +680,7 @@ export default function App(){
     const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
-    return{...old,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
+    return{...old,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
@@ -814,7 +815,7 @@ export default function App(){
   const amount=Math.round(loan.balance*100)/100;
   if(companyRef.current.cash+pendingCashRef.current<amount){setSimError('Insufficient operating cash to repay this loan.');return;}
   pendingCashRef.current-=amount;
-  setFleet(old=>({...old,loans:(old.loans??[]).filter(l=>l.id!==loanId),loanPrincipalPaid:(old.loanPrincipalPaid??0)+amount,
+  setFleet(old=>({...old,loans:(old.loans??[]).filter(l=>l.id!==loanId),loanPrincipalPaid:(old.loanPrincipalPaid??0)+amount,financePaymentsMade:(old.financePaymentsMade??0)+1,
    bank:appendBankEntries(bankOf(old.bank),[bankEntry('Early vehicle finance payoff',-amount,'operating','repayment')]),
    transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Early vehicle finance payoff',amount:-amount},...(old.transactions??[])].slice(0,100)}));setSimError('');
  };
