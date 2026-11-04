@@ -333,7 +333,7 @@ export default function App(){
      // Do not teleport to the workshop or service on the roadside if routing fails.
      const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??60)
       ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
-     if(delivered.status==='IDLE'&&serviceDue){
+     if(delivered.status==='IDLE'&&serviceDue&&energyPercent(delivered)>10&&!delivered.refillRequested){
       const start=nearest(graph,delivered.position);
       const home:[number,number]=[company!.headquarters.lng,company!.headquarters.lat];
       const end=nearest(graph,home);
