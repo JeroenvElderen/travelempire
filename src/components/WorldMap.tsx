@@ -393,18 +393,18 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const nodeCount=graph.nodes.size,edgeCount=graph.edges.size;
    const visibleIds=new Set(visibleRoadFeatures.current.map(f=>String(f.properties?.roadId??'')));
    const bounds=instance.getBounds();
-   const missingVisibleDiscovery=[...currentExploredRoads.current].some(id=>{
-    if(visibleIds.has(id))return false;
-    // Only trigger a rebuild for a newly discovered edge that is actually
-    // in the viewport, not for thousands of distant saved discoveries.
-    for(const [from,edges] of graph.edges){
-     const edge=edges.find(e=>e.id===id);
-     if(!edge)continue;
-     const a=graph.nodes.get(from),b=graph.nodes.get(edge.to);
-     return Boolean(a&&b&&(bounds.contains(a)||bounds.contains(b)));
+   const missingIds=new Set([...currentExploredRoads.current].filter(id=>!visibleIds.has(id)));
+   let missingVisibleDiscovery=false;
+   if(missingIds.size)for(const [from,edges] of graph.edges){
+    const a=graph.nodes.get(from);
+    if(!a)continue;
+    for(const edge of edges){
+     if(!missingIds.has(edge.id))continue;
+     const b=graph.nodes.get(edge.to);
+     if(b&&(bounds.contains(a)||bounds.contains(b))){missingVisibleDiscovery=true;break;}
     }
-    return false;
-   });
+    if(missingVisibleDiscovery)break;
+   }
    if(missingVisibleDiscovery||nodeCount!==previousNodeCount||edgeCount!==previousEdgeCount){
     previousNodeCount=nodeCount;previousEdgeCount=edgeCount;
     update();
