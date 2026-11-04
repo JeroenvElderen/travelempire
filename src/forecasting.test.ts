@@ -20,7 +20,7 @@ describe('finance forecasting',()=>{
   const expanded=forecastBusiness(company,fleet,{...plan,mode:'cash'},start,start);
   expect(expanded.investmentCost).toBeGreaterThan(0);
   expect(expanded.warnings.some(w=>w.includes('exceeds current operating cash'))).toBe(true);
-  expect(expanded.closingCash).toBeLessThan(baseline.closingCash);
+  expect(expanded.points[0].cash).toBeLessThan(baseline.points[0].cash);
  });
  it('schedules repayments and respects the requested horizon',()=>{
   const finance=forecastBusiness(company,fleet,{...plan,mode:'finance',days:90},start,start);
