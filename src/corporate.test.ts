@@ -49,6 +49,16 @@ describe('corporate group finance',()=>{
   expect(next.state.loans[0].balance).toBeLessThan(bought.state.loans[0].balance);
   expect(advanceCorporate(next.state,date+86400000).parentCashDelta).toBe(0);
  });
+ it('accrues subsidiary tax before settling at the next month boundary',()=>{
+  const bought=acquireCompany(undefined,fleet,'athens-city',0,0,300000,5000,date);
+  const initialized=advanceCorporate(bought.state,date);
+  const november=advanceCorporate(initialized.state,date+86400000);
+  expect(november.state.subsidiaries[0].taxLiability).toBeGreaterThan(0);
+  expect(november.state.subsidiaries[0].taxPaid).toBe(0);
+  const december=advanceCorporate(november.state,Date.UTC(2026,11,1));
+  expect(december.state.subsidiaries[0].taxPaid).toBeGreaterThan(0);
+  expect(december.state.subsidiaries[0].taxLiability).toBeGreaterThanOrEqual(0);
+ });
  it('restructures assets without creating operating income',()=>{
   const formed=foundSubsidiary(undefined,'Branch','Patras',20000,300000,5000,date);
   const updated=restructureSubsidiary(formed.state,formed.subsidiary.id,1,0,date);
