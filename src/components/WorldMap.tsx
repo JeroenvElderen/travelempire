@@ -354,9 +354,30 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   }else if(newlyDiscovered.length){
    addDebug(`+${newlyDiscovered.length} completed road edges; refreshing purple lines`);
   }
-  // Only the viewport renderer writes to the purple GeoJSON source.
-  // Trigger it immediately when road exploration changes, without map movement.
+  // The sole road renderer refreshes the purple source first.
   refreshRoadLines.current?.();
+  if(newlyDiscovered.length&&graph){
+   const instance=map.current;
+   const purpleSource=instance?.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
+   const renderedIds=new Set(visibleRoadFeatures.current.filter(f=>explored.has(String(f.properties?.roadId??''))).map(f=>String(f.properties?.roadId??'')));
+   const bounds=instance?.getBounds();
+   for(const id of newlyDiscovered.slice(0,12)){
+    let geometry=false,visible=false;
+    for(const [from,edges] of graph.edges){
+     const a=graph.nodes.get(from);
+     for(const edge of edges){
+      if(edge.id!==id)continue;
+      const b=graph.nodes.get(edge.to);
+      if(!a||!b)continue;
+      geometry=true;
+      if(bounds&&Math.max(a[0],b[0])>=bounds.getWest()&&Math.min(a[0],b[0])<=bounds.getEast()&&Math.max(a[1],b[1])>=bounds.getSouth()&&Math.min(a[1],b[1])<=bounds.getNorth())visible=true;
+      break;
+     }
+     if(geometry&&visible)break;
+    }
+    addDebug(`LINE ${id}: GEOMETRY=${geometry} VIEWPORT=${visible} RENDERED=${renderedIds.has(id)} SOURCE=${!!purpleSource}`);
+   }
+  }
  },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
