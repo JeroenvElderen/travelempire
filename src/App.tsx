@@ -791,7 +791,7 @@ export default function App(){
   const now=Date.now();
   pendingCashRef.current=Math.round((pendingCashRef.current+cashDelta)*100)/100;
   const old=fleetSaveRef.current;
-  const entries=events.map(event=>bankEntry(description+' · '+event.holderName,event.amount,'operating',event.type==='investment'||event.type==='issue'?'loan':'purchase'));
+  const entries=events.map(event=>bankEntry(description+' · '+event.holderName,event.amount,'operating','equity'));
   const updated={...old,equity:next,bank:appendBankEntries(bankOf(old.bank),entries),transactions:[{id:crypto.randomUUID(),time:now,description,amount:cashDelta},...(old.transactions??[])].slice(0,100)};
   fleetSaveRef.current=updated;setFleet(updated);setSimError('');
  };
