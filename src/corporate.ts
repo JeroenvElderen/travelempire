@@ -142,10 +142,21 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  // Parent acquisition loans remain separate liabilities; subsidiary cash stays in the subsidiary.
  const assets=round(parent.assets+subsidiaryAssets);
  const liabilities=round(parent.loans+parent.taxLiabilities+subsidiaryDebt+acquisitionDebt);
+ const parentCashTaxes=sum(parentPeriods.map(p=>p.corporateTaxPaid+p.vatPaid));
+ const equityFinancing=sum((fleet.equity?.events??[]).map(e=>e.amount));
+ const loanDrawdowns=sum(state.events.filter(e=>e.kind==='loan').map(e=>e.parentCashDelta));
+ const loanRepayments=sum(state.events.filter(e=>e.kind==='repayment').map(e=>e.parentCashDelta));
+ const subsidiaryAssetInvestment=sum(state.events.filter(e=>e.kind==='restructure').map(e=>e.subsidiaryCashDelta));
+ const cashFlow={
+  operating:round(parentRevenue-parentExpenses-parentCashTaxes+state.totalRevenue-state.totalExpenses-state.totalTaxes),
+  investing:round(-state.totalAcquisitionSpend+subsidiaryAssetInvestment),
+  financing:round(loanDrawdowns+loanRepayments+equityFinancing),
+  intercompanyEliminated:round(sum(state.events.filter(e=>e.kind==='transfer'||e.kind==='formation').map(e=>Math.abs(e.parentCashDelta)))),
+ };
  const revenue=round(parentRevenue+state.totalRevenue);
  const expenses=round(parentExpenses+state.totalExpenses);
  const taxes=round(parentTaxes+state.totalTaxes);
- return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt)};
+ return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt),cashFlow};
 }
 export function corporateValuation(company:Company,fleet:FleetState,gameMs:number){
  const valuation=valueCompany(company,fleet,gameMs);
