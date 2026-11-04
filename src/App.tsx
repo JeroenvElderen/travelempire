@@ -750,6 +750,8 @@ export default function App(){
   saveCompany(updated);setCompany(updated);setFleet(old=>({...old,
    loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,termDays),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
    leases:mode==='lease'?[...(old.leases??[]),{id:crypto.randomUUID(),vehicleId:taxi.id,vehicleName:taxi.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0}]:old.leases,
+   leaseExpense:(old.leaseExpense??0)+(mode==='lease'?lease.upfront:0),
+   financeHistory:mode==='lease'?(()=>{const day=new Date(now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];if(last?.day===day)list[list.length-1]={...last,expenses:last.expenses+lease.upfront};else list.push({day,revenue:0,expenses:lease.upfront,trips:0});return list.slice(-365);})():old.financeHistory,
    bank:appendBankEntries(bankOf(old.bank),[...(financed>0?[bankEntry('Taxi finance disbursement · '+taxi.name,financed,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,-(mode==='lease'?cashDue:cost),'operating','purchase')]),
    transactions:[{id:crypto.randomUUID(),time:now,taxiId:taxi.id,description:(mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,amount:-(mode==='lease'?cashDue:cost)},...(old.transactions??[])].slice(0,100),
    drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
