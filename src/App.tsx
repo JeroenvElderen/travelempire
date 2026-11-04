@@ -135,7 +135,7 @@ export default function App(){
     if(job.phase==='transport'){
      setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===job.targetId?{
       ...t,position:moving.position,recoveryPending:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
-      status:job.purpose==='fuel'?'REFUELLING':job.purpose==='service'?'SERVICING':'PAUSED',
+      status:job.purpose==='fuel'?'REFUELLING':job.purpose==='service'?'SERVICING':(!t.kind||t.kind==='taxi')?'PAUSED':'IDLE',
       refillDestination:job.purpose==='fuel'?job.destination:undefined,refillAtDepot:job.purpose==='fuel'?job.atDepot:undefined,
       refillUntil:undefined,serviceUntil:undefined,pauseAtHome:false,shiftParked:job.purpose==='depot'&&(!t.kind||t.kind==='taxi')
      }:t)}));
@@ -148,7 +148,7 @@ export default function App(){
     const watch=idleWatch.current.get(t.id);
     const stalled=!!watch&&now-watch.since>=30000;
     const empty=energyPercent(t)<=0;
-    const stranded=empty||((t.status==='IDLE'||t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
+    const stranded=empty||((t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
     if(!stranded||meters(t.position,depot)<75)continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??60)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
     const purpose:RecoveryJob['purpose']=serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
