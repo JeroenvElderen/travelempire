@@ -102,12 +102,20 @@ export default function App(){
    if(net!==0){
     pendingCashRef.current+=net;
     setFleet(old=>{
+     const savingsBank=bankOf(old.bank);
+     const available=Math.max(0,(companyRef.current?.cash??0)+pendingCashRef.current-savingsBank.minimumOperatingCash);
+     const savingsAmount=Math.floor(Math.min(available,Math.max(0,gross)*savingsBank.autoSavePercent/100)*100)/100;
+     if(savingsAmount>0)pendingCashRef.current-=savingsAmount;
+     const updatedBank=savingsAmount>0?appendBankEntries({...savingsBank,savings:savingsBank.savings+savingsAmount},[
+      bankEntry('Automatic savings · ferry income',-savingsAmount,'operating','transfer'),
+      bankEntry('Automatic savings · ferry income',savingsAmount,'savings','transfer')
+     ]):old.bank;
      const day=new Date(currentHour).toISOString().slice(0,10);
      const history=[...(old.financeHistory??[])];
      const lastDay=history[history.length-1];
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
-     return {...old,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+     return {...old,bank:updatedBank,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       financeHistory:history.slice(-365),
       transactions:[{id:crypto.randomUUID(),time:Date.now(),
        description:'Ferry ticket revenue · '+owned.length+' route(s)',amount:Math.round(gross*100)/100},
@@ -463,28 +471,6 @@ export default function App(){
   window.addEventListener('pagehide',flush);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',flush);flush()};
  },[company?.id]);
- // Automatic savings runs once per completed UTC financial day. Transfers are
- // balance movements, never income or operating expenses.
- useEffect(()=>{if(!company)return;
-  const timer=window.setInterval(()=>{
-   const current=companyRef.current;if(!current)return;
-   const state=fleetSaveRef.current;const bank=bankOf(state.bank);
-   const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
-   const record=(state.financeHistory??[]).find(h=>h.day===yesterday);
-   if(!record||bank.autoSavePercent<=0||bank.lastAutoSaveDay===yesterday)return;
-   const profit=Math.max(0,record.revenue-record.expenses);
-   const available=Math.max(0,current.cash+pendingCashRef.current-bank.minimumOperatingCash);
-   const amount=Math.floor(Math.min(available,profit*bank.autoSavePercent/100)*100)/100;
-   pendingCashRef.current-=amount;
-   setFleet(old=>{const currentBank=bankOf(old.bank);if(currentBank.lastAutoSaveDay===yesterday)return old;
-    return {...old,bank:{...appendBankEntries(currentBank,amount>0?[
-      bankEntry('Automatic profit savings',-amount,'operating','transfer'),
-      bankEntry('Automatic profit savings',amount,'savings','transfer')]:[]),
-      savings:currentBank.savings+amount,lastAutoSaveDay:yesterday}};
-   });
-  },15000);
-  return()=>window.clearInterval(timer);
- },[company?.id]);
  // Persist discoveries promptly rather than waiting for a five-second fleet snapshot.
  // IndexedDB merges the IDs transactionally with geometry written by WorldMap.
  useEffect(()=>{if(!company)return;const id=company.id;let busy=false;let pending=false;
@@ -677,11 +663,21 @@ export default function App(){
     const loanTick=advanceLoans(old.loans??[],4);
     const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-loanTick.payments;
     if(net!==0)pendingCashRef.current+=net;
+    // Sweep a percentage of each passenger-income settlement immediately.
+    // Loan proceeds, transfers and asset sales are not operating income.
+    const savingsBank=bankOf(old.bank);
+    const operatingAvailable=Math.max(0,(companyRef.current?.cash??0)+pendingCashRef.current-savingsBank.minimumOperatingCash);
+    const savingsAmount=Math.floor(Math.min(operatingAvailable,Math.max(0,revenue)*savingsBank.autoSavePercent/100)*100)/100;
+    if(savingsAmount>0)pendingCashRef.current-=savingsAmount;
+    const updatedBank=savingsAmount>0?appendBankEntries({...savingsBank,savings:savingsBank.savings+savingsAmount},[
+      bankEntry('Automatic savings · passenger income',-savingsAmount,'operating','transfer'),
+      bankEntry('Automatic savings · passenger income',savingsAmount,'savings','transfer')
+    ]):old.bank;
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
-    return{...old,drivers,taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
+    return{...old,bank:updatedBank,drivers,taxis,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead,
