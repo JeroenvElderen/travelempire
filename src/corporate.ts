@@ -35,7 +35,7 @@ export function acquireCompany(stateValue:CorporateState|undefined,fleet:FleetSt
  if(downPayment>operatingCash-minimumReserve)throw Error('Insufficient operating cash after the minimum reserve.');
  const annualRate=.09,term=180,dailyPayment=round(loanAmount*annualRate/365/(1-Math.pow(1+annualRate/365,-term)));
  const loan:CorporateLoan|undefined=loanAmount>0?{id:crypto.randomUUID(),principal:loanAmount,balance:loanAmount,annualRate,dailyPayment,remainingDays:term,targetId:offer.id}:undefined;
- const subsidiary:CorporateSubsidiary={id:offer.id,name:offer.name,city:offer.city,createdDay:dayOf(gameMs),source:'acquired',ownershipPercent:100,fleetCount:offer.fleetCount,depotCount:offer.depotCount,drivers:offer.fleetCount,cash:offer.cash,vehicleAssets:offer.vehicleAssets,depotAssets:offer.depotAssets,goodwill:round(price-(offer.cash+offer.vehicleAssets+offer.depotAssets-offer.externalDebt)),externalDebt:offer.externalDebt,revenuePerDay:offer.revenuePerDay,expensesPerDay:offer.expensesPerDay,retainedEarnings:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
+ const subsidiary:CorporateSubsidiary={id:offer.id,name:offer.name,city:offer.city,createdDay:dayOf(gameMs),source:'acquired',ownershipPercent:100,fleetCount:offer.fleetCount,depotCount:offer.depotCount,drivers:offer.fleetCount,cash:offer.cash,vehicleAssets:offer.vehicleAssets,depotAssets:offer.depotAssets,goodwill:round(price-(offer.cash+offer.vehicleAssets+offer.depotAssets-offer.externalDebt)),externalDebt:offer.externalDebt,revenuePerDay:offer.revenuePerDay,expensesPerDay:offer.expensesPerDay,retainedEarnings:0,taxLiability:0,taxPaid:0,accumulatedRevenue:0,accumulatedExpenses:0,lastSettledDay:dayOf(gameMs),active:true};
  const events=[event('acquisition',offer.id,'Acquire '+offer.name,price,-price,0,gameMs)];
  if(loan)events.unshift(event('loan',offer.id,'Acquisition loan drawdown',loanAmount,loanAmount,0,gameMs));
  return {state:{...state,subsidiaries:[...state.subsidiaries,subsidiary],loans:loan?[...state.loans,loan]:state.loans,events:[...events,...state.events].slice(0,1000),totalAcquisitionSpend:state.totalAcquisitionSpend+price},parentCashDelta:-downPayment,events,subsidiary};
@@ -65,9 +65,9 @@ export function mergeSubsidiaries(stateValue:CorporateState|undefined,sourceId:s
  const source=state.subsidiaries.find(s=>s.id===sourceId&&s.active),target=state.subsidiaries.find(s=>s.id===targetId&&s.active);
  if(!source||!target||source.id===target.id)throw Error('Choose two different active subsidiaries.');
  if(source.ownershipPercent!==100||target.ownershipPercent!==100)throw Error('Only wholly owned subsidiaries can be merged.');
- const merged:CorporateSubsidiary={...target,fleetCount:target.fleetCount+source.fleetCount,depotCount:target.depotCount+source.depotCount,drivers:target.drivers+source.drivers,cash:round(target.cash+source.cash),vehicleAssets:round(target.vehicleAssets+source.vehicleAssets),depotAssets:round(target.depotAssets+source.depotAssets),goodwill:round(target.goodwill+source.goodwill),externalDebt:round(target.externalDebt+source.externalDebt),revenuePerDay:round(target.revenuePerDay+source.revenuePerDay),expensesPerDay:round(target.expensesPerDay+source.expensesPerDay),retainedEarnings:round(target.retainedEarnings+source.retainedEarnings),taxPaid:round(target.taxPaid+source.taxPaid),accumulatedRevenue:round(target.accumulatedRevenue+source.accumulatedRevenue),accumulatedExpenses:round(target.accumulatedExpenses+source.accumulatedExpenses)};
+ const merged:CorporateSubsidiary={...target,fleetCount:target.fleetCount+source.fleetCount,depotCount:target.depotCount+source.depotCount,drivers:target.drivers+source.drivers,cash:round(target.cash+source.cash),vehicleAssets:round(target.vehicleAssets+source.vehicleAssets),depotAssets:round(target.depotAssets+source.depotAssets),goodwill:round(target.goodwill+source.goodwill),externalDebt:round(target.externalDebt+source.externalDebt),revenuePerDay:round(target.revenuePerDay+source.revenuePerDay),expensesPerDay:round(target.expensesPerDay+source.expensesPerDay),retainedEarnings:round(target.retainedEarnings+source.retainedEarnings),taxLiability:round(target.taxLiability+source.taxLiability),taxPaid:round(target.taxPaid+source.taxPaid),accumulatedRevenue:round(target.accumulatedRevenue+source.accumulatedRevenue),accumulatedExpenses:round(target.accumulatedExpenses+source.accumulatedExpenses)};
  const e=event('merger',target.id,'Merge '+source.name+' into '+target.name,0,0,0,gameMs);
- return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===sourceId?{...s,active:false,cash:0,vehicleAssets:0,depotAssets:0,externalDebt:0,revenuePerDay:0,expensesPerDay:0,retainedEarnings:0}:s.id===targetId?merged:s),loans:state.loans.map(l=>l.targetId===sourceId?{...l,targetId}:l),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
+ return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===sourceId?{...s,active:false,cash:0,vehicleAssets:0,depotAssets:0,externalDebt:0,revenuePerDay:0,expensesPerDay:0,retainedEarnings:0,taxLiability:0}:s.id===targetId?merged:s),loans:state.loans.map(l=>l.targetId===sourceId?{...l,targetId}:l),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
 }
 export function restructureSubsidiary(stateValue:CorporateState|undefined,id:string,deltaVehicles:number,deltaDepots:number,gameMs:number){
  const state=corporateOf(stateValue),sub=state.subsidiaries.find(s=>s.id===id&&s.active);
@@ -108,11 +108,15 @@ export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:numb
   const tickMs=Date.parse(state.lastProcessedDay)+(i+1)*86400000;
   for(const sub of subsidiaries){
    if(!sub.active||sub.lastSettledDay>=dayOf(tickMs))continue;
+   if(sub.lastSettledDay.slice(0,7)!==dayOf(tickMs).slice(0,7)){
+    const settlement=Math.min(Math.max(0,sub.cash),sub.taxLiability);
+    sub.cash=round(sub.cash-settlement);sub.taxPaid=round(sub.taxPaid+settlement);sub.taxLiability=round(sub.taxLiability-settlement);
+   }
    const dailyRevenue=sub.revenuePerDay;
    const dailyExpenses=sub.expensesPerDay;
    const tax=Math.max(0,round((dailyRevenue-dailyExpenses)*corporateTaxRate/100));
    const net=round(dailyRevenue-dailyExpenses-tax);
-   sub.cash=round(sub.cash+net);sub.retainedEarnings=round(sub.retainedEarnings+net);sub.accumulatedRevenue=round(sub.accumulatedRevenue+dailyRevenue);sub.accumulatedExpenses=round(sub.accumulatedExpenses+dailyExpenses);sub.taxPaid=round(sub.taxPaid+tax);sub.lastSettledDay=dayOf(tickMs);
+   sub.cash=round(sub.cash+dailyRevenue-dailyExpenses);sub.retainedEarnings=round(sub.retainedEarnings+net);sub.taxLiability=round(sub.taxLiability+tax);sub.accumulatedRevenue=round(sub.accumulatedRevenue+dailyRevenue);sub.accumulatedExpenses=round(sub.accumulatedExpenses+dailyExpenses);sub.lastSettledDay=dayOf(tickMs);
    revenue+=dailyRevenue;expenses+=dailyExpenses;taxes+=tax;
   }
   for(const loan of loans){
@@ -133,6 +137,8 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  const subsidiaryCash=sum(active.map(s=>s.cash));
  const subsidiaryAssets=sum(active.map(s=>s.cash+s.vehicleAssets+s.depotAssets+s.goodwill));
  const subsidiaryDebt=sum(active.map(s=>s.externalDebt));
+ const subsidiaryTaxLiabilities=sum(active.map(s=>s.taxLiability));
+ const subsidiaryTaxesPaid=sum(active.map(s=>s.taxPaid));
  const acquisitionDebt=sum(state.loans.map(l=>l.balance));
  const parentPeriods=accountingOf(fleet.accounting).periods;
  const parentRevenue=sum(parentPeriods.map(p=>p.netRevenue));
@@ -141,14 +147,14 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  // Intercompany transfers, formation capital and share purchases are excluded from P&L.
  // Parent acquisition loans remain separate liabilities; subsidiary cash stays in the subsidiary.
  const assets=round(parent.assets+subsidiaryAssets);
- const liabilities=round(parent.loans+parent.taxLiabilities+subsidiaryDebt+acquisitionDebt);
+ const liabilities=round(parent.loans+parent.taxLiabilities+subsidiaryDebt+subsidiaryTaxLiabilities+acquisitionDebt);
  const parentCashTaxes=sum(parentPeriods.map(p=>p.corporateTaxPaid+p.vatPaid));
  const equityFinancing=sum((fleet.equity?.events??[]).map(e=>e.amount));
  const loanDrawdowns=sum(state.events.filter(e=>e.kind==='loan').map(e=>e.parentCashDelta));
  const loanRepayments=sum(state.events.filter(e=>e.kind==='repayment').map(e=>e.parentCashDelta));
  const subsidiaryAssetInvestment=sum(state.events.filter(e=>e.kind==='restructure').map(e=>e.subsidiaryCashDelta));
  const cashFlow={
-  operating:round(parentRevenue-parentExpenses-parentCashTaxes+state.totalRevenue-state.totalExpenses-state.totalTaxes),
+  operating:round(parentRevenue-parentExpenses-parentCashTaxes+state.totalRevenue-state.totalExpenses-subsidiaryTaxesPaid),
   investing:round(-state.totalAcquisitionSpend+subsidiaryAssetInvestment),
   financing:round(loanDrawdowns+loanRepayments+equityFinancing),
   intercompanyEliminated:round(sum(state.events.filter(e=>e.kind==='transfer'||e.kind==='formation').map(e=>Math.abs(e.parentCashDelta)))),
@@ -156,7 +162,7 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  const revenue=round(parentRevenue+state.totalRevenue);
  const expenses=round(parentExpenses+state.totalExpenses);
  const taxes=round(parentTaxes+state.totalTaxes);
- return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt),cashFlow};
+ return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt),subsidiaryTaxLiabilities:round(subsidiaryTaxLiabilities),cashFlow};
 }
 export function corporateValuation(company:Company,fleet:FleetState,gameMs:number){
  return valueCompany(company,fleet,gameMs).value;
