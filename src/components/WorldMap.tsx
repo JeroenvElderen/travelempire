@@ -310,6 +310,27 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   frame=requestAnimationFrame(animate);
   return()=>cancelAnimationFrame(frame);
  },[]);
+ // Cache only visible road features so discovery changes can repaint immediately,
+ // without rescanning the nationwide routing graph on every vehicle tick.
+ const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
+ useEffect(()=>{
+  const instance=map.current;
+  if(!instance||!ready||!instance.isStyleLoaded())return;
+  const source=instance.getSource('active-road-network') as maplibregl.GeoJSONSource|undefined;
+  if(!source||!visibleRoadFeatures.current.length)return;
+  const explored=new Set(exploredEdgeIds);
+  let changed=false;
+  const features=visibleRoadFeatures.current.map(feature=>{
+   const roadId=feature.properties?.roadId as string|undefined;
+   const discovered=Boolean(roadId&&explored.has(roadId));
+   if(feature.properties?.explored===discovered)return feature;
+   changed=true;
+   return {...feature,properties:{...feature.properties,explored:discovered}};
+  });
+  if(!changed)return;
+  visibleRoadFeatures.current=features;
+  source.setData({type:'FeatureCollection',features});
+ },[exploredEdgeIds,ready]);
  // Display the same regional OSM graph that taxis use. Never fetch preview.geojson.
  // Only road segments inside the visible viewport are sent to MapLibre.
  useEffect(()=>{
@@ -347,6 +368,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(features.length>=MAX_VISIBLE)break outer;
     }
    }
+   visibleRoadFeatures.current=features;
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
    if(existing)existing.setData(data);
