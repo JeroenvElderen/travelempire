@@ -318,6 +318,21 @@ export default function App(){
     const taxis=old.taxis.map(t=>{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
+     const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
+     const onShift=!!gameClockRef.current&&isShiftActive(gameClockRef.current,8,shiftHours);
+     if(passengerTaxi&&onShift&&delivered.status==='PAUSED'&&delivered.shiftParked)
+      return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false};
+     if(passengerTaxi&&!onShift&&delivered.status==='IDLE'&&energyPercent(delivered)>10&&!delivered.refillRequested){
+      const assigned=(company!.depots??[]).find(d=>d.id===delivered.depotId);
+      const target:[number,number]=assigned?[assigned.lng,assigned.lat]:[company!.headquarters.lng,company!.headquarters.lat];
+      const from=nearest(graph,delivered.position),to=nearest(graph,target);
+      const homeRoute=from&&to?route(graph,from,to):null;
+      if(homeRoute){
+       if(homeRoute.path.length<2)return {...delivered,status:'PAUSED' as const,shiftParked:true,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
+       return {...delivered,status:'RETURNING' as const,pauseAtHome:true,shiftParked:true,serviceDestination:undefined,refillDestination:undefined,path:homeRoute.path,edgeIds:homeRoute.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+      }
+     }
+
      // Automatic scheduled service: vehicles stop accepting work at 60% condition.
      // Service is billed on completion; insufficient cash postpones completion.
      if(delivered.status==='SERVICING'){
