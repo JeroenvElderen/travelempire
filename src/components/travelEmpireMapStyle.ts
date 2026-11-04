@@ -15,7 +15,7 @@ const palettes={
 const basemapOriginals=new WeakMap<maplibregl.Map,Map<string,{property:string;value:unknown}>>();
 const modifiedLayerIds=new WeakMap<maplibregl.Map,Set<string>>();
 const isGameLayer=(id:string)=>/travelempire|explor|territory|ferry|survey|purple|road-status|fog|owned|discovered/i.test(id);
-function naturalTarget(layer:maplibregl.AnyLayer):'water'|'park'|'forest'|'building'|'road'|null {
+function naturalTarget(layer:{id:string;type:string;paint?:unknown;'source-layer'?:string}):'water'|'park'|'forest'|'building'|'road'|null {
  const id=layer.id.toLowerCase();
  if(isGameLayer(id))return null;
  const sourceLayer=('source-layer' in layer&&typeof layer['source-layer']==='string'?layer['source-layer']:'').toLowerCase();
