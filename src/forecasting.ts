@@ -89,7 +89,8 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  const loans=(fleet.loans??[]).map(l=>({...l}));
  const corporate=corporateOf(fleet.corporate);
  const corporateLoans=corporate.loans.map(l=>({...l}));
- let subsidiaryCash=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.cash,0);
+ const projectedSubsidiaries=corporate.subsidiaries.filter(s=>s.active).map(s=>({...s}));
+ let subsidiaryCash=projectedSubsidiaries.reduce((a,s)=>a+s.cash,0);
  let corporateLoanPayments=0;
  const leases=(fleet.leases??[]).map(l=>({...l}));
  if(plan.mode==='finance')for(let i=0;i<addedCount;i++)loans.push({id:'projection-'+i,principal:quote.principal,balance:quote.principal,annualRate:.09,termDays:plan.financeDays,remainingDays:plan.financeDays,dailyPayment:quote.instalment,accruedGameSeconds:0});
@@ -130,7 +131,16 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
    l.balance=Math.max(0,Math.round((l.balance-(paid-interest))*100)/100);l.remainingDays--;
    loanPayments+=paid;loanInterest+=interest;corporateLoanPayments+=paid;
   }
-  subsidiaryCash+=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.revenuePerDay-s.expensesPerDay-Math.max(0,(s.revenuePerDay-s.expensesPerDay)*settings.corporateRate/100),0);
+  for(const sub of projectedSubsidiaries){
+   if(sub.lastSettledDay.slice(0,7)!==date.slice(0,7)){
+    const settlement=Math.min(Math.max(0,sub.cash),sub.taxLiability);
+    sub.cash-=settlement;sub.taxLiability-=settlement;
+   }
+   sub.cash+=sub.revenuePerDay-sub.expensesPerDay;
+   sub.taxLiability+=Math.max(0,(sub.revenuePerDay-sub.expensesPerDay)*settings.corporateRate/100);
+   sub.lastSettledDay=date;
+  }
+  subsidiaryCash=projectedSubsidiaries.reduce((a,s)=>a+s.cash,0);
   const revenue=baseRevenue+extraRevenue;
   const operatingExpenses=baseExpenses+extraCost+loanInterest+leasePayments;
   const inputVat=vatIncluded(Math.max(0,(baseExpenses+extraCost)*.3),settings.vatRate);
