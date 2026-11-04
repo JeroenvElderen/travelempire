@@ -1,5 +1,5 @@
 import type {Company} from './company';
-import type {EquityState,EquityHolder,EquityEvent,FleetState,ValuationPoint} from './simulation/taxi';
+import type {EquityState,EquityEvent,FleetState,ValuationPoint} from './simulation/taxi';
 import {balanceSheet,accountingOf} from './accounting';
 import {DEPOT_UPGRADES} from './depotFinance';
 
