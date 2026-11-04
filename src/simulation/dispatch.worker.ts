@@ -8,7 +8,7 @@ type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowScout:boolean};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
@@ -66,7 +66,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    let best:{index:number;taxi:Taxi;etaSeconds:number}|null=null;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
+    if(!msg.allowTaxiShift||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered);
     if(!assigned)continue;
     let etaSeconds=0;
