@@ -126,7 +126,7 @@ export function consolidatedGroup(company:Company,fleet:FleetState){
  const assets=round(parent.assets+subsidiaryAssets);
  const liabilities=round(parent.loans+parent.taxLiabilities+subsidiaryDebt+acquisitionDebt);
  const revenue=round(parentRevenue+state.totalRevenue);
- const expenses=round(parentExpenses+state.totalExpenses+state.totalInterest);
+ const expenses=round(parentExpenses+state.totalExpenses);
  const taxes=round(parentTaxes+state.totalTaxes);
  return {activeCount:active.length,fleetCount:sum(active.map(s=>s.fleetCount)),depotCount:sum(active.map(s=>s.depotCount)),subsidiaryCash:round(subsidiaryCash),assets,liabilities,equity:round(assets-liabilities),revenue,expenses,taxes,profit:round(revenue-expenses-taxes),parentRevenue:round(parentRevenue),subsidiaryRevenue:state.totalRevenue,subsidiaryExpenses:state.totalExpenses,acquisitionDebt:round(acquisitionDebt),subsidiaryDebt:round(subsidiaryDebt)};
 }
