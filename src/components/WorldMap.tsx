@@ -317,6 +317,24 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const [debugOpen,setDebugOpen]=useState(false);
  const [debugEntries,setDebugEntries]=useState<string[]>([]);
  const debugStarted=useRef(false);
+ const lastExplorerTelemetry=useRef<Map<string,{leg:number;edge:string;status:string}>>(new Map());
+ useEffect(()=>{
+  for(const taxi of taxis){
+   if(taxi.kind!=='explorer')continue;
+   const edge=taxi.edgeIds[taxi.leg]??'(none)';
+   const previous=lastExplorerTelemetry.current.get(taxi.id);
+   if(!previous||previous.leg!==taxi.leg||previous.edge!==edge||previous.status!==taxi.status){
+    if(previous&&previous.leg!==taxi.leg){
+     const completed=taxi.edgeIds[Math.max(0,taxi.leg-1)]??previous.edge;
+     addDebug(`NODE reached: ${taxi.name}, leg ${previous.leg}→${taxi.leg}, edge ${completed.slice(0,24)}, saved=${exploredEdgeIds.includes(completed)}`);
+    }else if(!previous||previous.status!==taxi.status){
+     addDebug(`Explorer ${taxi.name}: ${taxi.status}, leg ${taxi.leg}, route edges ${taxi.edgeIds.length}`);
+    }
+    lastExplorerTelemetry.current.set(taxi.id,{leg:taxi.leg,edge,status:taxi.status});
+   }
+  }
+ },[taxis,exploredEdgeIds]);
+
  const addDebug=(message:string)=>{
   const entry=`${new Date().toLocaleTimeString()}  ${message}`;
   setDebugEntries(previous=>[...previous.slice(-79),entry]);
