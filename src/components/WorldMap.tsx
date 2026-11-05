@@ -530,6 +530,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Simulation: {perfSnapshot.simulationMs.toFixed(1)} ms · Vehicles: {perfSnapshot.vehicles}</div>
    <div>Tick avg/max: {perfSnapshot.simulationAvgMs.toFixed(1)} / {perfSnapshot.simulationMaxMs.toFixed(1)} ms</div>
    <div>Movement/accounting: {perfSnapshot.simulationMovementMs.toFixed(1)} / {perfSnapshot.simulationAccountingMs.toFixed(1)} ms</div>
+   <div>Slowest: {perfSnapshot.slowestVehicle} · {perfSnapshot.slowestVehicleMs.toFixed(1)} ms</div>
+   <div>Routing preparation: {perfSnapshot.routingMs.toFixed(1)} ms</div>
    <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
