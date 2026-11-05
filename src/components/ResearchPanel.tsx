@@ -5,7 +5,7 @@ import {projects,level,maxLevel,price,duration,type ResearchId,type ResearchStat
 import '../research.css';
 
 type Tab='overview'|'projects'|'progress';
-const icons={pricing:TrendingUp,procurement:Coins,efficiency:Clock3,secondSurveyor:CarFront};
+const icons={pricing:TrendingUp,procurement:Coins,efficiency:Clock3};
 const euro=(amount:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(amount);
 const formatDuration=(ms:number)=>{const seconds=Math.ceil(Math.max(0,ms)/1000);const hours=Math.floor(seconds/3600);const minutes=Math.floor(seconds%3600/60);const secs=seconds%60;return hours>0?`${hours}h ${String(minutes).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`:`${minutes}m ${String(secs).padStart(2,'0')}s`;};
 export default function ResearchPanel({company,state,onStart,onCancel}:{company:Company|null;state:ResearchState;onStart:(id:ResearchId)=>void;onCancel:()=>void}){
@@ -29,7 +29,7 @@ export default function ResearchPanel({company,state,onStart,onCancel}:{company:
   </article>;
  };
  return <section className="research-page research-v215">
-  <header className="research-heading"><div><span className="eyebrow">RESEARCH & DEVELOPMENT · V2.1.5</span><h1>Research</h1><p>Invest in pricing, procurement, research efficiency and a second Black Explorer.</p></div><span className="research-real-time"><Clock3 size={14}/> REAL-WORLD TIME</span></header>
+  <header className="research-heading"><div><span className="eyebrow">RESEARCH & DEVELOPMENT · V2.1.5</span><h1>Research</h1><p>Invest in pricing, procurement and research efficiency.</p></div><span className="research-real-time"><Clock3 size={14}/> REAL-WORLD TIME</span></header>
   <nav className="research-tabs" role="tablist" aria-label="Research sections">{([['overview','Overview',FlaskConical],['projects','Research projects',Beaker],['progress','Progress',TrendingUp]] as const).map(([id,label,Icon])=><button type="button" role="tab" aria-selected={tab===id} className={tab===id?'active':''} key={id} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}</nav>
   <div className="research-kpis"><article><small>RESEARCH LEVELS</small><strong>{completed} <em>/ 16</em></strong><span>Across four programmes</span></article><article><small>ACTIVE PROJECTS</small><strong>{state.active?1:0} <em>/ 1</em></strong><span>One project at a time</span></article><article><small>AVAILABLE UPGRADES</small><strong>{available}</strong><span>Programmes not yet maxed</span></article><article><small>AVAILABLE CAPITAL</small><strong>{euro(company?.cash??0)}</strong><span>Company cash balance</span></article></div>
   {!company&&<div className="research-notice">Create a company to unlock research projects. You can review the programmes below.</div>}
