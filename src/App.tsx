@@ -558,9 +558,22 @@ export default function App(){
  // Persist discoveries promptly rather than waiting for a five-second fleet snapshot.
  // IndexedDB merges the IDs transactionally with geometry written by WorldMap.
  useEffect(()=>{if(!company)return;const id=company.id;let busy=false;let pending=false;
+  let lastSavedIds:readonly string[]|null=null;
+  const unchanged=(ids:readonly string[])=>lastSavedIds!==null&&ids.length===lastSavedIds.length&&ids.every((value,index)=>value===lastSavedIds![index]);
   const saveExploration=async()=>{if(busy){pending=true;return;}busy=true;
-   try{do{pending=false;const ids=fleetSaveRef.current.exploredEdgeIds??[];
-    if(ids.length){const started=performance.now();await writeExploration(id,{ids,segments:{}});if(performanceMonitorEnabled())recordActivity('save:exploration',performance.now()-started);}
+   try{do{pending=false;
+    const prepareStarted=performance.now();
+    const ids=fleetSaveRef.current.exploredEdgeIds??[];
+    const skip=unchanged(ids);
+    if(performanceMonitorEnabled())recordActivity('save:exploration-prepare',performance.now()-prepareStarted);
+    if(!skip&&ids.length){
+     // Snapshot IDs before awaiting IndexedDB; never mark unsaved changes as persisted.
+     const snapshot=ids.slice();
+     const started=performance.now();
+     await writeExploration(id,{ids:snapshot,segments:{}});
+     lastSavedIds=snapshot;
+     if(performanceMonitorEnabled())recordActivity('save:exploration-await',performance.now()-started);
+    }
    }while(pending)}catch(error){console.error('[TravelEmpire] Exploration save failed',error)}finally{busy=false;}
   };
   const timer=window.setInterval(saveExploration,5000);
