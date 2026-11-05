@@ -31,7 +31,7 @@ export async function roadTileManifest():Promise<Manifest>{
 const DB_NAME='travelempire-parsed-roads', STORE='tiles', DB_VERSION=1;
 let dbPromise:Promise<IDBDatabase>|undefined;
 function tileDB():Promise<IDBDatabase>{
- return dbPromise??=new Promise((resolve,reject)=>{
+ return dbPromise??=new Promise<IDBDatabase>((resolve,reject)=>{
   if(!('indexedDB' in globalThis)){reject(Error('IndexedDB unavailable'));return;}
   const request=indexedDB.open(DB_NAME,DB_VERSION);
   request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(STORE))request.result.createObjectStore(STORE)};
