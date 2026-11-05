@@ -572,7 +572,7 @@ export function sectionCoverage(graph:RoadGraph,allowed:Set<string>,discovered:S
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,territoryCovered?:Set<string>,incomingNode?:string,sectionOwners?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -598,9 +598,8 @@ export function dispatchScout(
   return first;
  };
  // Bounded nearest-first search. A full graph scan blocked dispatch on mobile.
- // Complete nearby streets within the revealed territory, then expand outward.
+ // Select the nearest reachable undiscovered road.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
- let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -612,7 +611,7 @@ export function dispatchScout(
   if(distance>maxSearchMeters)break;
   // Once the nearest inside road is found, only finish nodes with shorter
   // approach distances; avoid searching the entire connected road network.
-  if(taxi.kind!=='surveyor'&&taxi.kind!=='explorer'&&best&&distance>best.distance)break;
+  if(best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
@@ -627,7 +626,6 @@ export function dispatchScout(
    }
   }
  }
- best=best??bestOutside;
  if(!best)return taxi;
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
