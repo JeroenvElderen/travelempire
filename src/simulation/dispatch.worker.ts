@@ -10,8 +10,9 @@ const idleFallbackAt=new Map<string,number>();
 const explorerIdleSince=new Map<string,number>();
 const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
+type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point};
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
-self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
+self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
@@ -36,6 +37,13 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(road.oneway!==1)add(b,a);
    }
    self.postMessage({type:'roadsAdded',revision:activeRevision,roadCount:seenRoadIds.size});return;
+  }
+  if(msg.type==='routeRequest'){
+   const started=performance.now();
+   const from=nearest(graph,msg.from),to=nearest(graph,msg.to);
+   const planned=from&&to?route(graph,from,to):null;
+   self.postMessage({type:'routeResult',revision:activeRevision,requestId:msg.requestId,from:msg.from,to:msg.to,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
+   return;
   }
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
