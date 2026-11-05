@@ -14,7 +14,7 @@ const yieldToRenderer=()=>new Promise<void>(resolve=>{
 // One background tile at a time avoids concurrent structured-clone and graph updates on iPhone.
 const MAX_CONCURRENT=1;
 const GRAPH_PUBLISH_INTERVAL_MS=5000;
-type GraphEdge={to:string;meters:number;id:string;speedKph:number};
+type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
