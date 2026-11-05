@@ -1,5 +1,5 @@
 import type {RoadSegment} from './roadTiles';
-type Edge={to:string;meters:number;id:string;speedKph:number};
+type Edge={to:string;meters:number;id:string;speedKph:number;highway?:string};
 type Result={id:number;nodes:[string,[number,number]][];edges:[string,Edge[]][];count:number};
 const seen=new Set<string>();
 self.onmessage=(event:MessageEvent<{id:number;roads:RoadSegment[]}>)=>{
@@ -15,7 +15,7 @@ self.onmessage=(event:MessageEvent<{id:number;roads:RoadSegment[]}>)=>{
   if(!nodes.has(b))nodes.set(b,road.coordinates[1]);
   const add=(from:string,to:string)=>{
    let links=edges.get(from);if(!links){links=[];edges.set(from,links)}
-   links.push({to,meters:road.length,id:road.id,speedKph:road.speed});
+   links.push({to,meters:road.length,id:road.id,speedKph:road.speed,highway:road.highway});
   };
   if(road.oneway!==-1)add(a,b);
   if(road.oneway!==1)add(b,a);
