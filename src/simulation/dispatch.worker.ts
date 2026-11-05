@@ -127,7 +127,20 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
    const purpleAllowedRoads=allowedRoads;
-  const discoveryRoads=(taxi:Taxi)=>{if(!taxi.discoveryMode||taxi.discoveryMode==='balanced')return purpleAllowedRoads;const allowed=new Set<string>();for(const links of graph!.edges.values())for(const edge of links){const h=edge.highway??'';const mode=taxi.discoveryMode;const match=mode==='highways'?['motorway','trunk','primary'].some(v=>h===v||h===v+'_link'):mode==='urban'?['residential','living_street','service'].includes(h):['secondary','tertiary','unclassified','road'].includes(h);if(match&&purpleAllowedRoads.has(edge.id))allowed.add(edge.id);}return allowed;};
+   // Build road-class sets once per dispatch, not once per Explorer.
+   const modeSets=new Map<string,Set<string>>();
+   const discoveryRoads=(taxi:Taxi)=>{
+    const mode=taxi.discoveryMode??'balanced';
+    if(mode==='balanced')return purpleAllowedRoads;
+    const cached=modeSets.get(mode);if(cached)return cached;
+    const selected=new Set<string>();
+    for(const links of graph!.edges.values())for(const edge of links){
+     const h=edge.highway??'';
+     const match=mode==='highways'?['motorway','trunk','primary'].some(v=>h===v||h===v+'_link'):mode==='urban'?['residential','living_street','service'].includes(h):['secondary','tertiary','unclassified','road'].includes(h);
+     if(match)selected.add(edge.id);
+    }
+    modeSets.set(mode,selected);return selected;
+   };
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
@@ -196,7 +209,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns};
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],discoveryEdgeIds:[...(taxi.discoveryEdgeIds??taxi.edgeIds),...(extension.discoveryEdgeIds??[])],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
