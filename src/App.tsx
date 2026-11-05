@@ -151,6 +151,8 @@ export default function App(){
  const dispatchWorkerRef=useRef<Worker|null>(null);
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
+ const routeSequenceRef=useRef(0);
+ const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
  const graphRevisionRef=useRef(0);
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
@@ -345,11 +347,23 @@ export default function App(){
  useEffect(()=>{
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
+  pendingRoutesRef.current.clear();
   dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
    const message=event.data;
    if(message.revision!==graphRevisionRef.current)return;
+   if(message.type==='routeResult'){
+    const response=message as typeof message & {requestId:number;path:[number,number][]|null;edgeIds:string[]|null;durationMs?:number};
+    const pending=pendingRoutesRef.current.get(response.requestId);
+    if(!pending)return;
+    pendingRoutesRef.current.delete(response.requestId);
+    const current=taxisRef.current.find(t=>t.id===pending.vehicleId);
+    if(!current||current.status!==pending.status||meters(current.position,pending.position)>15)return;
+    if((response.durationMs??0)>100)console.warn('[TravelEmpire] Slow worker route',{durationMs:Math.round(response.durationMs??0)});
+    pending.onResult(response.path,response.edgeIds);
+    return;
+   }
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
    if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
    dispatchBusyRef.current=false;
@@ -406,7 +420,7 @@ export default function App(){
   };
   worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
-  return()=>{worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
+  return()=>{pendingRoutesRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph)return;
@@ -987,7 +1001,7 @@ export default function App(){
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
  const controlExplorer=(id:string,action:'home'|'resume')=>{
-  const explorer=fleet.taxis.find(t=>t.id===id&&(t.kind==='explorer'));
+  const explorer=fleet.taxis.find(t=>t.id===id&&t.kind==='explorer');
   if(!explorer||!graph||!company)return;
   if(action==='resume'){
    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id&&t.status==='PAUSED'?{...t,status:'IDLE' as const,pauseAtHome:false}:t)}));
@@ -995,12 +1009,17 @@ export default function App(){
   }
   if(explorer.status==='PAUSED'||(explorer.status==='RETURNING'&&explorer.pauseAtHome))return;
   const depot=(company.depots??[]).find(d=>d.id===explorer.depotId);
-  const from=nearest(graph,explorer.position),to=nearest(graph,depot?[depot.lng,depot.lat]:[company.headquarters.lng,company.headquarters.lat]);
-  if(!from||!to){setSimError('Cannot send Explorer home: headquarters roads are not loaded.');return;}
-  const homeRoute=route(graph,from,to);
-  if(!homeRoute){setSimError('Cannot send Explorer home: no connected road route to headquarters.');return;}
-  setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:homeRoute.path.length<2?{...t,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0}:{...t,status:'RETURNING' as const,pauseAtHome:true,refillDestination:undefined,path:homeRoute.path,edgeIds:homeRoute.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]})}));
-  setSimError('');
+  const target:[number,number]=depot?[depot.lng,depot.lat]:[company.headquarters.lng,company.headquarters.lat];
+  const worker=dispatchWorkerRef.current;
+  if(!worker||!workerReadyRef.current){setSimError('Road routing is still loading. Try again shortly.');return;}
+  for(const [key,pending] of pendingRoutesRef.current)if(pending.vehicleId===id)pendingRoutesRef.current.delete(key);
+  const requestId=++routeSequenceRef.current;
+  pendingRoutesRef.current.set(requestId,{vehicleId:id,position:[...explorer.position],status:explorer.status,onResult:(path,edgeIds)=>{
+   if(!path||!edgeIds){setSimError('Cannot send Explorer home: no connected road route to headquarters.');return;}
+   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:path.length<2?{...t,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0}:{...t,status:'RETURNING' as const,pauseAtHome:true,refillDestination:undefined,path,edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]})}));
+   setSimError('');
+  }});
+  worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,requestId,from:explorer.position,to:target});
  };
  const depots=company?.depots??[];
  const assignDepot=(id:string,depotId:string)=>{
