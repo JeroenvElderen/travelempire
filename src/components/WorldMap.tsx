@@ -346,41 +346,39 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
 
  const currentExploredRoads=useRef<Set<string>>(new Set());
- currentExploredRoads.current=new Set(exploredEdgeIds);
+ const visibleExploredFeatures=useRef<Map<string,GeoJSON.Feature>>(new Map());
+ const purpleRefreshTimer=useRef<number|null>(null);
+ const purpleSourceId='explored-road-network-source';
+ const refreshPurpleRoads=()=>{
+  const instance=map.current;
+  if(!instance||!instance.isStyleLoaded())return;
+  const source=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
+  if(!source)return;
+  const features=[...visibleExploredFeatures.current.values()];
+  source.setData({type:'FeatureCollection',features});
+  setRoadStatus(`${features.length.toLocaleString()} explored / ${visibleRoadFeatures.current.length.toLocaleString()} visible regional road segments`);
+ };
  useEffect(()=>{
-  const explored=currentExploredRoads.current;
-  const newlyDiscovered=[...explored].filter(id=>!explorationDebugPrevious.current.has(id));
-  explorationDebugPrevious.current=new Set(explored);
-  if(!debugStarted.current){
-   debugStarted.current=true;
-   addDebug(`Initial exploration: ${explored.size} saved road IDs`);
-  }else if(newlyDiscovered.length){
-   addDebug(`+${newlyDiscovered.length} completed road edges; refreshing purple lines`);
+  const previous=currentExploredRoads.current;
+  const next=new Set(exploredEdgeIds);
+  currentExploredRoads.current=next;
+  // Incremental discovery: index visible geometry once per viewport update,
+  // then add only changed IDs instead of rebuilding the whole road graph.
+  const visible=new Map(visibleRoadFeatures.current.map(f=>[String(f.properties?.roadId??''),f]));
+  let changed=false;
+  for(const id of next){
+   if(previous.has(id))continue;
+   const feature=visible.get(id);
+   if(feature){visibleExploredFeatures.current.set(id,feature);changed=true;}
   }
-  // The sole road renderer refreshes the purple source first.
-  refreshRoadLines.current?.();
-  if(newlyDiscovered.length&&graph){
-   const instance=map.current;
-   const purpleSource=instance?.getSource('explored-road-network-source') as maplibregl.GeoJSONSource|undefined;
-   const renderedIds=new Set(visibleRoadFeatures.current.filter(f=>explored.has(String(f.properties?.roadId??''))).map(f=>String(f.properties?.roadId??'')));
-   const bounds=instance?.getBounds();
-   for(const id of newlyDiscovered.slice(0,12)){
-    let geometry=false,visible=false;
-    for(const [from,edges] of graph.edges){
-     const a=graph.nodes.get(from);
-     for(const edge of edges){
-      if(edge.id!==id)continue;
-      const b=graph.nodes.get(edge.to);
-      if(!a||!b)continue;
-      geometry=true;
-      if(bounds&&Math.max(a[0],b[0])>=bounds.getWest()&&Math.min(a[0],b[0])<=bounds.getEast()&&Math.max(a[1],b[1])>=bounds.getSouth()&&Math.min(a[1],b[1])<=bounds.getNorth())visible=true;
-      break;
-     }
-     if(geometry&&visible)break;
-    }
-    addDebug(`LINE ${id}: GEOMETRY=${geometry} VIEWPORT=${visible} RENDERED=${renderedIds.has(id)} SOURCE=${!!purpleSource}`);
-   }
+  for(const id of previous){
+   if(next.has(id))continue;
+   if(visibleExploredFeatures.current.delete(id))changed=true;
   }
+  if(!changed)return;
+  if(purpleRefreshTimer.current!==null)window.clearTimeout(purpleRefreshTimer.current);
+  purpleRefreshTimer.current=window.setTimeout(()=>{purpleRefreshTimer.current=null;refreshPurpleRoads();},150);
+  return()=>{if(purpleRefreshTimer.current!==null){window.clearTimeout(purpleRefreshTimer.current);purpleRefreshTimer.current=null;}};
  },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
@@ -422,8 +420,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     }
    }
    visibleRoadFeatures.current=features;
+   visibleExploredFeatures.current=new Map(features.filter(f=>exploredSet.has(String(f.properties?.roadId??''))).map(f=>[String(f.properties?.roadId??''),f]));
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
-   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:features.filter(feature=>exploredSet.has(String(feature.properties?.roadId??'')))};
+   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...visibleExploredFeatures.current.values()]};
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
    if(existing)existing.setData(data);
    else instance.addSource(sourceId,{type:'geojson',data});
