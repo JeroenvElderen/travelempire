@@ -20,7 +20,7 @@ function frame(now:number){
 }
 if(typeof window!=='undefined'){
  diagnostic('session','diagnostics enabled');
- raf=requestAnimationFrame(frame);
+ requestAnimationFrame(frame);
  window.addEventListener('error',e=>diagnostic('error',String(e.message).slice(0,250)));
  window.addEventListener('unhandledrejection',e=>diagnostic('promise',String(e.reason).slice(0,250)));
  document.addEventListener('visibilitychange',()=>diagnostic('visibility',document.visibilityState));
