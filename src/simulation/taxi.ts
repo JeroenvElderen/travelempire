@@ -113,9 +113,20 @@ const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
 // Road speeds are in km/h; gameplay fallbacks are used only when OSM maxspeed is absent.
 // Deterministic, Greece-local traffic model. No external traffic feed or map overlay.
+const trafficHourFormatter=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'});
+const trafficWeekdayFormatter=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Athens',weekday:'short'});
+let trafficCachedMinute=NaN,trafficCachedHour=0,trafficCachedWeekday='';
 export function trafficFactor(speedKph:number,at=Date.now()):number{
- const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'}).format(at));
- const weekday=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Athens',weekday:'short'}).format(at);
+ // Athens traffic classification changes only at hour/day boundaries.
+ // Reuse Intl formatting across the integrator's 100ms physics steps.
+ const minute=Math.floor(at/60000);
+ if(minute!==trafficCachedMinute){
+  trafficCachedMinute=minute;
+  trafficCachedHour=Number(trafficHourFormatter.format(at));
+  trafficCachedWeekday=trafficWeekdayFormatter.format(at);
+ }
+ const hour=trafficCachedHour;
+ const weekday=trafficCachedWeekday;
  const weekend=weekday==='Sat'||weekday==='Sun';
  const rush=!weekend&&((hour>=7&&hour<10)||(hour>=16&&hour<19));
  const busy=!weekend&&hour>=11&&hour<16;
