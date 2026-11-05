@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {Beaker,Clock3,FlaskConical,Coins,TrendingUp,CheckCircle2,ArrowUpRight,ShieldCheck,CarFront} from 'lucide-react';
+import {Beaker,Clock3,FlaskConical,Coins,TrendingUp,CheckCircle2,ArrowUpRight,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import {projects,level,maxLevel,price,duration,type ResearchId,type ResearchState} from '../research';
 import '../research.css';
