@@ -10,9 +10,10 @@ const idleFallbackAt=new Map<string,number>();
 const explorerIdleSince=new Map<string,number>();
 const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
+type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point};
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
-self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest>)=>{
+self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
@@ -37,6 +38,19 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest>)=>{
     if(road.oneway!==1)add(b,a);
    }
    self.postMessage({type:'roadsAdded',revision:activeRevision,roadCount:seenRoadIds.size});return;
+  }
+  if(msg.type==='fuelPlan'){
+   const started=performance.now();
+   const from=nearest(graph,msg.from);
+   let best:{point:Point;depot:boolean;roadKm:number;path:{path:Point[];edgeIds:string[]}}|null=null;
+   for(const target of msg.targets){
+    const to=nearest(graph,target.point);
+    const planned=from&&to?route(graph,from,to):null;
+    if(!planned)continue;
+    const roadKm=planned.path.reduce((sum,p,i)=>i?sum+meters(p,planned.path[i-1])/1000:sum,0)+(graph.nodes.get(to)?meters(graph.nodes.get(to)!,target.point)/1000:0);
+    if(!best||roadKm<best.roadKm)best={...target,roadKm,path:planned};
+   }
+   self.postMessage({type:'fuelPlanResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,position:msg.from,target:best,durationMs:performance.now()-started});return;
   }
   if(msg.type==='routeRequest'){
    const started=performance.now();
