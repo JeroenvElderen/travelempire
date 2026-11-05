@@ -156,6 +156,7 @@ export default function App(){
  const workerRoadCountRef=useRef(0);
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
  const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
+ const fuelPlanCacheRef=useRef(new Map<string,{at:number;position:[number,number];graph:RoadGraph|null;stationCount:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null}>());
  const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
  const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
@@ -621,27 +622,43 @@ export default function App(){
       return {...delivered,status:'IDLE' as const,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
-     // Low energy interrupts exploration at the next simulation tick; passenger
-     // taxis complete their current fare before heading to a station.
-     const needsEnergy=energyPercent(delivered)<=10||!!delivered.refillRequested;
+     // Refuel according to the shortest reachable road route, not a fixed tank percentage.
+     // Cache routing for 10 seconds to avoid expensive pathfinding on every simulation tick.
+     const remainingKm=energyRangeKm(delivered);
+     const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
+     const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
+     const stationCount=stationsRef.current.size;
+     const cached=fuelPlanCacheRef.current.get(delivered.id);
+     const planFresh=cached&&now-cached.at<10000&&cached.graph===graph&&cached.stationCount===stationCount&&meters(cached.position,delivered.position)<300;
+     let fuelTarget=planFresh?cached.target:null;
+     if(!planFresh&&graph){
+      const from=nearest(graph,delivered.position);
+      const candidates=[...stationsRef.current.values()]
+       .filter(st=>st.kind==='fuel'&&st.access!=='private'&&st.access!=='no')
+       .sort((x,y)=>meters(delivered.position,[x.lng,x.lat])-meters(delivered.position,[y.lng,y.lat])).slice(0,12);
+      const targets=[...candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
+      let shortest:typeof fuelTarget=null;
+      for(const target of targets){
+       const to=nearest(graph,target.point);
+       const planned=from&&to?route(graph,from,to):null;
+       if(!planned)continue;
+       const km=planned.path.reduce((sum,p,i)=>i?sum+meters(p,planned.path[i-1])/1000:sum,0)
+        + (graph.nodes.get(to)?meters(graph.nodes.get(to)!,target.point)/1000:0);
+       if(!shortest||km<shortest.roadKm)shortest={...target,roadKm:km,path:planned};
+      }
+      fuelTarget=shortest;
+      fuelPlanCacheRef.current.set(delivered.id,{at:now,position:[...delivered.position],graph,stationCount,target:fuelTarget});
+     }
+     const thresholdKm=fuelTarget?fuelTarget.roadKm*1.25+2:Math.max(2,remainingKm*0.25);
+     const needsEnergy=!!delivered.refillRequested||remainingKm<=thresholdKm;
+     // Passenger taxis finish their current fare; explorers turn back before they strand themselves.
      const stopExploring=needsEnergy&&delivered.status==='EXPLORING';
      let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:delivered;
-     if(working.status==='IDLE'&&needsEnergy){
-      const start=nearest(graph,working.position);
-      const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
-      const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
-      const stations=[...stationsRef.current.values()].filter(st=>st.kind===('fuel')&&st.access!=='private')
-       .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,12);
-      const targets=[...stations.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
-      for(const target of targets){
-       const end=nearest(graph,target.point);if(!start||!end)continue;
-       const path=route(graph,start,end);if(!path)continue;
-       const routeKm=path.path.reduce((sum,p,i)=>i?sum+meters(p,path.path[i-1])/1000:sum,0);
-       if(routeKm>energyRangeKm(delivered)*0.95)continue;
-       if(path.path.length<2){working={...working,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};break;}
-       working={...working,status:'RETURNING',path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,
-        refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};break;
-      }
+     if(working.status==='IDLE'&&needsEnergy&&fuelTarget&&fuelTarget.roadKm<=remainingKm*0.95){
+      const target=fuelTarget;
+      if(target.path&&target.path.path.length<2)working={...working,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};
+      else if(target.path)working={...working,status:'RETURNING',path:target.path.path,edgeIds:target.path.edgeIds,leg:0,distanceIntoLeg:0,
+       refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};
      }
      const next=tickTaxi(working,graph,elapsedSeconds,discovered);
      // The movement integrator reports the exact distance travelled this tick,
@@ -683,7 +700,7 @@ export default function App(){
      return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
-       refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=spec.capacity*0.10,
+       refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
     });
