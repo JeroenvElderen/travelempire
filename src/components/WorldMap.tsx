@@ -19,6 +19,24 @@ import {reachableStations,type StationRoute} from '../data/stationRouting';
 
 // The delivery SVG faces right (east) at zero rotation. Rotate it to the
 // bearing of the current road segment, not the overall delivery route.
+
+// In-memory, bounded startup trace. No vehicle coordinates or save contents are included.
+const startupStarted=typeof performance!=='undefined'?performance.timeOrigin:Date.now();
+const startupEvents:{ms:number;event:string;detail?:string}[]=[];
+function startupTrace(event:string,detail?:string){
+ const ms=typeof performance!=='undefined'?Math.round(performance.now()):0;
+ startupEvents.push({ms,event,detail});
+ if(startupEvents.length>120)startupEvents.shift();
+}
+function startupReport(){
+ const navigation=typeof performance!=='undefined'?performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming|undefined:undefined;
+ const rows=['TravelEmpire startup trace','Build: '+import.meta.env.MODE,'Elapsed: '+Math.round(Date.now()-startupStarted)+' ms',
+  'Navigation: '+(navigation?JSON.stringify({domInteractive:Math.round(navigation.domInteractive),domComplete:Math.round(navigation.domComplete),loadEventEnd:Math.round(navigation.loadEventEnd)}):'unavailable'),
+  'User agent: '+navigator.userAgent,
+  ...startupEvents.map(e=>e.ms+' ms | '+e.event+(e.detail?' | '+e.detail:''))];
+ return rows.join('\\n');
+}
+
 function deliveryHeading(path: [number,number][], started: number, until: number, now: number): number {
  if (path.length < 2 || until <= started) return 0;
  const lengths = path.slice(1).map((p,i) => {
@@ -186,11 +204,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const container=useRef<HTMLDivElement>(null);const map=useRef<maplibregl.Map|null>(null);const marker=useRef<maplibregl.Marker|null>(null);const onLocationRef=useRef(onLocationSelected);onLocationRef.current=onLocationSelected;
 
  const selectingRef=useRef(selecting);selectingRef.current=selecting;
+ const [startupLogOpen,setStartupLogOpen]=useState(false);const [startupCopied,setStartupCopied]=useState(false);
+ useEffect(()=>{startupTrace('WorldMap mounted');},[]);
+ useEffect(()=>{startupTrace('Road graph changed',graph?('nodes='+graph.nodeKeys.length):'not ready');},[graph]);
+ useEffect(()=>{startupTrace('Exploration changed','roads='+exploredEdgeIds.length);},[exploredEdgeIds.length]);
+ const copyStartupLog=async()=>{const report=startupReport();try{await navigator.clipboard.writeText(report);setStartupCopied(true);}catch{setStartupLogOpen(true);}};
  const [roadsVisible,setRoadsVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
- useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;const instance=new maplibregl.Map({container:container.current,style,center:initialHeadquarters.current?[initialHeadquarters.current.lng,initialHeadquarters.current.lat]:[-6.1,53.2],zoom:initialHeadquarters.current?11:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
+ useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;startupTrace('MapLibre constructor started');const instance=new maplibregl.Map({container:container.current,style,center:initialHeadquarters.current?[initialHeadquarters.current.lng,initialHeadquarters.current.lat]:[-6.1,53.2],zoom:initialHeadquarters.current?11:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
   if(!event.id||instance.hasImage(event.id))return;
   instance.addImage(event.id,{width:1,height:1,data:new Uint8Array(4)});
- });instance.on('load',()=>{setReady(true);});instance.on('error',e=>{console.error('MapLibre:',e.error);setError('Some map resources failed to load. Check your API key and network.');});
+ });instance.on('load',()=>{startupTrace('MapLibre load event');setReady(true);});instance.on('error',e=>{console.error('MapLibre:',e.error);setError('Some map resources failed to load. Check your API key and network.');});
  instance.on('click',async e=>{if(!selectingRef.current)return;if(busy.current)return;busy.current=true;setLookingUp(true);setError(null);const {lng,lat}=e.lngLat;try{if(!key)throw Error('MapTiler API key required for location lookup.');const response=await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${encodeURIComponent(key)}&language=en`);if(!response.ok)throw Error(`Location lookup failed (${response.status})`);const data=await response.json() as {features?:Array<{text?:string;place_name?:string;place_type?:string[];properties?:Record<string,unknown>;context?:Array<{id?:string;text?:string;short_code?:string}>}>};const features=data.features??[];const place=features[0];const context=[...(place?.context??[])];for(const f of features){if(f.place_type?.includes('country'))context.push({id:'country',text:f.text,short_code:String(f.properties?.short_code??'')});if(f.place_type?.includes('region'))context.push({id:'region',text:f.text});}const country=context.find(c=>c.id?.startsWith('country'));const region=context.find(c=>c.id?.startsWith('region'));if(!country?.text)throw Error('Select a location on land within a recognized country.');onLocationRef.current({lng,lat,label:place?.text||place?.place_name||`${lat.toFixed(4)}, ${lng.toFixed(4)}`,country:country.text,countryCode:country.short_code??'',region:region?.text??''});}catch(err){setError(err instanceof Error?err.message:'Unable to identify this location.');}finally{busy.current=false;setLookingUp(false);}});
  return()=>{taxiMarkers.current.forEach(m=>m.remove());taxiMarkers.current.clear();stationMarkers.current.forEach(m=>m.remove());stationMarkers.current.clear();depotMarkers.current.forEach(m=>m.remove());depotMarkers.current.clear();deliveryMarkers.current.forEach(m=>m.remove());deliveryMarkers.current.clear();marker.current?.remove();marker.current=null;map.current=null;instance.remove();};},[]);
  useEffect(()=>{if(!map.current)return;map.current.getCanvas().style.cursor=selecting?'crosshair':'';},[selecting]);
@@ -487,6 +510,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
+   const geometryStarted=performance.now();
    const features:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
@@ -582,5 +606,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
+ </div><div style={{position:'absolute',bottom:70,right:12,zIndex:25,maxWidth:'min(92vw,420px)',fontSize:12}}>
+ <button type="button" onClick={()=>setStartupLogOpen(v=>!v)} style={{padding:'8px 10px',background:'#102b36',color:'white',borderRadius:9}}>Startup log</button>
+ {startupLogOpen&&<div style={{marginTop:6,background:'#102b36',color:'white',padding:10,borderRadius:10,maxHeight:'45vh',overflow:'auto'}}>
+  <button type="button" onClick={()=>void copyStartupLog()} style={{padding:'7px 10px',background:'#23667b',color:'white',borderRadius:8}}>{startupCopied?'Copied!':'Copy log'}</button>
+  <textarea readOnly aria-label="Startup diagnostic log" value={startupReport()} onFocus={e=>e.currentTarget.select()} style={{display:'block',marginTop:8,width:'100%',height:190,color:'#14252c',background:'white',fontSize:11}}/>
+ </div>}
  </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
