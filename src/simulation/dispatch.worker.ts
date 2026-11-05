@@ -10,8 +10,6 @@ const idleFallbackAt=new Map<string,number>();
 const explorerIdleSince=new Map<string,number>();
 const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
-let eligibilityCacheKey='';
-let eligibilityCache=new Set<string>();
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
