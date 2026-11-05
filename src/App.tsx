@@ -597,7 +597,7 @@ export default function App(){
 
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
-    let slowestVehicleMs=0,slowestVehicle='—',routingMs=0;
+    let slowestVehicleMs=0,slowestVehicle='—',routingMs=0,integratorMs=0,discoveryMs=0;
     const depotById=new Map((company!.depots??[]).map(d=>[d.id,d]));
     const depotUpgradesById=new Map<string,ReturnType<typeof upgradesFor>>();
     const depotLevelsFor=(id:string)=>{let value=depotUpgradesById.get(id);if(!value){value=upgradesFor(old,id);depotUpgradesById.set(id,value);}return value;};
@@ -733,7 +733,9 @@ export default function App(){
        refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};
      }
      routingMs+=performance.now()-routeStarted;
+     const integratorStarted=performance.now();
      const next=tickTaxi(working,graph,elapsedSeconds,discovered);
+     integratorMs+=performance.now()-integratorStarted;
      // The movement integrator reports the exact distance travelled this tick,
      // including junction crossings and the final step before route reset.
      const km=next.distanceMeters/1000;
@@ -761,6 +763,7 @@ export default function App(){
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
+     const discoveryStarted=performance.now();
      if(t.kind==='explorer'&&t.status==='EXPLORING'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
      next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
@@ -770,6 +773,7 @@ export default function App(){
       }
       if(t.kind==='explorer')discovered.add(id);
      }});
+     discoveryMs+=performance.now()-discoveryStarted;
      return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
@@ -845,7 +849,7 @@ export default function App(){
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     const tickMs=performance.now()-tickStarted;
-    recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size,slowestVehicle,slowestVehicleMs,routingMs);
+    recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size,slowestVehicle,slowestVehicleMs,routingMs,integratorMs,discoveryMs);
     const perf=simulationPerfRef.current;
     perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
     if(tickMs>50&&now-perf.lastReport>15000){
