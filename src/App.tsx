@@ -152,6 +152,7 @@ export default function App(){
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
+ const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
  const graphRevisionRef=useRef(0);
  const workerReadyRef=useRef(false);
@@ -347,12 +348,23 @@ export default function App(){
  useEffect(()=>{
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
-  pendingRoutesRef.current.clear();
+  pendingRoutesRef.current.clear();pendingFuelRef.current.clear();fuelPlanCacheRef.current.clear();
   dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
    const message=event.data;
    if(message.revision!==graphRevisionRef.current)return;
+   if(message.type==='fuelPlanResult'){
+    const result=message as typeof message & {vehicleId:string;requestId:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null;durationMs:number};
+    const pending=pendingFuelRef.current.get(result.vehicleId);
+    if(!pending||pending.requestId!==result.requestId)return;
+    pendingFuelRef.current.delete(result.vehicleId);
+    const current=taxisRef.current.find(t=>t.id===result.vehicleId);
+    if(!current||meters(current.position,pending.position)>300)return;
+    fuelPlanCacheRef.current.set(result.vehicleId,{at:Date.now(),position:pending.position,graph:pending.graph,stationCount:stationsRef.current.size,target:result.target});
+    if(result.durationMs>100)console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs)});
+    return;
+   }
    if(message.type==='routeResult'){
     const response=message as typeof message & {requestId:number;path:[number,number][]|null;edgeIds:string[]|null;durationMs?:number};
     const pending=pendingRoutesRef.current.get(response.requestId);
@@ -420,7 +432,7 @@ export default function App(){
   };
   worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
-  return()=>{pendingRoutesRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
+  return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph)return;
@@ -650,22 +662,18 @@ export default function App(){
      const planFresh=cached&&now-cached.at<10000&&cached.graph===graph&&cached.stationCount===stationCount&&meters(cached.position,delivered.position)<300;
      let fuelTarget=planFresh?cached.target:null;
      if(!planFresh&&graph){
-      const from=nearest(graph,delivered.position);
-      const candidates=[...stationsRef.current.values()]
-       .filter(st=>st.kind==='fuel'&&st.access!=='private'&&st.access!=='no')
-       .sort((x,y)=>meters(delivered.position,[x.lng,x.lat])-meters(delivered.position,[y.lng,y.lat])).slice(0,12);
-      const targets=[...candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
-      let shortest:typeof fuelTarget=null;
-      for(const target of targets){
-       const to=nearest(graph,target.point);
-       const planned=from&&to?route(graph,from,to):null;
-       if(!planned)continue;
-       const km=planned.path.reduce((sum,p,i)=>i?sum+meters(p,planned.path[i-1])/1000:sum,0)
-        + (graph.nodes.get(to)?meters(graph.nodes.get(to)!,target.point)/1000:0);
-       if(!shortest||km<shortest.roadKm)shortest={...target,roadKm:km,path:planned};
+      const pending=pendingFuelRef.current.get(delivered.id);
+      const worker=dispatchWorkerRef.current;
+      if(worker&&workerReadyRef.current&&(!pending||pending.graph!==graph||now-pending.at>12000||meters(pending.position,delivered.position)>300)){
+       const candidates=[...stationsRef.current.values()]
+        .filter(st=>st.kind==='fuel'&&st.access!=='private'&&st.access!=='no')
+        .sort((x,y)=>meters(delivered.position,[x.lng,x.lat])-meters(delivered.position,[y.lng,y.lat])).slice(0,12);
+       const targets=[...candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
+       const requestId=++routeSequenceRef.current;
+       pendingFuelRef.current.set(delivered.id,{requestId,position:[...delivered.position],at:now,graph});
+       worker.postMessage({type:'fuelPlan',revision:graphRevisionRef.current,requestId,vehicleId:delivered.id,from:delivered.position,targets});
       }
-      fuelTarget=shortest;
-      fuelPlanCacheRef.current.set(delivered.id,{at:now,position:[...delivered.position],graph,stationCount,target:fuelTarget});
+      fuelTarget=cached?.target??null;
      }
      const thresholdKm=fuelTarget?fuelTarget.roadKm*1.25+2:Math.max(2,remainingKm*0.25);
      const needsEnergy=!!delivered.refillRequested||remainingKm<=thresholdKm;
