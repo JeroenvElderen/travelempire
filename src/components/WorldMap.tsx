@@ -1,4 +1,4 @@
-import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordFrameGap,type PerformanceSnapshot} from '../performanceMonitor';
+import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordFrameGapWithContext,recordActivity,recordLongTask,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
 import {formatGameClock,type GameClock} from '../simulation/gameClock';
@@ -91,6 +91,27 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{window.clearInterval(timer);enablePerformanceMonitor(false);};
  },[perfOpen]);
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
+ useEffect(()=>{
+  if(!perfOpen||typeof PerformanceObserver==='undefined')return;
+  let observer:PerformanceObserver|undefined;
+  try{
+   observer=new PerformanceObserver(list=>{for(const entry of list.getEntries())recordLongTask(entry.duration);});
+   observer.observe({entryTypes:['longtask']});
+  }catch{observer?.disconnect();}
+  return()=>observer?.disconnect();
+ },[perfOpen]);
+ useEffect(()=>{
+  if(!perfOpen)return;
+  const instance=map.current;if(!instance)return;
+  let lastRender=0;
+  const onRender=()=>{
+   const now=performance.now();
+   if(lastRender&&now-lastRender>50)recordActivity('map:render',now-lastRender);
+   lastRender=now;
+  };
+  instance.on('render',onRender);
+  return()=>{instance.off('render',onRender);};
+ },[perfOpen]);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
  const [ferryConnections,setFerryConnections]=useState<FerryConnectionResult|undefined>(undefined);
  // Build a small spatial lookup in bounded batches, never inside a map event handler.
@@ -278,7 +299,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const frameNow=performance.now();
    if(performanceMonitorEnabled()){
     monitoredFrames++;
-    if(lastFrameAt)recordFrameGap(frameNow-lastFrameAt);
+    if(lastFrameAt)recordFrameGapWithContext(frameNow-lastFrameAt,frameNow);
     if(frameNow-monitoredAt>=1000){recordPerformance({fps:Math.round(monitoredFrames*1000/(frameNow-monitoredAt))});monitoredFrames=0;monitoredAt=frameNow;}
    }else{monitoredFrames=0;monitoredAt=frameNow;}
 
@@ -398,6 +419,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const started=performance.now();
   const features=[...visibleExploredFeatures.current.values()];
   source.setData({type:'FeatureCollection',features});
+  if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-started);
   lastPurpleSourceUpdate.current=started;
   const stats=purpleRenderStats.current;const duration=performance.now()-started;
   if(performanceMonitorEnabled()){incrementPerformance('sourceUpdates');recordPerformance({sourceMs:duration,visibleExplored:features.length});}
@@ -481,6 +503,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
    if(performanceMonitorEnabled()){
     incrementPerformance('sourceUpdates');
     recordPerformance({sourceMs:performance.now()-purpleStarted,visibleExplored:purple.features.length});
@@ -534,6 +557,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Routing preparation: {perfSnapshot.routingMs.toFixed(1)} ms</div>
    <div>Integrator: {perfSnapshot.integratorMs.toFixed(1)} ms · Discovery: {perfSnapshot.discoveryMs.toFixed(1)} ms</div>
    <div>Other vehicle work: {perfSnapshot.otherVehicleMs.toFixed(1)} ms</div>
+   <div>Last spike near: {perfSnapshot.lastSpikeCause}</div>
+   <div>Long tasks: {perfSnapshot.longTasks} · Max: {perfSnapshot.longestTaskMs.toFixed(0)} ms</div>
+   <div>Map render gaps: {perfSnapshot.mapRenderCount} · Latest: {perfSnapshot.mapRenderMs.toFixed(0)} ms</div>
+   <div>Last save: {perfSnapshot.saveKind} · {perfSnapshot.saveMs.toFixed(1)} ms</div>
    <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
