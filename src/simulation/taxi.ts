@@ -625,6 +625,8 @@ export function dispatchScout(
   if(best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
+   const approach=node===start?incomingNode:previous.get(node)?.from;
+   if(taxi.kind==='explorer'&&approach&&forbiddenUTurn(graph,approach,node,edge.to,_allowedRoads))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
@@ -646,6 +648,11 @@ export function dispatchScout(
  }
  keys.reverse();ids.reverse();
  keys.push(best.to);ids.push(best.id);
+ // Keep the explorer's previous heading across new assignments.
+ if(taxi.kind==='explorer')for(let i=0;i<keys.length-1;i++){
+  const approach=i===0?incomingNode:keys[i-1];
+  if(approach&&forbiddenUTurn(graph,approach,keys[i],keys[i+1],_allowedRoads))return taxi;
+ }
  // Extend the assignment along connected, undiscovered streets. This avoids
  // becoming IDLE at every junction and waiting for the next worker dispatch.
  const planned=new Set(ids);
@@ -658,6 +665,10 @@ export function dispatchScout(
    !reservedTargets.has(edge.to)&&edge.meters>0&&
    true
   );
+  // Continue forward or sideways whenever possible; reverse only at a dead end.
+  const previousNode=keys[keys.length-2];
+  const forward=previousNode?links.filter(edge=>!forbiddenTurnGeometry(graph,previousNode,cursor,edge.to)):links;
+  if(forward.length)links.splice(0,links.length,...forward);
   if(!links.length)break;
   // Prefer connected roads and shorter routes without assigning exploration sectors.
   links.sort((a,b)=>{
