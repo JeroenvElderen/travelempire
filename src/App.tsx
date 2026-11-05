@@ -1,4 +1,4 @@
-import {recordSimulationTick} from './performanceMonitor';
+import {recordSimulationTick,recordActivity,performanceMonitorEnabled} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
@@ -549,7 +549,7 @@ export default function App(){
    const current=companyRef.current;
    if(!current||current.id!==id)return;
    const updated={...current,cash:Math.round((current.cash+delta)*100)/100};
-   companyRef.current=updated;setCompany(updated);saveCompany(updated);
+   companyRef.current=updated;setCompany(updated);const started=performance.now();saveCompany(updated);if(performanceMonitorEnabled())recordActivity('save:company',performance.now()-started);
   };
   const timer=window.setInterval(flush,5000);
   window.addEventListener('pagehide',flush);
@@ -560,14 +560,14 @@ export default function App(){
  useEffect(()=>{if(!company)return;const id=company.id;let busy=false;let pending=false;
   const saveExploration=async()=>{if(busy){pending=true;return;}busy=true;
    try{do{pending=false;const ids=fleetSaveRef.current.exploredEdgeIds??[];
-    if(ids.length)await writeExploration(id,{ids,segments:{}});
+    if(ids.length){const started=performance.now();await writeExploration(id,{ids,segments:{}});if(performanceMonitorEnabled())recordActivity('save:exploration',performance.now()-started);}
    }while(pending)}catch(error){console.error('[TravelEmpire] Exploration save failed',error)}finally{busy=false;}
   };
   const timer=window.setInterval(saveExploration,5000);
   window.addEventListener('pagehide',saveExploration);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);void saveExploration()};
  },[company?.id]);
- useEffect(()=>{if(!company)return;const id=company.id;const save=()=>{try{saveFleet(id,{...fleetSaveRef.current,exploredEdgeIds:[]})}catch(error){console.error('[TravelEmpire] Fleet save failed',error)}};
+ useEffect(()=>{if(!company)return;const id=company.id;const save=()=>{try{const started=performance.now();saveFleet(id,{...fleetSaveRef.current,exploredEdgeIds:[]});if(performanceMonitorEnabled())recordActivity('save:fleet',performance.now()-started)}catch(error){console.error('[TravelEmpire] Fleet save failed',error)}};
   const timer=window.setInterval(save,5000);
   window.addEventListener('pagehide',save);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',save);save()};
@@ -849,6 +849,7 @@ export default function App(){
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     const tickMs=performance.now()-tickStarted;
+    if(performanceMonitorEnabled())recordActivity('simulation',tickMs);
     recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size,slowestVehicle,slowestVehicleMs,routingMs,integratorMs,discoveryMs);
     const perf=simulationPerfRef.current;
     perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
