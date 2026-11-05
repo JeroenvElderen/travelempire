@@ -152,6 +152,7 @@ export default function App(){
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
+ const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
  const graphRevisionRef=useRef(0);
@@ -348,12 +349,22 @@ export default function App(){
  useEffect(()=>{
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
-  pendingRoutesRef.current.clear();pendingFuelRef.current.clear();fuelPlanCacheRef.current.clear();
+  pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();
   dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
    const message=event.data;
    if(message.revision!==graphRevisionRef.current)return;
+   if(message.type==='operationalRouteResult'){
+    const result=message as typeof message & {vehicleId:string;requestId:number;purpose:'shift'|'service';path:[number,number][]|null;edgeIds:string[]|null;durationMs:number};
+    const pending=operationalRoutesRef.current.get(result.vehicleId);
+    if(!pending||pending.requestId!==result.requestId||pending.purpose!==result.purpose)return;
+    const current=taxisRef.current.find(t=>t.id===result.vehicleId);
+    if(!current||current.status!==pending.status||meters(current.position,pending.position)>15){operationalRoutesRef.current.delete(result.vehicleId);return;}
+    operationalRoutesRef.current.set(result.vehicleId,{...pending,path:result.path,edgeIds:result.edgeIds,ready:true,at:Date.now()});
+    if(result.durationMs>100)console.warn('[TravelEmpire] Slow operational routing',{purpose:result.purpose,durationMs:Math.round(result.durationMs)});
+    return;
+   }
    if(message.type==='fuelPlanResult'){
     const result=message as typeof message & {vehicleId:string;requestId:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null;durationMs:number};
     const pending=pendingFuelRef.current.get(result.vehicleId);
@@ -432,7 +443,7 @@ export default function App(){
   };
   worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
-  return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
+  return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph)return;
@@ -599,13 +610,24 @@ export default function App(){
        const stations=breakActive?[...stationsRef.current.values()].filter(st=>st.kind==='fuel'&&st.access!=='private')
         .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,8):[];
        const targets=[...stations.map(st=>[st.lng,st.lat] as [number,number]),depot];
-       const from=nearest(graph,delivered.position);
-       for(const target of targets){
-        const to=nearest(graph,target);const planned=from&&to?route(graph,from,to):null;
-        if(!planned)continue;
-        const extra={shiftParked:true,scheduledBreakUntil:breakActive?schedule.breakEndsAt:undefined};
-        if(planned.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
-        return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:planned.path,edgeIds:planned.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+       const key=delivered.id;
+       const cached=operationalRoutesRef.current.get(key);
+       if(cached?.purpose==='shift'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
+        if(cached.ready){
+         if(cached.path&&cached.edgeIds){
+          operationalRoutesRef.current.delete(key);
+          const extra={shiftParked:true,scheduledBreakUntil:breakActive?schedule.breakEndsAt:undefined};
+          if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
+          return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+         }
+         if(now-cached.at<10000)return delivered;
+        }else if(now-cached.at<12000)return delivered;
+       }
+       const worker=dispatchWorkerRef.current;
+       if(worker&&workerReadyRef.current){
+        const requestId=++routeSequenceRef.current;
+        operationalRoutesRef.current.set(key,{requestId,purpose:'shift',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
+        worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'shift',from:delivered.position,targets});
        }
       }
      }
@@ -626,14 +648,25 @@ export default function App(){
      const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??40)
       ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
      if(delivered.status==='IDLE'&&serviceDue&&energyPercent(delivered)>10&&!delivered.refillRequested){
-      const start=nearest(graph,delivered.position);
       const home:[number,number]=[company!.headquarters.lng,company!.headquarters.lat];
-      const end=nearest(graph,home);
-      const path=start&&end?route(graph,start,end):null;
-      if(path){
-       if(path.path.length<2)return {...delivered,status:'SERVICING' as const,serviceUntil:now+120000,path:[],edgeIds:[],speedKph:0,serviceDestination:undefined};
-       return {...delivered,status:'RETURNING' as const,serviceDestination:home,refillDestination:undefined,pauseAtHome:false,
-        path:path.path,edgeIds:path.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+      const key=delivered.id;
+      const cached=operationalRoutesRef.current.get(key);
+      if(cached?.purpose==='service'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
+       if(cached.ready){
+        if(cached.path&&cached.edgeIds){
+         operationalRoutesRef.current.delete(key);
+         if(cached.path.length<2)return {...delivered,status:'SERVICING' as const,serviceUntil:now+120000,path:[],edgeIds:[],speedKph:0,serviceDestination:undefined};
+         return {...delivered,status:'RETURNING' as const,serviceDestination:home,refillDestination:undefined,pauseAtHome:false,
+          path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+        }
+        if(now-cached.at<10000)return delivered;
+       }else if(now-cached.at<12000)return delivered;
+      }
+      const worker=dispatchWorkerRef.current;
+      if(worker&&workerReadyRef.current){
+       const requestId=++routeSequenceRef.current;
+       operationalRoutesRef.current.set(key,{requestId,purpose:'service',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
+       worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'service',from:delivered.position,targets:[home]});
       }
       return delivered;
      }
