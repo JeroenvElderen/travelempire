@@ -4,6 +4,13 @@ import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
 const PREFETCH_METERS=10000;
 const BACKGROUND_TILE_DELAY_MS=35;
+// Safari needs an actual rendering frame between expensive graph batches.
+const MERGE_BUDGET_MS=3;
+const MERGE_BATCH_MAX=250;
+const yieldToRenderer=()=>new Promise<void>(resolve=>{
+ if(typeof document!=='undefined'&&document.visibilityState==='visible')requestAnimationFrame(()=>setTimeout(resolve,0));
+ else setTimeout(resolve,0);
+});
 const MAX_CONCURRENT=2;
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
@@ -70,12 +77,21 @@ export class RoadNetworkManager {
    if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
   const roads=await loadRoadTile(id);if(this.disposed)return;
-  for(let i=0;i<roads.length;i+=1500){this.merge(roads.slice(i,i+1500));if(i+1500<roads.length)await new Promise<void>(resolve=>setTimeout(resolve,0));if(this.disposed)return;}
+  // Process at most a few milliseconds of road data before yielding a real frame.
+  // No copies of the tile array are created; the routing graph stays available
+  // throughout loading and each tile is published only after full ingestion.
+  let i=0;
+  while(i<roads.length){
+   const deadline=performance.now()+MERGE_BUDGET_MS;
+   do{const end=Math.min(i+MERGE_BATCH_MAX,roads.length);this.merge(roads,i,end);i=end;}while(i<roads.length&&performance.now()<deadline);
+   if(i<roads.length)await yieldToRenderer();
+   if(this.disposed)return;
+  }
   this.loaded.add(id);this.onRoads?.(roads);this.scheduleGraphPublish();
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
  }
- private merge(roads:RoadSegment[]){for(const road of roads){if(this.seenEdges.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
+ private merge(roads:RoadSegment[],start:number,end:number){for(let index=start;index<end;index++){const road=roads[index];if(this.seenEdges.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
   this.seenEdges.add(road.id);const a=String(road.a),b=String(road.b);
   if(!this.graph.nodes.has(a)){this.graph.nodes.set(a,road.coordinates[0]);this.graph.nodeKeys.push(a)}
   if(!this.graph.nodes.has(b)){this.graph.nodes.set(b,road.coordinates[1]);this.graph.nodeKeys.push(b)}
