@@ -488,6 +488,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const instance=map.current;
   if(!instance)return;
   let cancelled=false;
+  let scanRevision=0;
+  let scanTimer:ReturnType<typeof setTimeout>|undefined;
   const sourceId='active-road-network';
   const purpleSourceId='explored-road-network-source';
   const exploredLayerId='explored-road-network';
