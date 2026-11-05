@@ -7,3 +7,4 @@ export function performanceMonitorEnabled(){return enabled;}
 export function recordPerformance(values:Partial<PerformanceSnapshot>){if(enabled)Object.assign(metrics,values);}
 export function incrementPerformance(key:'frameSpikes'|'sourceUpdates'|'explorationDelta',by=1){if(enabled)metrics[key]+=by;}
 export function readPerformance():PerformanceSnapshot{return {...metrics};}
+export function recordFrameGap(ms:number){if(!enabled)return;if(ms>50)metrics.frameSpikes++;if(ms>metrics.maxFrameMs)metrics.maxFrameMs=ms;}
