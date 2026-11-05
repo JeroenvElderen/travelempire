@@ -502,6 +502,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
    if(!graph){remove();setRoadStatus('Waiting for geographic road tiles');return;}
+   if(scanTimer!==undefined)clearTimeout(scanTimer);
+   ++scanRevision;
    const exploredSet=currentExploredRoads.current;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
@@ -515,20 +517,39 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const features:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
-   outer:for(const [from,edges] of graph.edges){
-    const a=graph.nodes.get(from);
-    if(!a)continue;
-    for(const edge of edges){
-     if(!roadsVisible&&!exploredSet.has(edge.id))continue;
-     if(seen.has(edge.id))continue;
-     const b=graph.nodes.get(edge.to);
-     if(!b)continue;
-     if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
-     seen.add(edge.id);
-     features.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
-     if(features.length>=MAX_VISIBLE)break outer;
+   // Scan the large graph in small slices so iPhone Safari can render between batches.
+   // Cancel stale scans when the viewport, graph or style changes.
+   const scanId=++scanRevision;
+   const iterator=graph.edges.entries();
+   let examined=0;
+   const scan=()=>{
+    if(cancelled||scanId!==scanRevision)return;
+    const sliceStart=performance.now();
+    let done=false;
+    while(performance.now()-sliceStart<3&&features.length<MAX_VISIBLE){
+     const next=iterator.next();
+     if(next.done){done=true;break;}
+     const [from,edges]=next.value;
+     examined++;
+     const a=graph.nodes.get(from);
+     if(!a)continue;
+     for(const edge of edges){
+      if(!roadsVisible&&!exploredSet.has(edge.id))continue;
+      if(seen.has(edge.id))continue;
+      const b=graph.nodes.get(edge.to);
+      if(!b)continue;
+      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
+      seen.add(edge.id);
+      features.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
+      if(features.length>=MAX_VISIBLE)break;
+     }
     }
-   }
+    if(!done&&features.length<MAX_VISIBLE){scanTimer=window.setTimeout(scan,0);return;}
+    startupTrace('Visible road scan complete','nodes='+examined+' visible='+features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
+    finishScan();
+   };
+   const finishScan=()=>{
+    if(cancelled||scanId!==scanRevision)return;
    visibleRoadFeatures.current=features;
    visibleRoadIndex.current=new Map(features.map(f=>[String(f.properties?.roadId??''),f]));
    visibleExploredFeatures.current=new Map(features.filter(f=>exploredSet.has(String(f.properties?.roadId??''))).map(f=>[String(f.properties?.roadId??''),f]));
@@ -557,12 +578,14 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
+   };
+   scanTimer=window.setTimeout(scan,0);
   };
   refreshRoadLines.current=update;
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('style.load',update);};
+  return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
  // Ferries remain operational; sea routes no longer generate territory fog.
