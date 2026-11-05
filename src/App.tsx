@@ -1,3 +1,4 @@
+import {diagnostic} from './frontendDiagnostics';
 import {recordSimulationTick,recordActivity,performanceMonitorEnabled} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
@@ -327,11 +328,13 @@ export default function App(){
        const worker=dispatchWorkerRef.current;
        if(!worker)return;
        // Synchronize newly loaded tile edges with the dispatch worker.
+       const syncStarted=performance.now();
        workerReadyRef.current=false;
        for(let i=0;i<roads.length;i+=2000){
         roadSyncPendingRef.current++;
         worker.postMessage({type:'addRoads',revision:graphRevisionRef.current,roads:roads.slice(i,i+2000)});
        }
+       diagnostic('dispatch:enqueue',`segments=${roads.length} batches=${Math.ceil(roads.length/2000)} ms=${Math.round(performance.now()-syncStarted)} pending=${roadSyncPendingRef.current}`);
      });
     networkRef.current=manager;
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
