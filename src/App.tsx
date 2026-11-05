@@ -525,11 +525,6 @@ export default function App(){
   window.addEventListener('pagehide',saveExploration);
   return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);void saveExploration()};
  },[company?.id]);
- // Cloud synchronization is throttled; IndexedDB writes remain immediate.
- useEffect(()=>{if(!company||!fleet.exploredEdgeIds?.length)return;
-  const timer=window.setTimeout(()=>{void writeExploration(company.id,{ids:fleet.exploredEdgeIds??[],segments:{}}).catch(error=>console.error('[TravelEmpire] Discovery save failed',error));},350);
-  return()=>window.clearTimeout(timer);
- },[company?.id,fleet.exploredEdgeIds]);
  useEffect(()=>{if(!company)return;const id=company.id;const save=()=>{try{saveFleet(id,{...fleetSaveRef.current,exploredEdgeIds:[]})}catch(error){console.error('[TravelEmpire] Fleet save failed',error)}};
   const timer=window.setInterval(save,5000);
   window.addEventListener('pagehide',save);
