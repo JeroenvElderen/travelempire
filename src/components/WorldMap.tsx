@@ -244,8 +244,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{
   let frame=0;
   let lastDeliveryRefresh=0;
+  let lastFrameAt=0,frameSamples=0,slowFrames=0,maxFrameGap=0;
+  let lastPerfReport=performance.now();
   const animate=()=>{
    const frameNow=performance.now();
+   if(lastFrameAt){const gap=frameNow-lastFrameAt;frameSamples++;if(gap>50)slowFrames++;maxFrameGap=Math.max(maxFrameGap,gap);}
+   lastFrameAt=frameNow;
+   if(frameNow-lastPerfReport>=30000){if(slowFrames>5)console.warn('[TravelEmpire] Map frame delays',{slowFrames,frameSamples,maxGapMs:Math.round(maxFrameGap),markers:taxiMarkers.current.size});frameSamples=0;slowFrames=0;maxFrameGap=0;lastPerfReport=frameNow;}
    // Delivery animations are less frequent than vehicle position interpolation.
    if(frameNow-lastDeliveryRefresh>=100){
     lastDeliveryRefresh=frameNow;
@@ -268,6 +273,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    for(const [id,snapshot] of taxiSnapshots.current){
     const marker=taxiMarkers.current.get(id);if(!marker)continue;
     const taxi=snapshot.to;
+    if(snapshot.from.position[0]===snapshot.to.position[0]&&snapshot.from.position[1]===snapshot.to.position[1]&&snapshot.to.position[0]===snapshot.forecast.position[0]&&snapshot.to.position[1]===snapshot.forecast.position[1]&&renderedPosition.current.has(id))continue;
     const elapsed=Math.max(0,(now-snapshot.at)/1000);
     // Continue a short distance along the actual road after a late simulation tick.
     // Forecast is computed only when authoritative state changes, never per frame.
@@ -295,7 +301,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       // keeping fast-moving taxis aligned with the road direction.
       const blend=1-Math.exp(-dt/((taxi.speedKph ?? 0)>45?0.12:0.20));
       previousHeading.angle+=delta*blend;
-      marker.setRotation(previousHeading.angle);
+      if(Math.abs(delta*blend)>0.05)marker.setRotation(previousHeading.angle);
      }
      previousHeading.position=position;
      previousHeading.at=now;
