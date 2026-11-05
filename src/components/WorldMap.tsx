@@ -1,3 +1,4 @@
+import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
 import {formatGameClock,type GameClock} from '../simulation/gameClock';
@@ -79,6 +80,15 @@ type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,onExplorerCommand,gameClock}:Props){
+ const [perfOpen,setPerfOpen]=useState(false);
+ const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
+ useEffect(()=>{
+  enablePerformanceMonitor(perfOpen);
+  if(!perfOpen){setPerfSnapshot(null);return;}
+  setPerfSnapshot(readPerformance());
+  const timer=window.setInterval(()=>setPerfSnapshot(readPerformance()),1000);
+  return()=>{window.clearInterval(timer);enablePerformanceMonitor(false);};
+ },[perfOpen]);
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
  const [ferryConnections,setFerryConnections]=useState<FerryConnectionResult|undefined>(undefined);
@@ -261,9 +271,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let frame=0;
   let lastDeliveryRefresh=0;
   let lastFrameAt=0,frameSamples=0,slowFrames=0,maxFrameGap=0;
+  let monitoredFrames=0,monitoredAt=performance.now();
   let lastPerfReport=performance.now();
   const animate=()=>{
    const frameNow=performance.now();
+   if(performanceMonitorEnabled()){
+    monitoredFrames++;
+    if(lastFrameAt){const frameGap=frameNow-lastFrameAt;if(frameGap>50)incrementPerformance('frameSpikes');recordPerformance({maxFrameMs:Math.max(readPerformance().maxFrameMs,frameGap)});}
+    if(frameNow-monitoredAt>=1000){recordPerformance({fps:Math.round(monitoredFrames*1000/(frameNow-monitoredAt))});monitoredFrames=0;monitoredAt=frameNow;}
+   }else{monitoredFrames=0;monitoredAt=frameNow;}
+
    if(lastFrameAt){const gap=frameNow-lastFrameAt;frameSamples++;if(gap>50)slowFrames++;maxFrameGap=Math.max(maxFrameGap,gap);}
    lastFrameAt=frameNow;
    if(frameNow-lastPerfReport>=30000){if(slowFrames>5)console.warn('[TravelEmpire] Map frame delays',{slowFrames,frameSamples,maxGapMs:Math.round(maxFrameGap),markers:taxiMarkers.current.size});frameSamples=0;slowFrames=0;maxFrameGap=0;lastPerfReport=frameNow;}
@@ -382,6 +399,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   source.setData({type:'FeatureCollection',features});
   lastPurpleSourceUpdate.current=started;
   const stats=purpleRenderStats.current;const duration=performance.now()-started;
+  if(performanceMonitorEnabled()){incrementPerformance('sourceUpdates');recordPerformance({sourceMs:duration,visibleExplored:features.length});}
   stats.updates++;if(duration>12)stats.slow++;stats.maxMs=Math.max(stats.maxMs,duration);
   if(started-stats.lastReport>30000){if(stats.slow)console.warn('[TravelEmpire] Explored road source updates',{updates:stats.updates,slow:stats.slow,maxMs:Math.round(stats.maxMs),features:features.length});stats.updates=0;stats.slow=0;stats.maxMs=0;stats.lastReport=started;}
   setRoadStatus(`${features.length.toLocaleString()} explored / ${visibleRoadFeatures.current.length.toLocaleString()} visible regional road segments`);
@@ -390,6 +408,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const previous=currentExploredRoads.current;
   const next=new Set(exploredEdgeIds);
   currentExploredRoads.current=next;
+  if(performanceMonitorEnabled()){let additions=0;for(const id of next)if(!previous.has(id))additions++;if(additions)incrementPerformance('explorationDelta',additions);}
   // Incremental discovery: index visible geometry once per viewport update,
   // then add only changed IDs instead of rebuilding the whole road graph.
   const visible=visibleRoadIndex.current;
@@ -495,5 +514,17 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    return()=>{instance.off('style.load',apply);};
  },[ready,basemap,phase]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
- return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ return <div className="map-container">
+ <div style={{position:'absolute',bottom:16,left:12,zIndex:25,maxWidth:'min(85vw,280px)',fontSize:12}}>
+  <button type="button" onClick={()=>setPerfOpen(v=>!v)} aria-expanded={perfOpen} style={{background:'#152b34',color:'#fff',border:'1px solid #4a6570',borderRadius:10,padding:'7px 11px',cursor:'pointer'}}>{perfOpen?'Hide performance':'Performance'}</button>
+  {perfOpen&&perfSnapshot&&<div role="status" style={{background:'#10232deF',color:'#f5f9fb',padding:12,borderRadius:12,marginTop:6,boxShadow:'0 3px 15px #0008',lineHeight:1.8}}>
+   <strong>Mobile performance</strong>
+   <div>FPS: {perfSnapshot.fps} · Frame spikes: {perfSnapshot.frameSpikes}</div>
+   <div>Max frame gap: {perfSnapshot.maxFrameMs.toFixed(1)} ms</div>
+   <div>Simulation: {perfSnapshot.simulationMs.toFixed(1)} ms · Vehicles: {perfSnapshot.vehicles}</div>
+   <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
+   <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
+   <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
+  </div>}
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
