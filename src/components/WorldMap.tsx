@@ -415,6 +415,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const purpleRevision=useRef(0);
  const flushedPurpleRevision=useRef(-1);
  const viewportSourceSignature=useRef('');
+ const viewportGraphRef=useRef<typeof graph>(null);
  const purpleSourceId='explored-road-network-source';
  const refreshPurpleRoads=()=>{
   const instance=map.current;
@@ -485,8 +486,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
    // Source existence is checked to support map-style reloads.
    const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible;
-   if(signature===viewportSourceSignature.current&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
+   if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
    viewportSourceSignature.current=signature;
+   viewportGraphRef.current=graph;
    const features:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
