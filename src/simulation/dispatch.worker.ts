@@ -33,7 +33,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const add=(from:string,to:string)=>{
      let list=graph!.edges.get(from);
      if(!list){list=[];graph!.edges.set(from,list);}
-     list.push({to,meters:road.length,id:road.id,speedKph:road.speed});
+     list.push({to,meters:road.length,id:road.id,speedKph:road.speed,highway:road.highway});
     };
     if(road.oneway!==-1)add(a,b);
     if(road.oneway!==1)add(b,a);
@@ -127,6 +127,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
    const purpleAllowedRoads=allowedRoads;
+  const discoveryRoads=(taxi:Taxi)=>{if(!taxi.discoveryMode||taxi.discoveryMode==='balanced')return purpleAllowedRoads;const allowed=new Set<string>();for(const links of graph!.edges.values())for(const edge of links){const h=edge.highway??'';const mode=taxi.discoveryMode;const match=mode==='highways'?['motorway','trunk','primary'].some(v=>h===v||h===v+'_link'):mode==='urban'?['residential','living_street','service'].includes(h):['secondary','tertiary','unclassified','road'].includes(h);if(match&&purpleAllowedRoads.has(edge.id))allowed.add(edge.id);}return allowed;};
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
@@ -190,7 +191,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,purpleAllowedRoads,undefined,undefined);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -202,7 +203,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if((taxis[index].kind!=='explorer')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,purpleAllowedRoads);
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]));
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
@@ -210,7 +211,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
-     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,purpleAllowedRoads);
+     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]));
     }
     if(assignment.status!=='IDLE'){
      explorerIdleSince.delete(taxis[index].id);
