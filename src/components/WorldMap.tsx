@@ -322,8 +322,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Discovery updates must not depend on the map moving or on a full graph scan.
  const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
  const refreshRoadLines=useRef<(()=>void)|null>(null);
- const explorationDebugPrevious=useRef<Set<string>>(new Set());
- const debugStarted=useRef(false);
  const lastExplorerTelemetry=useRef<Map<string,{leg:number;edge:string;status:string}>>(new Map());
  useEffect(()=>{
   for(const taxi of taxis){
@@ -443,15 +441,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('moveend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  // Reconcile visible purple road geometry every two seconds even if the
-  // explored ID set and graph size remain unchanged. A newly loaded tile or
-  // map-style change can alter the visible features without changing counts.
-  const reconcile=()=>{
-   if(cancelled||!instance.isStyleLoaded()||!graph)return;
-   update();
-  };
-  const refreshTimer=window.setInterval(reconcile,2000);
-  return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
+  return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
  // Ferries remain operational; sea routes no longer generate territory fog.
