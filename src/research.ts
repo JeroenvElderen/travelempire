@@ -6,7 +6,7 @@ const key=(id:string)=>`travelempire.research.v1.${id}`;
 export function load(id:string):ResearchState{try{const v=JSON.parse(localStorage.getItem(key(id))||'null');return v&&v.levels?v:empty()}catch{return empty()}}
 export function save(id:string,v:ResearchState){localStorage.setItem(key(id),JSON.stringify(v))}
 export function clear(id:string){localStorage.removeItem(key(id))}
-export function maxLevel(id:ResearchId){return 5}
+export function maxLevel(_id:ResearchId){return 5}
 export function level(s:ResearchState,id:ResearchId){return Math.max(0,Math.min(maxLevel(id),s.levels[id]||0))}
 export function price(id:ResearchId,l:number){return (id==='efficiency'?1500:2000)*3**(l-1)}
 export function duration(s:ResearchState,l:number){return Math.round(([5,15,30,60,180][l-1]||180)*60000*(1-0.05*level(s,'efficiency')))}
