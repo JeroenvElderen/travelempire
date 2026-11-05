@@ -156,6 +156,7 @@ export default function App(){
  const workerRoadCountRef=useRef(0);
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
  const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
+ const simulationPerfRef=useRef({samples:0,totalMs:0,maxMs:0,lastReport:0});
  const fuelPlanCacheRef=useRef(new Map<string,{at:number;position:[number,number];graph:RoadGraph|null;stationCount:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null}>());
  const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
  const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
@@ -540,6 +541,7 @@ export default function App(){
    previousTick=clock;
    const now=Date.now();
    setFleet(old=>{
+    const tickStarted=performance.now();
     const savedIds=old.exploredEdgeIds??[];
     const cache=discoveredCacheRef.current;
     const discovered=cache&&cache.ids===savedIds?cache.set:new Set<string>(savedIds);
@@ -687,7 +689,7 @@ export default function App(){
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
-     if(roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
+     if(t.kind==='explorer'&&t.status==='EXPLORING'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
      next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
       if(t.kind==='explorer'&&!discovered.has(id)){
@@ -765,6 +767,13 @@ export default function App(){
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
+    const tickMs=performance.now()-tickStarted;
+    const perf=simulationPerfRef.current;
+    perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
+    if(tickMs>50&&now-perf.lastReport>15000){
+     console.warn('[TravelEmpire] Slow simulation tick',{durationMs:Math.round(tickMs),vehicles:old.taxis.length,exploredRoads:discovered.size,averageMs:Math.round(perf.totalMs/perf.samples),maxMs:Math.round(perf.maxMs)});
+     perf.lastReport=now;perf.samples=0;perf.totalMs=0;perf.maxMs=0;
+    }
     return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(now-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
