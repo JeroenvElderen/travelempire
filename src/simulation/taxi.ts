@@ -30,6 +30,7 @@ export type Taxi = {
   explorationSectionCompleted?: number;
   explorationSectionTotal?: number;
   explorationMode?: 'local'|'frontier';
+  discoveryMode?: 'balanced'|'highways'|'urban'|'rural';
   drivingPolicy?: 'economy'|'balanced'|'performance';
   serviceThreshold?: number;
   discoveredKm?: number;
