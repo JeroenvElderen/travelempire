@@ -7,25 +7,7 @@ function openDB():Promise<IDBDatabase>{return new Promise((resolve,reject)=>{con
 export async function readExploration(id:string):Promise<ExplorationRecord|null>{const db=await openDB();try{return await new Promise((resolve,reject)=>{const request=db.transaction(STORE,'readonly').objectStore(STORE).get(id);request.onsuccess=()=>resolve(request.result??null);request.onerror=()=>reject(request.error);});}finally{db.close();}}
 export async function writeExploration(id:string,record:ExplorationRecord):Promise<void>{const db=await openDB();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');const store=tx.objectStore(STORE);const get=store.get(id);get.onsuccess=()=>{const old=get.result as ExplorationRecord|undefined;store.put({ids:[...new Set([...(old?.ids??[]),...record.ids])],segments:{...(old?.segments??{}),...record.segments}},id);};tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}finally{db.close();}}
 
-/** Last successfully rendered fog mask, cached independently of road tiles.
- * Cache is company-scoped; discoveries remain authoritative in segments store.
- */
-export type ExplorationMask={coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection};
-const MASK_PREFIX='fog-mask:';
-export async function readExplorationMask(id:string):Promise<ExplorationMask|null>{
- const db=await openDB();try{return await new Promise((resolve,reject)=>{
-  const request=db.transaction(STORE,'readonly').objectStore(STORE).get(MASK_PREFIX+id);
-  request.onsuccess=()=>resolve(request.result??null);request.onerror=()=>reject(request.error);
- });}finally{db.close();}
-}
-export async function writeExplorationMask(id:string,mask:ExplorationMask):Promise<void>{
- const db=await openDB();try{await new Promise<void>((resolve,reject)=>{
-  const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(mask,MASK_PREFIX+id);
-  tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
- });}finally{db.close();}
-}
-
-export async function clearExploration(id:string):Promise<void>{const db=await openDB();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.objectStore(STORE).delete(MASK_PREFIX+id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}finally{db.close();}}
+export async function clearExploration(id:string):Promise<void>{const db=await openDB();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.objectStore(STORE).delete('fog-mask:'+id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}finally{db.close();}}
 
 /**
  * Optional Supabase cloud backup. Uses Supabase anonymous Auth + RLS; never
