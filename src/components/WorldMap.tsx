@@ -1,7 +1,6 @@
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
 import {formatGameClock,type GameClock} from '../simulation/gameClock';
-import {readExploration,writeExploration,syncExploration,cloudExplorationEnabled,readExplorationMask,type Segment} from '../data/explorationStore';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
@@ -76,10 +75,10 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];territoryEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],territoryEdgeIds=[],graph,onExplorerCommand,gameClock}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,onExplorerCommand,gameClock}:Props){
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
  useEffect(()=>{let active=true;loadFerryNetwork().then(data=>{if(active)setFerryNetwork(data)}).catch(err=>console.warn('Ferry overlay unavailable',err));return()=>{active=false}},[]);
  const [ferryConnections,setFerryConnections]=useState<FerryConnectionResult|undefined>(undefined);
@@ -150,7 +149,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const container=useRef<HTMLDivElement>(null);const map=useRef<maplibregl.Map|null>(null);const marker=useRef<maplibregl.Marker|null>(null);const onLocationRef=useRef(onLocationSelected);onLocationRef.current=onLocationSelected;
 
  const selectingRef=useRef(selecting);selectingRef.current=selecting;
- const [roadsVisible,setRoadsVisible]=useState(true); const [explorationVisible,setExplorationVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
+ const [roadsVisible,setRoadsVisible]=useState(true);const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;const instance=new maplibregl.Map({container:container.current,style,center:[-6.1,53.2],zoom:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
   if(!event.id||instance.hasImage(event.id))return;
   instance.addImage(event.id,{width:1,height:1,data:new Uint8Array(4)});
@@ -450,174 +449,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{cancelled=true;if(refreshRoadLines.current===update)refreshRoadLines.current=null;window.clearInterval(refreshTimer);instance.off('moveend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,ready,basemap]);
 
- // Keep the exploration overlay mounted while road discovery updates every tick.
- // The geometry worker is persistent: restarting it every second can prevent any result.
- const explorationInputs=useRef({graph,territoryEdgeIds,headquarters});
- explorationInputs.current={graph,territoryEdgeIds,headquarters};
- const explorationLast=useRef<{coverage:GeoJSON.FeatureCollection;locked:GeoJSON.FeatureCollection}|null>(null);
- const explorationApply=useRef<((coverage:GeoJSON.FeatureCollection,locked:GeoJSON.FeatureCollection)=>void)|null>(null);
- const persistentSegments=useRef<Map<string,Segment[]>>(new Map());
- const explorationCompany=useRef<string|undefined>(undefined);
- const persistBusy=useRef(false);
- const persistAgain=useRef(false);
- const explorationLastSignature=useRef('');
- const explorationGeneration=useRef(0);
- useEffect(()=>{explorationCompany.current=companyId;persistentSegments.current=new Map();explorationLast.current=null;explorationLastSignature.current='';explorationGeneration.current++;
-  if(!companyId)return;let cancelled=false;
-  // Restore the last proven fog mask immediately; rebuilding large unions can
-  // take time or fail, but must never erase already discovered territory.
-  void readExplorationMask(companyId).then(mask=>{
-   if(cancelled||explorationCompany.current!==companyId||!mask)return;
-   if(!explorationLast.current){
-    explorationLast.current=mask;
-    explorationApply.current?.(mask.coverage,mask.locked);
-   }
-  }).catch(error=>console.error('[TravelEmpire] Cached fog restore failed',error));
-
-  readExploration(companyId).then(record=>{if(cancelled||explorationCompany.current!==companyId)return;
-   // Merge rather than replace discoveries made while storage was loading.
-   for(const [id,segments] of Object.entries(record?.segments??{}))if(id.startsWith('territory:')&&!id.startsWith('territory:sea:')&&!persistentSegments.current.has(id.slice(10)))persistentSegments.current.set(id.slice(10),segments);
-   explorationLastSignature.current='';
-   fogDraw.current?.();
-  }).catch(error=>console.error('[TravelEmpire] Geometry restore failed',error));
-  if(cloudExplorationEnabled())void syncExploration(companyId).then(record=>{
-   if(cancelled||explorationCompany.current!==companyId||!record)return;
-   for(const [id,segments] of Object.entries(record.segments)){
-    if(!id.startsWith('territory:')||id.startsWith('territory:sea:')&&!id.startsWith('territory:sea:v2:'))continue;
-    const key=id.slice(10);
-    const current=persistentSegments.current.get(key);
-    if(!current||(!current.length&&segments.length))persistentSegments.current.set(key,segments);
-   }
-   explorationLastSignature.current='';
-   fogDraw.current?.();
-  }).catch(error=>console.error('[TravelEmpire] Cloud geometry restore failed',error));
-  return()=>{cancelled=true};
- },[companyId]);
- const persistGeometry=async()=>{const id=explorationCompany.current;if(!id||persistBusy.current){persistAgain.current=true;return;}persistBusy.current=true;
-  try{do{persistAgain.current=false;const old=await readExploration(id);const segments={...(old?.segments??{})};
-   for(const [key,value] of persistentSegments.current)segments['territory:'+key]=value;
-   await writeExploration(id,{ids:old?.ids??[],segments});
-  }while(persistAgain.current&&explorationCompany.current===id)}catch(error){console.error('[TravelEmpire] Geometry save failed',error)}finally{persistBusy.current=false;}
- };
- // Build a stable edge geometry index only when the graph changes.
- const explorationEdgeIndex=useRef<{graph:RoadGraph|null|undefined;edgeCount:number;entries:Map<string,Array<[[number,number],[number,number]]>>}>({graph:null,edgeCount:-1,entries:new Map()});
- // Draw fog as a screen-space canvas mask. No Turf polygon unions or
- // world-sized GeoJSON subtraction: each discovered segment clears its own
- // geographic-width corridor, even when the road tile is no longer loaded.
- const fogDraw=useRef<(()=>void)|null>(null);
- const seaLast=useRef(new Map<string,{point:[number,number];at:number}>());
- const seaDirty=useRef(false);
- useEffect(()=>{seaLast.current.clear();seaDirty.current=false;},[companyId]);
+ // Ferries remain operational; sea routes no longer generate territory fog.
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  const stop=startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,(routeId,sailedSegments)=>{
-   if(!explorationCompany.current||!sailedSegments.length)return;
-   // v2 avoids reusing legacy straight-chord sea discoveries.
-   const key='sea:v2:'+routeId;
-   const segments=persistentSegments.current.get(key)??[];
-   if(segments.length>=3000)return;
-   segments.push(...sailedSegments.slice(0,3000-segments.length));
-   persistentSegments.current.set(key,segments);
-   seaDirty.current=true;
-   fogDraw.current?.();
-  },companyId);
-  const save=window.setInterval(()=>{if(seaDirty.current){seaDirty.current=false;void persistGeometry();}},30000);
-  return()=>{stop();window.clearInterval(save);if(seaDirty.current){seaDirty.current=false;void persistGeometry();}};
+  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId);
  },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
 
- useEffect(()=>{
-  const instance=map.current;
-  if(!instance||!ready||!container.current)return;
-  const host=container.current;
-  const canvas=document.createElement('canvas');
-  canvas.setAttribute('aria-hidden','true');
-  canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1';
-  host.appendChild(canvas);
-  const ctx=canvas.getContext('2d');
-  if(!ctx){canvas.remove();return;}
-  let frame=0;
-  const draw=()=>{
-   frame=0;
-   const width=host.clientWidth,height=host.clientHeight;
-   if(!width||!height)return;
-   const dpr=Math.min(window.devicePixelRatio||1,2);
-   if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){
-    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
-   }
-   ctx.setTransform(dpr,0,0,dpr,0,0);
-   ctx.clearRect(0,0,width,height);
-   if(!explorationVisible||!headquarters)return;
-   ctx.globalCompositeOperation='source-over';
-   ctx.fillStyle='rgba(211,107,107,0.58)';
-   ctx.fillRect(0,0,width,height);
-   ctx.globalCompositeOperation='destination-out';
-   // No free headquarters reveal: exploration requires the Black Explorer.
-   // One path per segment. A 150 m radius remains geographic at every zoom.
-   const bounds=instance.getBounds();
-   const west=bounds.getWest()-0.03,east=bounds.getEast()+0.03;
-   const south=bounds.getSouth()-0.03,north=bounds.getNorth()+0.03;
-   // Batch strokes by approximate width to avoid a canvas draw call per road.
-   const batches=new Map<number,Path2D>();
-   for(const [segmentKey,segments] of persistentSegments.current)for(const [a,b] of segments){
-    if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||
-       Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
-    const p=instance.project(a),q=instance.project(b);
-    const lat=(a[1]+b[1])/2;
-    const metersPerDegree=111320*Math.max(0.01,Math.cos(lat*Math.PI/180));
-    const edge=instance.project([a[0]+(segmentKey.startsWith('sea:')?300:150)/metersPerDegree,a[1]]);
-    const width=Math.max(1,Math.round(2*Math.abs(edge.x-p.x)*2)/2);
-    let path=batches.get(width);
-    if(!path){path=new Path2D();batches.set(width,path);}
-    path.moveTo(p.x,p.y);path.lineTo(q.x,q.y);
-   }
-   ctx.lineCap='round';ctx.lineJoin='round';
-   for(const [width,path] of batches){ctx.lineWidth=width;ctx.stroke(path);}
-   ctx.globalCompositeOperation='source-over';
-  };
-  const schedule=()=>{if(document.hidden)return;if(!frame)frame=requestAnimationFrame(draw);};
-  const onVisibilityChange=()=>{if(!document.hidden)schedule();};
-  document.addEventListener('visibilitychange',onVisibilityChange);
-  fogDraw.current=schedule;
-  instance.on('move',schedule);
-  instance.on('moveend',schedule);
-  instance.on('resize',schedule);
-  instance.on('style.load',schedule);
-  schedule();
-  return()=>{
-   fogDraw.current=null;
-   instance.off('move',schedule);instance.off('moveend',schedule);instance.off('resize',schedule);
-   instance.off('style.load',schedule);
-   document.removeEventListener('visibilitychange',onVisibilityChange);
-   if(frame)cancelAnimationFrame(frame);
-   canvas.remove();
-  };
- },[ready,explorationVisible,headquarters?.lng,headquarters?.lat,basemap]);
- useEffect(()=>{
-  const currentGraph=graph;
-  if(currentGraph){
-   const edgeCount=[...currentGraph.edges.values()].reduce((n,edges)=>n+edges.length,0);
-   if(explorationEdgeIndex.current.graph!==currentGraph||explorationEdgeIndex.current.edgeCount!==edgeCount){
-    const entries=new Map<string,Segment[]>();
-    const seen=new Set<string>();
-    for(const [from,edges] of currentGraph.edges)for(const edge of edges){
-     const unique=[from,edge.to].sort().join('|');
-     if(seen.has(unique))continue;seen.add(unique);
-     const a=currentGraph.nodes.get(from),b=currentGraph.nodes.get(edge.to);
-     if(a&&b){const list=entries.get(edge.id)??[];list.push([[a[0],a[1]],[b[0],b[1]]]);entries.set(edge.id,list);}
-    }
-    explorationEdgeIndex.current={graph:currentGraph,edgeCount,entries};
-   }
-  }
-  let changed=false;
-  for(const id of territoryEdgeIds){
-   const existing=persistentSegments.current.get(id);
-   if(existing?.length)continue;
-   const found=explorationEdgeIndex.current.entries.get(id);
-   if(found?.length){persistentSegments.current.set(id,found);changed=true;}
-  }
-  if(changed)void persistGeometry();
-  fogDraw.current?.();
- },[graph,territoryEdgeIds,explorationVisible]);
  // Repaint only when the game enters a different lighting phase. Never call
  // setStyle for the clock: that would discard exploration/ferry layers and stutter taxis.
  const phase=gameClock?mapDayPhase(gameHour(gameClock)):'day';
@@ -630,5 +467,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    return()=>{instance.off('style.load',apply);};
  },[ready,basemap,phase]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
- return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered · 150 m Black Explorer corridor</div><label className="territory-toggle"><input type="checkbox" checked={explorationVisible} onChange={e=>setExplorationVisible(e.target.checked)}/> Show WorldFront exploration area</label><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = unexplored. Clear = territory revealed by the Black Explorer (150 m radius). Purple Explorer-discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ return <div className="map-container"><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
