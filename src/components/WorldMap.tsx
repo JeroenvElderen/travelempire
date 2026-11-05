@@ -517,10 +517,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    viewportGraphRef.current=graph;
    const geometryStarted=performance.now();
    const features:GeoJSON.Feature[]=[];
+   const exploredFeatures:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
-   // Scan the large graph in small slices so iPhone Safari can render between batches.
-   // Cancel stale scans when the viewport, graph or style changes.
+   // Continue scanning for explored roads even after the ordinary road cap.
    const scanId=++scanRevision;
    const iterator=graph.edges.entries();
    let examined=0;
@@ -528,7 +528,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     if(cancelled||scanId!==scanRevision)return;
     const sliceStart=performance.now();
     let done=false;
-    while(performance.now()-sliceStart<3&&features.length<MAX_VISIBLE){
+    while(performance.now()-sliceStart<3){
      const next=iterator.next();
      if(next.done){done=true;break;}
      const [from,edges]=next.value;
@@ -536,25 +536,27 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const a=graph.nodes.get(from);
      if(!a)continue;
      for(const edge of edges){
-      if(!roadsVisible&&!exploredSet.has(edge.id))continue;
+      const explored=exploredSet.has(edge.id);
+      if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
       if(seen.has(edge.id))continue;
       const b=graph.nodes.get(edge.to);
       if(!b)continue;
-      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.max(a[1],b[1])<south||Math.min(a[1],b[1])>north)continue;
+      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
       seen.add(edge.id);
-      features.push({type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}});
-      if(features.length>=MAX_VISIBLE)break;
+      const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}};
+      if(explored)exploredFeatures.push(feature);
+      if(features.length<MAX_VISIBLE)features.push(feature);
      }
     }
-    if(!done&&features.length<MAX_VISIBLE){scanTimer=window.setTimeout(scan,0);return;}
-    startupTrace('Visible road scan complete','nodes='+examined+' visible='+features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
+    if(!done){scanTimer=window.setTimeout(scan,0);return;}
+    startupTrace('Visible road scan complete','nodes='+examined+' visible='+features.length+' purple='+exploredFeatures.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
     finishScan();
    };
    const finishScan=()=>{
     if(cancelled||scanId!==scanRevision)return;
    visibleRoadFeatures.current=features;
-   visibleRoadIndex.current=new Map(features.map(f=>[String(f.properties?.roadId??''),f]));
-   visibleExploredFeatures.current=new Map(features.filter(f=>exploredSet.has(String(f.properties?.roadId??''))).map(f=>[String(f.properties?.roadId??''),f]));
+   visibleRoadIndex.current=new Map([...features,...exploredFeatures].map(f=>[String(f.properties?.roadId??''),f]));
+   visibleExploredFeatures.current=new Map(exploredFeatures.map(f=>[String(f.properties?.roadId??''),f]));
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
    const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...visibleExploredFeatures.current.values()]};
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
