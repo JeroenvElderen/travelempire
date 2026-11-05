@@ -106,7 +106,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let lastRender=0;
   const onRender=()=>{
    const now=performance.now();
-   if(lastRender&&now-lastRender>50)recordActivity('map:render',now-lastRender);
+   // Only report gaps between frames in an active rendering burst.
+   // A long idle period followed by a render is not a blocked frame.
+   if(lastRender&&now-lastRender>50&&now-lastRender<250)recordActivity('map:render',now-lastRender);
    lastRender=now;
   };
   instance.on('render',onRender);
@@ -410,15 +412,20 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const lastPurpleSourceUpdate=useRef(0);
  const purpleRenderStats=useRef({updates:0,slow:0,maxMs:0,lastReport:0});
  const purpleRefreshTimer=useRef<number|null>(null);
+ const purpleRevision=useRef(0);
+ const flushedPurpleRevision=useRef(-1);
+ const viewportSourceSignature=useRef('');
  const purpleSourceId='explored-road-network-source';
  const refreshPurpleRoads=()=>{
   const instance=map.current;
   if(!instance||!instance.isStyleLoaded())return;
   const source=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
   if(!source)return;
+  if(flushedPurpleRevision.current===purpleRevision.current)return;
   const started=performance.now();
   const features=[...visibleExploredFeatures.current.values()];
   source.setData({type:'FeatureCollection',features});
+  flushedPurpleRevision.current=purpleRevision.current;
   if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-started);
   lastPurpleSourceUpdate.current=started;
   const stats=purpleRenderStats.current;const duration=performance.now()-started;
@@ -446,6 +453,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(visibleExploredFeatures.current.delete(id))changed=true;
   }
   if(!changed)return;
+  purpleRevision.current++;
   // Coalesce continuous discoveries without indefinitely postponing source updates.
   if(purpleRefreshTimer.current===null){
    const delay=Math.max(0,150-(performance.now()-lastPurpleSourceUpdate.current));
@@ -466,7 +474,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();
+   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();viewportSourceSignature.current='';
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -474,6 +482,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const exploredSet=currentExploredRoads.current;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
+   // Ignore duplicate moveend notifications when neither bounds nor sources changed.
+   // Source existence is checked to support map-style reloads.
+   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible;
+   if(signature===viewportSourceSignature.current&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
+   viewportSourceSignature.current=signature;
    const features:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
@@ -503,6 +516,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   flushedPurpleRevision.current=purpleRevision.current;
    if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
    if(performanceMonitorEnabled()){
     incrementPerformance('sourceUpdates');
