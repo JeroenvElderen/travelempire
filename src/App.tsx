@@ -150,6 +150,7 @@ export default function App(){
 
  const dispatchWorkerRef=useRef<Worker|null>(null);
  const dispatchBusyRef=useRef(false);
+ const dispatchStartedRef=useRef(0);
  const graphRevisionRef=useRef(0);
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
@@ -352,6 +353,7 @@ export default function App(){
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
    if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
    dispatchBusyRef.current=false;
+   if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150)console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length});}
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
    if(message.generatedMission)lastMissionAt.current=Date.now();
@@ -402,7 +404,7 @@ export default function App(){
    queueRef.current=queue;
    setMissionQueue(old=>old.length===queue.length&&old.every((q,i)=>q.id===queue[i].id)?old:queue);
   };
-  worker.onerror=(event)=>{dispatchBusyRef.current=false;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
+  worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
   return()=>{worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
@@ -417,8 +419,9 @@ export default function App(){
    const queue=queueRef.current.filter(q=>q.expiresAt>now);
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
+   dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
-    hq:[company.headquarters.lng,company.headquarters.lat],stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>{if((t.kind&&t.kind!=='taxi')||!gameClockRef.current||t.shiftParked)return false;const schedule=driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs);return schedule.onDuty&&!schedule.onBreak;}).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
