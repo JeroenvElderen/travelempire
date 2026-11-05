@@ -540,6 +540,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   startupTrace('Visible road sources ready','visible='+features.length+' purple='+purple.features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
    flushedPurpleRevision.current=purpleRevision.current;
    if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
    if(performanceMonitorEnabled()){
