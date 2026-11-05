@@ -3,10 +3,12 @@ import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
 const PREFETCH_METERS=10000;
+const BACKGROUND_TILE_DELAY_MS=35;
 const MAX_CONCURRENT=2;
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
+ private priority=new Map<string,number>();private priorityOrigin:Point|null=null;private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
  private failedUntil=new Map<string,number>();private seenEdges=new Set<string>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
@@ -26,11 +28,15 @@ export class RoadNetworkManager {
   const manifest=await roadTileManifest();this.tileSize=manifest.tileSize;this.available=new Set(Object.keys(manifest.tiles));
   const id=tileId(point[0],point[1],this.tileSize);
   // Load tiles around HQ before dispatch; an empty centre tile is allowed.
-  const nearby=this.idsNear(point,1500);
-  await Promise.all(nearby.filter(k=>this.available.has(k)).map(k=>this.load(k)));
+  this.priorityOrigin=point;
+  const nearby=this.idsNear(point,1500).filter(k=>this.available.has(k));
+  nearby.sort((a,b)=>this.tileDistance(a,point)-this.tileDistance(b,point));
+  // Establish a usable local graph before starting broad background prefetch.
+  for(const key of nearby){if(this.disposed)break;await this.load(key);if(this.graph.nodeKeys.length)break;}
   if(!this.graph.nodeKeys.length)throw Error(`No road tiles near headquarters (${id}). Upload geographic tiles first.`);
   this.consider([point]);return this.graph;
  }
+ private tileDistance(id:string,p:Point):number{const [x,y]=id.split('_').map(Number);return Math.hypot((x+.5)*this.tileSize-p[0],((y+.5)*this.tileSize-p[1])*Math.cos(p[1]*Math.PI/180));}
  private idsNear(p:Point,radius:number):string[]{
   const dy=radius/111320,dx=radius/(111320*Math.max(.15,Math.cos(p[1]*Math.PI/180)));
   const ids:string[]=[];const s=this.tileSize;
@@ -52,11 +58,17 @@ export class RoadNetworkManager {
     if(this.queue.length>=MAX_PENDING_TILES)break;
     if(!this.available.has(id)||this.loaded.has(id)||this.queued.has(id)||(this.failedUntil.get(id)??0)>now)continue;
     this.queued.add(id);this.queue.push(id);
+    this.priority.set(id,this.tileDistance(id,p));
    }
-  }this.pump();
+  }
+  // Vehicle positions and HQ are processed first; distant ferry/prefetch tiles remain queued.
+  this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
+  this.pump();
  }
- private pump(){while(!this.disposed&&this.inFlight<MAX_CONCURRENT&&this.queue.length){const id=this.queue.shift()!;this.inFlight++;
-  void this.load(id).catch(e=>{this.failedUntil.set(id,Date.now()+60000);this.onError(`Road tile ${id}: ${String(e)}`)}).finally(()=>{this.queued.delete(id);this.inFlight--;this.pump()});}}
+ private pump(){if(this.backgroundTimer!==null)return;while(!this.disposed&&this.inFlight<MAX_CONCURRENT&&this.queue.length){const id=this.queue.shift()!;this.priority.delete(id);this.inFlight++;
+  void this.load(id).catch(e=>{this.failedUntil.set(id,Date.now()+60000);this.onError(`Road tile ${id}: ${String(e)}`)}).finally(()=>{this.queued.delete(id);this.inFlight--;if(this.disposed)return;
+   // Give Safari a rendering opportunity between completed background tiles.
+   if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
   const roads=await loadRoadTile(id);if(this.disposed)return;
   for(let i=0;i<roads.length;i+=1500){this.merge(roads.slice(i,i+1500));if(i+1500<roads.length)await new Promise<void>(resolve=>setTimeout(resolve,0));if(this.disposed)return;}
@@ -71,5 +83,5 @@ export class RoadNetworkManager {
   const add=(from:string,to:string)=>{let links=this.graph.edges.get(from);if(!links){links=[];this.graph.edges.set(from,links)}links.push({to,meters:road.length,id:road.id,speedKph:road.speed})};
   if(road.oneway!==-1)add(a,b);if(road.oneway!==1)add(b,a);
  }}
- dispose(){this.disposed=true;if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
+ dispose(){this.disposed=true;if(this.backgroundTimer!==null){clearTimeout(this.backgroundTimer);this.backgroundTimer=null;}this.priority.clear();if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
 }
