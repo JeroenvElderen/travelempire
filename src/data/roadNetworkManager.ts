@@ -1,3 +1,4 @@
+import {diagnostic} from '../frontendDiagnostics';
 import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} from './roadTiles';
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
@@ -22,14 +23,14 @@ export class RoadNetworkManager {
  private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
- private publishGraph(){if(this.disposed)return;this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
+ private publishGraph(){if(this.disposed)return;diagnostic('roads:publish',`nodes=${this.graph.nodeKeys.length} edges=${this.edgeTotal} tiles=${this.loaded.size}`);this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
  private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=1000){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,1000-elapsed));}
  private edgeTotal=0;
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
  private prepareInWorker(roads:RoadSegment[]):Promise<GraphDelta>{
   if(!this.graphWorker){
    const worker=new Worker(new URL('./roadGraph.worker.ts',import.meta.url),{type:'module'});
-   worker.onmessage=(event:MessageEvent<GraphDelta>)=>{const request=this.workerRequests.get(event.data.id);if(!request)return;this.workerRequests.delete(event.data.id);request.resolve(event.data);};
+   worker.onmessage=(event:MessageEvent<GraphDelta>)=>{diagnostic('roads:worker',`delta nodes=${event.data.nodes.length} edges=${event.data.count} pending=${this.workerRequests.size}`);const request=this.workerRequests.get(event.data.id);if(!request)return;this.workerRequests.delete(event.data.id);request.resolve(event.data);};
    worker.onerror=event=>{for(const request of this.workerRequests.values())request.reject(new Error(event.message));this.workerRequests.clear();worker.terminate();if(this.graphWorker===worker)this.graphWorker=null;};
    this.graphWorker=worker;
   }
@@ -90,12 +91,12 @@ export class RoadNetworkManager {
    // Give Safari a rendering opportunity between completed background tiles.
    if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
-  const roads=await loadRoadTile(id);if(this.disposed)return;
+  const fetchStarted=performance.now();const roads=await loadRoadTile(id);diagnostic('roads:tile',`loaded segments=${roads.length} parseMs=${Math.round(performance.now()-fetchStarted)} queued=${this.queue.length}`);if(this.disposed)return;
   // Build and deduplicate edges off the main thread. Only the compact graph
   // delta is applied to the live graph; rendering is yielded between batches.
-  const delta=await this.prepareInWorker(roads);
+  const workerStarted=performance.now();const delta=await this.prepareInWorker(roads);diagnostic('roads:worker',`processingMs=${Math.round(performance.now()-workerStarted)} nodes=${delta.nodes.length} edges=${delta.count}`);
   if(this.disposed)return;
-  let nodeIndex=0,edgeIndex=0;
+  const applyStarted=performance.now();let nodeIndex=0,edgeIndex=0;
   while(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length){
    const deadline=performance.now()+MERGE_BUDGET_MS;
    while(nodeIndex<delta.nodes.length&&performance.now()<deadline){
@@ -110,7 +111,7 @@ export class RoadNetworkManager {
    if(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length)await yieldToRenderer();
    if(this.disposed)return;
   }
-  this.edgeTotal+=delta.count;
+  diagnostic('roads:apply',`ms=${Math.round(performance.now()-applyStarted)} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
   this.loaded.add(id);this.onRoads?.(roads);this.scheduleGraphPublish();
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
