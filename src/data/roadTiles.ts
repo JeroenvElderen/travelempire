@@ -25,6 +25,35 @@ export async function roadTileManifest():Promise<Manifest>{
  })().catch(e=>{manifestPromise=undefined;throw e});
  return manifestPromise;
 }
+
+// Parsed road tiles persist independently of the browser's raw-response cache.
+// IndexedDB failures (private mode, quota, eviction) are non-fatal.
+const DB_NAME='travelempire-parsed-roads', STORE='tiles', DB_VERSION=1;
+let dbPromise:Promise<IDBDatabase>|undefined;
+function tileDB():Promise<IDBDatabase>{
+ return dbPromise??=new Promise((resolve,reject)=>{
+  if(!('indexedDB' in globalThis)){reject(Error('IndexedDB unavailable'));return;}
+  const request=indexedDB.open(DB_NAME,DB_VERSION);
+  request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(STORE))request.result.createObjectStore(STORE)};
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error);
+ }).catch(error=>{dbPromise=undefined;throw error});
+}
+async function cachedTile(key:string):Promise<RoadSegment[]|undefined>{
+ const db=await tileDB();return new Promise((resolve,reject)=>{
+  const request=db.transaction(STORE,'readonly').objectStore(STORE).get(key);
+  request.onsuccess=()=>resolve(Array.isArray(request.result)?request.result:undefined);
+  request.onerror=()=>reject(request.error);
+ });
+}
+async function saveTile(key:string,roads:RoadSegment[]):Promise<void>{
+ const db=await tileDB();return new Promise((resolve,reject)=>{
+  const tx=db.transaction(STORE,'readwrite');
+  tx.objectStore(STORE).put(roads,key);
+  tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+ });
+}
+
 let worker:Worker|undefined;let serial=0;
 const callbacks=new Map<number,{resolve:(v:RoadSegment[])=>void;reject:(e:Error)=>void}>();
 function parser(){if(worker)return worker;worker=new Worker(new URL('./roadPackage.worker.ts',import.meta.url),{type:'module'});
@@ -35,8 +64,14 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
  const inflight=pending.get(id);if(inflight)return inflight;
  const task=(async()=>{const manifest=await roadTileManifest();const info=manifest.tiles[id];if(!info)return [];
   const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
+  const key=`v2:${manifest.format}:${manifest.tileSize}:${id}:${info.file}:${info.edges}`;
+  const persisted=await cachedTile(key).catch(()=>undefined);
+  if(persisted){cache.set(id,persisted);return persisted;}
   const request=++serial;const result=new Promise<RoadSegment[]>((resolve,reject)=>callbacks.set(request,{resolve,reject}));
-  parser().postMessage({id:request,regionId:id,url});const roads=await result;cache.set(id,roads);return roads;
+  parser().postMessage({id:request,regionId:id,url});const roads=await result;cache.set(id,roads);
+  // Persist asynchronously; gameplay never waits for a storage transaction.
+  void saveTile(key,roads).catch(()=>{});
+  return roads;
  })().finally(()=>pending.delete(id));pending.set(id,task);return task;
 }
 
