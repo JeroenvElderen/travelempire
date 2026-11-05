@@ -212,8 +212,24 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const taxiHeadingState=useRef(new Map<string,{angle:number;position:[number,number];at:number}>());
  // Render-only state. Simulation position, job status and saved coordinates are untouched.
  const renderedPosition=useRef(new Map<string,[number,number]>());
- useEffect(()=>{const now=performance.now();const ids=new Set(taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=Date.now()).map(t=>t.id));for(const [id,m] of taxiMarkers.current){if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);}}for(const taxi of taxis){if(taxi.deliveryUntil && taxi.deliveryUntil> Date.now())continue;const previous=taxiSnapshots.current.get(taxi.id);
-  if(!previous || previous.to.position[0]!==taxi.position[0] || previous.to.position[1]!==taxi.position[1]){
+ useEffect(()=>{
+ const started=performance.now();
+ const now=started;
+ const wallNow=Date.now();
+ let changed=0,unchanged=0,created=0,removed=0;
+ const ids=new Set<string>();
+ for(const taxi of taxis)if(!taxi.deliveryUntil||taxi.deliveryUntil<=wallNow)ids.add(taxi.id);
+ for(const [id,m] of taxiMarkers.current){
+  if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);removed++;}
+ }
+ for(const taxi of taxis){
+  if(taxi.deliveryUntil&&taxi.deliveryUntil>wallNow)continue;
+  const previous=taxiSnapshots.current.get(taxi.id);
+  // React may supply new Taxi objects with unchanged render-relevant state.
+  // Preserve the animation clock and forecast in that case.
+  const sameMotion=!!previous&&previous.to.position[0]===taxi.position[0]&&previous.to.position[1]===taxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===taxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
+  if(sameMotion){unchanged++;}else{changed++;}
+  if(!sameMotion){
    const forecast=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
    // Preserve the last rendered position across simulation ticks to avoid
    // one-frame jumps when the simulation and animation clocks differ.
@@ -224,9 +240,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const displayed=renderedPosition.current.get(taxi.id);
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
-  }else{
-   // Keep route/status current without restarting the animation clock.
-   taxiSnapshots.current.set(taxi.id,{...previous,to:taxi});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
    if(taxi.kind==='explorer'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
@@ -240,7 +253,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
    }
-   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
+   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);created++;}}
+ const duration=performance.now()-started;
+ if(duration>12)console.warn('[TravelEmpire] Slow vehicle snapshot update',{durationMs:Math.round(duration),fleet:taxis.length,changed,unchanged,created,removed});
+},[taxis]);
  useEffect(()=>{
   let frame=0;
   let lastDeliveryRefresh=0;
