@@ -6,22 +6,36 @@ const PREFETCH_METERS=10000;
 const BACKGROUND_TILE_DELAY_MS=35;
 // Safari needs an actual rendering frame between expensive graph batches.
 const MERGE_BUDGET_MS=3;
-const MERGE_BATCH_MAX=250;
 const yieldToRenderer=()=>new Promise<void>(resolve=>{
  if(typeof document!=='undefined'&&document.visibilityState==='visible')requestAnimationFrame(()=>setTimeout(resolve,0));
  else setTimeout(resolve,0);
 });
 const MAX_CONCURRENT=2;
+type GraphEdge={to:string;meters:number;id:string;speedKph:number};
+type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
  private failedUntil=new Map<string,number>();private seenEdges=new Set<string>();
+ private graphWorker:Worker|null=null;private workerSequence=0;
+ private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
  private publishGraph(){if(this.disposed)return;this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
  private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=1000){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,1000-elapsed));}
+ private edgeTotal=0;
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
+ private prepareInWorker(roads:RoadSegment[]):Promise<GraphDelta>{
+  if(!this.graphWorker){
+   const worker=new Worker(new URL('./roadGraph.worker.ts',import.meta.url),{type:'module'});
+   worker.onmessage=(event:MessageEvent<GraphDelta>)=>{const request=this.workerRequests.get(event.data.id);if(!request)return;this.workerRequests.delete(event.data.id);request.resolve(event.data);};
+   worker.onerror=event=>{for(const request of this.workerRequests.values())request.reject(new Error(event.message));this.workerRequests.clear();worker.terminate();if(this.graphWorker===worker)this.graphWorker=null;};
+   this.graphWorker=worker;
+  }
+  const id=++this.workerSequence;
+  return new Promise((resolve,reject)=>{this.workerRequests.set(id,{resolve,reject});this.graphWorker!.postMessage({id,roads});});
+ }
  constructor(private onGraph:(graph:RoadGraph,count:number)=>void,private onError:(message:string)=>void,private onRoads?:(roads:RoadSegment[])=>void){}
  /** Request road tiles around ferry boarding points without crossing water. */
  considerFerryTerminals(network:FerryNetwork){this.consider(network.ports.map(p=>p.roadAccess??p.position));}
@@ -30,7 +44,7 @@ export class RoadNetworkManager {
  get loadedCount(){return this.loaded.size;}
  get queuedCount(){return this.queue.length+this.inFlight;}
  get nodeCount(){return this.graph.nodeKeys.length;}
- get edgeCount(){return this.seenEdges.size;}
+ get edgeCount(){return this.edgeTotal;}
  async initialize(point:Point):Promise<RoadGraph>{
   const manifest=await roadTileManifest();this.tileSize=manifest.tileSize;this.available=new Set(Object.keys(manifest.tiles));
   const id=tileId(point[0],point[1],this.tileSize);
@@ -77,26 +91,29 @@ export class RoadNetworkManager {
    if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
   const roads=await loadRoadTile(id);if(this.disposed)return;
-  // Process at most a few milliseconds of road data before yielding a real frame.
-  // No copies of the tile array are created; the routing graph stays available
-  // throughout loading and each tile is published only after full ingestion.
-  let i=0;
-  while(i<roads.length){
+  // Build and deduplicate edges off the main thread. Only the compact graph
+  // delta is applied to the live graph; rendering is yielded between batches.
+  const delta=await this.prepareInWorker(roads);
+  if(this.disposed)return;
+  let nodeIndex=0,edgeIndex=0;
+  while(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length){
    const deadline=performance.now()+MERGE_BUDGET_MS;
-   do{const end=Math.min(i+MERGE_BATCH_MAX,roads.length);this.merge(roads,i,end);i=end;}while(i<roads.length&&performance.now()<deadline);
-   if(i<roads.length)await yieldToRenderer();
+   while(nodeIndex<delta.nodes.length&&performance.now()<deadline){
+    const [key,point]=delta.nodes[nodeIndex++];
+    if(!this.graph.nodes.has(key)){this.graph.nodes.set(key,point);this.graph.nodeKeys.push(key);}
+   }
+   while(edgeIndex<delta.edges.length&&performance.now()<deadline){
+    const [key,links]=delta.edges[edgeIndex++];
+    const existing=this.graph.edges.get(key);
+    if(existing)existing.push(...links);else this.graph.edges.set(key,links);
+   }
+   if(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length)await yieldToRenderer();
    if(this.disposed)return;
   }
+  this.edgeTotal+=delta.count;
   this.loaded.add(id);this.onRoads?.(roads);this.scheduleGraphPublish();
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
  }
- private merge(roads:RoadSegment[],start:number,end:number){for(let index=start;index<end;index++){const road=roads[index];if(this.seenEdges.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
-  this.seenEdges.add(road.id);const a=String(road.a),b=String(road.b);
-  if(!this.graph.nodes.has(a)){this.graph.nodes.set(a,road.coordinates[0]);this.graph.nodeKeys.push(a)}
-  if(!this.graph.nodes.has(b)){this.graph.nodes.set(b,road.coordinates[1]);this.graph.nodeKeys.push(b)}
-  const add=(from:string,to:string)=>{let links=this.graph.edges.get(from);if(!links){links=[];this.graph.edges.set(from,links)}links.push({to,meters:road.length,id:road.id,speedKph:road.speed})};
-  if(road.oneway!==-1)add(a,b);if(road.oneway!==1)add(b,a);
- }}
- dispose(){this.disposed=true;if(this.backgroundTimer!==null){clearTimeout(this.backgroundTimer);this.backgroundTimer=null;}this.priority.clear();if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
+ dispose(){this.disposed=true;if(this.backgroundTimer!==null){clearTimeout(this.backgroundTimer);this.backgroundTimer=null;}this.priority.clear();this.graphWorker?.terminate();this.graphWorker=null;for(const request of this.workerRequests.values())request.reject(new Error('Road network disposed'));this.workerRequests.clear();if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
 }
