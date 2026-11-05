@@ -367,6 +367,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
  const currentExploredRoads=useRef<Set<string>>(new Set());
  const visibleExploredFeatures=useRef<Map<string,GeoJSON.Feature>>(new Map());
+ const visibleRoadIndex=useRef<Map<string,GeoJSON.Feature>>(new Map());
+ const lastPurpleSourceUpdate=useRef(0);
+ const purpleRenderStats=useRef({updates:0,slow:0,maxMs:0,lastReport:0});
  const purpleRefreshTimer=useRef<number|null>(null);
  const purpleSourceId='explored-road-network-source';
  const refreshPurpleRoads=()=>{
@@ -374,8 +377,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   if(!instance||!instance.isStyleLoaded())return;
   const source=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
   if(!source)return;
+  const started=performance.now();
   const features=[...visibleExploredFeatures.current.values()];
   source.setData({type:'FeatureCollection',features});
+  lastPurpleSourceUpdate.current=started;
+  const stats=purpleRenderStats.current;const duration=performance.now()-started;
+  stats.updates++;if(duration>12)stats.slow++;stats.maxMs=Math.max(stats.maxMs,duration);
+  if(started-stats.lastReport>30000){if(stats.slow)console.warn('[TravelEmpire] Explored road source updates',{updates:stats.updates,slow:stats.slow,maxMs:Math.round(stats.maxMs),features:features.length});stats.updates=0;stats.slow=0;stats.maxMs=0;stats.lastReport=started;}
   setRoadStatus(`${features.length.toLocaleString()} explored / ${visibleRoadFeatures.current.length.toLocaleString()} visible regional road segments`);
  };
  useEffect(()=>{
@@ -384,7 +392,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   currentExploredRoads.current=next;
   // Incremental discovery: index visible geometry once per viewport update,
   // then add only changed IDs instead of rebuilding the whole road graph.
-  const visible=new Map(visibleRoadFeatures.current.map(f=>[String(f.properties?.roadId??''),f]));
+  const visible=visibleRoadIndex.current;
   let changed=false;
   for(const id of next){
    if(previous.has(id))continue;
@@ -396,9 +404,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(visibleExploredFeatures.current.delete(id))changed=true;
   }
   if(!changed)return;
-  if(purpleRefreshTimer.current!==null)window.clearTimeout(purpleRefreshTimer.current);
-  purpleRefreshTimer.current=window.setTimeout(()=>{purpleRefreshTimer.current=null;refreshPurpleRoads();},150);
-  return()=>{if(purpleRefreshTimer.current!==null){window.clearTimeout(purpleRefreshTimer.current);purpleRefreshTimer.current=null;}};
+  // Coalesce continuous discoveries without indefinitely postponing source updates.
+  if(purpleRefreshTimer.current===null){
+   const delay=Math.max(0,150-(performance.now()-lastPurpleSourceUpdate.current));
+   purpleRefreshTimer.current=window.setTimeout(()=>{purpleRefreshTimer.current=null;refreshPurpleRoads();},delay);
+  }
  },[exploredEdgeIds,ready,graph]);
  // Rebuild visible geometry only when the viewport, graph or map style changes.
  useEffect(()=>{
@@ -414,7 +424,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   visibleRoadFeatures.current=[];
+   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -440,6 +450,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     }
    }
    visibleRoadFeatures.current=features;
+   visibleRoadIndex.current=new Map(features.map(f=>[String(f.properties?.roadId??''),f]));
    visibleExploredFeatures.current=new Map(features.filter(f=>exploredSet.has(String(f.properties?.roadId??''))).map(f=>[String(f.properties?.roadId??''),f]));
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
    const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...visibleExploredFeatures.current.values()]};
