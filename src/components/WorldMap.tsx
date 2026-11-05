@@ -1,4 +1,4 @@
-import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordFrameGapWithContext,recordActivity,recordLongTask,type PerformanceSnapshot} from '../performanceMonitor';
+import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordActiveFrame,markMonitorSuspended,recordActivity,recordLongTask,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
 import {formatGameClock,type GameClock} from '../simulation/gameClock';
@@ -91,6 +91,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{window.clearInterval(timer);enablePerformanceMonitor(false);};
  },[perfOpen]);
  const [ferryNetwork,setFerryNetwork]=useState<FerryNetwork|null>(null);
+ useEffect(()=>{if(!perfOpen)return;const onVisibility=()=>markMonitorSuspended();document.addEventListener('visibilitychange',onVisibility);window.addEventListener('pageshow',onVisibility);window.addEventListener('pagehide',onVisibility);return()=>{document.removeEventListener('visibilitychange',onVisibility);window.removeEventListener('pageshow',onVisibility);window.removeEventListener('pagehide',onVisibility);};},[perfOpen]);
  useEffect(()=>{
   if(!perfOpen||typeof PerformanceObserver==='undefined')return;
   let observer:PerformanceObserver|undefined;
@@ -295,15 +296,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let frame=0;
   let lastDeliveryRefresh=0;
   let lastFrameAt=0,frameSamples=0,slowFrames=0,maxFrameGap=0;
-  let monitoredFrames=0,monitoredAt=performance.now();
   let lastPerfReport=performance.now();
   const animate=()=>{
    const frameNow=performance.now();
-   if(performanceMonitorEnabled()){
-    monitoredFrames++;
-    if(lastFrameAt)recordFrameGapWithContext(frameNow-lastFrameAt,frameNow);
-    if(frameNow-monitoredAt>=1000){recordPerformance({fps:Math.round(monitoredFrames*1000/(frameNow-monitoredAt))});monitoredFrames=0;monitoredAt=frameNow;}
-   }else{monitoredFrames=0;monitoredAt=frameNow;}
+   if(performanceMonitorEnabled())recordActiveFrame(frameNow);
 
    if(lastFrameAt){const gap=frameNow-lastFrameAt;frameSamples++;if(gap>50)slowFrames++;maxFrameGap=Math.max(maxFrameGap,gap);}
    lastFrameAt=frameNow;
@@ -564,7 +560,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   <button type="button" onClick={()=>setPerfOpen(v=>!v)} aria-expanded={perfOpen} style={{background:'#152b34',color:'#fff',border:'1px solid #4a6570',borderRadius:10,padding:'7px 11px',cursor:'pointer'}}>{perfOpen?'Hide performance':'Performance'}</button>
   {perfOpen&&perfSnapshot&&<div role="status" style={{background:'#10232deF',color:'#f5f9fb',padding:12,borderRadius:12,marginTop:6,boxShadow:'0 3px 15px #0008',lineHeight:1.8}}>
    <strong>Mobile performance</strong>
-   <div>FPS: {perfSnapshot.fps} · Frame spikes: {perfSnapshot.frameSpikes}</div>
+   <div>Rolling 60s FPS: {perfSnapshot.fps} · Spikes: {perfSnapshot.frameSpikes}</div>
+   <div>Active frames: {perfSnapshot.activeFrames} · Resumes: {perfSnapshot.resumeCount}</div>
    <div>Max frame gap: {perfSnapshot.maxFrameMs.toFixed(1)} ms</div>
    <div>Simulation: {perfSnapshot.simulationMs.toFixed(1)} ms · Vehicles: {perfSnapshot.vehicles}</div>
    <div>Tick avg/max: {perfSnapshot.simulationAvgMs.toFixed(1)} / {perfSnapshot.simulationMaxMs.toFixed(1)} ms</div>
@@ -577,6 +574,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Long tasks: {perfSnapshot.longTasks} · Max: {perfSnapshot.longestTaskMs.toFixed(0)} ms</div>
    <div>Map render gaps: {perfSnapshot.mapRenderCount} · Latest: {perfSnapshot.mapRenderMs.toFixed(0)} ms</div>
    <div>Last save: {perfSnapshot.saveKind} · {perfSnapshot.saveMs.toFixed(1)} ms</div>
+   <div>Save prep / async: {perfSnapshot.savePrepareMs.toFixed(1)} / {perfSnapshot.saveAwaitMs.toFixed(1)} ms</div>
+   <div>Serialization: {perfSnapshot.saveSerializationMs.toFixed(1)} ms (not instrumented)</div>
    <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
