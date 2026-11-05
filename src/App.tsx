@@ -597,7 +597,13 @@ export default function App(){
 
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
+    let slowestVehicleMs=0,slowestVehicle='—',routingMs=0;
+    const depotById=new Map((company!.depots??[]).map(d=>[d.id,d]));
+    const depotUpgradesById=new Map<string,ReturnType<typeof upgradesFor>>();
+    const depotLevelsFor=(id:string)=>{let value=depotUpgradesById.get(id);if(!value){value=upgradesFor(old,id);depotUpgradesById.set(id,value);}return value;};
     const taxis=old.taxis.map(t=>{
+     const vehicleStarted=performance.now();
+     try{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
@@ -611,7 +617,7 @@ export default function App(){
        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,scheduledBreakUntil:undefined};
       }
       if(delivered.status==='IDLE'&&(offDuty||breakActive)&&energyPercent(delivered)>10&&!delivered.refillRequested){
-       const assigned=(company!.depots??[]).find(d=>d.id===delivered.depotId);
+       const assigned=depotById.get(delivered.depotId??'');
        const depot:[number,number]=assigned?[assigned.lng,assigned.lat]:[company!.headquarters.lng,company!.headquarters.lat];
        const stations=breakActive?[...stationsRef.current.values()].filter(st=>st.kind==='fuel'&&st.access!=='private')
         .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,8):[];
@@ -643,7 +649,7 @@ export default function App(){
      if(delivered.status==='SERVICING'){
       const until=delivered.serviceUntil??now+120000;
       if(now<until)return {...delivered,serviceUntil:until};
-      const cost=150*(1-0.10*Math.min(3,upgradesFor(old,t.depotId??'main').workshop??0));
+      const cost=150*(1-0.10*Math.min(3,depotLevelsFor(t.depotId??'main').workshop??0));
       if((companyRef.current?.cash??0)+pendingCashRef.current<cost)return {...delivered,serviceUntil:now+60000};
       pendingCashRef.current-=cost;serviceExpense+=cost;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · automatic scheduled service`,amount:-cost});
@@ -691,6 +697,7 @@ export default function App(){
       return {...delivered,status:'IDLE' as const,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
+     const routeStarted=performance.now();
      // Refuel according to the shortest reachable road route, not a fixed tank percentage.
      // Cache routing for 10 seconds to avoid expensive pathfinding on every simulation tick.
      const remainingKm=energyRangeKm(delivered);
@@ -725,6 +732,7 @@ export default function App(){
       else if(target.path)working={...working,status:'RETURNING',path:target.path.path,edgeIds:target.path.edgeIds,leg:0,distanceIntoLeg:0,
        refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false,journeyEdges:[]};
      }
+     routingMs+=performance.now()-routeStarted;
      const next=tickTaxi(working,graph,elapsedSeconds,discovered);
      // The movement integrator reports the exact distance travelled this tick,
      // including junction crossings and the final step before route reset.
@@ -768,6 +776,10 @@ export default function App(){
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
+     }finally{
+      const duration=performance.now()-vehicleStarted;
+      if(duration>slowestVehicleMs){slowestVehicleMs=duration;slowestVehicle=t.name;}
+     }
     });
     const movementMs=performance.now()-tickStarted;
     // Depreciation is non-cash; book it on owned vehicles only.
@@ -833,7 +845,7 @@ export default function App(){
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     const tickMs=performance.now()-tickStarted;
-    recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size);
+    recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size,slowestVehicle,slowestVehicleMs,routingMs);
     const perf=simulationPerfRef.current;
     perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
     if(tickMs>50&&now-perf.lastReport>15000){
