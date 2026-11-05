@@ -85,6 +85,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{
   enablePerformanceMonitor(perfOpen);
   if(!perfOpen){setPerfSnapshot(null);return;}
+  recordPerformance({visibleExplored:visibleExploredFeatures.current.size,exploredRoads:currentExploredRoads.current.size});
   setPerfSnapshot(readPerformance());
   const timer=window.setInterval(()=>setPerfSnapshot(readPerformance()),1000);
   return()=>{window.clearInterval(timer);enablePerformanceMonitor(false);};
@@ -477,8 +478,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(existing)existing.setData(data);
    else instance.addSource(sourceId,{type:'geojson',data});
    const purpleSource=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
+   const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   if(performanceMonitorEnabled()){
+    incrementPerformance('sourceUpdates');
+    recordPerformance({sourceMs:performance.now()-purpleStarted,visibleExplored:purple.features.length});
+   }
    if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.2,13,2,17,3],'line-opacity':1}});
    // Style changes and other overlays can insert layers above discovered roads.
@@ -522,6 +528,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>FPS: {perfSnapshot.fps} · Frame spikes: {perfSnapshot.frameSpikes}</div>
    <div>Max frame gap: {perfSnapshot.maxFrameMs.toFixed(1)} ms</div>
    <div>Simulation: {perfSnapshot.simulationMs.toFixed(1)} ms · Vehicles: {perfSnapshot.vehicles}</div>
+   <div>Tick avg/max: {perfSnapshot.simulationAvgMs.toFixed(1)} / {perfSnapshot.simulationMaxMs.toFixed(1)} ms</div>
+   <div>Movement/accounting: {perfSnapshot.simulationMovementMs.toFixed(1)} / {perfSnapshot.simulationAccountingMs.toFixed(1)} ms</div>
    <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
