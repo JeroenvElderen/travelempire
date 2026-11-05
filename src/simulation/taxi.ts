@@ -435,7 +435,7 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   const to=near[Math.floor(Math.random()*near.length)];
   // Pickup and drop-off are on Explorer-discovered roads within the revealed area.
   // Travel between those stops may use undiscovered roads without revealing them.
-  const trip=route(graph,from,to);
+  const trip=routeDiscovered(graph,from,to,explored);
   if(!trip||trip.length<150||trip.length>5000)continue;
   return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
  }
@@ -467,7 +467,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
   if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
  }
  // Passenger stops must be discovered, but taxis may travel over any road without exploring it.
- const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
+ const toPickup=discovered?routeDiscovered(graph,start,pickup,discovered,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':''):route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
@@ -751,7 +751,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
-  const next=route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
+  const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,t.lastRoadTo===from?t.lastRoadFrom??'':''):route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
    return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
