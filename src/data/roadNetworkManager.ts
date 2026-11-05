@@ -8,7 +8,7 @@ const MAX_CONCURRENT=2;
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
- private priority=new Map<string,number>();private priorityOrigin:Point|null=null;private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
+ private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
  private failedUntil=new Map<string,number>();private seenEdges=new Set<string>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
@@ -28,7 +28,6 @@ export class RoadNetworkManager {
   const manifest=await roadTileManifest();this.tileSize=manifest.tileSize;this.available=new Set(Object.keys(manifest.tiles));
   const id=tileId(point[0],point[1],this.tileSize);
   // Load tiles around HQ before dispatch; an empty centre tile is allowed.
-  this.priorityOrigin=point;
   const nearby=this.idsNear(point,1500).filter(k=>this.available.has(k));
   nearby.sort((a,b)=>this.tileDistance(a,point)-this.tileDistance(b,point));
   // Establish a usable local graph before starting broad background prefetch.
