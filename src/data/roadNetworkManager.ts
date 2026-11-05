@@ -11,7 +11,9 @@ const yieldToRenderer=()=>new Promise<void>(resolve=>{
  if(typeof document!=='undefined'&&document.visibilityState==='visible')requestAnimationFrame(()=>setTimeout(resolve,0));
  else setTimeout(resolve,0);
 });
-const MAX_CONCURRENT=2;
+// One background tile at a time avoids concurrent structured-clone and graph updates on iPhone.
+const MAX_CONCURRENT=1;
+const GRAPH_PUBLISH_INTERVAL_MS=5000;
 type GraphEdge={to:string;meters:number;id:string;speedKph:number};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
@@ -24,7 +26,7 @@ export class RoadNetworkManager {
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
  private publishGraph(){if(this.disposed)return;diagnostic('roads:publish',`nodes=${this.graph.nodeKeys.length} edges=${this.edgeTotal} tiles=${this.loaded.size}`);this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
- private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=1000){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,1000-elapsed));}
+ private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=GRAPH_PUBLISH_INTERVAL_MS){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,GRAPH_PUBLISH_INTERVAL_MS-elapsed));}
  private edgeTotal=0;
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
  private prepareInWorker(roads:RoadSegment[]):Promise<GraphDelta>{
@@ -96,9 +98,9 @@ export class RoadNetworkManager {
   // delta is applied to the live graph; rendering is yielded between batches.
   const workerStarted=performance.now();const delta=await this.prepareInWorker(roads);diagnostic('roads:worker',`processingMs=${Math.round(performance.now()-workerStarted)} nodes=${delta.nodes.length} edges=${delta.count}`);
   if(this.disposed)return;
-  const applyStarted=performance.now();let nodeIndex=0,edgeIndex=0;
+  const applyStarted=performance.now();let applyCpuMs=0,applyYields=0;let nodeIndex=0,edgeIndex=0;
   while(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length){
-   const deadline=performance.now()+MERGE_BUDGET_MS;
+   const sliceStarted=performance.now();const deadline=sliceStarted+MERGE_BUDGET_MS;
    while(nodeIndex<delta.nodes.length&&performance.now()<deadline){
     const [key,point]=delta.nodes[nodeIndex++];
     if(!this.graph.nodes.has(key)){this.graph.nodes.set(key,point);this.graph.nodeKeys.push(key);}
@@ -108,11 +110,12 @@ export class RoadNetworkManager {
     const existing=this.graph.edges.get(key);
     if(existing)existing.push(...links);else this.graph.edges.set(key,links);
    }
-   if(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length)await yieldToRenderer();
+   applyCpuMs+=performance.now()-sliceStarted;
+   if(nodeIndex<delta.nodes.length||edgeIndex<delta.edges.length){applyYields++;await yieldToRenderer();}
    if(this.disposed)return;
   }
-  diagnostic('roads:apply',`ms=${Math.round(performance.now()-applyStarted)} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
-  this.loaded.add(id);this.onRoads?.(roads);this.scheduleGraphPublish();
+  diagnostic('roads:apply',`elapsedMs=${Math.round(performance.now()-applyStarted)} cpuMs=${Math.round(applyCpuMs)} yields=${applyYields} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
+  this.loaded.add(id);const syncStarted=performance.now();this.onRoads?.(roads);diagnostic('roads:dispatch-sync',`enqueueMs=${Math.round(performance.now()-syncStarted)} segments=${roads.length}`);this.scheduleGraphPublish();
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
  }
