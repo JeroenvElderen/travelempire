@@ -1,6 +1,6 @@
 import {energyPercent} from './energy';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,sectionCoverage,territoryDiscoveryEdges,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -12,7 +12,7 @@ const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
 let eligibilityCacheKey='';
 let eligibilityCache=new Set<string>();
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];territory:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
 self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
  const msg=event.data;
  try{
@@ -41,17 +41,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   }
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
-  const territoryExplored=new Set(msg.territory);
-  // Recompute only when the territory or road graph changes; dispatch runs often.
-  const territorySignature=msg.territory.length+':'+msg.territory.join('|');
-  const cacheKey=activeRevision+':'+seenRoadIds.size+':'+territorySignature;
-  if(cacheKey!==eligibilityCacheKey){
-   eligibilityCacheKey=cacheKey;
-   eligibilityCache=territoryDiscoveryEdges(graph,territoryExplored);
-  }
-  const discoveryEligible=eligibilityCache;
   const taxis=msg.taxis.map(t=>
-   (t.kind==='surveyor'||t.kind==='explorer')&&t.status==='PAUSED'&&
+   (t.kind==='explorer')&&t.status==='PAUSED'&&
    !t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
     ?{...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false}:t);
 
@@ -97,17 +88,16 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
   // Passenger assignments run first. Purple Explorers continuously select nearby eligible roads.
   let assignedCount=0;
   if(msg.allowScout){
-   // Road Explorers discover roads; Black Explorer independently reveals territory.
-   // Only its actual exploration routes contribute to discovered territory.
+   // All loaded roads are eligible for independent Purple Explorer discovery.
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
-   const purpleAllowedRoads=discoveryEligible;
+   const purpleAllowedRoads=allowedRoads;
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='EXPLORING')continue;
+    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING')continue;
     const permitted=taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads;
     const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!permitted.has(id));
     if(firstForbidden<0)continue;
@@ -128,7 +118,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    }
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
+    if((taxi.kind!=='explorer')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const start=nearest(graph,taxi.position);
     if(!start||permittedNodes.has(start))continue;
     const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
@@ -141,18 +131,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
      break;
     }
    }
-   // Refresh section completion on every dispatch, including when the vehicle
-   // is already driving. Completed sections release their owner automatically.
-   for(let index=0;index<taxis.length;index++){
-    const t=taxis[index];
-    if(t.kind!=='explorer'||!t.explorationSection)continue;
-    const coverage=sectionCoverage(graph,discoveryEligible,explored,t.explorationSection);
-    taxis[index]={...t,explorationSectionCompleted:coverage.completed,
-     explorationSectionTotal:coverage.total,
-     explorationSection:coverage.total>0&&coverage.completed>=coverage.total?undefined:t.explorationSection};
-   }
-   // Reserve each Purple Explorer's persisted section to avoid overlap.
-   const sectionOwners=new Set(taxis.filter(t=>t.kind==='explorer'&&t.explorationSection).map(t=>t.explorationSection!));
    const reservedTargets=new Set<string>();
    const reservedEdges=new Set<string>();
    // Existing scouts reserve their remaining route, so new scouts avoid following them.
@@ -166,7 +144,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer'&&taxi.kind!=='surveyor')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
+    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
     const remaining=taxi.path.length-1-taxi.leg;
     if(remaining>2||!taxi.path.length)continue;
     const destination=taxi.path[taxi.path.length-1];
@@ -174,24 +152,22 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(!from)continue;
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
-    const purpleCluster=taxi.kind==='explorer'?discoveryEligible:undefined;
+    const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,taxi.kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads,taxi.kind==='explorer'?discoveryEligible:undefined,taxi.kind==='surveyor'?discoveryEligible:undefined,
-     taxi.kind==='explorer'&&taxi.path.length>=2?nearest(graph,taxi.path[taxi.path.length-2]):undefined,sectionOwners);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,purpleAllowedRoads,undefined,undefined);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns,explorationSection:extension.explorationSection,
-     explorationSectionCompleted:extension.explorationSectionCompleted,explorationSectionTotal:extension.explorationSectionTotal};
+     edgeIds:[...taxi.edgeIds,...extension.edgeIds],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
    for(let index=0;index<taxis.length;index++){
-    if((taxis[index].kind!=='explorer'&&taxis[index].kind!=='surveyor')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
-    const purpleCluster=taxis[index].kind==='explorer'?discoveryEligible:undefined;
+    if((taxis[index].kind!=='explorer')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
+    const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,taxis[index].kind==='surveyor'?territoryExplored:explored,hq,reservedTargets,reservedEdges,undefined,taxis[index].kind==='explorer'?purpleAllowedRoads:allowedRoads,taxis[index].kind==='explorer'?discoveryEligible:undefined,taxis[index].kind==='surveyor'?discoveryEligible:undefined,undefined,sectionOwners);
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,purpleAllowedRoads);
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
@@ -199,15 +175,11 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
     if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
-     assignment=dispatchScout({...taxis[index],explorationSection:undefined,
-      shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),
-      undefined,purpleAllowedRoads,discoveryEligible,undefined,undefined,new Set<string>());
+     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,purpleAllowedRoads);
     }
     if(assignment.status!=='IDLE'){
      explorerIdleSince.delete(taxis[index].id);
      taxis[index]=assignment;
-     if(assignment.kind==='explorer'&&assignment.explorationSection)
-      sectionOwners.add(assignment.explorationSection);
      assignedCount++;
     }
    }
@@ -244,6 +216,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads>)=>{
    // Do not park or pause them: the next dispatch automatically retries as
    // new eligible roads and territory arrive.
   }
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,discoveryEligible:[...discoveryEligible]});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
