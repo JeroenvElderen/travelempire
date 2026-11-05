@@ -5,7 +5,6 @@ const started=performance.now();
 let lastFrame=performance.now();
 let frameCount=0,frameTotal=0,frameWorst=0,frameDrops=0;
 let lastSample=performance.now();
-let raf=0;
 export function diagnostic(category:string,message:string){
  entries.push({ms:Math.round(performance.now()),category,message});
  if(entries.length>800)entries.shift();
@@ -17,7 +16,7 @@ function frame(now:number){
   diagnostic('frames',`fps=${Math.round(frameCount*1000/(now-lastSample))} avg=${Math.round(frameTotal/Math.max(1,frameCount))}ms worst=${Math.round(frameWorst)}ms gaps>50ms=${frameDrops} visibility=${document.visibilityState}`);
   frameCount=0;frameTotal=0;frameWorst=0;frameDrops=0;lastSample=now;
  }
- raf=requestAnimationFrame(frame);
+ requestAnimationFrame(frame);
 }
 if(typeof window!=='undefined'){
  diagnostic('session','diagnostics enabled');
