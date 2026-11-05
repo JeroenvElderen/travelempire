@@ -4,7 +4,7 @@ import type {FerryNetwork} from './ferries';
 import type {FerryConnectionResult} from './roadConnections';
 
 /** Each ferry route requires one permanent company purchase (both directions). */
-export const FERRY_ROUTE_BASE_PRICE=2000;
+export const FERRY_ROUTE_BASE_PRICE=250000;
 export function ferryRoutePrice(_routeId:string):number{return FERRY_ROUTE_BASE_PRICE;}
 export type FerryJourneyLeg=
  |{kind:'road';from:Point;to:Point;path:Point[];edgeIds:string[];distanceMeters:number}

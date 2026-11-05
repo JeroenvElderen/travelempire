@@ -28,7 +28,7 @@ export default function FerryRoutesPanel({company,onPurchase,onTicketPriceChange
  }),[network,discoveredPorts]);
  const ports=new Map(network?.ports.map(p=>[p.id,p.name])??[]);
  const owned=new Set(company?.purchasedFerryRouteIds??[]);
- return <section className="ferry-routes-panel"><div className="ferry-routes-heading"><div><span>MARITIME NETWORK · V2.2.2</span><h2>Ferry Connections</h2><p>Purchase each route once to unlock travel in both directions for all your vehicles.</p></div><strong>From €2,000 / route</strong></div>
+ return <section className="ferry-routes-panel"><div className="ferry-routes-heading"><div><span>MARITIME NETWORK · V2.2.2</span><h2>Ferry Connections</h2><p>Purchase each route once to unlock travel in both directions for all your vehicles.</p></div><strong>From €250,000 / route</strong></div>
  {error&&<p role="alert">Ferry data could not be loaded: {error}</p>}
  {network&&network.routes.length===0&&<div className="ferry-empty"><strong>No ferry routes imported yet</strong><p>Real ferry route data must be added before connections can be purchased or used. Your existing vehicles continue operating normally.</p></div>}
  <div className="ferry-route-tools"><strong aria-live="polite">{network?`${network.routes.length.toLocaleString('en-IE')} routes available · ${owned.size} purchased`:'Loading ferry routes…'}</strong><button type="button" disabled={reloading} onClick={()=>{void reloadData()}}>{reloading?'Reloading…':'↻ Reload data'}</button></div>
