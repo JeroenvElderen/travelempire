@@ -10,10 +10,11 @@ const idleFallbackAt=new Map<string,number>();
 const explorerIdleSince=new Map<string,number>();
 const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
+type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point};
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];availableTaxiIds?:string[]};
-self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest>)=>{
+self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
@@ -38,6 +39,20 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(road.oneway!==1)add(b,a);
    }
    self.postMessage({type:'roadsAdded',revision:activeRevision,roadCount:seenRoadIds.size});return;
+  }
+  if(msg.type==='operationalRoute'){
+   const started=performance.now();
+   const from=nearest(graph,msg.from);
+   let planned:{path:Point[];edgeIds:string[]}|null=null;
+   // Preserve target order: break stations are preferred over the depot.
+   for(const target of msg.targets){
+    const to=nearest(graph,target);
+    if(!from||!to)continue;
+    planned=route(graph,from,to);
+    if(planned)break;
+   }
+   self.postMessage({type:'operationalRouteResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,purpose:msg.purpose,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
+   return;
   }
   if(msg.type==='fuelPlan'){
    const started=performance.now();
