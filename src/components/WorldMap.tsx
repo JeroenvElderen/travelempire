@@ -243,8 +243,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);}}},[taxis]);
  useEffect(()=>{
   let frame=0;
+  let lastDeliveryRefresh=0;
   const animate=()=>{
-   const wallNow=Date.now();
+   const frameNow=performance.now();
+   // Delivery animations are less frequent than vehicle position interpolation.
+   if(frameNow-lastDeliveryRefresh>=100){
+    lastDeliveryRefresh=frameNow;
+    const wallNow=Date.now();
    const deliveries=taxisRef.current.filter(t=>t.deliveryUntil&&t.deliveryUntil>wallNow);
    const activeIds=new Set(deliveries.map(t=>t.id));
    for(const [id,m] of deliveryMarkers.current)if(!activeIds.has(id)){m.remove();deliveryMarkers.current.delete(id)}
@@ -258,7 +263,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     }
     m.getElement().title=`Delivering ${taxi.vehicleModel??taxi.name}`;
    }
-   const now=performance.now();
+   }
+   const now=frameNow;
    for(const [id,snapshot] of taxiSnapshots.current){
     const marker=taxiMarkers.current.get(id);if(!marker)continue;
     const taxi=snapshot.to;
