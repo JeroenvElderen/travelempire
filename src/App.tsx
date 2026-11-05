@@ -235,7 +235,8 @@ export default function App(){
     }
    }
    for(const t of vehicles){
-    if(updated.some(job=>job.targetId===t.id)||t.recoveryPending||t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING'||(t.deliveryUntil??0)>now)continue;
+    const manual=manualRecoveryRequestsRef.current.has(t.id);
+    if(updated.some(job=>job.targetId===t.id)||t.recoveryPending||(!manual&&(t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING'))||(t.deliveryUntil??0)>now)continue;
     const watch=idleWatch.current.get(t.id);
     const stalled=!!watch&&now-watch.since>=30000;
     const empty=energyPercent(t)<=0;
@@ -244,9 +245,9 @@ export default function App(){
     // unless their battery/fuel is actually depleted.
     const stranded=empty||((t.kind!=='explorer')&&
      (t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
-    if(!stranded||meters(t.position,depot)<75)continue;
+    if(!manual&&(!stranded||meters(t.position,depot)<75))continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
-    const purpose:RecoveryJob['purpose']=serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
+    const purpose:RecoveryJob['purpose']=manual?'depot':serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
     const pickup=buildRoute(depot,t.position);
     if(!pickup)continue;
     const candidates=purpose==='fuel'?
@@ -261,6 +262,7 @@ export default function App(){
      status:'RETURNING',pauseAtHome:true,path:pickup.path,edgeIds:pickup.edgeIds,leg:0,distanceIntoLeg:0,fare:0,completed:0,journeyEdges:[]};
     const next:RecoveryJob={truck,targetId:t.id,phase:'pickup',destination:destination.point,purpose,atDepot:destination.atDepot};
     updated.push(next);
+    manualRecoveryRequestsRef.current.delete(t.id);
     setFleet(old=>({...old,taxis:old.taxis.map(v=>v.id===t.id?{...v,status:'PAUSED',recoveryPending:true,path:[],edgeIds:[],speedKph:0}:v)}));
    }
    recoveriesRef.current=updated;
