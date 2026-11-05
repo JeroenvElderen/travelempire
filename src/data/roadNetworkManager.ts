@@ -9,6 +9,9 @@ export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private failedUntil=new Map<string,number>();private seenEdges=new Set<string>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
+ private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
+ private publishGraph(){if(this.disposed)return;this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
+ private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=1000){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,1000-elapsed));}
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
  constructor(private onGraph:(graph:RoadGraph,count:number)=>void,private onError:(message:string)=>void,private onRoads?:(roads:RoadSegment[])=>void){}
  /** Request road tiles around ferry boarding points without crossing water. */
@@ -57,7 +60,7 @@ export class RoadNetworkManager {
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
   const roads=await loadRoadTile(id);if(this.disposed)return;
   for(let i=0;i<roads.length;i+=1500){this.merge(roads.slice(i,i+1500));if(i+1500<roads.length)await new Promise<void>(resolve=>setTimeout(resolve,0));if(this.disposed)return;}
-  this.loaded.add(id);this.graph={...this.graph};this.onRoads?.(roads);this.onGraph(this.graph,this.loaded.size);
+  this.loaded.add(id);this.onRoads?.(roads);this.scheduleGraphPublish();
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
  }
@@ -68,5 +71,5 @@ export class RoadNetworkManager {
   const add=(from:string,to:string)=>{let links=this.graph.edges.get(from);if(!links){links=[];this.graph.edges.set(from,links)}links.push({to,meters:road.length,id:road.id,speedKph:road.speed})};
   if(road.oneway!==-1)add(a,b);if(road.oneway!==1)add(b,a);
  }}
- dispose(){this.disposed=true;this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
+ dispose(){this.disposed=true;if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.queue.length=0;this.queued.clear();this.failedUntil.clear();}
 }
