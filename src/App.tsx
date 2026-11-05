@@ -102,8 +102,12 @@ export default function App(){
      const duration=Math.max(10,Math.min(240,route.durationMinutes));
      const crossings=Math.max(1,Math.floor(60/Math.max(30,duration)));
      const passengers=Math.round((12+Math.min(55,duration*0.22))*demand);
-     const ticket=4+duration*0.16;
-     gross+=crossings*passengers*ticket;
+     const standardFare=4+duration*0.16;
+     const configuredFare=current.ferryTicketPrices?.[id];
+     const ticket=typeof configuredFare==='number'&&Number.isFinite(configuredFare)&&configuredFare>=1&&configuredFare<=100?configuredFare:standardFare;
+     const priceMultiplier=Math.max(0.2,Math.min(1.8,Math.pow(ticket/standardFare,-0.75)));
+     const adjustedPassengers=Math.min(90,Math.max(0,Math.round(passengers*priceMultiplier)));
+     gross+=crossings*adjustedPassengers*ticket;
      costs+=crossings*(24+duration*0.9);
     }
    }
@@ -1262,6 +1266,7 @@ export default function App(){
   }
   harbourSeenRef.current=true;
  },[company?.id,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
+ const setFerryTicketPrice=(routeId:string,fare:number)=>{const current=companyRef.current;if(!current||!(current.purchasedFerryRouteIds??[]).includes(routeId)||!Number.isFinite(fare))return;const value=Math.max(1,Math.min(100,Math.round(fare*2)/2));const updated={...current,ferryTicketPrices:{...(current.ferryTicketPrices??{}),[routeId]:value}};companyRef.current=updated;saveCompany(updated);setCompany(updated);};
  const purchaseFerryRoute=(routeId:string,price:number)=>{const current=companyRef.current;if(!current||!Number.isFinite(price)||price<2000||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId]};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
  const go=(name:Page)=>{setPage(name);setDrawerOpen(false);};
  const onLocation=(value:Headquarters)=>{if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
@@ -1273,7 +1278,7 @@ export default function App(){
  {page==='Drivers'&&<DriversPanel fleet={fleet} gameClock={gameClock}/>}
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
- {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} unlockedHarbourIds={unlockedHarbours}/>}
+ {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
