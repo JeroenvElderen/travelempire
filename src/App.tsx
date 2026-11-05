@@ -1,4 +1,4 @@
-import {recordPerformance} from './performanceMonitor';
+import {recordSimulationTick} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
@@ -590,6 +590,11 @@ export default function App(){
     
     
     let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,serviceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
+    const driversByName=new Map((old.drivers??[]).map(d=>[d.name.toLowerCase(),d]));
+    const tickDay=new Date(now).toISOString().slice(0,10);
+    const assignedByDepot=new Map<string,number>();
+    for(const vehicle of old.taxis){const id=vehicle.depotId??'main';assignedByDepot.set(id,(assignedByDepot.get(id)??0)+1);}
+
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     const taxis=old.taxis.map(t=>{
@@ -725,7 +730,7 @@ export default function App(){
      // including junction crossings and the final step before route reset.
      const km=next.distanceMeters/1000;
      const spec=energySpec(delivered);
-     const person=(old.drivers??[]).find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
+     const person=driversByName.get(t.driver.toLowerCase());
      const experience=person?.completedTrips??0;
      // Career skills are derived from persistent driver trip counts (save compatible).
      const skill=Math.min(5,1+Math.floor(experience/25));
@@ -764,6 +769,7 @@ export default function App(){
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
     });
+    const movementMs=performance.now()-tickStarted;
     // Depreciation is non-cash; book it on owned vehicles only.
     let depreciation=0;
     for(let index=0;index<taxis.length;index++){
@@ -774,7 +780,7 @@ export default function App(){
      const before=old.taxis[index];
      const delta=(field:'tripRevenue'|'fuelExpense'|'maintenanceExpense'|'explorationExpense'|'driverWages'|'insuranceExpense'|'operatingKm')=>Math.max(0,(t[field]??0)-(before[field]??0));
      const revenueDelta=delta('tripRevenue');
-     return {day:new Date(now).toISOString().slice(0,10),taxiId:t.id,name:t.name,depotId:t.depotId??'main',revenue:revenueDelta,
+     return {day:tickDay,taxiId:t.id,name:t.name,depotId:t.depotId??'main',revenue:revenueDelta,
       expenses:delta('fuelExpense')+delta('maintenanceExpense')+delta('explorationExpense')+delta('driverWages')+delta('insuranceExpense'),
       km:delta('operatingKm'),trips:Math.max(0,t.completed-before.completed)};
     }).filter(v=>v.revenue>0||v.expenses>0||v.km>0||v.trips>0);
@@ -783,13 +789,13 @@ export default function App(){
     // Facility costs are NEW operating expenses; legacy office overhead remains separate.
     const depotDefinitions=[{id:'main',name:'Headquarters',capacity:5},...(companyRef.current?.depots??[])];
     const facilityByDepot=depotDefinitions.map(d=>{
-      const assigned=old.taxis.filter(t=>(t.depotId??'main')===d.id).length;
+      const assigned=assignedByDepot.get(d.id)??0;
       const daily=depotDailyTotal(d.id==='main',upgradesFor(old,d.id),depotCapacity(d,upgradesFor(old,d.id)));
       return {id:d.id,name:d.name,assigned,cost:daily*4/86400};
     });
     const facilityCost=facilityByDepot.reduce((a,d)=>a+d.cost,0);
     const depotHistory:DepotFinanceRecord[]=[...(old.depotFinanceHistory??[])];
-    const historyDay=new Date(now).toISOString().slice(0,10);
+    const historyDay=tickDay;
     for(const d of facilityByDepot){
       const related=vehicleFinanceDeltas.filter(v=>v.depotId===d.id);
       const vehicleExpenses=related.reduce((a,v)=>a+v.expenses,0);
@@ -827,7 +833,7 @@ export default function App(){
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     const tickMs=performance.now()-tickStarted;
-    recordPerformance({simulationMs:tickMs,vehicles:old.taxis.length,exploredRoads:discovered.size});
+    recordSimulationTick(tickMs,movementMs,tickMs-movementMs,old.taxis.length,discovered.size);
     const perf=simulationPerfRef.current;
     perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
     if(tickMs>50&&now-perf.lastReport>15000){
