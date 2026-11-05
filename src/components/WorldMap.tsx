@@ -109,7 +109,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const now=performance.now();
    // Only report gaps between frames in an active rendering burst.
    // A long idle period followed by a render is not a blocked frame.
-   if(lastRender&&now-lastRender>50&&now-lastRender<250)recordActivity('map:render',now-lastRender);
+   if(lastRender&&now-lastRender>50&&now-lastRender<250&&instance.isMoving())recordActivity('map:render',now-lastRender);
    lastRender=now;
   };
   instance.on('render',onRender);
@@ -575,7 +575,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Map render gaps: {perfSnapshot.mapRenderCount} · Latest: {perfSnapshot.mapRenderMs.toFixed(0)} ms</div>
    <div>Last save: {perfSnapshot.saveKind} · {perfSnapshot.saveMs.toFixed(1)} ms</div>
    <div>Save prep / async: {perfSnapshot.savePrepareMs.toFixed(1)} / {perfSnapshot.saveAwaitMs.toFixed(1)} ms</div>
-   <div>Serialization: {perfSnapshot.saveSerializationMs.toFixed(1)} ms (not instrumented)</div>
+   <div>IDB merge prep: {perfSnapshot.saveSerializationMs.toFixed(1)} ms</div>
    <div>Explored roads: {perfSnapshot.exploredRoads.toLocaleString()} · New: {perfSnapshot.explorationDelta}</div>
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
