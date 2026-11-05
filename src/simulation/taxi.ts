@@ -609,9 +609,10 @@ export function dispatchScout(
   }heap[i]=last;}
   return first;
  };
- // Bounded nearest-first search. A full graph scan blocked dispatch on mobile.
- // Select the nearest reachable undiscovered road.
- let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
+ // Finish a local 900 m road-network neighbourhood before expanding outward.
+ // Search is bounded and runs in the dispatch worker, never the animation loop.
+ const LOCAL_AREA_METERS=900;
+ let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -621,9 +622,10 @@ export function dispatchScout(
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
   if(distance>maxSearchMeters)break;
-  // Once the nearest inside road is found, only finish nodes with shorter
-  // approach distances; avoid searching the entire connected road network.
-  if(best&&distance>best.distance)break;
+  // Once a local road is found, do not scan the wider network.
+  // The bound also avoids expensive repeated global searches on mobile.
+  if(best?.local&&distance>LOCAL_AREA_METERS)break;
+  if(best&&!best.local&&distance>best.distance&&distance>LOCAL_AREA_METERS)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const approach=node===start?incomingNode:previous.get(node)?.from;
@@ -631,8 +633,10 @@ export function dispatchScout(
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
-    const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
-    if(!best||candidate.distance<best.distance)best=candidate;
+    const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside,local:distance<=LOCAL_AREA_METERS};
+    // Local streets take precedence over distant frontier roads. Once the
+    // neighbourhood is complete, choose the nearest reachable new segment.
+    if(!best||(candidate.local&&!best.local)||(candidate.local===best.local&&candidate.distance<best.distance))best=candidate;
    }
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
@@ -673,6 +677,7 @@ export function dispatchScout(
   if(!links.length)break;
   // Prefer connected roads and shorter routes without assigning exploration sectors.
   links.sort((a,b)=>{
+   // Clear already-open streets and short side branches before heading out.
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
    return ai-bi||a.meters-b.meters;
   });
