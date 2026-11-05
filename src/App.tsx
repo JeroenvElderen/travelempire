@@ -153,7 +153,6 @@ export default function App(){
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
  const workerRoadCountRef=useRef(0);
- const territoryDiscoveryAllowedRef=useRef<Set<string>>(new Set());
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
  const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
  const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
@@ -239,7 +238,7 @@ export default function App(){
     // Explorers may wait for an eligible section or worker reroute.
     // A 30-second movement timeout is not a breakdown: never tow them
     // unless their battery/fuel is actually depleted.
-    const stranded=empty||((t.kind!=='explorer'&&t.kind!=='surveyor')&&
+    const stranded=empty||((t.kind!=='explorer')&&
      (t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
     if(!stranded||meters(t.position,depot)<75)continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
@@ -348,14 +347,13 @@ export default function App(){
    dispatchBusyRef.current=false;
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
-   if(message.discoveryEligible)territoryDiscoveryAllowedRef.current=new Set(message.discoveryEligible);
    if(message.generatedMission)lastMissionAt.current=Date.now();
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
     // Apply boundary enforcement from the worker to already-moving Explorers.
     // Keep the current simulated position instead of reverting to the worker snapshot.
-    if((t.kind==='explorer'||t.kind==='surveyor')&&t.status==='EXPLORING'&&assigned&&
+    if((t.kind==='explorer')&&t.status==='EXPLORING'&&assigned&&
        (assigned.status==='IDLE'||assigned.edgeIds.length<t.edgeIds.length)){
      if(assigned.status==='IDLE')return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
      if(assigned.edgeIds.length>t.leg&&
@@ -417,7 +415,7 @@ export default function App(){
    const queue=queueRef.current.filter(q=>q.expiresAt>now);
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
-   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,territory:fleetSaveRef.current.territoryEdgeIds??[],
+   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!!gameClockRef.current&&driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onDuty&&!driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs).onBreak&&!t.shiftParked).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
@@ -550,8 +548,8 @@ export default function App(){
     const cache=discoveredCacheRef.current;
     const discovered=cache&&cache.ids===savedIds?cache.set:new Set<string>(savedIds);
     const initialDiscoveryCount=discovered.size;
-    const territory=new Set(old.territoryEdgeIds??[]);
-    const initialTerritoryCount=territory.size;
+    
+    
     let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,serviceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
@@ -665,11 +663,11 @@ export default function App(){
      // Energy purchases are charged at refill time, never again per driven kilometre.
      const depotLevels=upgradesFor(old,t.depotId??'main');
      const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
-     const explorerTravelCost=(t.kind==='explorer'||t.kind==='surveyor')?km*2.50:0;
+     const explorerTravelCost=(t.kind==='explorer')?km*2.50:0;
      explorationExpense+=explorerTravelCost;
      const wearPerKm=0.025*(1-careBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
-     const wage=(t.kind==='explorer'||t.kind==='surveyor')?0:0.009*(old.wageMultiplier??1)*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
-     const insurance=(t.kind==='explorer'||t.kind==='surveyor')?0.00045:0.00085; // €3.06 per simulated hour per taxi
+     const wage=(t.kind==='explorer')?0:0.009*(old.wageMultiplier??1)*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
+     const insurance=(t.kind==='explorer')?0.00045:0.00085; // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
      const earned=next.earned*(1+0.05*Research.level(research,'pricing'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
@@ -680,16 +678,13 @@ export default function App(){
      if(roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
      next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
-      // Never save a Purple road whose full segment is outside Black coverage.
-      const eligible=t.kind==='explorer'&&territoryDiscoveryAllowedRef.current.has(id);
-      const survey=t.kind==='surveyor';
-      if(eligible&&!discovered.has(id)||survey&&!territory.has(id)){
+      if(t.kind==='explorer'&&!discovered.has(id)){
        const length=roadLengthByIdRef.current.get(id)??0;
        newRoadKm+=length/1000;
       }
-      if(eligible)discovered.add(id);if(survey)territory.add(id);
+      if(t.kind==='explorer')discovered.add(id);
      }});
-     return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer'||t.kind==='surveyor')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
+     return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=spec.capacity*0.10,
@@ -756,10 +751,9 @@ export default function App(){
     if(taxPaid>0)pendingCashRef.current-=taxPaid;
     const expiredLeaseIds=new Set(leaseTick.expired.map(l=>l.vehicleId));
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
-    const updatedTerritory=territory.size===initialTerritoryCount?(old.territoryEdgeIds??[]):[...territory];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
-    return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(now-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,territoryEdgeIds:updatedTerritory,
+    return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(now-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
@@ -772,19 +766,6 @@ export default function App(){
   return()=>window.clearInterval(timer);
  },[company?.id,graph,fleet.taxis.length,research]);
 
- const buyExplorer=()=>{if(!company||!graph)return;try{
-  const cost=15000;
-  const blackCount=fleet.taxis.filter(t=>t.kind==='surveyor'||(t.kind==='explorer'&&(t.vehicleModel==='Black Explorer'||t.name==='Black Explorer'))).length;
-  const maxBlack=1+Research.level(Research.settle(research),'secondSurveyor');
-  if(blackCount>=maxBlack)throw Error(maxBlack===1?'Research Second Black Explorer to unlock another vehicle.':'Maximum of two Black Explorers reached.');
-  if(company.cash<cost)throw Error('Insufficient company funds for an Explorer (€15,000).');
-  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
-  const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
-  const now=Date.now();
-  const explorer:Taxi={id:crypto.randomUUID(),kind:'surveyor',name:'Black Explorer',driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:'Black Explorer',vehicleYear:2026,vehicleFuel:'Electric',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Electric'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
-  const updated={...company,cash:Math.round((company.cash-cost)*100)/100};
-  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:'Explorer vehicle purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
- }catch(e){setSimError(String(e))}};
  const buyRoadExplorer=()=>{if(!company||!graph)return;try{
   const cost=12000;
   if(company.cash<cost)throw Error('Insufficient company funds for an Explorer (€15,000).');
@@ -982,7 +963,7 @@ export default function App(){
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
  const controlExplorer=(id:string,action:'home'|'resume')=>{
-  const explorer=fleet.taxis.find(t=>t.id===id&&(t.kind==='explorer'||t.kind==='surveyor'));
+  const explorer=fleet.taxis.find(t=>t.id===id&&(t.kind==='explorer'));
   if(!explorer||!graph||!company)return;
   if(action==='resume'){
    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id&&t.status==='PAUSED'?{...t,status:'IDLE' as const,pauseAtHome:false}:t)}));
@@ -1008,7 +989,7 @@ export default function App(){
   if(occupied>=capacity){setSimError('That depot has no available parking spaces.');return;}
   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,depotId}:t)}));setSimError('');
  };
- const setExplorationMode=(id:string,mode:'local'|'frontier')=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id&&(t.kind==='explorer'||t.kind==='surveyor')?{...t,explorationMode:mode}:t)}));
+ const setExplorationMode=(id:string,mode:'local'|'frontier')=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id&&(t.kind==='explorer')?{...t,explorationMode:mode}:t)}));
  const setAutoDepotService=(id:string,enabled:boolean)=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,autoDepotService:enabled}:t)}));
  const setVehiclePolicy=(id:string,policy:'economy'|'balanced'|'performance')=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,drivingPolicy:policy}:t)}));
  const setServiceThreshold=(id:string,threshold:number)=>setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,serviceThreshold:threshold}:t)}));
@@ -1135,11 +1116,11 @@ export default function App(){
  const onLocation=(value:Headquarters)=>{if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  return <div className={`shell nav-v216 ${sidebarCollapsed?'nav-collapsed':''} ${page==='World'?'nav-map-mode':''}`}><aside className={`sidebar ${drawerOpen?'open':''}`}><header className="brand"><div className="brand-mark"><CarFront size={23}/></div><div className="nav-brand-copy"><strong>TravelEmpire</strong><small>v2.1.6 · MANAGEMENT</small></div><button className="nav-collapse-button" title={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} aria-label={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="close-menu" aria-label="Close menu" onClick={()=>setDrawerOpen(false)}><X size={19}/></button></header><nav className="navigation" aria-label="Main navigation"><div className="nav-group-label">OPERATIONS</div>{navigation.filter(n=>['World','Fleet','Drivers','Operations','Ferries'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name==='World'?'World Map':name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'World Map':name}</span></button>)}<div className="nav-group-label">MANAGEMENT</div>{navigation.filter(n=>['Company','Finance','Research','Explorer AI'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}<div className="nav-group-label">FUTURE</div><button type="button" disabled title="Empire is not available yet" className="nav-locked"><BarChart3 size={19}/><span>Empire</span><LockKeyhole size={14} className="nav-lock-icon"/></button></nav><button className="sidebar-bottom nav-company-shortcut" title={company?.name??'Company'} onClick={()=>go('Company')}><span className="nav-company-avatar"><CarFront size={20}/></span><span className="nav-company-copy"><strong>{company?.name??'Create company'}</strong><small>{company?'Company workspace':'Set up your company'}</small></span></button></aside>
  {drawerOpen&&<button className="backdrop" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/>}<main className="main"><header className="topbar"><button className="menu-toggle" aria-label="Open navigation" onClick={()=>setDrawerOpen(true)}><Menu size={21}/></button><div className="nav-page-identity"><strong>{page==='World'?'World Map':page}</strong><small>{({World:'Explore roads and monitor vehicles',Fleet:'Vehicles and dealerships',Drivers:'Driver schedules, breaks and performance',Operations:'Dispatch and exploration control',Ferries:'Ferry routes, purchases and maritime network',Company:'Depots and company management',Finance:'Business performance and cash flow',Research:'Company upgrades and development','Explorer AI':'Explorer intelligence and discovery rewards',Empire:'Coming soon'} as Record<Page,string>)[page]}</small></div><div className="nav-top-stats">{company&&<><span className="nav-top-stat"><CircleDollarSign size={16}/><strong>{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(company.cash)}</strong></span><span className="nav-top-stat nav-vehicles"><CarFront size={16}/>{fleet.taxis.length} vehicles</span></>}<span className="nav-sim-status"><Activity size={14}/> LIVE</span></div></header>
- <section className="world" style={{display:page==='World'?'block':'none'}}><WorldMap companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} exploredEdgeIds={fleet.exploredEdgeIds??[]} territoryEdgeIds={fleet.territoryEdgeIds??[]} graph={graph} gameClock={gameClock} onExplorerCommand={controlExplorer}/>{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
+ <section className="world" style={{display:page==='World'?'block':'none'}}><WorldMap companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} gameClock={gameClock} onExplorerCommand={controlExplorer}/>{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
  {page==='Company'&&(!company||showSetup)?<CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/>:null}
  {page==='Company'&&company&&!showSetup&&<section className="company-dashboard company-v213"><div className="company-v213-heading"><div><span className="eyebrow">COMPANY MANAGEMENT · V2.1.3</span><h1>Company</h1><p>Manage your company, depots and operational settings.</p></div><span className="company-v213-status">● COMPANY ACTIVE</span></div><div className="company-v213-identity"><div className="company-v213-icon">🚕</div><div className="company-v213-name"><strong>{company.name}</strong><small>Taxi & exploration company</small><span>Headquarters · {company.headquarters.label}</span></div><div className="company-v213-identity-stats"><div><small>Vehicles</small><strong>{fleet.taxis.length}</strong></div><div><small>Drivers</small><strong>{(fleet.drivers??[]).length}</strong></div><div><small>Depots</small><strong>{1+(company.depots??[]).length}</strong></div><div><small>Completed trips</small><strong>{fleet.completed.toLocaleString('en-IE')}</strong></div></div></div><div className="ui-section-tabs" role="tablist" aria-label="Company sections">{([["overview","Overview"],["depots","Depots"],["vehicles","Assignments"],["settings","Settings"]] as const).map(([id,label])=><button key={id} role="tab" aria-selected={companyTab===id} className={companyTab===id?"active":""} onClick={()=>setCompanyTab(id)}>{label}</button>)}</div><div className="company-v213-overview" style={{display:companyTab==="overview"?"block":"none"}}><div className="company-v213-section-title"><h2>Company overview</h2><span>Live business statistics</span></div><div className="company-metrics"><article><small>MAIN DEPOT</small><strong>{company.headquarters.label}</strong></article><article><small>ASSIGNED VEHICLES</small><strong>{fleet.taxis.length}</strong></article><article><small>DEPOT CAPACITY</small><strong>{Math.max(5,5+5*(fleet.upgrades??[]).filter(u=>u==='depot-capacity').length)} spaces</strong></article><article><small>AVAILABLE SPACES</small><strong>{Math.max(0,Math.max(5,5+5*(fleet.upgrades??[]).filter(u=>u==='depot-capacity').length)-fleet.taxis.length)}</strong></article></div><div className="company-v213-columns"><article className="company-v213-card"><h3>Company performance</h3><p>Lifetime operating results</p><div className="company-v213-row"><span>Passenger revenue</span><strong>€{fleet.revenue.toLocaleString("en-IE",{maximumFractionDigits:2})}</strong></div><div className="company-v213-row"><span>Completed trips</span><strong>{fleet.completed.toLocaleString("en-IE")}</strong></div><div className="company-v213-row"><span>Operating distance</span><strong>{(fleet.distanceKm??0).toFixed(1)} km</strong></div><div className="company-v213-row"><span>Available capital</span><strong>€{company.cash.toLocaleString("en-IE",{maximumFractionDigits:2})}</strong></div></article><article className="company-v213-card"><h3>Operational status</h3><p>Fleet and depot availability</p><div className="company-v213-row"><span>Available vehicles</span><strong>{fleet.taxis.filter(t=>t.status==="IDLE").length} / {fleet.taxis.length}</strong></div><div className="company-v213-progress"><div style={{width:`${fleet.taxis.length?100*fleet.taxis.filter(t=>t.status==="IDLE").length/fleet.taxis.length:0}%`}}/></div><div className="company-v213-row"><span>Assigned drivers</span><strong>{fleet.taxis.filter(t=>t.kind!=="explorer"&&t.kind!=="surveyor"&&!!t.driver).length}</strong></div><div className="company-v213-row"><span>Depot locations</span><strong>{1+(company.depots??[]).length}</strong></div></article></div><div className="company-v213-actions"><h3>Quick actions</h3><div><button onClick={()=>setCompanyTab("depots")}>Manage depots →</button><button onClick={()=>setCompanyTab("vehicles")}>Vehicle assignments →</button><button onClick={()=>setCompanyTab("settings")}>Company settings →</button><button onClick={()=>setPage("Finance")}>Financial reports →</button></div></div></div><div className="company-v213-subpage" style={{display:companyTab==="depots"?"block":"none"}}><button type="button" disabled={company.cash<2500} onClick={()=>{if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<2500){setSimError('Insufficient funds for depot expansion (€2,500).');return;}pendingCashRef.current-=2500;setFleet(old=>({...old,upgrades:[...(old.upgrades??[]),'depot-capacity'],transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Main depot expansion (+5 spaces)',amount:-2500},...(old.transactions??[])].slice(0,100)}));setSimError('');}}>Expand main depot (+5 spaces) · €2,500</button><h2>Depot network</h2><p>Purchase a depot on the map for €10,000. Each new depot starts with five spaces. Vehicles must be idle or paused to change their assigned depot.</p><button type="button" onClick={()=>{setPlacingDepot(true);setSelecting(true);setPage('World');setSimError('');}}>+ Place new depot on map · €10,000</button>{[...([{id:'main',name:'Main depot · '+company.headquarters.label,capacity:5+5*(fleet.upgrades??[]).filter(u=>u==='depot-capacity').length}]),...(company.depots??[])].map(d=><article key={d.id}><strong>{d.name}</strong> · {fleet.taxis.filter(t=>(t.depotId??'main')===d.id).length} / {d.capacity} spaces {d.id!=='main'&&<button type="button" onClick={()=>{if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<2500){setSimError('Insufficient funds (€2,500).');return;}pendingCashRef.current-=2500;const updated={...companyRef.current,depots:(companyRef.current.depots??[]).map(x=>x.id===d.id?{...x,capacity:x.capacity+5}:x)};companyRef.current=updated;setCompany(updated);saveCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Depot expansion (+5 spaces)',amount:-2500},...(old.transactions??[])].slice(0,100)}));}}>Expand +5 · €2,500</button>}</article>)}</div><div className="company-v213-subpage" style={{display:companyTab==="vehicles"?"block":"none"}}><h2>Vehicle assignments</h2><p>Choose each vehicle’s home depot. Only idle or paused vehicles can be reassigned.</p>{fleet.taxis.map(t=><div key={t.id} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:8}}><strong>{t.name}</strong><select aria-label={`Depot for ${t.name}`} value={t.depotId??'main'} onChange={e=>assignDepot(t.id,e.target.value)}><option value="main">Main depot</option>{(company.depots??[]).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><button type="button" disabled={t.status!=='IDLE'&&t.status!=='PAUSED'} onClick={()=>returnToDepot(t.id)}>Return & park</button>{t.status==='PAUSED'&&<button type="button" onClick={()=>resumeDepotTaxi(t.id)}>Resume operations</button>}<small>{t.status}</small></div>)}</div>{simError&&<p role="alert">{simError}</p>}<div className="company-v213-subpage" style={{display:companyTab==="settings"?"block":"none"}}><h2>Company settings</h2><p>Your company profile is saved in this browser. Taxi operations run locally while this browser tab is open.</p><div className="company-metrics"><article><small>AVAILABLE CAPITAL</small><strong>€{company.cash.toLocaleString('en-IE')}</strong></article><article><small>HEADQUARTERS</small><strong>{company.headquarters.label}</strong></article><article><small>FLEET</small><strong>{fleet.taxis.filter(t=>(!t.kind||t.kind==='taxi')).length} taxis · {fleet.taxis.filter(t=>t.kind==='explorer').length} road explorers · {fleet.taxis.filter(t=>t.kind==='surveyor').length} black explorers</strong></article></div><p className="setup-disclaimer">No administrative ownership restrictions. Greek roads load automatically near headquarters and active taxis from Supabase.</p><button className="setup-secondary" onClick={()=>setPage('World')}>View headquarters on map</button><button className="danger-button" onClick={()=>{if(window.confirm('Delete this locally saved company? This cannot be undone.')){Research.clear(company.id);void clearExploration(company.id);clearCompany();localStorage.removeItem(`travelempire.fleet.v0.8.${company.id}`);setFleet({taxis:[],revenue:0,completed:0});setCompany(null);setSelection(null);setShowSetup(false);}}}>Delete local company</button></div></section>}
  {page==='Drivers'&&<DriversPanel fleet={fleet} gameClock={gameClock}/>}
-  {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyExplorer={buyExplorer} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
+  {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError} onExplorationMode={setExplorationMode}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} graph={graph} exploredEdgeIds={fleet.exploredEdgeIds??[]}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
