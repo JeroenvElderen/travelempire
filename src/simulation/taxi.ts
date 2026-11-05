@@ -579,11 +579,7 @@ export function dispatchScout(
  if(!start)return taxi;
  incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
  const revealed=new Set(exploredRoadNodes(graph,explored,hq));
- const activeSection=taxi.kind==='explorer'?taxi.explorationSection:undefined;
- // A section is finished only when no reachable eligible, unvisited edge remains.
- // Search its roads first; don't switch sections merely because another road scores better.
- // Dijkstra from the current vehicle position: one search replaces dozens of
- // independent full-graph routes, and yields the cheapest road-by-road approach.
+ // Independent road discovery: choose nearby unvisited roads without zones or AI priorities.
  const dist=new Map<string,number>([[start,0]]);
  const previous=new Map<string,{from:string;id:string}>();
  const heap:Array<[number,string]>=[[0,start]];
@@ -605,12 +601,6 @@ export function dispatchScout(
  // Complete nearby streets within the revealed territory, then expand outward.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
  let bestOutside:{from:string;to:string;id:string;distance:number;inside:boolean}|null=null;
- // Purple Explorer: reward unique discoveries, penalise travel over known roads.
- let bestPurple:{from:string;to:string;id:string;distance:number;inside:boolean;score:number;section:string}|null=null;
- let bestInSection:{from:string;to:string;id:string;distance:number;inside:boolean;score:number;section:string}|null=null;
- // Surveyor: prioritise roads outside the existing 150 m territory corridor.
- // Covered roads remain available as transit routes, not preferred survey targets.
- let bestSurvey:{from:string;to:string;id:string;distance:number;inside:boolean;score:number}|null=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -627,44 +617,9 @@ export function dispatchScout(
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
-    if(taxi.kind==='surveyor'&&territoryCovered){
-     // A road outside the covered corridor expands the map. Prefer it even
-     // when a covered but untravelled road is closer. Penalise long detours.
-     const newTerritory=!territoryCovered.has(edge.id);
-     // Depot-centred expanding rings: work around each ring before moving
-     // outward. Targets remain actual connected roads, never straight lines.
-     const completedRuns=taxi.scoutingRuns??0;
-     const ringRadius=Math.min(4500,350+Math.floor(completedRuns/12)*350);
-     const targetPoint=graph.nodes.get(edge.to)??hq;
-     const radialDistance=meters(hq,targetPoint);
-     const ringError=Math.abs(radialDistance-ringRadius);
-     // Prefer fresh coverage on the current ring, while limiting detours.
-     const score=(newTerritory?6500:0)-ringError*1.7-distance*0.65+Math.min(edge.meters,600)*0.4;
-     if(!bestSurvey||score>bestSurvey.score)
-      bestSurvey={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside:false,score};
-    }
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside};
-    if(taxi.kind==='explorer'){
-     const a=graph.nodes.get(node)!,b=graph.nodes.get(edge.to)!;
-     const section=roadSection([(a[0]+b[0])/2,(a[1]+b[1])/2]);
-     // Stay in the assigned section while any reachable roads remain there.
-     // Other Explorers reserve their sections; loops beat dead-end branches.
-     const exits=(graph.edges.get(edge.to)??[]).filter(next=>
-      (!_allowedRoads||_allowedRoads.has(next.id))&&next.to!==node);
-     const loop=exits.some(next=>revealed.has(next.to)||explored.has(next.id));
-     const fresh=exits.filter(next=>!explored.has(next.id)&&!reservedEdges.has(next.id));
-     const score=(activeSection===section?100000:0)-
-      (sectionOwners?.has(section)&&section!==activeSection?30000:0)-
-      distance*0.12+Math.min(3,fresh.length)*28+(loop?45:0)-
-      (exits.length===0?35:0)+Math.min(edge.meters,300)*0.03;
-     if(!bestPurple||score>bestPurple.score||(score===bestPurple.score&&candidate.distance<bestPurple.distance))
-      bestPurple={...candidate,score,section};
-     if(activeSection===section&&(!bestInSection||candidate.distance<bestInSection.distance))
-      bestInSection={...candidate,score,section};
-    }else if(inside){
-     if(!best||candidate.distance<best.distance)best=candidate;
-    }else if(!bestOutside||candidate.distance<bestOutside.distance)bestOutside=candidate;
+    if(!best||candidate.distance<best.distance)best=candidate;
    }
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
@@ -672,11 +627,8 @@ export function dispatchScout(
    }
   }
  }
- best=taxi.kind==='explorer'?(bestInSection??bestPurple??best??bestOutside):taxi.kind==='surveyor'&&bestSurvey?bestSurvey:(best??bestOutside);
+ best=best??bestOutside;
  if(!best)return taxi;
- const selectedSection=taxi.kind==='explorer'?(bestInSection??bestPurple)?.section:undefined;
- const coverage=taxi.kind==='explorer'&&selectedSection?
-  sectionCoverage(graph,discoveryAllowed??_allowedRoads??new Set<string>(),explored,selectedSection):{completed:0,total:0};
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
  while(node!==start){
@@ -693,27 +645,13 @@ export function dispatchScout(
  for(let step=0;step<24&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
-   (taxi.kind!=='explorer'||!selectedSection||(()=>{const a=graph.nodes.get(cursor)!,b=graph.nodes.get(edge.to)!;return roadSection([(a[0]+b[0])/2,(a[1]+b[1])/2])===selectedSection;})())&&
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&
    true
   );
   if(!links.length)break;
-  // Black Explorer expands into unrevealed territory; Purple Explorer stays
-  // focused on eligible discovered-territory roads.
+  // Prefer connected roads and shorter routes without assigning exploration sectors.
   links.sort((a,b)=>{
-   if(taxi.kind==='surveyor'&&territoryCovered){
-    const ai=territoryCovered.has(a.id)?1:0,bi=territoryCovered.has(b.id)?1:0;
-    return ai-bi||b.meters-a.meters;
-   }
-   if(taxi.kind==='explorer'&&selectedSection){
-    const ai=roadSection(graph.nodes.get(a.to)!)===selectedSection?0:1;
-    const bi=roadSection(graph.nodes.get(b.to)!)===selectedSection?0:1;
-    if(ai!==bi)return ai-bi;
-    const loopRank=(edge:typeof a)=> (graph.edges.get(edge.to)??[]).some(next=>
-     next.to!==cursor&&(revealed.has(next.to)||keys.includes(next.to)))?0:1;
-    if(loopRank(a)!==loopRank(b))return loopRank(a)-loopRank(b);
-   }
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
    return ai-bi||a.meters-b.meters;
   });
@@ -725,7 +663,7 @@ export function dispatchScout(
  for(const id of ids)reservedEdges.add(id);
  return {...taxi,status:'EXPLORING',path:keys.map(k=>graph.nodes.get(k)!),
   edgeIds:ids,discoveryEdgeIds:discoveryAllowed?ids.filter(id=>discoveryAllowed.has(id)):ids,journeyEdges:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,explorationSection:selectedSection??taxi.explorationSection,explorationSectionCompleted:coverage.completed,explorationSectionTotal:coverage.total,scoutingRuns:(taxi.scoutingRuns??0)+1};
+  pickup:undefined,dropoff:undefined,fare:0,explorationSection:undefined,explorationSectionCompleted:undefined,explorationSectionTotal:undefined,scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
 // Shared integrator: simulation and marker animation use exactly the same road speeds.
 // Acceleration/deceleration is expressed in real seconds (1x wall time).
