@@ -4,5 +4,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import './territory-rendering.css';
 import App from "./App";
+import { registerOfflineCache } from "./data/registerOfflineCache";
+
+registerOfflineCache();
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
