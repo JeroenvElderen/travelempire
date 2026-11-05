@@ -1,4 +1,4 @@
-import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,type PerformanceSnapshot} from '../performanceMonitor';
+import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordFrameGap,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour} from '../simulation/gameClock';
 import {formatGameClock,type GameClock} from '../simulation/gameClock';
@@ -277,7 +277,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const frameNow=performance.now();
    if(performanceMonitorEnabled()){
     monitoredFrames++;
-    if(lastFrameAt){const frameGap=frameNow-lastFrameAt;if(frameGap>50)incrementPerformance('frameSpikes');recordPerformance({maxFrameMs:Math.max(readPerformance().maxFrameMs,frameGap)});}
+    if(lastFrameAt)recordFrameGap(frameNow-lastFrameAt);
     if(frameNow-monitoredAt>=1000){recordPerformance({fps:Math.round(monitoredFrames*1000/(frameNow-monitoredAt))});monitoredFrames=0;monitoredAt=frameNow;}
    }else{monitoredFrames=0;monitoredAt=frameNow;}
 
