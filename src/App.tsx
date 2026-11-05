@@ -992,8 +992,6 @@ export default function App(){
   if(t.status!=='IDLE'&&t.status!=='PAUSED'){setSimError('Vehicle must be idle or parked before selling.');return;}
   if(t.deliveryUntil&&t.deliveryUntil>Date.now()){setSimError('Cannot sell a vehicle awaiting delivery.');return;}
   if(t.ownership==='leased'||(fleet.leases??[]).some(l=>l.vehicleId===id)){setSimError('Leased vehicles cannot be sold. The vehicle returns when the lease ends.');return;}
-  const otherBlack=fleet.taxis.filter(x=>x.id!==id&&x.kind==='surveyor');
-  if(t.kind==='surveyor'&&otherBlack.length){setSimError('Invalid Black Explorer fleet state.');return;}
   const age=Math.max(0,new Date().getFullYear()-(t.vehicleYear??new Date().getFullYear()));
   const value=Math.max(1000,Math.round(15000*Math.pow(.88,age)*Math.pow(.92,(t.vehicleMileage??0)/30000)*(t.vehicleCondition??100)/100));
   const balance=(fleet.loans??[]).filter(l=>l.vehicleId===id).reduce((a,l)=>a+l.balance,0);
