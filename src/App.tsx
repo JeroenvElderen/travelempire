@@ -1,3 +1,4 @@
+import {recordPerformance} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
@@ -826,6 +827,7 @@ export default function App(){
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
     const drivers=(old.drivers??[]).map(d=>{const u=driverUpdates.get(d.id);return u?{...d,completedTrips:(d.completedTrips??0)+u.trips,distanceKm:(d.distanceKm??0)+u.km,revenueGenerated:(d.revenueGenerated??0)+u.revenue,wagesEarned:(d.wagesEarned??0)+u.wages}:d;});
     const tickMs=performance.now()-tickStarted;
+    recordPerformance({simulationMs:tickMs,vehicles:old.taxis.length,exploredRoads:discovered.size});
     const perf=simulationPerfRef.current;
     perf.samples++;perf.totalMs+=tickMs;perf.maxMs=Math.max(perf.maxMs,tickMs);
     if(tickMs>50&&now-perf.lastReport>15000){
