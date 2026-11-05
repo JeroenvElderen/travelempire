@@ -17,7 +17,7 @@ const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
- private failedUntil=new Map<string,number>();private seenEdges=new Set<string>();
+ private failedUntil=new Map<string,number>();
  private graphWorker:Worker|null=null;private workerSequence=0;
  private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
