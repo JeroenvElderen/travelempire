@@ -583,9 +583,12 @@ export default function App(){
     }
    }while(pending)}catch(error){console.error('[TravelEmpire] Exploration save failed',error)}finally{busy=false;}
   };
-  const timer=window.setInterval(saveExploration,5000);
+  // Mobile Safari can suspend the page without pagehide; checkpoint more often.
+  const onVisibilityChange=()=>{if(document.visibilityState==='hidden')void saveExploration();};
+  const timer=window.setInterval(saveExploration,2000);
   window.addEventListener('pagehide',saveExploration);
-  return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);void saveExploration()};
+  document.addEventListener('visibilitychange',onVisibilityChange);
+  return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',saveExploration);document.removeEventListener('visibilitychange',onVisibilityChange);void saveExploration()};
  },[company?.id]);
  useEffect(()=>{if(!company)return;const id=company.id;const save=()=>{try{const started=performance.now();saveFleet(id,{...fleetSaveRef.current,exploredEdgeIds:[]});if(performanceMonitorEnabled())recordActivity('save:fleet',performance.now()-started)}catch(error){console.error('[TravelEmpire] Fleet save failed',error)}};
   const timer=window.setInterval(save,5000);
