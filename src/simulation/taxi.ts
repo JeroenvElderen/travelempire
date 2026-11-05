@@ -315,10 +315,10 @@ export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(local
   const names=new Set<string>();for(const taxi of saved.taxis)if(taxi.driver?.trim())names.add(taxi.driver.trim());
   const roster=saved.drivers??[];for(const name of names)if(!roster.some(d=>d.name.toLowerCase()===name.toLowerCase()))roster.push({id:crypto.randomUUID(),name,hiredAt:Date.now()});
   // PR A saved Black Explorers as 'explorer'; migrate only those vehicles.
-  const taxis=saved.taxis.map(t=>t.kind==='explorer'&&(t.vehicleModel==='Black Explorer'||t.name==='Black Explorer')?{...t,kind:'surveyor' as const}:t);
+  const taxis=saved.taxis.filter(t=>t.kind!=='surveyor'&&t.vehicleModel!=='Black Explorer'&&t.name!=='Black Explorer');
   return {...saved,taxis,drivers:roster};
  }}catch{/* ignore invalid save */}return{taxis:[],revenue:0,completed:0,exploredEdgeIds:[]};}
-export function saveFleet(id:string,fleet:FleetState){localStorage.setItem(fleetKey(id),JSON.stringify(fleet));}
+export function saveFleet(id:string,fleet:FleetState){localStorage.setItem(fleetKey(id),JSON.stringify({...fleet,taxis:fleet.taxis.filter(t=>t.kind!=='surveyor'&&t.vehicleModel!=='Black Explorer'&&t.name!=='Black Explorer')}));}
 export const TAXI_COST=18000,DRIVER_COST=1200;
 export function purchaseTaxi(company:Company,fleet:FleetState,graph:RoadGraph,driver:string):{company:Company;fleet:FleetState}{if(company.cash<TAXI_COST+DRIVER_COST)throw Error('Insufficient company funds.');if(!driver.trim())throw Error('Enter a driver name.');const start=nearest(graph,[company.headquarters.lng,company.headquarters.lat]);if(!start)throw Error('No roads available near headquarters.');const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,driver:driver.trim(),position:graph.nodes.get(start)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0};return{company:{...company,cash:company.cash-TAXI_COST-DRIVER_COST},fleet:{...fleet,taxis:[...fleet.taxis,taxi]}};}
 // Passenger stops must be in the 500 m headquarters seed or on a discovered road.
