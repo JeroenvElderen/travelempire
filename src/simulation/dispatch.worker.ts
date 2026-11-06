@@ -143,7 +143,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    }
    const generalRoads=new Set([...allowedRoads].filter(id=>!highwayRoads.has(id)&&!urbanRoads.has(id)&&!completionRoads.has(id)&&!poiRoads.has(id)));
    // Build road-class sets once per dispatch, not once per Explorer.
-   const modeSets=new Map<string,Set<string>>();
+   
    const discoveryRoads=(taxi:Taxi)=>{
     if(taxi.explorerRole==='highway')return highwayRoads;
     if(taxi.explorerRole==='urban')return urbanRoads;
