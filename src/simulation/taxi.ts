@@ -604,7 +604,7 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[]
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -656,7 +656,7 @@ export function dispatchScout(
    const approach=node===start?incomingNode:previous.get(node)?.from;
    if(taxi.kind==='explorer'&&approach&&forbiddenUTurn(graph,approach,node,edge.to,_allowedRoads))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
-   if(isNew){
+   if(isNew&&(!requiredFrontier||requiredFrontier.has(node)||requiredFrontier.has(edge.to))){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
     // Nearest undiscovered road by shortest travel distance to its junction.

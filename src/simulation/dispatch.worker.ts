@@ -143,6 +143,24 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
     for(const edge of links)if(!explored.has(edge.id))poiRoads.add(edge.id);
    }
+   // Each class must branch from a road discovered by the immediately preceding class.
+   const sequence=['motorway','trunk','primary','secondary','tertiary','residential','rural','service','poi','completion'] as const;
+   const previousClass=new Map<string,string>();for(let i=1;i<sequence.length;i++)previousClass.set(sequence[i],sequence[i-1]);
+   const discoveredByClass=new Map<string,Set<string>>();
+   for(const [role,ids] of byClass){const nodes=new Set<string>();for(const [from,links] of graph.edges)for(const edge of links)if(ids.has(edge.id)&&explored.has(edge.id)){nodes.add(from);nodes.add(edge.to);}discoveredByClass.set(role,nodes);}
+   // POI and completion require the preceding specialist to have actually discovered roads.
+   const poiNodes=new Set<string>(),completionNodes=new Set<string>();
+   for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){
+    if(poiRoads.has(edge.id)){poiNodes.add(from);poiNodes.add(edge.to);}
+    if(completionRoads.has(edge.id)){completionNodes.add(from);completionNodes.add(edge.to);}
+   }
+   discoveredByClass.set('poi',poiNodes);discoveredByClass.set('completion',completionNodes);
+   const frontierFor=(taxi:Taxi)=>{
+    const role=taxi.explorerRole;const prev=role?previousClass.get(role):undefined;
+    if(!prev)return undefined;
+    const nodes=discoveredByClass.get(prev)??new Set<string>();
+    return nodes.size?nodes:new Set<string>();
+   };
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
@@ -204,6 +222,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
+    if(frontierFor(taxi)?.size===0)continue;
     const remaining=taxi.path.length-1-taxi.leg;
     if(remaining>2||!taxi.path.length)continue;
     const destination=taxi.path[taxi.path.length-1];
@@ -214,7 +233,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxi));
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -224,9 +243,10 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    }
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
+    if(frontierFor(taxis[index])?.size===0)continue;
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets);
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
@@ -234,7 +254,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
-     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets);
+     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
     }
     if(assignment.status!=='IDLE'){
      explorerIdleSince.delete(taxis[index].id);

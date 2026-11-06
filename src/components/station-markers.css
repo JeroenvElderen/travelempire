@@ -38,3 +38,14 @@
 .te-offscreen-highway-explorer{--pointer-color:#438fff}
 .te-offscreen-urban-explorer{--pointer-color:#f59e42}
 .te-offscreen-poi-explorer{--pointer-color:#06b6d4}
+
+.te-offscreen-motorway-explorer{--pointer-color:#438fff}
+.te-offscreen-trunk-explorer{--pointer-color:#25c4ed}
+.te-offscreen-primary-explorer{--pointer-color:#8d75ff}
+.te-offscreen-secondary-explorer{--pointer-color:#ff9c42}
+.te-offscreen-tertiary-explorer{--pointer-color:#f1d74d}
+.te-offscreen-residential-explorer{--pointer-color:#51d88c}
+.te-offscreen-rural-explorer{--pointer-color:#ad8261}
+.te-offscreen-service-explorer{--pointer-color:#d5dce5}
+.te-offscreen-poi-explorer{--pointer-color:#06b6d4}
+.te-offscreen-completion-explorer{--pointer-color:#71e45a}
