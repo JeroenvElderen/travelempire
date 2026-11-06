@@ -658,7 +658,9 @@ export function dispatchScout(
    const approach=node===start?incomingNode:previous.get(node)?.from;
    if(taxi.kind==='explorer'&&approach&&forbiddenUTurn(graph,approach,node,edge.to,_allowedRoads))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
-   if(isNew&&(!requiredFrontier||requiredFrontier.has(node))){
+   // Reach the frontier through actual connected graph edges; a transit road
+   // does not become discovered merely because it was used to get here.
+   if(isNew&&(!requiredFrontier||requiredFrontier.size>0)){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
     // Nearest undiscovered road by shortest travel distance to its junction.
@@ -674,8 +676,7 @@ export function dispatchScout(
       }
      }
    }
-   // Later tiers may only transit over discovered roads, never cut through fog.
-   if(requiredFrontier&&!explored.has(edge.id))continue;
+   // Transit is allowed on other classes; only discoveryAllowed edges reveal roads.
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
