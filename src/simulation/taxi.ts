@@ -56,6 +56,7 @@ export type Taxi = {
   vehicleModel?: string;
   vehicleTrim?: string;
   vehicleOptionIds?: string[];
+  vehiclePaintHex?: string;
   vehicleRevenueBonus?: number;
   vehicleYear?: number;
   vehicleFuel?: string;
