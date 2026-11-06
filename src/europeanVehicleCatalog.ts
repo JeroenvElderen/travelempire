@@ -51,7 +51,11 @@ const rows:Row[]=[
 ['Lancia','Ypsilon','Economy',29500],
 ['Abarth','500e','Standard',38500,4,'Electric']
 ];
-export const EUROPEAN_MODELS:VehicleModel[]=rows.map(([brand,name,segment,basePrice,seats=segment==='XL'?6:4,fuel='Petrol'])=>({brand,name,segment,basePrice,seats,fuel,years:[2025,2026]}));
+// Only the nine manufacturers selected for the TravelEmpire dealership.
+// Filtering at the catalogue source also prevents excluded makes from entering orders.
+export const DEALERSHIP_BRANDS=['Peugeot','Renault','BMW','Mercedes-Benz','Audi','Volkswagen','Toyota','Škoda','Volvo'] as const;
+const dealershipBrandSet=new Set<string>(DEALERSHIP_BRANDS);
+export const EUROPEAN_MODELS:VehicleModel[]=rows.filter(([brand])=>dealershipBrandSet.has(brand)).map(([brand,name,segment,basePrice,seats=segment==='XL'?6:4,fuel='Petrol'])=>({brand,name,segment,basePrice,seats,fuel,years:[2025,2026]}));
 export const BRANDS=[...new Set(EUROPEAN_MODELS.map(m=>m.brand))].sort((a,b)=>a.localeCompare(b));
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment']};
 export const FACTORY_OPTIONS:FactoryOption[]=[
