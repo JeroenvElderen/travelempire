@@ -333,7 +333,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));
       button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');popup.remove();});popupContent.appendChild(button);
      }
-     new maplibregl.Popup({offset:22,closeOnClick:true,maxWidth:'310px',className:'vehicle-service-map-popup'})
+     const popup=new maplibregl.Popup({offset:22,closeOnClick:true,maxWidth:'310px',className:'vehicle-service-map-popup'})
       .setLngLat(renderedPosition.current.get(current.id)??current.position).setDOMContent(popupContent).addTo(map.current);
     };
     el.addEventListener('click',openControls);
