@@ -82,11 +82,48 @@ export function compatibleOptions(model:VehicleModel){
   return true;
  });
 }
-export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:'Base'|'Plus'|'Luxury'):VehicleOffer{
- const options=compatibleOptions(model).filter(o=>optionIds.includes(o.id));
- const trimCost=trim==='Luxury'?Math.round(model.basePrice*.12):trim==='Plus'?Math.round(model.basePrice*.06):0;
- const trimBonus=trim==='Luxury'?10:trim==='Plus'?5:0;
- const price=model.basePrice+trimCost+options.reduce((n,o)=>n+o.price,0);
- const revenueBonus=trimBonus+options.reduce((n,o)=>n+o.bonus,0);
+export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:string):VehicleOffer{
+ const options=pricedOptions(model,year).filter(o=>optionIds.includes(o.id));
+ const pricing=trimPricing(model,year,trim);
+ const price=pricing.base+pricing.cost+options.reduce((n,o)=>n+o.price,0);
+ const revenueBonus=pricing.bonus+options.reduce((n,o)=>n+o.bonus,0);
  return {id:model.brand+'-'+model.name+'-'+year,model:model.brand+' '+model.name,year,fuel:model.fuel,className:model.segment,price,mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:options.map(o=>o.id),revenueBonus};
+}
+
+/** Published European-market reference prices, not live transaction quotes.
+ * Manufacturer sources: Toyota Ireland models, VW Germany Golf, BMW Ireland configurator.
+ * Market VAT and registration tax vary; do not compare these as equivalent on-road quotes.
+ */
+export type MarketPrice={market:string;from:number;year:number;source:string;note:string;trims?:readonly string[]};
+const MARKET_PRICES:Record<string,MarketPrice>={
+ 'Toyota|Corolla':{market:'Ireland',from:34605,year:2026,source:'https://www.toyota.ie/models',note:'Corolla Saloon advertised from price; other Corolla body styles differ',trims:['Luna','Sol']},
+ 'Toyota|Yaris':{market:'Ireland',from:28400,year:2026,source:'https://www.toyota.ie/models',note:'Advertised Yaris from price',trims:['Luna','Sol']},
+ 'Toyota|RAV4':{market:'Ireland',from:47790,year:2026,source:'https://www.toyota.ie/models',note:'Advertised RAV4 from price',trims:['Sol','Sport']},
+ 'Toyota|Proace Verso':{market:'Ireland',from:72545,year:2026,source:'https://www.toyota.ie/models',note:'Advertised Proace Verso from price'},
+ 'Volkswagen|Golf':{market:'Germany',from:29835,year:2026,source:'https://www.volkswagen.de/de/modelle/golf.html',note:'German Golf starting price; German VAT and local delivery/registration rules apply',trims:['Life','Style','R-Line']},
+ 'BMW|3 Series':{market:'Ireland',from:59015,year:2026,source:'https://www.bmw.ie/en/configurator.html',note:'BMW Ireland 3 Series hybrid starting price; petrol variants differ',trims:['Sport','M Sport','M Sport Pro']}
+};
+export function marketPrice(model:VehicleModel,year:number):MarketPrice|undefined{
+ const result=MARKET_PRICES[model.brand+'|'+model.name];
+ return result?.year===year?result:undefined;
+}
+export function trimChoices(model:VehicleModel,year:number):readonly string[]{
+ return marketPrice(model,year)?.trims??['Base','Plus','Luxury'];
+}
+export function trimPricing(model:VehicleModel,year:number,trim:string){
+ const choices=trimChoices(model,year);
+ const index=Math.max(0,choices.indexOf(trim));
+ const priceBase=marketPrice(model,year)?.from??model.basePrice;
+ // Higher-grade premiums are game estimates until verified option-by-option.
+ return {base:priceBase,cost:index===0?0:Math.round(priceBase*(index===1?.06:.12)),bonus:index===0?0:index===1?5:10};
+}
+export function pricedOptions(model:VehicleModel,year:number):FactoryOption[]{
+ const profile=marketPrice(model,year);
+ const brandFactor=model.brand==='BMW'?1.5:model.brand==='Mercedes-Benz'?1.45:model.brand==='Porsche'?1.7:model.brand==='Volkswagen'?1.1:model.brand==='Toyota'?.9:1;
+ return compatibleOptions(model).map(option=>({
+  ...option,
+  // Manufacturer-specific pricing here is a transparent game estimate.
+  price:Math.round(option.price*brandFactor/50)*50,
+  label:profile&&option.id==='metallic'? 'Metallic exterior paint':option.label
+ }));
 }
