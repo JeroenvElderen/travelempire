@@ -637,7 +637,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(width<100||height<100)return;
    const center={x:width/2,y:height/2};
    const candidates:Array<{id:string;lng:number;lat:number;type:string;label:string;limit:number}>=[];
-   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?'explorer':t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
+   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?(t.explorerRole==='completion'?'completion-explorer':'explorer'):t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
    if(headquarters)candidates.push({id:'hq',lng:headquarters.lng,lat:headquarters.lat,type:'depot',label:'Headquarters',limit:150000});
    for(const d of depots)candidates.push({id:'d:'+d.id,lng:d.lng,lat:d.lat,type:'depot',label:d.name,limit:150000});
    for(const f of ferryPositionsRef.current)candidates.push({id:'f:'+f.id,lng:f.point[0],lat:f.point[1],type:'ferry',label:'Ferry '+f.id,limit:250000});

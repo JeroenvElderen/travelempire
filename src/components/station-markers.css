@@ -29,6 +29,7 @@
 .te-offscreen-arrow{font-size:25px;line-height:1;color:var(--pointer-color,#f5c542);text-shadow:0 0 3px #092333}
 .te-offscreen-taxi{--pointer-color:#ffd447}
 .te-offscreen-explorer{--pointer-color:#bd7cff}
+.te-offscreen-completion-explorer{--pointer-color:#42df74}
 .te-offscreen-ferry{--pointer-color:#54b9ff}
 .te-offscreen-depot{--pointer-color:#52d69b}
 .te-offscreen-recovery{--pointer-color:#ff9d4b}
