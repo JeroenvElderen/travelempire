@@ -126,11 +126,60 @@ const VERIFIED_VARIANTS:Record<string,VerifiedVariant[]>={
  ]
 };
 export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{
- return VERIFIED_VARIANTS[model.brand+'|'+model.name+'|'+year]??[];
+ return VERIFIED_VARIANTS[model.brand+'|'+model.name+'|'+year]??VW_MY26[model.brand+'|'+model.name+'|'+year]??[];
 }
+
+const TOYOTA_IE='https://www.toyota.ie/';
+const MERCEDES_IE='https://www.mercedes-benz.ie/models/';
+const VW_IE='https://www.volkswagen.ie/idhub/content/dam/onehub_pkw/importers/ie/models/product-guides/my27/VW%20Ireland%20Price%20List%20260506.pdf';
+// Published model starting prices. The manufacturer's live pages are snapshots,
+// not certified 2025/2026 factory build sheets; model-year specificity is explicit.
+const LIVE_MARKET_PRICES:Record<string,{from:number;source:string;market:string;note:string}>={
+ 'Toyota|Yaris':{from:28400,source:TOYOTA_IE,market:'Ireland',note:'Yaris Hybrid advertised starting price'},
+ 'Toyota|Corolla':{from:34605,source:TOYOTA_IE,market:'Ireland',note:'Corolla Saloon Hybrid advertised starting price'},
+ 'Toyota|RAV4':{from:47790,source:TOYOTA_IE,market:'Ireland',note:'RAV4 Plug-in Hybrid advertised starting price'},
+ 'Toyota|Prius':{from:47100,source:TOYOTA_IE,market:'Ireland',note:'Prius Plug-in Hybrid advertised starting price'},
+ 'Toyota|Proace Verso':{from:72545,source:TOYOTA_IE,market:'Ireland',note:'Proace Verso advertised starting price'},
+ 'Mercedes-Benz|A-Class':{from:43082,source:MERCEDES_IE,market:'Ireland',note:'A-Class Hatchback advertised starting price'},
+ 'Mercedes-Benz|C-Class':{from:57625,source:MERCEDES_IE,market:'Ireland',note:'C-Class Saloon advertised starting price'},
+ 'Mercedes-Benz|E-Class':{from:81315,source:MERCEDES_IE,market:'Ireland',note:'E-Class Saloon advertised starting price'},
+ 'Mercedes-Benz|EQE':{from:73690,source:MERCEDES_IE,market:'Ireland',note:'EQE Saloon advertised starting price'},
+ 'Mercedes-Benz|V-Class':{from:132460,source:MERCEDES_IE,market:'Ireland',note:'V-Class advertised starting price'},
+ 'Volkswagen|Passat':{from:47995,source:VW_IE,market:'Ireland',note:'MY26 Passat Business 1.5 eHybrid DSG 204hp recommended retail price'},
+ 'Volkswagen|ID.3':{from:37705,source:VW_IE,market:'Ireland',note:'MY26 ID.3 Pure 52kWh recommended retail price'},
+ 'Volkswagen|ID.4':{from:40990,source:VW_IE,market:'Ireland',note:'MY26 ID.4 Pure 52kWh 170hp recommended retail price'}
+};
+const VW_MY26:Record<string,VerifiedVariant[]>={
+ 'Volkswagen|Passat|2026':[
+  {id:'vw-passat-business-ehybrid-204',trim:'Business',engine:'1.5 eHybrid plug-in',fuel:'Hybrid',transmission:'DSG',powerHp:204,price:47995,source:VW_IE,market:'Ireland'},
+  {id:'vw-passat-business-tdi-150',trim:'Business',engine:'2.0 TDI',fuel:'Diesel',transmission:'DSG',powerHp:150,price:50995,source:VW_IE,market:'Ireland'},
+  {id:'vw-passat-rline-ehybrid-204',trim:'R-Line',engine:'1.5 eHybrid plug-in',fuel:'Hybrid',transmission:'DSG',powerHp:204,price:53995,source:VW_IE,market:'Ireland'},
+  {id:'vw-passat-rline-tdi-150',trim:'R-Line',engine:'2.0 TDI',fuel:'Diesel',transmission:'DSG',powerHp:150,price:55995,source:VW_IE,market:'Ireland'}
+ ],
+ 'Volkswagen|ID.3|2026':[
+  {id:'vw-id3-pure-52',trim:'Pure',engine:'52 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:37705,source:VW_IE,market:'Ireland'},
+  {id:'vw-id3-pure-plus-52',trim:'Pure Plus',engine:'52 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:39205,source:VW_IE,market:'Ireland'},
+  {id:'vw-id3-pro-58',trim:'Pro',engine:'58 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:41965,source:VW_IE,market:'Ireland'},
+  {id:'vw-id3-pro-plus-58',trim:'Pro Plus',engine:'58 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:42965,source:VW_IE,market:'Ireland'},
+  {id:'vw-id3-pro-s-77',trim:'Pro S',engine:'77 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:47660,source:VW_IE,market:'Ireland'},
+  {id:'vw-id3-gtx-79',trim:'GTX',engine:'79 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:0,price:43585,source:VW_IE,market:'Ireland'}
+ ],
+ 'Volkswagen|ID.4|2026':[
+  {id:'vw-id4-pure-52',trim:'Pure',engine:'52 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:170,price:40990,source:VW_IE,market:'Ireland'},
+  {id:'vw-id4-pure-plus-52',trim:'Pure Plus',engine:'52 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:170,price:41990,source:VW_IE,market:'Ireland'},
+  {id:'vw-id4-pro-77',trim:'Pro',engine:'77 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:286,price:45990,source:VW_IE,market:'Ireland'},
+  {id:'vw-id4-pro-plus-77',trim:'Pro Plus',engine:'77 kWh battery',fuel:'Electric',transmission:'Single-speed',powerHp:286,price:48990,source:VW_IE,market:'Ireland'},
+  {id:'vw-id4-gtx-79',trim:'GTX',engine:'79 kWh battery 4MOTION',fuel:'Electric',transmission:'Single-speed',powerHp:340,price:54990,source:VW_IE,market:'Ireland'}
+ ]
+};
 export function marketPrice(model:VehicleModel,year:number):MarketPrice|undefined{
- const result=MARKET_PRICES[model.brand+'|'+model.name];
- return result?.year===year?result:undefined;
+ const key=model.brand+'|'+model.name;
+ const result=MARKET_PRICES[key];
+ if(result?.year===year)return result;
+ const live=LIVE_MARKET_PRICES[key];
+ // Do not attribute undated/live manufacturer site prices to an earlier model year.
+ if(live&&year===2026)return {year:2026,market:live.market,from:live.from,source:live.source,note:live.note+'; manufacturer website reference, not confirmed MY26 build price'};
+ return undefined;
 }
 export function trimChoices(model:VehicleModel,year:number):readonly string[]{
  const variants=verifiedVariants(model,year);
