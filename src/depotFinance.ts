@@ -7,10 +7,10 @@ export const DEPOT_UPGRADES:{id:DepotUpgradeKind;name:string;cost:number;descrip
  {id:'fuel',name:'Fuel storage',cost:7000,description:'8% lower fuel purchases per level',max:3},
  {id:'dispatch',name:'Dispatch centre',cost:12000,description:'3% higher passenger revenue per level',max:3},
  {id:'capacity',name:'Taxi parking expansion',cost:10000,description:'5 extra taxi spaces per level',max:4},
- {id:'explorer-parking',name:'Explorer parking expansion',cost:1000,description:'2 extra explorer spaces per level (5 included free)',max:10},
+ {id:'explorer-parking',name:'Explorer parking expansion',cost:1000,description:'2 extra explorer spaces per level (10 included at headquarters)',max:10},
 ];
 export function upgradesFor(fleet:FleetState,depotId:string):DepotUpgradeState{return fleet.depotUpgrades?.[depotId]??{};}
-export function explorerDepotCapacity(upgrades:DepotUpgradeState):number{return 5+(upgrades['explorer-parking']??0)*2;}
+export function explorerDepotCapacity(upgrades:DepotUpgradeState):number{return 10+(upgrades['explorer-parking']??0)*2;}
 export function depotCapacity(depot:Pick<Depot,'capacity'>|undefined,upgrades:DepotUpgradeState):number{return (depot?.capacity??5)+(upgrades.capacity??0)*5;}
 export function depotDailyCost(isMain:boolean,upgrades:DepotUpgradeState,capacity:number){
  const base=isMain?25:42;

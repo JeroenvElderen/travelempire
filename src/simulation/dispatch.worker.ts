@@ -127,10 +127,12 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
    const purpleAllowedRoads=allowedRoads;
-   const highwayRoads=new Set<string>(),urbanRoads=new Set<string>();
-   for(const links of graph.edges.values())for(const edge of links){const h=edge.highway??'';
-    if(['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h))highwayRoads.add(edge.id);
-    else if(['residential','living_street','service','tertiary','unclassified','pedestrian'].includes(h))urbanRoads.add(edge.id);
+   // Shared discovery classification: one road type per specialist.
+   const byClass=new Map<string,Set<string>>();
+   for(const links of graph.edges.values())for(const edge of links){
+    const h=edge.highway??'';
+    const role=h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
+    if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(edge.id);}
    }
    const revealedNodes=new Set<string>();
    for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
@@ -141,15 +143,13 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
     for(const edge of links)if(!explored.has(edge.id))poiRoads.add(edge.id);
    }
-   const generalRoads=new Set([...allowedRoads].filter(id=>!highwayRoads.has(id)&&!urbanRoads.has(id)&&!completionRoads.has(id)&&!poiRoads.has(id)));
-   // Build road-class sets once per dispatch, not once per Explorer.
-   
    const discoveryRoads=(taxi:Taxi)=>{
-    if(taxi.explorerRole==='highway')return highwayRoads;
-    if(taxi.explorerRole==='urban')return urbanRoads;
-    if(taxi.explorerRole==='poi')return poiRoads;
-    if(taxi.explorerRole==='completion')return completionRoads;
-    return generalRoads;
+    const role=taxi.explorerRole;
+    if(role==='poi')return poiRoads;
+    if(role==='completion')return completionRoads;
+    if(role==='highway')return new Set([...byClass.values()].slice(0,4).flatMap(ids=>[...ids]));
+    if(role==='urban')return new Set([...byClass.values()].flatMap(ids=>[...ids]));
+    return byClass.get(role??'')??new Set<string>();
    };
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
