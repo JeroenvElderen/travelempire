@@ -9,9 +9,10 @@ type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lea
 export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,onOrder}:Props){
  const [brand,setBrand]=useState('Toyota');
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
- const [selected,setSelected]=useState('Toyota Corolla');
+ const [selected,setSelected]=useState('Toyota Corolla Saloon');
  const model:VehicleModel=models.find(m=>m.brand+' '+m.name===selected)??models[0];
- const [year,setYear]=useState(2026);
+ const [selectedYear,setYear]=useState(2026);
+ const year=model.years.includes(selectedYear)?selectedYear:model.years[0];
  const [trim,setTrim]=useState<string>('Base');
  const [paintId,setPaintId]=useState('');
  const [wheelId,setWheelId]=useState('');
@@ -41,8 +42,8 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
   <div className="eu-dealer-grid">
    <div className="eu-dealer-controls">
     <label>Find manufacturer<input type="search" placeholder="Search brands…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-    <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
-    <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Model year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}>{model.years.map(y=><option key={y} value={y}>{y}</option>)}</select></label></div>
+    <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setYear(EUROPEAN_MODELS.find(m=>m.brand===b)?.years[0]??2026);setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
+    <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setYear(models.find(m=>m.name===e.target.value)?.years[0]??2026);setSelectedExtras([]);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Model year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}>{model.years.map(y=><option key={y} value={y}>{y}</option>)}</select></label></div>
     <label>Equipment grade<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('');setSelectedExtras([])}}>{choices.map((choice,index)=><option key={choice} value={choice}>{choice} · {variants.length?'Published variant · upgrades estimated':index===0?'Included':index===1?'+6% estimated price · +5% revenue':'+12% estimated price · +10% revenue'}</option>)}</select></label>
     {availableVariants.length>0&&<label>Verified engine and transmission<select value={activeVariant?.id??''} onChange={e=>setVariantId(e.target.value)}>{availableVariants.map(v=><option key={v.id} value={v.id}>{v.engine} · {v.powerHp?v.powerHp+' hp · ':''}{v.transmission} · {eur(v.price)}</option>)}</select></label>}
     <label>Exterior colour<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name} · {p.price?'+':' '}{eur(p.price)}</option>)}</select></label>
