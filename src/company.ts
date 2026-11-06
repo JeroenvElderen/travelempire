@@ -6,4 +6,4 @@ const STORAGE_KEY='travelempire.company.v0.4';
 export function loadCompany():Company|null {try {const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return null;const data:unknown=JSON.parse(raw);if(typeof data==='object'&&data!==null&&'name'in data&&'headquarters'in data&&'id'in data)return data as Company;}catch{ /* corrupt local data must not crash the app */ }return null;}
 export function saveCompany(company:Company){localStorage.setItem(STORAGE_KEY,JSON.stringify(company));}
 export function clearCompany(){localStorage.removeItem(STORAGE_KEY);}
-export const STARTING_CAPITAL=100000;
+export const STARTING_CAPITAL=600000;
