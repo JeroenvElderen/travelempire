@@ -664,11 +664,11 @@ export function dispatchScout(
      // Green explorers finish undiscovered links between already explored junctions first.
      if(taxi.explorerRole==='completion'&&inside&&(!completionBest||candidate.distance<completionBest.distance))completionBest=candidate;
      if(specialist==='highway'||specialist==='urban'){
-      if(specialistMatch(edge.highway??'')&&distance<specialistScore){specialistBest=candidate;specialistScore=distance;}
+      if((!discoveryAllowed||discoveryAllowed.has(edge.id))&&specialistMatch(edge.highway??'')&&distance<specialistScore){specialistBest=candidate;specialistScore=distance;}
      }else if(specialist==='poi'&&poiPoints.length){
       const point=graph.nodes.get(edge.to);
       if(point){let proximity=Infinity;for(const poi of poiPoints)proximity=Math.min(proximity,meters(point,poi));
-       if(proximity<2500){const score=distance+proximity*1.5;if(score<specialistScore){specialistBest=candidate;specialistScore=score;}}
+       if((!discoveryAllowed||discoveryAllowed.has(edge.id))&&proximity<600){const score=distance+proximity*1.5;if(score<specialistScore){specialistBest=candidate;specialistScore=score;}}
       }
      }
    }
@@ -679,10 +679,10 @@ export function dispatchScout(
   }
  }
  // Green explorers prefer missing links, falling back to nearest-road expansion.
- if(completionBest)best=completionBest;
- else if(specialistBest)best=specialistBest;
+ if(specialist==='completion')best=completionBest;
+ else if(specialist==='highway'||specialist==='urban'||specialist==='poi')best=specialistBest;
  if(!best)return taxi;
- const block=blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
+ const block=taxi.explorerRole?null:blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
  while(node!==start){

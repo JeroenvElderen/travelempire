@@ -127,19 +127,29 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const allowedRoads=new Set<string>();
    for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
    const purpleAllowedRoads=allowedRoads;
+   const highwayRoads=new Set<string>(),urbanRoads=new Set<string>();
+   for(const links of graph.edges.values())for(const edge of links){const h=edge.highway??'';
+    if(['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h))highwayRoads.add(edge.id);
+    else if(['residential','living_street','service','tertiary','unclassified','pedestrian'].includes(h))urbanRoads.add(edge.id);
+   }
+   const revealedNodes=new Set<string>();
+   for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
+   const completionRoads=new Set<string>();
+   for(const [from,links] of graph.edges)if(revealedNodes.has(from))for(const edge of links)if(revealedNodes.has(edge.to)&&!explored.has(edge.id))completionRoads.add(edge.id);
+   const poiRoads=new Set<string>();
+   const poiTargets=(msg.poiTargets??[]).slice(0,150);
+   if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
+    for(const edge of links)if(!explored.has(edge.id))poiRoads.add(edge.id);
+   }
+   const generalRoads=new Set([...allowedRoads].filter(id=>!highwayRoads.has(id)&&!urbanRoads.has(id)&&!completionRoads.has(id)&&!poiRoads.has(id)));
    // Build road-class sets once per dispatch, not once per Explorer.
    const modeSets=new Map<string,Set<string>>();
    const discoveryRoads=(taxi:Taxi)=>{
-    const mode=taxi.explorerRole==='highway'?'highways':taxi.explorerRole==='urban'?'urban':taxi.discoveryMode??'balanced';
-    if(mode==='balanced')return purpleAllowedRoads;
-    const cached=modeSets.get(mode);if(cached)return cached;
-    const selected=new Set<string>();
-    for(const links of graph!.edges.values())for(const edge of links){
-     const h=edge.highway??'';
-     const match=mode==='highways'?['motorway','trunk','primary'].some(v=>h===v||h===v+'_link'):mode==='urban'?['residential','living_street','service'].includes(h):['secondary','tertiary','unclassified','road'].includes(h);
-     if(match)selected.add(edge.id);
-    }
-    modeSets.set(mode,selected);return selected;
+    if(taxi.explorerRole==='highway')return highwayRoads;
+    if(taxi.explorerRole==='urban')return urbanRoads;
+    if(taxi.explorerRole==='poi')return poiRoads;
+    if(taxi.explorerRole==='completion')return completionRoads;
+    return generalRoads;
    };
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
@@ -225,9 +235,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets);
-      if(assignment.status==='IDLE'&&(taxis[index].explorerRole==='highway'||taxis[index].explorerRole==='urban')){
-       assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,purpleAllowedRoads);
-      }
     }
     if(assignment.status!=='IDLE'){
      explorerIdleSince.delete(taxis[index].id);
