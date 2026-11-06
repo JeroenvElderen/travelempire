@@ -55,7 +55,7 @@ const rows:Row[]=[
 // Filtering at the catalogue source also prevents excluded makes from entering orders.
 export const DEALERSHIP_BRANDS=['Peugeot','Renault','BMW','Mercedes-Benz','Audi','Volkswagen','Toyota','Škoda','Volvo'] as const;
 const dealershipBrandSet=new Set<string>(DEALERSHIP_BRANDS);
-export const EUROPEAN_MODELS:VehicleModel[]=rows.filter(([brand])=>dealershipBrandSet.has(brand)).map(([brand,name,segment,basePrice,seats=segment==='XL'?6:4,fuel='Petrol'])=>({brand,name,segment,basePrice,seats,fuel,years:[2025,2026]}));
+export const EUROPEAN_MODELS:VehicleModel[]=rows.filter(([brand])=>dealershipBrandSet.has(brand)).map(([brand,name,segment,basePrice,seats=segment==='XL'?6:4,fuel='Petrol'])=>({brand,name,segment,basePrice,seats,fuel:brand==='Renault'&&name==='Clio'?'Hybrid':brand==='Renault'&&name==='Austral'?'Hybrid':brand==='Renault'&&name==='Captur'?'Hybrid':fuel,years:[2025,2026]}));
 export const BRANDS=[...new Set(EUROPEAN_MODELS.map(m=>m.brand))].sort((a,b)=>a.localeCompare(b));
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment']};
 export const FACTORY_OPTIONS:FactoryOption[]=[
@@ -193,6 +193,13 @@ const VERIFIED_EXPANSION:Record<string,VerifiedVariant[]>={
   {id:'a3-40tfsie-sline',trim:'S line',engine:'40 TFSI e',fuel:'Hybrid',transmission:'S tronic',powerHp:204,price:55695,source:AUDI_IE,market:'Ireland'}
  ]
 };
+const RENAULT_IE='https://www.renault.ie/';
+const RENAULT_CURRENT:Record<string,{from:number;fuel:VehicleModel['fuel'];note:string}>={
+ 'Clio':{from:29495,fuel:'Hybrid',note:'Current Clio full hybrid advertised starting price'},
+ 'Captur':{from:30890,fuel:'Hybrid',note:'Current Captur advertised starting price (powertrain depends on grade)'},
+ 'Austral':{from:41995,fuel:'Hybrid',note:'Current Austral full hybrid advertised starting price'},
+ 'Scenic E-Tech':{from:39995,fuel:'Electric',note:'Current Scenic electric advertised starting price'}
+};
 const VW_MY26:Record<string,VerifiedVariant[]>={
  'Volkswagen|Passat|2026':[
   {id:'vw-passat-business-ehybrid-204',trim:'Business',engine:'1.5 eHybrid plug-in',fuel:'Hybrid',transmission:'DSG',powerHp:204,price:47995,source:VW_IE,market:'Ireland'},
@@ -220,6 +227,8 @@ export function marketPrice(model:VehicleModel,year:number):MarketPrice|undefine
  const key=model.brand+'|'+model.name;
  const result=MARKET_PRICES[key];
  if(result?.year===year)return result;
+ const renault=model.brand==='Renault'?RENAULT_CURRENT[model.name]:undefined;
+ if(renault&&year===2026)return {year,market:'Ireland',from:renault.from,source:RENAULT_IE,note:renault.note+'; current website listing, not verified as MY26 pricing'};
  const live=LIVE_MARKET_PRICES[key];
  // Do not attribute undated/live manufacturer site prices to an earlier model year.
  if(live&&year===2026)return {year:2026,market:live.market,from:live.from,source:live.source,note:live.note+'; manufacturer website reference, not confirmed MY26 build price'};
