@@ -305,7 +305,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const displayed=renderedPosition.current.get(taxi.id);
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;if(taxi.kind==='explorer'&&taxi.explorerRole==='completion')img.style.filter='hue-rotate(105deg) saturate(1.5)';el.appendChild(img);el.title=taxi.name;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
@@ -314,7 +314,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const header=document.createElement('div');header.className='vehicle-service-popup-header';
      const icon=document.createElement('span');icon.textContent=current.kind==='explorer'?'◆':'●';icon.className='vehicle-service-popup-icon';
      const heading=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;
-     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?'Road Explorer':'Taxi')+' · '+current.status.replace(/_/g,' ');
+     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?(current.explorerRole==='completion'?'Road Completion Explorer':'Road Explorer'):'Taxi')+' · '+current.status.replace(/_/g,' ');
      heading.append(label,subtitle);header.append(icon,heading);popupContent.appendChild(header);
      const stats=document.createElement('div');stats.className='vehicle-service-popup-stats';
      stats.textContent='Speed '+Math.round(current.speedKph??0)+' km/h · Condition '+Math.round(current.vehicleCondition??100)+'%';

@@ -3,7 +3,8 @@ import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
   id: string;
-  kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery'; // Older saves default to taxi.
+  kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery';
+  explorerRole?: 'completion'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
@@ -632,6 +633,7 @@ export function dispatchScout(
  // Search is bounded and runs in the dispatch worker, never the animation loop.
  const LOCAL_AREA_METERS=900;
  let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
+  let completionBest:typeof best=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -643,8 +645,8 @@ export function dispatchScout(
   if(distance>maxSearchMeters)break;
   // Once a local road is found, do not scan the wider network.
   // The bound also avoids expensive repeated global searches on mobile.
-  if(best?.local&&distance>LOCAL_AREA_METERS)break;
-  if(best&&!best.local&&distance>best.distance&&distance>LOCAL_AREA_METERS)break;
+  if(taxi.explorerRole!=='completion'&&best?.local&&distance>LOCAL_AREA_METERS)break;
+  if(taxi.explorerRole!=='completion'&&best&&!best.local&&distance>best.distance&&distance>LOCAL_AREA_METERS)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const approach=node===start?incomingNode:previous.get(node)?.from;
@@ -656,6 +658,8 @@ export function dispatchScout(
     // Local streets take precedence over distant frontier roads. Once the
     // neighbourhood is complete, choose the nearest reachable new segment.
     if(!best||(candidate.local&&!best.local)||(candidate.local===best.local&&candidate.distance<best.distance))best=candidate;
+     // Green explorers finish undiscovered links between already explored junctions first.
+     if(taxi.explorerRole==='completion'&&inside&&(!completionBest||candidate.distance<completionBest.distance))completionBest=candidate;
    }
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
