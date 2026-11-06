@@ -640,8 +640,10 @@ export function dispatchScout(
  const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):specialist==='motorway'?['motorway','motorway_link'].includes(h):specialist==='trunk'?['trunk','trunk_link'].includes(h):specialist==='primary'?['primary','primary_link'].includes(h):specialist==='secondary'?['secondary','secondary_link'].includes(h):specialist==='tertiary'?['tertiary','tertiary_link'].includes(h):specialist==='residential'?['residential','living_street'].includes(h):specialist==='rural'?h==='unclassified':specialist==='service'?h==='service':false;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
- const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&(fullRetry||visits< (specialist==='poi'?2500:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+ // Motorway scouts must be able to reach highways far beyond the starting town.
+ const motorwayScout=specialist==='motorway';
+ const maxSearchMeters=motorwayScout?80000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ while(heap.length&&(fullRetry||visits< (motorwayScout?100000:specialist==='poi'?2500:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
   visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;

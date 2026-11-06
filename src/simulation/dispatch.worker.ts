@@ -246,6 +246,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    for(let index=0;index<taxis.length;index++){
     if((taxis[index].kind!=='explorer')||taxis[index].status!=='IDLE'||taxis[index].deliveryUntil||taxis[index].refillRequested||energyPercent(taxis[index])<=10)continue;
     if(frontierFor(taxis[index])?.size===0)continue;
+    // Long-distance motorway scans are expensive: retry only every 10 seconds.
+    if(taxis[index].explorerRole==='motorway'&&now<(idleFallbackAt.get(taxis[index].id)??0))continue;
+    if(taxis[index].explorerRole==='motorway')idleFallbackAt.set(taxis[index].id,now+10000);
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
@@ -253,7 +256,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
     // or soft reservations, then release the old section if reassigned.
-    if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&
+    if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&taxis[index].explorerRole!=='motorway'&&
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
