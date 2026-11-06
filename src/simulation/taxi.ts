@@ -792,6 +792,19 @@ export function dispatchScout(
 // PR D: Road-speed-aware vehicle dynamics. Only speed integration changes;
 // existing route, discovery, dispatch and arrival handling remain untouched.
 const clamp=(value:number,low:number,high:number)=>Math.max(low,Math.min(high,value));
+// Road graphs are keyed by OSM node IDs, not coordinate strings.
+// Cache an edge-ID speed index per graph snapshot to avoid O(E) work per frame.
+const roadSpeedIndex=new WeakMap<RoadGraph,Map<string,number>>();
+function speedForEdge(graph:RoadGraph,id:string|undefined):number{
+ if(!id)return 50;
+ let index=roadSpeedIndex.get(graph);
+ if(!index){
+  index=new Map<string,number>();
+  for(const links of graph.edges.values())for(const edge of links)index.set(edge.id,edge.speedKph);
+  roadSpeedIndex.set(graph,index);
+ }
+ return index.get(id)??50;
+}
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[],distanceMeters:0};
  const t={...taxi};
@@ -802,8 +815,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  while(time>0.00001&&t.leg<t.path.length-1){
   const a=t.path[t.leg],b=t.path[t.leg+1];
   const length=meters(a,b);
-  const edge=graph.edges.get(key(a))?.find(e=>e.to===key(b)&&e.id===t.edgeIds[t.leg]);
-  const roadSpeed=clamp(edge?.speedKph??50,5,160);
+  const roadSpeed=clamp(speedForEdge(graph,t.edgeIds[t.leg]),5,160);
   const metersPerSecond=roadSpeed/3.6;
   t.speedKph=roadSpeed;
   const remaining=Math.max(0,length-t.distanceIntoLeg);
@@ -820,8 +832,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    t.leg++;t.distanceIntoLeg=0;t.position=b;
    if(t.leg<t.path.length-1){
     const next=t.path[t.leg+1];
-    const nextEdge=graph.edges.get(key(b))?.find(e=>e.to===key(next)&&e.id===t.edgeIds[t.leg]);
-    t.speedKph=clamp(nextEdge?.speedKph??50,5,160);
+    t.speedKph=clamp(speedForEdge(graph,t.edgeIds[t.leg]),5,160);
    }
   }
   if(stepSeconds<=0&&remaining>0)break;
