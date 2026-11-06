@@ -1,5 +1,5 @@
 import {useMemo,useState} from 'react';
-import {BRANDS,EUROPEAN_MODELS,configuredOffer,marketPrice,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,type VehicleModel} from '../europeanVehicleCatalog';
+import {BRANDS,EUROPEAN_MODELS,configuredOffer,marketPrice,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
@@ -15,6 +15,7 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const [trim,setTrim]=useState<string>('Base');
  const [paintId,setPaintId]=useState('');
  const [wheelId,setWheelId]=useState('');
+ const [selectedExtras,setSelectedExtras]=useState<string[]>([]);
  const [variantId,setVariantId]=useState('');
  const [search,setSearch]=useState('');
  const filteredBrands=BRANDS.filter(b=>b.toLowerCase().includes(search.toLowerCase()));
@@ -27,9 +28,12 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const wheels=wheelChoices(model,year,currentTrim,activeVariant?.id);
  const paint=paints.find(p=>p.id===paintId)??paints[0];
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
+ const extras=individualOptions(model,year,currentTrim);
+ const extraIds=selectedExtras.filter(id=>extras.some(o=>o.id===id&&!o.included));
+ const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
  const market=marketPrice(model,year);
  const priceBreakdown=trimPricing(model,year,currentTrim);
- const offer=configuredOffer(model,year,[],currentTrim,activeVariant?.id,paint?.id,wheel?.id);
+ const offer=configuredOffer(model,year,extraIds,currentTrim,activeVariant?.id,paint?.id,wheel?.id);
  const upfront=mode==='cash'?offer.price+DRIVER_COST:mode==='finance'?financeQuote(offer.price,depositPercent,termDays).deposit+DRIVER_COST:leaseQuote(offer.price,termDays).upfront+DRIVER_COST;
  const bonus=offer.revenueBonus??0;
  return <section className="eu-dealership">
@@ -37,13 +41,23 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
   <div className="eu-dealer-grid">
    <div className="eu-dealer-controls">
     <label>Find manufacturer<input type="search" placeholder="Search brands…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-    <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
-    <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Model year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setVariantId('')}}><option value={2025}>2025</option><option value={2026}>2026</option></select></label></div>
-    <label>Equipment grade<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('')}}>{choices.map((choice,index)=><option key={choice} value={choice}>{choice} · {variants.length?'Published variant · upgrades estimated':index===0?'Included':index===1?'+6% estimated price · +5% revenue':'+12% estimated price · +10% revenue'}</option>)}</select></label>
+    <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
+    <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Model year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}><option value={2025}>2025</option><option value={2026}>2026</option></select></label></div>
+    <label>Equipment grade<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('');setSelectedExtras([])}}>{choices.map((choice,index)=><option key={choice} value={choice}>{choice} · {variants.length?'Published variant · upgrades estimated':index===0?'Included':index===1?'+6% estimated price · +5% revenue':'+12% estimated price · +10% revenue'}</option>)}</select></label>
     {availableVariants.length>0&&<label>Verified engine and transmission<select value={activeVariant?.id??''} onChange={e=>setVariantId(e.target.value)}>{availableVariants.map(v=><option key={v.id} value={v.id}>{v.engine} · {v.powerHp?v.powerHp+' hp · ':''}{v.transmission} · {eur(v.price)}</option>)}</select></label>}
     <label>Exterior colour<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name} · {p.price?'+':' '}{eur(p.price)}</option>)}</select></label>
     <label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name} · {w.price?'+':' '}{eur(w.price)}</option>)}</select></label>
-    <p className="eu-source-note">Colour and wheel upgrade prices are game estimates unless confirmed in a manufacturer price guide. Grade equipment and packages are included in the selected variant.</p>
+    <fieldset><legend>Individual equipment</legend>
+      <p className="eu-source-note">Features from the Toyota brochure. Standard equipment is included in your grade. Other items have individual TravelEmpire prices; availability as a real-world retrofit is not guaranteed.</p>
+      {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=><div key={group}>
+       <strong>{group}</strong>
+       <div className="eu-options">{extras.filter(o=>o.group===group).map(o=><label key={o.id} className="eu-option">
+        <input type="checkbox" checked={o.included||extraIds.includes(o.id)} disabled={o.included} onChange={e=>setSelectedExtras(old=>e.target.checked?[...old,o.id]:old.filter(id=>id!==o.id))}/>
+        <span><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim: '+'+eur(o.price)}</small></span>
+       </label>)}</div>
+      </div>)}
+    </fieldset>
+
    </div>
    <aside className="eu-config-summary">
     <div className="eu-vehicle-stage"><div className="eu-car-symbol" aria-hidden="true">🚘</div><small>{model.segment} · {activeVariant?.fuel??model.fuel} · {model.seats} passenger seats</small></div>
@@ -53,6 +67,7 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <div className="eu-price-line"><span>Colour</span><strong>{eur(paint?.price??0)}</strong></div>
     <div className="eu-price-line"><span>Wheels</span><strong>{eur(wheel?.price??0)}</strong></div>
     {!activeVariant&&market?<p className="eu-source-note">Published {market.market} starting price ({market.year}): <a href={market.source} target="_blank" rel="noopener noreferrer">{eur(market.from)} · manufacturer source</a>. {market.note}. Higher trim and option prices are game estimates.</p>:!activeVariant?<p className="eu-source-note">Starting price and options are in-game estimates; no manufacturer quote has been verified for this model and year.</p>:null}
+    <div className="eu-price-line"><span>Individual equipment</span><strong>{eur(extraTotal)}</strong></div>
     <div className="eu-price-total"><span>Configured price</span><strong>{eur(offer.price)}</strong></div>
     <div className="eu-revenue"><strong>+{bonus}% fare revenue</strong><span>Example €25 fare → €{(25*(1+bonus/100)).toFixed(2)}</span><small>Applied to completed passenger fares. Game balance values, not real-world pricing.</small></div>
     <div className="eu-price-line"><span>Estimated energy cost / 100 km</span><strong>{eur((activeVariant?.fuel??model.fuel)==='Electric'?18*.32:(activeVariant?.fuel??model.fuel)==='Hybrid'?4.6*1.85:(activeVariant?.fuel??model.fuel)==='Diesel'?5.8*1.75:8*1.85)}</strong></div>
