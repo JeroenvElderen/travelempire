@@ -242,6 +242,28 @@ export function vehicleConfiguration(model:VehicleModel,year:number):VehicleConf
 export function availableColors(model:VehicleModel,year:number,trim?:string):VehicleColor[]{return (vehicleConfiguration(model,year)?.colors??[]).filter(c=>(!c.years||c.years.includes(year))&&(!c.trims||(trim!==undefined&&c.trims.includes(trim))));}
 export function availableConfiguratorGroups(model:VehicleModel,year:number,trim?:string,variantId?:string):ConfiguratorGroup[]{return (vehicleConfiguration(model,year)?.configurator??[]).map(g=>({...g,choices:g.choices.filter(c=>(!c.years||c.years.includes(year))&&(!c.trims||(trim!==undefined&&c.trims.includes(trim)))&&(!c.variantIds||(variantId!==undefined&&c.variantIds.includes(variantId))))})).filter(g=>g.choices.length>0);}
 
+// Simplified game configuration. Where manufacturer option surcharges are not
+// published for a particular model/trim, prices are explicitly gameplay estimates.
+export function paintChoices(model:VehicleModel,year:number,trim:string):VehicleColor[]{
+ const published=availableColors(model,year,trim);
+ const fallback:VehicleColor[]=[
+  {id:'standard-white',name:'Solid White',hex:'#F1F1ED',price:0},
+  {id:'metallic-black',name:'Metallic Black',hex:'#1A1C20',price:900},
+  {id:'metallic-grey',name:'Metallic Grey',hex:'#777D83',price:900},
+  {id:'metallic-blue',name:'Metallic Blue',hex:'#304D75',price:900},
+  {id:'metallic-red',name:'Metallic Red',hex:'#A32B35',price:900}
+ ];
+ const palette=published.length?published:fallback;
+ return palette.map((p,i)=>({...p,price:p.price>0?p.price:i===0?0:(/exclusive|pearl|bi-tone|special/i.test(p.name)?1500:900)}));
+}
+export function wheelChoices(model:VehicleModel,year:number,trim:string,variantId?:string):ConfiguratorChoice[]{
+ const group=availableConfiguratorGroups(model,year,trim,variantId).find(g=>g.id==='wheels');
+ const choices=group?.choices.length?group.choices:[
+  {id:'standard-wheels',name:'Standard factory wheels',price:0,included:true},
+  {id:'upgrade-wheels',name:'Upgraded alloy wheels',price:1200}
+ ];
+ return choices.map((w,i)=>({...w,price:w.price>0?w.price:i===0?0:1200}));
+}
 export const FACTORY_OPTIONS:FactoryOption[]=[
 {id:'metallic',group:'Exterior',label:'Metallic paint',price:900,bonus:1},
 {id:'special-paint',group:'Exterior',label:'Special paint finish',price:2400,bonus:3},
@@ -270,13 +292,15 @@ export function compatibleOptions(model:VehicleModel){
   return true;
  });
 }
-export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:string,variantId?:string):VehicleOffer{
+export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:string,variantId?:string,paintId?:string,wheelId?:string):VehicleOffer{
  const options=pricedOptions(model,year).filter(o=>optionIds.includes(o.id));
  const variant=verifiedVariants(model,year).find(v=>v.id===variantId);
  const pricing=trimPricing(model,year,trim);
- const price=(variant?variant.price:pricing.base+pricing.cost)+options.reduce((n,o)=>n+o.price,0);
+ const paint=paintChoices(model,year,trim).find(p=>p.id===paintId);
+ const wheel=wheelChoices(model,year,trim,variantId).find(w=>w.id===wheelId);
+ const price=(variant?variant.price:pricing.base+pricing.cost)+options.reduce((n,o)=>n+o.price,0)+(paint?.price??0)+(wheel?.price??0);
  const revenueBonus=(variant?(['Sportline','RS','R-Line'].includes(variant.trim)?10:variant.trim==='Selection +'?5:0):pricing.bonus)+options.reduce((n,o)=>n+o.bonus,0);
- return {id:model.brand+'-'+model.name+'-'+year+(variant?'-'+variant.id:''),model:model.brand+' '+model.name+(variant?' '+variant.engine+' '+variant.transmission:''),year,fuel:variant?.fuel??model.fuel,className:model.segment,price,mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:options.map(o=>o.id),revenueBonus};
+ return {id:model.brand+'-'+model.name+'-'+year+(variant?'-'+variant.id:''),model:model.brand+' '+model.name+(variant?' '+variant.engine+' '+variant.transmission:''),year,fuel:variant?.fuel??model.fuel,className:model.segment,price,mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:[...options.map(o=>o.id),...(paint?['paint:'+paint.id]:[]),...(wheel?['wheel:'+wheel.id]:[])],revenueBonus};
 }
 
 /** Published European-market reference prices, not live transaction quotes.
