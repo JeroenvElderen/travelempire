@@ -40,10 +40,11 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <div className="eu-price-line"><span>Options</span><strong>{eur(options.filter(o=>optionIds.includes(o.id)).reduce((n,o)=>n+o.price,0))}</strong></div>
     <div className="eu-price-total"><span>Configured price</span><strong>{eur(offer.price)}</strong></div>
     <div className="eu-revenue"><strong>+{bonus}% fare revenue</strong><span>Example €25 fare → €{(25*(1+bonus/100)).toFixed(2)}</span><small>Applied to completed passenger fares. Game balance values, not real-world pricing.</small></div>
+    <div className="eu-price-line"><span>Estimated energy cost / 100 km</span><strong>{eur(model.fuel==='Electric'?18*.32:model.fuel==='Hybrid'?4.6*1.85:model.fuel==='Diesel'?5.8*1.75:8*1.85)}</strong></div>
     <div className="eu-price-line"><span>Order quantity</span><strong>{quantity}</strong></div>
     <div className="eu-price-total"><span>Due at checkout incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
     <button className="eu-order" disabled={!ready||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Order {quantity} configured {quantity===1?'vehicle':'vehicles'}</button>
-    <small className="eu-disclaimer">Curated European-market-inspired game catalogue. All listed models are selectable for both years for gameplay; exact EU availability, trims, engines, compatibility and prices are not manufacturer-verified. Electric and hybrid powertrains currently use the game's petrol-only energy simulation until drivetrain support is expanded.</small>
+    <small className="eu-disclaimer">Curated European-market-inspired game catalogue. All listed models are selectable for both years for gameplay; exact EU availability, trims, engines, compatibility and prices are not manufacturer-verified. Petrol, diesel, hybrid and electric vehicles now use separate simplified energy-consumption and operating-cost profiles; model-specific WLTP data and charging infrastructure are not yet implemented.</small>
    </aside>
   </div>
  </section>;
