@@ -678,8 +678,53 @@ export function dispatchScout(
   const approach=i===0?incomingNode:keys[i-1];
   if(approach&&forbiddenUTurn(graph,approach,keys[i],keys[i+1],_allowedRoads))return taxi;
  }
- // Complete the selected block perimeter before seeking another area.
- if(block)for(let i=1;i<block.nodes.length;i++){keys.push(block.nodes[i]);ids.push(block.ids[i-1]);}
+ // Before continuing each block perimeter, clear short dead-end branches.
+ // Traverse the branch to its tip and return to the SAME junction, then resume
+ // the saved perimeter. Limit work per assignment to keep dispatch responsive.
+ if(block){
+  const perimeterIds=new Set<string>([best.id,...block.ids]);
+  const visitedBranches=new Set<string>();
+  const MAX_BRANCH_METERS=350;
+  const MAX_TOTAL_DETOUR_METERS=1100;
+  let detourMeters=0;
+  const branchFrom=(junction:string,previousNode:string|undefined,nextNode:string)=>{
+   for(const candidate of graph.edges.get(junction)??[]){
+    if(perimeterIds.has(candidate.id)||visitedBranches.has(candidate.id)||explored.has(candidate.id)||
+       reservedEdges.has(candidate.id)||(discoveryAllowed&&!discoveryAllowed.has(candidate.id))||
+       (_allowedRoads&&!_allowedRoads.has(candidate.id)))continue;
+    // Only enter a true terminal branch, not another connected block.
+    const branchNodes=[junction,candidate.to],branchIds=[candidate.id];
+    const seen=new Set<string>([junction,candidate.to]);
+    let length=candidate.meters,tip=candidate.to,prior=junction,deadEnd=false;
+    while(length<=MAX_BRANCH_METERS&&branchIds.length<16){
+     const onward=(graph.edges.get(tip)??[]).filter(e=>e.to!==prior&&
+      (!_allowedRoads||_allowedRoads.has(e.id))&&
+      (!discoveryAllowed||discoveryAllowed.has(e.id))&&!perimeterIds.has(e.id));
+     if(!onward.length){deadEnd=true;break;}
+     if(onward.length!==1||seen.has(onward[0].to))break;
+     const edge=onward[0];
+     if(explored.has(edge.id)||reservedEdges.has(edge.id)||visitedBranches.has(edge.id))break;
+     length+=edge.meters;prior=tip;tip=edge.to;seen.add(tip);
+     branchNodes.push(tip);branchIds.push(edge.id);
+    }
+    if(!deadEnd||length>MAX_BRANCH_METERS||detourMeters+length*2>MAX_TOTAL_DETOUR_METERS)continue;
+    if(previousNode&&forbiddenUTurn(graph,previousNode,junction,branchNodes[1],_allowedRoads))continue;
+    if(forbiddenUTurn(graph,branchNodes[1],junction,nextNode,_allowedRoads))continue;
+    // A terminal road necessarily requires a turn-around; preserve that route
+    // rather than repeatedly redispatching from the tip.
+    for(let i=1;i<branchNodes.length;i++){keys.push(branchNodes[i]);ids.push(branchIds[i-1]);}
+    for(let i=branchNodes.length-2;i>=0;i--){keys.push(branchNodes[i]);ids.push(branchIds[i]);}
+    for(const id of branchIds)visitedBranches.add(id);
+    detourMeters+=length*2;
+   }
+  };
+  for(let i=1;i<block.nodes.length;i++){
+   const junction=keys[keys.length-1];
+   const previousNode=keys.length>1?keys[keys.length-2]:undefined;
+   branchFrom(junction,previousNode,block.nodes[i]);
+   keys.push(block.nodes[i]);ids.push(block.ids[i-1]);
+  }
+ }
  // Extend the assignment along connected, undiscovered streets. This avoids
  // becoming IDLE at every junction and waiting for the next worker dispatch.
  const planned=new Set(ids);
