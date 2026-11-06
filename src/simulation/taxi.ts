@@ -661,7 +661,7 @@ export function dispatchScout(
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    // Reach the frontier through actual connected graph edges; a transit road
    // does not become discovered merely because it was used to get here.
-   if(isNew&&(!requiredFrontier||requiredFrontier.size>0)){
+   if(isNew&&(!requiredFrontier||requiredFrontier.has(node))){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
     // Nearest undiscovered road by shortest travel distance to its junction.

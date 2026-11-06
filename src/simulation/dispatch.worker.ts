@@ -150,7 +150,20 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    // Every specialist routes physically from headquarters across the road graph.
    // Transit on another category is permitted but never reveals that road.
    // A missing predecessor category must not block available specialist work.
-   const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
+   // Only junctions connected to the HQ through already discovered edges
+   // may initiate a NEW discovery. Transit can cross other road classes,
+   // but those crossings do not silently extend the explored network.
+   const hqNode=nearest(graph,hq);
+   const connectedFrontier=new Set<string>();
+   if(hqNode){
+    connectedFrontier.add(hqNode);
+    const queue=[hqNode];
+    for(let i=0;i<queue.length;i++)for(const edge of graph.edges.get(queue[i])??[]){
+     if(!explored.has(edge.id)||connectedFrontier.has(edge.to))continue;
+     connectedFrontier.add(edge.to);queue.push(edge.to);
+    }
+   }
+   const frontierFor=(_taxi:Taxi):Set<string>=>connectedFrontier;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
