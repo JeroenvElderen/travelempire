@@ -159,14 +159,30 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(completionRoads.has(edge.id)){completionNodes.add(from);completionNodes.add(edge.to);}
    }
    discoveredByClass.set('poi',poiNodes);discoveredByClass.set('completion',completionNodes);
+   // Only roads connected to the headquarters are valid discovery frontiers.
+   // An edge discovered somewhere else cannot unlock another explorer.
+   const hqNode=nearest(graph,hq);
+   const connectedNodes=new Set<string>();
+   if(hqNode){
+    connectedNodes.add(hqNode);
+    const queue=[hqNode];
+    for(let i=0;i<queue.length;i++){
+     const from=queue[i];
+     for(const edge of graph.edges.get(from)??[]){
+      if(!explored.has(edge.id)||connectedNodes.has(edge.to))continue;
+      connectedNodes.add(edge.to);queue.push(edge.to);
+     }
+    }
+   }
    const frontierFor=(taxi:Taxi)=>{
     const role=taxi.explorerRole;const prev=role?previousClass.get(role):undefined;
-    if(!prev)return undefined;
+    if(!prev)return connectedNodes;
     const nodes=discoveredByClass.get(prev)??new Set<string>();
-    if(nodes.size)return nodes;
-    // The previous class found no reachable target. Permit the next class
-    // to bootstrap, but only after its predecessor has actually been checked.
-    if(unavailableExplorerRoles.has(prev))return undefined;
+    const connectedPrevious=new Set([...nodes].filter(node=>connectedNodes.has(node)));
+    if(connectedPrevious.size)return connectedPrevious;
+    // If the predecessor cannot discover any reachable roads, let the next
+    // specialist bootstrap at the HQ frontier, never at an arbitrary location.
+    if(unavailableExplorerRoles.has(prev))return connectedNodes;
     return new Set<string>();
    };
    const discoveryRoads=(taxi:Taxi)=>{
