@@ -3,7 +3,7 @@ import type {VehicleOffer} from './dealership';
 // All purchase and upgrade prices are TravelEmpire game values, not Toyota quotes.
 export type VehicleModel={brand:string;name:string;segment:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';basePrice:number;seats:number;fuel:'Petrol'|'Hybrid'|'Diesel'|'Electric';years:number[]};
 export const DEALERSHIP_BRANDS=['Toyota'] as const;
-export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Corolla Touring Sports',segment:'Standard',basePrice:37200,seats:5,fuel:'Hybrid',years:[2027]}];
+export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Corolla Touring Sports',segment:'Standard',basePrice:37200,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Toyota',name:'RAV4 Hybrid',segment:'Comfort',basePrice:45900,seats:5,fuel:'Hybrid',years:[2026]}];
 export const BRANDS=['Toyota'];
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment'];trims?:string[];years?:number[];variantIds?:string[];included?:boolean;includedTrims?:string[];requires?:string[];excludes?:string[];includes?:string[]};
 export type VehicleColor={id:string;name:string;hex:string;price:number;trims?:string[];years?:number[];variantIds?:string[];bonus?:number};
@@ -14,6 +14,8 @@ export type VerifiedVariant={id:string;trim:string;engine:string;fuel:VehicleMod
 export type MarketPrice={market:string;from:number;year:number;source:string;note:string;trims?:readonly string[]};
 const SOURCE="https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-SALOON-PDF-GUIDE.pdf";
 export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
+'Toyota|RAV4 Hybrid|2026':{brand:'Toyota',model:'RAV4 Hybrid',year:2026,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/RAV4-HYBRID-PDF-GUIDE.pdf',notes:'Toyota Ireland December 2025 guide. Game prices are estimates, HEX swatches approximated. Technical data pending final homologation in source.',colors:[{id:'rav4-hev-paint-0',name:"Pure White (040)",hex:'#F2F1EB',price:0,trims:["Sol"]},{id:'rav4-hev-paint-1',name:"Massive Grey (1L6)",hex:'#74777A',price:650,trims:["Sol"]},{id:'rav4-hev-paint-2',name:"Pearl White (089)",hex:'#F1EFE9',price:950,trims:["Sol"]},{id:'rav4-hev-paint-3',name:"Urban Rock (1M6)",hex:'#686D6A',price:650,trims:["Sol"]},{id:'rav4-hev-paint-4',name:"Attitude Black (218)",hex:'#1A1B1D',price:650,trims:["Sol"]},{id:'rav4-hev-paint-5',name:"Tokyo Red (3T3)",hex:'#9E2732',price:950,trims:["Sol"]},{id:'rav4-hev-paint-6',name:"Forest Green (6X7)",hex:'#3B584B',price:650,trims:["Sol"]},{id:'rav4-hev-paint-7',name:"Midnight Blue (8X8)",hex:'#25374F',price:650,trims:["Sol"]},{id:'rav4-hev-paint-8',name:"Avantgarde Bronze (4V8)",hex:'#8A745F',price:650,trims:["Sol"]},{id:'rav4-hev-paint-9',name:"Tokyo Red Bi-tone (2NF)",hex:'#9E2732',price:1350,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-10',name:"Pearl White Bi-tone (2VP)",hex:'#F1EFE9',price:1350,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-11',name:"Avantgarde Bronze Bi-tone (2SQ)",hex:'#8A745F',price:1150,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-12',name:"Massive Grey Bi-tone (M22)",hex:'#74777A',price:1150,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-13',name:"Forest Green Bi-tone (M39)",hex:'#3B584B',price:1150,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-14',name:"Urban Rock Bi-tone (M38)",hex:'#686D6A',price:1150,trims:["Sport","Sport Launch Edition"]},{id:'rav4-hev-paint-15',name:"Midnight Blue Bi-tone (M40)",hex:'#25374F',price:1150,trims:["Sport","Sport Launch Edition"]}],options:[],configurator:[{id:'wheels',label:'Wheels',selection:'single',required:true,choices:[{id:'rav4-sol-18',name:'18-inch dark grey machined-face alloy wheels (5-double-spoke)',price:0,included:true,trims:['Sol']},{id:'rav4-sport-20',name:'20-inch black alloy wheels (5-double-spoke)',price:0,included:true,trims:['Sport','Sport Launch Edition']}]}]},
+
  'Toyota|Corolla Touring Sports|2027':{brand:'Toyota',model:'Corolla Touring Sports',year:2027,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',notes:'Toyota Ireland October 2026 product guide (MY27). Prices and colour HEX values are TravelEmpire estimates.',colors:[{id:'corolla-ts-paint-0',name:"Pure White (040)",hex:'#F3F2EF',price:0,trims:["Luna","Sol"]},{id:'corolla-ts-paint-1',name:"Night Sky Black (209)",hex:'#1B1D22',price:550,trims:["Luna","Sol"]},{id:'corolla-ts-paint-2',name:"Precious Silver (1J6)",hex:'#B7BABD',price:750,trims:["Luna","Sol"]},{id:'corolla-ts-paint-3',name:"Pearl Ice White (089)",hex:'#F3F1E9',price:850,trims:["Luna","Sol"]},{id:'corolla-ts-paint-4',name:"Pearl Red (3U5)",hex:'#9F2530',price:850,trims:["Luna","Sol"]},{id:'corolla-ts-paint-5',name:"Storm Grey (1M2)",hex:'#6F7479',price:550,trims:["Luna","Sol"]},{id:'corolla-ts-paint-6',name:"Precious Silver Bi-tone (2RD)",hex:'#B7BABD',price:1100,trims:["GR SPORT"]},{id:'corolla-ts-paint-7',name:"Pearl Ice White Bi-tone (2PU)",hex:'#F3F1E9',price:1200,trims:["GR SPORT"]},{id:'corolla-ts-paint-8',name:"Pearl Red Bi-tone (2SZ)",hex:'#9F2530',price:1200,trims:["GR SPORT"]},{id:'corolla-ts-paint-9',name:"Storm Grey Bi-tone (M52)",hex:'#6F7479',price:1100,trims:["GR SPORT"]}],options:[],configurator:[{id:'wheels',label:'Wheels',selection:'single',required:true,choices:[{id:'corolla-ts-luna-wheel',name:'16-inch alloy wheels (5-double-spoke)',price:0,included:true,trims:['Luna']},{id:'corolla-ts-sol-wheel',name:'17-inch silver alloy wheels (5-spoke)',price:0,included:true,trims:['Sol']},{id:'corolla-ts-gr-wheel',name:'18-inch black machined-face alloy wheels (10-spoke)',price:0,included:true,trims:['GR SPORT']}]}]},
  
  'Toyota|Corolla Saloon|2026':{
@@ -27,6 +29,101 @@ export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
  ]}]
  }};
 export const FACTORY_OPTIONS:FactoryOption[]=[];
+export const RAV4_HEV_OPTIONS:FactoryOption[]=[
+{id:'rav4-hev-safety-0',group:'Safety',label:"Toyota Safety Sense TSS4",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-1',group:'Safety',label:"Adjustable Speed Limiter",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-2',group:'Safety',label:"Anti-lock Braking System with Electronic Brake Force Distribution",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-3',group:'Safety',label:"Blind Spot Monitor",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-4',group:'Safety',label:"Brake Assist",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-5',group:'Safety',label:"Driver Monitoring Camera",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-6',group:'Safety',label:"eCall",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-7',group:'Safety',label:"Emergency Brake-Light Signal",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-8',group:'Safety',label:"Emergency Driving Stop System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-9',group:'Safety',label:"Full-Range Adaptive Cruise Control",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-10',group:'Safety',label:"Hill-Start Assist Control",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-11',group:'Safety',label:"Immobiliser",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-12',group:'Safety',label:"Intelligent Clearance Sonar",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-13',group:'Safety',label:"Front and Rear Parking Sensors",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-14',group:'Safety',label:"Intrusion Alarm",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-15',group:'Safety',label:"Lane Trace Assist",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-16',group:'Safety',label:"Pre-Collision System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-17',group:'Safety',label:"Rear Cross Traffic Alert",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-18',group:'Safety',label:"Rear Seat Reminder System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-19',group:'Safety',label:"Rear-View Camera with Dynamic Guide Lines",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-20',group:'Safety',label:"Road Sign Assist",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-21',group:'Safety',label:"Safe Exit Assist",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-22',group:'Safety',label:"Tyre Pressure Warning System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-23',group:'Safety',label:"Vehicle Approach Notice",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-safety-24',group:'Safety',label:"Front Cross Traffic Alert",price:650,bonus:0,includedTrims:["Sport Launch Edition"]},
+{id:'rav4-hev-safety-25',group:'Safety',label:"Lane Change Assist",price:650,bonus:0,includedTrims:["Sport Launch Edition"]},
+{id:'rav4-hev-safety-26',group:'Safety',label:"Panoramic View Monitor with 3D Effect",price:650,bonus:0,includedTrims:["Sport Launch Edition"]},
+{id:'rav4-hev-safety-27',group:'Safety',label:"Side-View Camera on Door Mirrors",price:650,bonus:0,includedTrims:["Sport Launch Edition"]},
+{id:'rav4-hev-comfort-0',group:'Comfort',label:"Digital Key",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-1',group:'Comfort',label:"Remote Air Conditioning System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-2',group:'Comfort',label:"Remote Door Lock",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-3',group:'Comfort',label:"Remote Hazard Lights System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-4',group:'Comfort',label:"Remote Open Window Notification",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-5',group:'Comfort',label:"Automatically Retractable Heated Door Mirrors",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-6',group:'Comfort',label:"Dual-Zone Automatic Air Conditioning",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-7',group:'Comfort',label:"Smart Entry Exit and Start System",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-8',group:'Comfort',label:"Power Back Door",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-9',group:'Comfort',label:"Heated Driver and Front Passenger Seats",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-10',group:'Comfort',label:"Power-Adjustable Driver Seat",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-11',group:'Comfort',label:"Adjustable Driver Lumbar Support",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-12',group:'Comfort',label:"Heated Steering Wheel",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-13',group:'Comfort',label:"Electronic Parking Brake",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-14',group:'Comfort',label:"Power Back Door with Kick Function",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-15',group:'Comfort',label:"Driver Seat Memory Function",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-16',group:'Comfort',label:"Power-Height-Adjustable Front Seats",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-17',group:'Comfort',label:"Ventilated Front Seats",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-comfort-18',group:'Comfort',label:"Wireless Charger",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-0',group:'Technology',label:"12.9-inch Multimedia Display with Embedded Navigation",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-1',group:'Technology',label:"Six Speakers",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-2',group:'Technology',label:"Bluetooth Hands-Free",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-3',group:'Technology',label:"Digital Audio Broadcast",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-4',group:'Technology',label:"Smart Voice Assist",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-5',group:'Technology',label:"Wireless Apple CarPlay and Android Auto",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-6',group:'Technology',label:"Four USB-C Connectors",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-7',group:'Technology',label:"Voice Recognition",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-8',group:'Technology',label:"12.3-inch Coloured TFT Information Display",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-technology-9',group:'Technology',label:"Head Up Display",price:650,bonus:0,includedTrims:["Sport Launch Edition"]},
+{id:'rav4-hev-technology-10',group:'Technology',label:"Illuminated Centre Tray and Cup Holders",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-0',group:'Exterior',label:"Alloy Roof Rails",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-1',group:'Exterior',label:"Automatic Rear Flashing Hazard Lights",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-2',group:'Exterior',label:"Bi-Beam LED Headlamps",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-3',group:'Exterior',label:"Black Door Mirrors",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-4',group:'Exterior',label:"Black Resin Wheel Arch Moulding",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-5',group:'Exterior',label:"LED Daytime Running Lights",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-6',group:'Exterior',label:"LED Front Fog Lamps",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-7',group:'Exterior',label:"Gloss Black Rear Spoiler",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-8',group:'Exterior',label:"LED Rear Brake Lights",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-9',group:'Exterior',label:"Privacy Glass",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-10',group:'Exterior',label:"Rain Sensor",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-11',group:'Exterior',label:"LED Rear Combination Lamps",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-12',group:'Exterior',label:"LED Rear Fog Lamps",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-13',group:'Exterior',label:"LED High-Mounted Stop Lamp",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-14',group:'Exterior',label:"Monotone Roof",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-15',group:'Exterior',label:"Piano Black Front and Rear Bumpers",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-16',group:'Exterior',label:"Piano Black Roof Rails",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-17',group:'Exterior',label:"Bi-tone Roof",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-exterior-18',group:'Exterior',label:"Boot Liner",price:110,bonus:0,includedTrims:[]},
+{id:'rav4-hev-exterior-19',group:'Exterior',label:"Front and Rear Mud Guards",price:185,bonus:0,includedTrims:[]},
+{id:'rav4-hev-exterior-20',group:'Exterior',label:"Rear Bumper Protection Plate",price:125,bonus:0,includedTrims:[]},
+{id:'rav4-hev-exterior-21',group:'Exterior',label:"Door Handle Protection Film",price:75,bonus:0,includedTrims:[]},
+{id:'rav4-hev-interior-0',group:'Interior',label:"Three-Spoke Leather Steering Wheel",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-1',group:'Interior',label:"Electro-Chromatic Rear-View Mirror",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-2',group:'Interior',label:"Synthetic Leather Front and Rear Door Armrests",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-3',group:'Interior',label:"Detachable Front Centre Console Tray",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-4',group:'Interior',label:"Black Fabric Upholstery",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-5',group:'Interior',label:"60:40 Split-Folding Rear Seats",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-6',group:'Interior',label:"Rear Seat Armrest",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-7',group:'Interior',label:"ISOFIX Seat Fixing",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-8',group:'Interior',label:"Synthetic Leather and Ultrasuede Upholstery with Blue Stitching",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-interior-9',group:'Interior',label:"Rubber Floor Mats (front and rear)",price:140,bonus:0,includedTrims:[]},
+{id:'rav4-hev-wheels-0',group:'Wheels',label:"Temporary Spare Wheel",price:0,bonus:0,includedTrims:["Sol","Sport","Sport Launch Edition"]},
+{id:'rav4-hev-wheels-1',group:'Wheels',label:"Tyre Repair Kit",price:450,bonus:0,includedTrims:["Sport","Sport Launch Edition"]},
+{id:'rav4-hev-wheels-2',group:'Wheels',label:"Locking Wheel Nuts",price:95,bonus:0,includedTrims:[]}
+];
 export const COROLLA_TS_OPTIONS:FactoryOption[]=[
 {id:'corolla-ts-safety-0',group:'Safety',label:"Toyota Safety Sense 3 with over-the-air updates",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
 {id:'corolla-ts-safety-1',group:'Safety',label:"Seven SRS airbags",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
@@ -175,6 +272,11 @@ export const COROLLA_SALOON_OPTIONS:FactoryOption[]=[{id:'corolla-saloon-extra-0
 {id:'corolla-saloon-extra-54',group:"Interior",label:"Leather-like front door armrests",price:220,bonus:0,includedTrims:["Sol"]},
 {id:'corolla-saloon-extra-55',group:"Interior",label:"Sliding central armrest",price:180,bonus:0,includedTrims:["Sol"]},
 {id:'corolla-saloon-extra-56',group:"Wheels",label:"Locking wheel nuts",price:85,bonus:0,includedTrims:[]}];
+const RAV4_HEV_VARIANTS:VerifiedVariant[]=[
+ {id:'rav4-hev-sol',trim:'Sol',engine:'2.5 Hybrid FWD',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:183,price:45900,consumptionL100:5.0,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/RAV4-HYBRID-PDF-GUIDE.pdf',market:'Ireland (game price)'},
+ {id:'rav4-hev-sport',trim:'Sport',engine:'2.5 Hybrid FWD',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:183,price:50900,consumptionL100:5.2,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/RAV4-HYBRID-PDF-GUIDE.pdf',market:'Ireland (game price)'},
+ {id:'rav4-hev-sport-launch',trim:'Sport Launch Edition',engine:'2.5 Hybrid FWD',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:183,price:53900,consumptionL100:5.2,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/RAV4-HYBRID-PDF-GUIDE.pdf',market:'Ireland (game price)'}
+];
 const COROLLA_TS_VARIANTS:VerifiedVariant[]=[
  {id:'corolla-ts-luna',trim:'Luna',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:37200,consumptionL100:4.4,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',market:'Ireland (game price)'},
  {id:'corolla-ts-sol',trim:'Sol',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:40700,consumptionL100:4.7,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',market:'Ireland (game price)'},
@@ -190,10 +292,10 @@ export function availableColors(model:VehicleModel,year:number,trim?:string):Veh
 export function availableConfiguratorGroups(model:VehicleModel,year:number,trim?:string,variantId?:string):ConfiguratorGroup[]{return (vehicleConfiguration(model,year)?.configurator??[]).map(g=>({...g,choices:g.choices.filter(c=>(!c.trims||!!trim&&c.trims.includes(trim))&&(!c.variantIds||!!variantId&&c.variantIds.includes(variantId)))})).filter(g=>g.choices.length>0);}
 export function paintChoices(model:VehicleModel,year:number,trim:string):VehicleColor[]{return availableColors(model,year,trim);}
 export function wheelChoices(model:VehicleModel,year:number,trim:string,variantId?:string):ConfiguratorChoice[]{return availableConfiguratorGroups(model,year,trim,variantId).find(g=>g.id==='wheels')?.choices??[];}
-export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{if(model.brand!=='Toyota')return [];const list=model.name==='Corolla Saloon'&&year===2026?COROLLA_SALOON_OPTIONS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_OPTIONS:[];return list.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));}
+export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{if(model.brand!=='Toyota')return [];const list=model.name==='Corolla Saloon'&&year===2026?COROLLA_SALOON_OPTIONS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_OPTIONS:model.name==='RAV4 Hybrid'&&year===2026?RAV4_HEV_OPTIONS:[];return list.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));}
 export function compatibleOptions(_model:VehicleModel):FactoryOption[]{return [];}
 export function pricedOptions(model:VehicleModel,year:number):FactoryOption[]{return individualOptions(model,year,trimChoices(model,year)[0]??'');}
-export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'?(model.name==='Corolla Saloon'&&year===2026?COROLLA_VARIANTS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_VARIANTS:[]):[];}
+export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'?(model.name==='Corolla Saloon'&&year===2026?COROLLA_VARIANTS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_VARIANTS:model.name==='RAV4 Hybrid'&&year===2026?RAV4_HEV_VARIANTS:[]):[];}
 export function marketPrice(_model:VehicleModel,_year:number):MarketPrice|undefined{return undefined;}
 export function trimChoices(model:VehicleModel,year:number):readonly string[]{return [...new Set(verifiedVariants(model,year).map(v=>v.trim))];}
 export function trimPricing(model:VehicleModel,year:number,trim:string){const variant=verifiedVariants(model,year).find(v=>v.trim===trim);return {base:variant?.price??model.basePrice,cost:0,bonus:0};}
