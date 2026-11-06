@@ -400,7 +400,7 @@ export default function App(){
      if(assigned.status==='IDLE')return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
      if(assigned.edgeIds.length>t.leg&&
         assigned.edgeIds.every((id,i)=>t.edgeIds[i]===id))
-      return {...t,path:assigned.path,edgeIds:assigned.edgeIds};
+      return {...t,path:assigned.path,edgeIds:assigned.edgeIds,discoveryEdgeIds:assigned.discoveryEdgeIds};
      return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     }
     // Preserve live position, speed and leg when the worker extends a moving
@@ -408,7 +408,7 @@ export default function App(){
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&assigned?.status==='EXPLORING'&&
        assigned.edgeIds.length>t.edgeIds.length&&
        t.edgeIds.every((id,i)=>assigned.edgeIds[i]===id)){
-     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,scoutingRuns:assigned.scoutingRuns,
+     return {...t,path:assigned.path,edgeIds:assigned.edgeIds,discoveryEdgeIds:assigned.discoveryEdgeIds,scoutingRuns:assigned.scoutingRuns,
       explorationSection:assigned.explorationSection,explorationSectionCompleted:assigned.explorationSectionCompleted,
       explorationSectionTotal:assigned.explorationSectionTotal};
     }

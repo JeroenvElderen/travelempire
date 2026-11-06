@@ -642,8 +642,8 @@ export function dispatchScout(
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  // Motorway scouts must be able to reach highways far beyond the starting town.
  const motorwayScout=specialist==='motorway';
- const maxSearchMeters=motorwayScout?80000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&(fullRetry||visits< (motorwayScout?100000:specialist==='poi'?2500:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+ const maxSearchMeters=motorwayScout?80000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ while(heap.length&&(fullRetry||visits< (motorwayScout?100000:taxi.kind==='explorer'&&specialist?25000:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
   visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;
@@ -656,7 +656,8 @@ export function dispatchScout(
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const approach=node===start?incomingNode:previous.get(node)?.from;
-   if(taxi.kind==='explorer'&&approach&&forbiddenUTurn(graph,approach,node,edge.to,_allowedRoads))continue;
+   // Routing can reverse at a junction when needed to reach the next specialist road.
+   // The turn restriction is a preference, not a reason to strand a scout.
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    // Reach the frontier through actual connected graph edges; a transit road
    // does not become discovered merely because it was used to get here.
@@ -699,7 +700,7 @@ export function dispatchScout(
  // Keep the explorer's previous heading across new assignments.
  if(taxi.kind==='explorer')for(let i=0;i<keys.length-1;i++){
   const approach=i===0?incomingNode:keys[i-1];
-  if(approach&&forbiddenUTurn(graph,approach,keys[i],keys[i+1],_allowedRoads))return taxi;
+  // Preserve connected route even when it requires reversing at a junction.
  }
  // Before continuing each block perimeter, clear short dead-end branches.
  // Traverse the branch to its tip and return to the SAME junction, then resume
