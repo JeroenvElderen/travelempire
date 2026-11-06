@@ -633,7 +633,7 @@ export function dispatchScout(
  // Search is bounded and runs in the dispatch worker, never the animation loop.
  const LOCAL_AREA_METERS=900;
  let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
-  let completionBest:typeof best=null;
+  let completionBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
