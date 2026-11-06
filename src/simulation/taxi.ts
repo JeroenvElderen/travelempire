@@ -655,7 +655,7 @@ export function dispatchScout(
   if(!specialist&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
-   const approach=node===start?incomingNode:previous.get(node)?.from;
+
    // Routing can reverse at a junction when needed to reach the next specialist road.
    // The turn restriction is a preference, not a reason to strand a scout.
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
@@ -699,7 +699,7 @@ export function dispatchScout(
  keys.push(best.to);ids.push(best.id);
  // Keep the explorer's previous heading across new assignments.
  if(taxi.kind==='explorer')for(let i=0;i<keys.length-1;i++){
-  const approach=i===0?incomingNode:keys[i-1];
+
   // Preserve connected route even when it requires reversing at a junction.
  }
  // Before continuing each block perimeter, clear short dead-end branches.
