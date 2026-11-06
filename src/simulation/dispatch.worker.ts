@@ -7,6 +7,8 @@ const seenRoadIds=new Set<string>();
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 const idleFallbackAt=new Map<string,number>();
+// A failed scout permits the next road class to bootstrap without motorway access.
+const unavailableExplorerRoles=new Set<string>();
 const explorerIdleSince=new Map<string,number>();
 const explorerDepotCooldown=new Map<string,number>();
 const EXPLORER_IDLE_RETURN_MS=60000;
@@ -18,7 +20,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   explorerIdleSince.clear();explorerDepotCooldown.clear();idleFallbackAt.clear();
+   explorerIdleSince.clear();explorerDepotCooldown.clear();idleFallbackAt.clear();unavailableExplorerRoles.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -161,7 +163,11 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const role=taxi.explorerRole;const prev=role?previousClass.get(role):undefined;
     if(!prev)return undefined;
     const nodes=discoveredByClass.get(prev)??new Set<string>();
-    return nodes.size?nodes:new Set<string>();
+    if(nodes.size)return nodes;
+    // The previous class found no reachable target. Permit the next class
+    // to bootstrap, but only after its predecessor has actually been checked.
+    if(unavailableExplorerRoles.has(prev))return undefined;
+    return new Set<string>();
    };
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
@@ -261,7 +267,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      idleFallbackAt.set(taxis[index].id,now+5000);
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
     }
+    if(assignment.status==='IDLE'&&taxis[index].explorerRole){unavailableExplorerRoles.add(taxis[index].explorerRole);}
     if(assignment.status!=='IDLE'){
+     if(taxis[index].explorerRole)unavailableExplorerRoles.delete(taxis[index].explorerRole);
      explorerIdleSince.delete(taxis[index].id);
      taxis[index]=assignment;
      assignedCount++;
