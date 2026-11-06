@@ -71,7 +71,17 @@ export const FACTORY_OPTIONS:FactoryOption[]=[
 {id:'cameras',group:'Safety',label:'360-degree parking cameras',price:900,bonus:1}
 ];
 const order=['Economy','Standard','Comfort','Premium','XL'];
-export function compatibleOptions(model:VehicleModel){return FACTORY_OPTIONS.filter(o=>!o.minimum||order.indexOf(model.segment)>=order.indexOf(o.minimum));}
+// Gameplay compatibility rules, not official manufacturer build sheets.
+export function compatibleOptions(model:VehicleModel){
+ return FACTORY_OPTIONS.filter(o=>{
+  if(o.minimum&&order.indexOf(model.segment)<order.indexOf(o.minimum))return false;
+  if(model.segment==='Economy'&&['wheels20','entertainment','executive','luxury-interior'].includes(o.id))return false;
+  if(model.segment==='XL'&&o.id==='wheels20')return false;
+  if(model.brand==='Dacia'&&['luxury-interior','executive','entertainment'].includes(o.id))return false;
+  if(model.brand==='Rolls-Royce'&&o.id==='wheels19')return false;
+  return true;
+ });
+}
 export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:'Base'|'Plus'|'Luxury'):VehicleOffer{
  const options=compatibleOptions(model).filter(o=>optionIds.includes(o.id));
  const trimCost=trim==='Luxury'?Math.round(model.basePrice*.12):trim==='Plus'?Math.round(model.basePrice*.06):0;
