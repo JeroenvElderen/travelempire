@@ -1,15 +1,19 @@
 import type {Taxi} from './taxi';
 
-export type EnergyKind='petrol';
-export type EnergySpec={kind:EnergyKind;capacity:number;per100km:number;unit:'L';pricePerUnit:number};
-// Petrol-only gameplay: realistic baseline fuel consumption, measured by distance driven.
-export function energySpec(_t:Pick<Taxi,'vehicleFuel'>):EnergySpec {
- return {kind:'petrol',capacity:50,per100km:8,unit:'L',pricePerUnit:1.85};
+export type EnergyKind='petrol'|'diesel'|'hybrid'|'electric';
+export type EnergySpec={kind:EnergyKind;capacity:number;per100km:number;unit:'L'|'kWh';pricePerUnit:number};
+// Simplified game balance figures, not homologated WLTP figures for individual models.
+// Vehicles saved before drivetrain support retain the original petrol specification.
+export function energySpec(t:Pick<Taxi,'vehicleFuel'>):EnergySpec {
+ switch((t.vehicleFuel??'Petrol').toLowerCase()){
+  case 'diesel':return {kind:'diesel',capacity:55,per100km:5.8,unit:'L',pricePerUnit:1.75};
+  case 'hybrid':return {kind:'hybrid',capacity:45,per100km:4.6,unit:'L',pricePerUnit:1.85};
+  case 'electric':return {kind:'electric',capacity:70,per100km:18,unit:'kWh',pricePerUnit:0.32};
+  default:return {kind:'petrol',capacity:50,per100km:8,unit:'L',pricePerUnit:1.85};
+ }
 }
 export function energyRemaining(t:Taxi):number {
  const spec=energySpec(t);
- // Older saves had cumulative fuelLitres but no tank state. Migrate as a full tank,
- // rather than interpreting lifetime fuel consumption as current fuel.
  return Math.min(spec.capacity,Math.max(0,t.energyRemaining??spec.capacity));
 }
 export function energyPercent(t:Taxi):number{return energyRemaining(t)/energySpec(t).capacity*100;}
