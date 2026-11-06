@@ -629,11 +629,10 @@ export function dispatchScout(
   }heap[i]=last;}
   return first;
  };
- // Finish a local 900 m road-network neighbourhood before expanding outward.
+ // After completing a block, choose the nearest reachable undiscovered road.
  // Search is bounded and runs in the dispatch worker, never the animation loop.
- const LOCAL_AREA_METERS=900;
  let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
-  let completionBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
+ let completionBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -643,10 +642,10 @@ export function dispatchScout(
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
   if(distance>maxSearchMeters)break;
-  // Once a local road is found, do not scan the wider network.
-  // The bound also avoids expensive repeated global searches on mobile.
-  if(taxi.explorerRole!=='completion'&&best?.local&&distance>LOCAL_AREA_METERS)break;
-  if(taxi.explorerRole!=='completion'&&best&&!best.local&&distance>best.distance&&distance>LOCAL_AREA_METERS)break;
+  // Dijkstra visits junctions in increasing travel distance. Once the
+  // closest candidate is found, more distant junctions cannot beat it.
+  // Completion explorers keep searching for gaps between revealed junctions.
+  if(taxi.explorerRole!=='completion'&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const approach=node===start?incomingNode:previous.get(node)?.from;
@@ -654,10 +653,9 @@ export function dispatchScout(
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    if(isNew){
     const inside=revealed.has(node)&&revealed.has(edge.to);
-    const candidate={from:node,to:edge.to,id:edge.id,distance:distance+edge.meters,inside,local:distance<=LOCAL_AREA_METERS};
-    // Local streets take precedence over distant frontier roads. Once the
-    // neighbourhood is complete, choose the nearest reachable new segment.
-    if(!best||(candidate.local&&!best.local)||(candidate.local===best.local&&candidate.distance<best.distance))best=candidate;
+    const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
+    // Nearest undiscovered road by shortest travel distance to its junction.
+    if(!best||candidate.distance<best.distance)best=candidate;
      // Green explorers finish undiscovered links between already explored junctions first.
      if(taxi.explorerRole==='completion'&&inside&&(!completionBest||candidate.distance<completionBest.distance))completionBest=candidate;
    }
@@ -667,6 +665,8 @@ export function dispatchScout(
    }
   }
  }
+ // Green explorers prefer missing links, falling back to nearest-road expansion.
+ if(completionBest)best=completionBest;
  if(!best)return taxi;
  const block=blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
  const keys=[best.from],ids:string[]=[];
