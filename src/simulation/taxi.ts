@@ -886,8 +886,14 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  // when the vehicle reaches its destination node, never partway through.
  // Discovery is not the same as driving: transit on another category never reveals it.
   // The assignment's discoveryEdgeIds are the sole authority for explorer discoveries.
-  const eligible=taxi.kind==='explorer'?new Set(taxi.discoveryEdgeIds??[]):null;
-  const newlyDiscovered=eligible?advanced.crossed.filter(id=>eligible.has(id)):advanced.crossed;
+  const eligible=taxi.kind==='explorer'?new Set(taxi.status==='EXPLORING'?(taxi.discoveryEdgeIds??[]):[]):null;
+  // The motorway explorer may transit undiscovered roads of any class, but
+  // traversing them must never reveal them. Validate against the graph as well
+  // as the dispatch assignment, including routes restored from older saves.
+  const motorwayIds=taxi.kind==='explorer'&&taxi.explorerRole==='motorway'
+   ?new Set([...graph.edges.values()].flatMap(links=>links.filter(e=>e.highway==='motorway'||e.highway==='motorway_link').map(e=>e.id)))
+   :null;
+  const newlyDiscovered=eligible?advanced.crossed.filter(id=>eligible.has(id)&&(!motorwayIds||motorwayIds.has(id))):advanced.crossed;
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
