@@ -581,6 +581,25 @@ export function sectionCoverage(graph:RoadGraph,allowed:Set<string>,discovered:S
  return {completed,total:ids.size};
 }
 
+// Find a bounded block perimeter through a second road path between junctions.
+function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,allowed?:Set<string>):{nodes:string[];ids:string[]}|null{
+ type Item={node:string;distance:number;nodes:string[];ids:string[]};
+ const queue:Item[]=[{node:to,distance:0,nodes:[to],ids:[]}],best=new Map<string,number>([[to,0]]);
+ for(let i=0;i<queue.length&&i<450;i++){
+  let min=i;for(let j=i+1;j<queue.length;j++)if(queue[j].distance<queue[min].distance)min=j;
+  [queue[i],queue[min]]=[queue[min],queue[i]];
+  const item=queue[i];if(item.distance!==(best.get(item.node)??Infinity))continue;
+  if(item.node===from&&item.ids.length>=2)return{nodes:item.nodes,ids:item.ids};
+  if(item.distance>850||item.ids.length>=30)continue;
+  for(const e of graph.edges.get(item.node)??[]){
+   if(e.id===excludeId||(allowed&&!allowed.has(e.id)))continue;
+   const next=item.distance+e.meters;if(next>850||next>=(best.get(e.to)??Infinity))continue;
+   best.set(e.to,next);queue.push({node:e.to,distance:next,nodes:[...item.nodes,e.to],ids:[...item.ids,e.id]});
+  }
+ }
+ return null;
+}
+
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
@@ -645,6 +664,7 @@ export function dispatchScout(
   }
  }
  if(!best)return taxi;
+ const block=blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
  const keys=[best.from],ids:string[]=[];
  let node=best.from;
  while(node!==start){
@@ -658,12 +678,14 @@ export function dispatchScout(
   const approach=i===0?incomingNode:keys[i-1];
   if(approach&&forbiddenUTurn(graph,approach,keys[i],keys[i+1],_allowedRoads))return taxi;
  }
+ // Complete the selected block perimeter before seeking another area.
+ if(block)for(let i=1;i<block.nodes.length;i++){keys.push(block.nodes[i]);ids.push(block.ids[i-1]);}
  // Extend the assignment along connected, undiscovered streets. This avoids
  // becoming IDLE at every junction and waiting for the next worker dispatch.
  const planned=new Set(ids);
- let cursor=best.to;
+ let cursor=keys[keys.length-1];
  let extraMeters=0;
- for(let step=0;step<24&&extraMeters<900;step++){
+ for(let step=0;step<(block?0:24)&&extraMeters<900;step++){
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
    (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
