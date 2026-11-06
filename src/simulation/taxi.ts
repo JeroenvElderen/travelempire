@@ -636,12 +636,12 @@ export function dispatchScout(
  let specialistBest:typeof best=null;
  let specialistScore=Infinity;
  const specialist=taxi.explorerRole;
- const poiPoints=specialist==='poi'?(poiTargets??[]).filter(p=>meters(p,taxi.position)<15000).slice(0,100):[];
+ const poiPoints=specialist==='poi'?(poiTargets??[]).filter(p=>meters(p,taxi.position)<8000).slice(0,24):[];
  const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):false;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&(fullRetry||visits< (taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+ while(heap.length&&(fullRetry||visits< (specialist==='poi'?2500:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
   visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;
