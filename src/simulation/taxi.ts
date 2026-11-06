@@ -884,7 +884,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const advanced=advanceTaxi(taxi,graph,seconds);
  // Only completed graph edges are discovered. advanceTaxi reports an edge
  // when the vehicle reaches its destination node, never partway through.
- const newlyDiscovered=advanced.crossed;
+ // Discovery is not the same as driving: transit on another category never reveals it.
+  // The assignment's discoveryEdgeIds are the sole authority for explorer discoveries.
+  const eligible=taxi.kind==='explorer'?new Set(taxi.discoveryEdgeIds??[]):null;
+  const newlyDiscovered=eligible?advanced.crossed.filter(id=>eligible.has(id)):advanced.crossed;
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){

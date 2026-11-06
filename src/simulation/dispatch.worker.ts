@@ -137,11 +137,12 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const revealedNodes=new Set<string>();
    for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
    const completionRoads=new Set<string>();
-   for(const [from,links] of graph.edges)if(revealedNodes.has(from))for(const edge of links)if(revealedNodes.has(edge.to)&&!explored.has(edge.id))completionRoads.add(edge.id);
+   for(const [from,links] of graph.edges)if(revealedNodes.has(from))for(const edge of links)if(revealedNodes.has(edge.to)&&!explored.has(edge.id)&&!classifiedRoads.has(edge.id))completionRoads.add(edge.id);
+   const classifiedRoads=new Set<string>();for(const ids of byClass.values())for(const id of ids)classifiedRoads.add(id);
    const poiRoads=new Set<string>();
    const poiTargets=(msg.poiTargets??[]).slice(0,150);
    if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
-    for(const edge of links)poiRoads.add(edge.id);
+    for(const edge of links)if(!classifiedRoads.has(edge.id))poiRoads.add(edge.id);
    }
    // Each class must branch from a road discovered by the immediately preceding class.
    const sequence=['motorway','trunk','primary','secondary','tertiary','residential','rural','service','poi','completion'] as const;
@@ -164,9 +165,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
-    if(role==='completion')return completionRoads;
-    if(role==='highway')return new Set([...byClass.values()].slice(0,4).flatMap(ids=>[...ids]));
-    if(role==='urban')return new Set([...byClass.values()].flatMap(ids=>[...ids]));
+    if(role==='completion')return new Set([...completionRoads].filter(id=>!poiRoads.has(id)));
+    if(role==='highway')return new Set([...['motorway','trunk','primary','secondary'].flatMap(k=>[...(byClass.get(k)??[])] )]);
+    if(role==='urban')return new Set([...['tertiary','residential','rural','service'].flatMap(k=>[...(byClass.get(k)??[])] )]);
     return byClass.get(role??'')??new Set<string>();
    };
    // Trim any previously assigned Explorer route at the first forbidden edge.
