@@ -63,6 +63,45 @@ export type ConfiguratorChoice={id:string;name:string;price:number;trims?:string
 export type ConfiguratorGroup={id:string;label:string;selection:'single'|'multiple';required?:boolean;choices:ConfiguratorChoice[]};
 export type VehicleConfiguration={brand:string;model:string;year:number;reference?:string;notes?:string;colors:VehicleColor[];options:FactoryOption[];configurator:ConfiguratorGroup[]};
 export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
+ 'Audi|A3|2026':{
+  brand:'Audi',model:'A3',year:2026,
+  reference:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/product-guides/my26/A3_MY26.pdf',
+  notes:'Audi A3 Sportback MY26 Irish prices in VERIFIED_EXPANSION. Actual Audi equipment names are sourced from Audi Ireland A3 pages. Paint/option surcharge amounts and exact trim compatibility are not fully published in accessible configurator pages; €0 is a placeholder, NOT a claim of free equipment. Swatch HEX values are approximations. Audi exclusive choices may require dealer consultation.',
+  colors:[
+   {id:'a3-arkona-white',name:'Arkona White (solid)',hex:'#F1F0EC',price:0},
+   {id:'a3-brilliant-black',name:'Brilliant Black (solid)',hex:'#161719',price:0},
+   {id:'a3-glacier-white',name:'Glacier White metallic',hex:'#E6E8E7',price:0},
+   {id:'a3-mythos-black',name:'Mythos Black metallic',hex:'#1D1E22',price:0},
+   {id:'a3-navarra-blue',name:'Navarra Blue metallic',hex:'#253C60',price:0},
+   {id:'a3-daytona-grey',name:'Daytona Grey pearl effect',hex:'#575B61',price:0},
+   {id:'a3-vegas-yellow-exclusive',name:'Vegas Yellow (Audi exclusive; dealer confirmation)',hex:'#E6B522',price:0}
+  ],
+  options:[
+   {id:'a3-ambient-pro',group:'Interior',label:'Ambient lighting package pro (30 colours)',price:0,bonus:0},
+   {id:'a3-phone-charge',group:'Technology',label:'Inductive smartphone charging (25 W)',price:0,bonus:0},
+   {id:'a3-matrix-led',group:'Safety',label:'Matrix LED headlights',price:0,bonus:0},
+   {id:'a3-panoramic-roof',group:'Comfort',label:'Panoramic glass roof (availability to verify)',price:0,bonus:0}
+  ],
+  configurator:[
+   {id:'wheels',label:'Wheels',selection:'single',required:true,choices:[
+    {id:'a3-wheels-standard',name:'Standard wheels (exact size depends on SE/S line specification)',price:0,included:true},
+    {id:'a3-wheels-18-twin',name:'18-inch 5-twin-spoke graphite grey, gloss turned',price:0}
+   ]},
+   {id:'upholstery',label:'Upholstery and interior',selection:'single',required:true,choices:[
+    {id:'a3-interior-standard',name:'Standard upholstery (trim-dependent)',price:0,included:true},
+    {id:'a3-interior-sline',name:'S line sports interior (availability to confirm)',price:0,trims:['S line']}
+   ]},
+   {id:'technology-packages',label:'Technology packages',selection:'single',choices:[
+    {id:'a3-tech',name:'Tech — adaptive cruise control and reversing camera',price:0},
+    {id:'a3-tech-plus',name:'Tech plus — adds park assist plus, side assist and rear cross-traffic assist',price:0},
+    {id:'a3-tech-pro',name:'Tech pro — surround-view cameras and matrix LED headlights',price:0}
+   ]},
+   {id:'individualisation',label:'Audi exclusive',selection:'multiple',choices:[
+    {id:'a3-audi-exclusive-inlays',name:'Audi exclusive interior inlays (dealer confirmation)',price:0},
+    {id:'a3-audi-exclusive-stitching',name:'Audi exclusive contrasting stitching (dealer confirmation)',price:0}
+   ]}
+  ]
+ },
  'Toyota|Aygo X|2026':{
   brand:'Toyota',model:'Aygo X',year:2026,
   reference:'https://www.toyota.ie/models/aygo-x.html',
@@ -225,6 +264,15 @@ const VERIFIED_EXPANSION:Record<string,VerifiedVariant[]>={
   {id:'p3008-gte-awd',trim:'GT Exclusive',engine:'Electric AWD 73 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:325,price:59995,source:PEUGEOT_IE,market:'Ireland'}
  ],
  'Audi|A3|2026':[
+  {id:'a3-30tfsi-se-2026',trim:'SE',engine:'30 TFSI',fuel:'Petrol',transmission:'Manual',powerHp:115,price:37140,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tdi-se-2026',trim:'SE',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:38985,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tfsi-sline-2026',trim:'S line',engine:'30 TFSI',fuel:'Petrol',transmission:'Manual',powerHp:115,price:41740,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tdi-sline-2026',trim:'S line',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:43465,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tdi-se-2026',trim:'SE',engine:'35 TDI',fuel:'Diesel',transmission:'S tronic',powerHp:150,price:44035,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tfsi-se-2026',trim:'SE',engine:'35 TFSI',fuel:'Petrol',transmission:'S tronic',powerHp:150,price:41795,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tfsi-sline-2026',trim:'S line',engine:'35 TFSI',fuel:'Petrol',transmission:'S tronic',powerHp:150,price:45930,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tdi-sline-2026',trim:'S line',engine:'35 TDI',fuel:'Diesel',transmission:'S tronic',powerHp:150,price:48640,source:AUDI_IE,market:'Ireland'},
+
   {id:'a3-30tdi-se',trim:'SE',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:38985,source:AUDI_IE,market:'Ireland'},
   {id:'a3-30tfsi-se',trim:'SE',engine:'30 TFSI',fuel:'Petrol',transmission:'Manual',powerHp:115,price:37140,source:AUDI_IE,market:'Ireland'},
   {id:'a3-30tdi-sline',trim:'S line',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:43465,source:AUDI_IE,market:'Ireland'},
