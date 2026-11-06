@@ -658,7 +658,7 @@ export function dispatchScout(
    const approach=node===start?incomingNode:previous.get(node)?.from;
    if(taxi.kind==='explorer'&&approach&&forbiddenUTurn(graph,approach,node,edge.to,_allowedRoads))continue;
    const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
-   if(isNew&&(!requiredFrontier||requiredFrontier.has(node)||requiredFrontier.has(edge.to))){
+   if(isNew&&(!requiredFrontier||requiredFrontier.has(node))){
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
     // Nearest undiscovered road by shortest travel distance to its junction.
