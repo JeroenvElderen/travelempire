@@ -11,8 +11,9 @@
    version="1.1"
    width="100%"
    height="100%"
-   viewBox="0 0 960 476"
+   viewBox="0 0 476 960"
    id="svg2">
+<g transform="translate(476 0) rotate(90)">
   <title
      id="title3968">Red Car - Top View</title>
   <defs
@@ -384,4 +385,5 @@
       </cc:License>
     </rdf:RDF>
   </metadata>
+</g>
 </svg>
