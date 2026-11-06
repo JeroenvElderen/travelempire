@@ -697,11 +697,7 @@ export function dispatchScout(
  }
  keys.reverse();ids.reverse();
  keys.push(best.to);ids.push(best.id);
- // Keep the explorer's previous heading across new assignments.
- if(taxi.kind==='explorer')for(let i=0;i<keys.length-1;i++){
-
-  // Preserve connected route even when it requires reversing at a junction.
- }
+ // Connected routes may reverse at junctions when necessary.
  // Before continuing each block perimeter, clear short dead-end branches.
  // Traverse the branch to its tip and return to the SAME junction, then resume
  // the saved perimeter. Limit work per assignment to keep dispatch responsive.
