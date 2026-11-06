@@ -95,10 +95,10 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  return end;
 }
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,onExplorerCommand,gameClock}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
  useEffect(()=>{
@@ -192,6 +192,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
+ const recoveryCommandRef=useRef(onRequestRecovery);recoveryCommandRef.current=onRequestRecovery;
+ const recoveryStateRef=useRef({active:new Set<string>(),requested:new Set<string>()});recoveryStateRef.current={active:new Set(recoveryTargetIds),requested:new Set(recoveryRequestedIds)};
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
  const depotMarkers=useRef(new Map<string,maplibregl.Marker>());
@@ -302,14 +304,37 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?'SimplePurpleCarTopView.svg':'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
-   if(taxi.kind==='explorer'){
+   if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
-     const popupContent=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;popupContent.appendChild(label);
-     const status=document.createElement('p');status.textContent=current.status==='PAUSED'?'Paused at headquarters':current.pauseAtHome?'Returning home to pause':current.status;popupContent.appendChild(status);
-     const button=document.createElement('button');button.type='button';const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';button.disabled=!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome);
-     button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');popup.remove();});popupContent.appendChild(button);
-     const popup=new maplibregl.Popup({offset:22,closeOnClick:true}).setLngLat(current.position).setDOMContent(popupContent).addTo(map.current);
+     const pending=current.recoveryPending||recoveryStateRef.current.active.has(current.id)||recoveryStateRef.current.requested.has(current.id);
+     const popupContent=document.createElement('div');popupContent.className='vehicle-service-popup';
+     const header=document.createElement('div');header.className='vehicle-service-popup-header';
+     const icon=document.createElement('span');icon.textContent=current.kind==='explorer'?'◆':'●';icon.className='vehicle-service-popup-icon';
+     const heading=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;
+     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?'Road Explorer':'Taxi')+' · '+current.status.replace(/_/g,' ');
+     heading.append(label,subtitle);header.append(icon,heading);popupContent.appendChild(header);
+     const stats=document.createElement('div');stats.className='vehicle-service-popup-stats';
+     stats.textContent='Speed '+Math.round(current.speedKph??0)+' km/h · Condition '+Math.round(current.vehicleCondition??100)+'%';
+     popupContent.appendChild(stats);
+     const section=document.createElement('div');section.className='vehicle-service-popup-section';section.textContent='ROADSIDE ASSISTANCE';popupContent.appendChild(section);
+     const addAction=(text:string,purpose:'fuel'|'depot')=>{
+      const button=document.createElement('button');button.type='button';button.className='vehicle-service-popup-action';
+      button.textContent=text;button.disabled=pending||Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());
+      button.addEventListener('click',()=>{recoveryCommandRef.current?.(current.id,purpose);popup.remove();});
+      popupContent.appendChild(button);
+     };
+     if(pending){const notice=document.createElement('p');notice.className='vehicle-service-popup-notice';notice.textContent='Recovery already requested or in progress';popupContent.appendChild(notice);}
+     addAction('⛽ Tow to nearest fuel / charging station','fuel');
+     addAction('⌂ Tow to nearest depot','depot');
+     if(current.kind==='explorer'){
+      const button=document.createElement('button');button.type='button';button.className='vehicle-service-popup-action secondary';
+      const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';
+      button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));
+      button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');popup.remove();});popupContent.appendChild(button);
+     }
+     new maplibregl.Popup({offset:22,closeOnClick:true,maxWidth:'310px',className:'vehicle-service-map-popup'})
+      .setLngLat(renderedPosition.current.get(current.id)??current.position).setDOMContent(popupContent).addTo(map.current);
     };
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
