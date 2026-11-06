@@ -792,21 +792,6 @@ export function dispatchScout(
 // PR D: Road-speed-aware vehicle dynamics. Only speed integration changes;
 // existing route, discovery, dispatch and arrival handling remain untouched.
 const clamp=(value:number,low:number,high:number)=>Math.max(low,Math.min(high,value));
-function turnSpeedKph(previous:Point,junction:Point,next:Point):number{
- const latitude=junction[1]*Math.PI/180;
- const x=Math.cos(latitude);
- const ux=(junction[0]-previous[0])*x,uy=junction[1]-previous[1];
- const vx=(next[0]-junction[0])*x,vy=next[1]-junction[1];
- const magnitude=Math.hypot(ux,uy)*Math.hypot(vx,vy);
- if(magnitude<1e-12)return 50;
- const angle=Math.acos(clamp((ux*vx+uy*vy)/magnitude,-1,1))*180/Math.PI;
- if(angle<15)return 160;
- if(angle<35)return 70;
- if(angle<60)return 45;
- if(angle<90)return 30;
- if(angle<125)return 20;
- return 12;
-}
 export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[],distanceMeters:0};
  const t={...taxi};
