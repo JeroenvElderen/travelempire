@@ -23,3 +23,13 @@
 .te-offscreen-arrow{font-size:12px;color:#a9e8ed;display:inline-block}
 .te-offscreen-explorer{border-color:#ad8af0}.te-offscreen-ferry{border-color:#70c8e8}.te-offscreen-depot{border-color:#6ed9ac}.te-offscreen-station{border-color:#edbd6a}.te-offscreen-recovery{border-color:#86b5ee}
 .te-offscreen-count{font-size:10px;font-weight:800;background:#416578;border-radius:8px;padding:1px 4px}
+
+/* Minimal off-screen navigation: only a direction arrow in the vehicle's color. */
+.te-offscreen-pointer{width:30px;min-width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;box-shadow:none;font-size:22px;filter:drop-shadow(0 1px 2px #001c29cc)}
+.te-offscreen-arrow{font-size:25px;line-height:1;color:var(--pointer-color,#f5c542);text-shadow:0 0 3px #092333}
+.te-offscreen-taxi{--pointer-color:#ffd447}
+.te-offscreen-explorer{--pointer-color:#bd7cff}
+.te-offscreen-ferry{--pointer-color:#54b9ff}
+.te-offscreen-depot{--pointer-color:#52d69b}
+.te-offscreen-recovery{--pointer-color:#ff9d4b}
+.te-offscreen-pointer:focus-visible{outline:2px solid white;outline-offset:3px}

@@ -640,7 +640,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?'explorer':t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
    if(headquarters)candidates.push({id:'hq',lng:headquarters.lng,lat:headquarters.lat,type:'depot',label:'Headquarters',limit:150000});
    for(const d of depots)candidates.push({id:'d:'+d.id,lng:d.lng,lat:d.lat,type:'depot',label:d.name,limit:150000});
-   if(stationsVisible)for(const s of stations)candidates.push({id:'s:'+s.id,lng:s.lng,lat:s.lat,type:'station',label:s.name,limit:80000});
    for(const f of ferryPositionsRef.current)candidates.push({id:'f:'+f.id,lng:f.point[0],lat:f.point[1],type:'ferry',label:'Ferry '+f.id,limit:250000});
    const grouped=new Map<string,{x:number;y:number;angle:number;type:string;count:number;lng:number;lat:number;label:string;distance:number}>();
    const mapCenter=instance.getCenter();
@@ -660,18 +659,15 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     if(prior){prior.count++;if(distance<prior.distance){prior.lng=item.lng;prior.lat=item.lat;prior.label=item.label;prior.distance=distance;}continue;}
     grouped.set(key,{x,y,angle:Math.atan2(dy,dx)*180/Math.PI,type:item.type,count:1,lng:item.lng,lat:item.lat,label:item.label,distance});
    }
-   const selected=[...grouped.values()].sort((a,b)=>a.distance-b.distance).slice(0,24);
+   const selected=[...grouped.values()].sort((a,b)=>a.distance-b.distance).slice(0,10);
    const fragment=document.createDocumentFragment();
-   const symbols:Record<string,string>={taxi:'🚕',explorer:'🟣',recovery:'🚚',depot:'🏠',station:'⛽',ferry:'⛴️'};
    for(const item of selected){
     const button=document.createElement('button');button.type='button';button.className='te-offscreen-pointer te-offscreen-'+item.type;
     button.style.left=item.x+'px';button.style.top=item.y+'px';
     button.title=item.label+(item.count>1?' +'+(item.count-1)+' nearby':'');
     button.setAttribute('aria-label','Locate '+button.title);
     const arrow=document.createElement('span');arrow.className='te-offscreen-arrow';arrow.textContent='➤';arrow.style.transform='rotate('+item.angle+'deg)';
-    const symbol=document.createElement('span');symbol.textContent=symbols[item.type]??'●';
-    button.append(arrow,symbol);
-    if(item.count>1){const badge=document.createElement('span');badge.className='te-offscreen-count';badge.textContent=String(item.count);button.append(badge);}
+    button.append(arrow);
     button.addEventListener('click',()=>instance.flyTo({center:[item.lng,item.lat],zoom:Math.max(instance.getZoom(),13),essential:true}));
     fragment.append(button);
    }
@@ -682,7 +678,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const interval=window.setInterval(render,1000);
   render();
   return()=>{instance.off('moveend',schedule);instance.off('zoomend',schedule);instance.off('resize',schedule);clearInterval(interval);if(timer!==undefined)clearTimeout(timer);layer.replaceChildren();};
- },[ready,headquarters?.lng,headquarters?.lat,JSON.stringify(depots),stations,stationsVisible]);
+ },[ready,headquarters?.lng,headquarters?.lat,JSON.stringify(depots)]);
 
  // Repaint only when the game enters a different lighting phase. Never call
  // setStyle for the clock: that would discard exploration/ferry layers and stutter taxis.
