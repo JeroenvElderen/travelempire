@@ -196,6 +196,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const recoveryStateRef=useRef({active:new Set<string>(),requested:new Set<string>()});recoveryStateRef.current={active:new Set(recoveryTargetIds),requested:new Set(recoveryRequestedIds)};
  const taxiStateRef=useRef(taxis);taxiStateRef.current=taxis;
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
+ const ferryPositionsRef=useRef<Array<{id:string;point:[number,number]}>>([]);
+ const offscreenLayer=useRef<HTMLDivElement>(null);
  const depotMarkers=useRef(new Map<string,maplibregl.Marker>());
  const [stationsVisible,setStationsVisible]=useState(true);
  const [stations,setStations]=useState<Station[]>([]);
@@ -620,8 +622,67 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Ferries remain operational; sea routes no longer generate territory fog.
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId);
+  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId,positions=>{ferryPositionsRef.current=positions;});
  },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
+
+ // Off-screen pointers: bounded, clustered and refreshed at most once per second.
+ // This never participates in vehicle animation or road graph updates.
+ useEffect(()=>{
+  const instance=map.current,layer=offscreenLayer.current;
+  if(!ready||!instance||!layer)return;
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  const render=()=>{
+   if(document.hidden||!instance.getCanvas().isConnected)return;
+   const width=instance.getContainer().clientWidth,height=instance.getContainer().clientHeight;
+   if(width<100||height<100)return;
+   const center={x:width/2,y:height/2};
+   const candidates:Array<{id:string;lng:number;lat:number;type:string;label:string;limit:number}>=[];
+   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?'explorer':t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
+   if(headquarters)candidates.push({id:'hq',lng:headquarters.lng,lat:headquarters.lat,type:'depot',label:'Headquarters',limit:150000});
+   for(const d of depots)candidates.push({id:'d:'+d.id,lng:d.lng,lat:d.lat,type:'depot',label:d.name,limit:150000});
+   if(stationsVisible)for(const s of stations)candidates.push({id:'s:'+s.id,lng:s.lng,lat:s.lat,type:'station',label:s.name,limit:80000});
+   for(const f of ferryPositionsRef.current)candidates.push({id:'f:'+f.id,lng:f.point[0],lat:f.point[1],type:'ferry',label:'Ferry '+f.id,limit:250000});
+   const grouped=new Map<string,{x:number;y:number;angle:number;type:string;count:number;lng:number;lat:number;label:string;distance:number}>();
+   const mapCenter=instance.getCenter();
+   for(const item of candidates){
+    const point=instance.project([item.lng,item.lat]);
+    if(!Number.isFinite(point.x)||!Number.isFinite(point.y))continue;
+    if(point.x>=16&&point.x<=width-16&&point.y>=16&&point.y<=height-16)continue;
+    const latKm=(item.lat-mapCenter.lat)*111320;
+    const lngKm=(item.lng-mapCenter.lng)*111320*Math.cos(mapCenter.lat*Math.PI/180);
+    const distance=Math.hypot(latKm,lngKm);
+    if(distance>item.limit)continue;
+    const dx=point.x-center.x,dy=point.y-center.y;
+    const ratio=Math.min((width/2-28)/Math.max(1,Math.abs(dx)),(height/2-32)/Math.max(1,Math.abs(dy)));
+    const x=center.x+dx*ratio,y=center.y+dy*ratio;
+    const key=item.type+':'+Math.round(x/52)+':'+Math.round(y/52);
+    const prior=grouped.get(key);
+    if(prior){prior.count++;if(distance<prior.distance){prior.lng=item.lng;prior.lat=item.lat;prior.label=item.label;prior.distance=distance;}continue;}
+    grouped.set(key,{x,y,angle:Math.atan2(dy,dx)*180/Math.PI,type:item.type,count:1,lng:item.lng,lat:item.lat,label:item.label,distance});
+   }
+   const selected=[...grouped.values()].sort((a,b)=>a.distance-b.distance).slice(0,24);
+   const fragment=document.createDocumentFragment();
+   const symbols:Record<string,string>={taxi:'🚕',explorer:'🟣',recovery:'🚚',depot:'🏠',station:'⛽',ferry:'⛴️'};
+   for(const item of selected){
+    const button=document.createElement('button');button.type='button';button.className='te-offscreen-pointer te-offscreen-'+item.type;
+    button.style.left=item.x+'px';button.style.top=item.y+'px';
+    button.title=item.label+(item.count>1?' +'+(item.count-1)+' nearby':'');
+    button.setAttribute('aria-label','Locate '+button.title);
+    const arrow=document.createElement('span');arrow.className='te-offscreen-arrow';arrow.textContent='➤';arrow.style.transform='rotate('+item.angle+'deg)';
+    const symbol=document.createElement('span');symbol.textContent=symbols[item.type]??'●';
+    button.append(arrow,symbol);
+    if(item.count>1){const badge=document.createElement('span');badge.className='te-offscreen-count';badge.textContent=String(item.count);button.append(badge);}
+    button.addEventListener('click',()=>instance.flyTo({center:[item.lng,item.lat],zoom:Math.max(instance.getZoom(),13),essential:true}));
+    fragment.append(button);
+   }
+   layer.replaceChildren(fragment);
+  };
+  const schedule=()=>{if(timer!==undefined)clearTimeout(timer);timer=setTimeout(render,90);};
+  instance.on('moveend',schedule);instance.on('zoomend',schedule);instance.on('resize',schedule);
+  const interval=window.setInterval(render,1000);
+  render();
+  return()=>{instance.off('moveend',schedule);instance.off('zoomend',schedule);instance.off('resize',schedule);clearInterval(interval);if(timer!==undefined)clearTimeout(timer);layer.replaceChildren();};
+ },[ready,headquarters?.lng,headquarters?.lat,JSON.stringify(depots),stations,stationsVisible]);
 
  // Repaint only when the game enters a different lighting phase. Never call
  // setStyle for the clock: that would discard exploration/ferry layers and stutter taxis.
@@ -666,5 +727,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   <button type="button" onClick={()=>void copyStartupLog()} style={{padding:'7px 10px',background:'#23667b',color:'white',borderRadius:8}}>{startupCopied?'Copied!':'Copy full log'}</button>
   <textarea readOnly aria-label="Startup diagnostic log" value={startupReport()} onFocus={e=>e.currentTarget.select()} style={{display:'block',marginTop:8,width:'100%',height:280,color:'#14252c',background:'white',fontSize:11}}/>
  </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control" style={{display:"flex",alignItems:"flex-start",gap:8}}>{gameClock&&<div style={{background:"#152b34",color:"#f5f9fb",borderRadius:12,padding:"8px 10px",fontSize:12,boxShadow:"0 2px 8px #0004",display:"flex",flexDirection:"column",gap:3}} title="Game time continues while offline"><strong>🕒 {formatGameClock(gameClock)}</strong><span>Automatic taxi shifts · 12h duty · 30m break</span></div>}<button className="map-layer-trigger" type="button" aria-expanded={selectorOpen} aria-controls="map-layer-options" onClick={()=>setSelectorOpen(v=>!v)}><Layers3 size={17}/> Map layers</button>{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> MapTiler Streets v4</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><div>{roadStatus}</div><div>Reddish = undiscovered roads. Purple = roads discovered by Purple Explorers; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }

@@ -18,7 +18,7 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void,companyId?:string):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void,companyId?:string,onPositions?:(positions:Array<{id:string;point:Coordinate}>)=>void):()=>void{
  const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
@@ -60,6 +60,7 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
   const now=Date.now();
   const bounds=map.getBounds();
   const active=new Set<string>();
+  const positions:Array<{id:string;point:Coordinate}>=[];
   // Cap DOM markers and work per update. Do not bind to map move/render events.
   for(const sailing of sailings){
    if(active.size>=35)break;
@@ -88,6 +89,7 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
     onSailed?.(sailing.id,segments);
     lastSailed.set(sailing.id,{progress,cycle:cycleIndex,at:now});
    }
+   positions.push({id:sailing.id,point});
    if(!bounds.contains(point))continue;
    active.add(sailing.id);
    let marker=markers.get(sailing.id);
@@ -103,6 +105,7 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
    marker.setLngLat(point);
    marker.setRotation((forward?bearing:bearing+180)-90);
   }
+  onPositions?.(positions);
   for(const [id,marker] of markers)if(!active.has(id)){marker.remove();markers.delete(id);}
  };
  const timer=window.setInterval(()=>{if(!document.hidden)refresh()},250);
