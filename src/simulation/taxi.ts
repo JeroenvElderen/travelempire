@@ -673,6 +673,33 @@ export function dispatchScout(
  // Green explorers prefer missing links, falling back to nearest-road expansion.
  if(specialist==='completion')best=completionBest;
  else if(specialist)best=specialistBest;
+ // Keep specialist scouts moving along the road they are already following.
+ // The nearest-frontier search otherwise sends them backwards even when an
+ // eligible undiscovered continuation is connected to the current junction.
+ if(taxi.kind==='explorer'&&specialist&&specialist!=='completion'&&specialist!=='poi'&&incomingNode){
+  const previousPoint=graph.nodes.get(incomingNode),at=graph.nodes.get(start);
+  if(previousPoint&&at){
+   const scale=Math.cos(at[1]*Math.PI/180);
+   const ax=(at[0]-previousPoint[0])*scale,ay=at[1]-previousPoint[1];
+   const am=Math.hypot(ax,ay);
+   let forward:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
+   let forwardAngle=Infinity;
+   for(const edge of graph.edges.get(start)??[]){
+    if(edge.to===incomingNode||edge.meters<=0||explored.has(edge.id)||reservedEdges.has(edge.id)||reservedTargets.has(edge.to)||
+       (_allowedRoads&&!_allowedRoads.has(edge.id))||(discoveryAllowed&&!discoveryAllowed.has(edge.id))||
+       (requiredFrontier&&!requiredFrontier.has(start))||!specialistMatch(edge.highway??''))continue;
+    const end=graph.nodes.get(edge.to);if(!end||am<1e-12)continue;
+    const bx=(end[0]-at[0])*scale,by=end[1]-at[1],bm=Math.hypot(bx,by);
+    if(bm<1e-12)continue;
+    const cosine=(ax*bx+ay*by)/(am*bm);
+    if(cosine>0.5&&-cosine<forwardAngle){
+     forwardAngle=-cosine;
+     forward={from:start,to:edge.to,id:edge.id,distance:0,inside:false,local:true};
+    }
+   }
+   if(forward)best=forward;
+  }
+ }
  if(!best)return taxi;
  const block=taxi.explorerRole?null:blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
  const keys=[best.from],ids:string[]=[];
