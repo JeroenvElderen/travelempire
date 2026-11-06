@@ -29,7 +29,18 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const wheels=wheelChoices(model,year,currentTrim,activeVariant?.id);
  const paint=paints.find(p=>p.id===paintId)??paints[0];
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
- const extras=individualOptions(model,year,currentTrim);
+ const extras=useMemo(()=>{
+  const options=individualOptions(model,year,currentTrim);
+  // Manufacturer data sometimes repeats the same equipment under different IDs.
+  // Show it once and charge only once.
+  const unique=new Map<string,(typeof options)[number]>();
+  for(const option of options){
+   const key=option.label.trim().toLocaleLowerCase().replace(/\\s+/g,' ');
+   const previous=unique.get(key);
+   if(!previous||(!option.included&&previous.included))unique.set(key,option);
+  }
+  return [...unique.values()];
+ },[model,year,currentTrim]);
  const extraIds=selectedExtras.filter(id=>extras.some(o=>o.id===id&&!o.included));
  const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
  const market=marketPrice(model,year);
@@ -62,9 +73,9 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
          const selected=o.included||extraIds.includes(o.id);
          return <button key={o.id} type="button" aria-pressed={selected} disabled={o.included}
           onClick={()=>setSelectedExtras(old=>old.includes(o.id)?old.filter(id=>id!==o.id):[...old,o.id])}
-          style={{display:'flex',width:'100%',alignItems:'center',justifyContent:'space-between',gap:'12px',textAlign:'left',padding:'12px',marginBottom:'8px',borderRadius:'10px',border:selected?'2px solid #22a35a':'1px solid var(--border, #cbd5e1)',background:selected?'rgba(34,163,90,0.08)':'transparent',color:'inherit',cursor:o.included?'default':'pointer',opacity:1}}>
-          <span style={{display:'flex',flexDirection:'column',gap:'3px'}}><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
-          {selected&&<span aria-hidden="true" style={{color:'#22a35a',fontWeight:700,fontSize:'12px'}}>{o.included?'Included':'Selected'}</span>}
+          style={{display:'flex',width:'100%',minWidth:0,boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',gap:'8px',textAlign:'left',padding:'10px',borderRadius:'10px',border:selected?'2px solid #22a35a':'1px solid var(--border, #cbd5e1)',background:selected?'rgba(34,163,90,0.08)':'transparent',color:'inherit',cursor:o.included?'default':'pointer',opacity:1}}>
+          <span style={{display:'flex',minWidth:0,flex:1,flexDirection:'column',gap:'3px',overflowWrap:'anywhere'}}><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
+          {selected&&<span aria-hidden="true" style={{color:'#22a35a',fontWeight:700,fontSize:'11px',flexShrink:0}}>{o.included?'Included':'Selected'}</span>}
          </button>;
         })}</div>
        </details>;
