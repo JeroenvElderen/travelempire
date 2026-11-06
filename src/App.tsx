@@ -757,18 +757,18 @@ export default function App(){
      const efficiencyBonus=(skill-1)*0.03;
      const careBonus=(skill-1)*0.0375;
      const serviceBonus=(skill-1)*0.02;
-     const consumed=energyUsed(delivered,km,efficiencyBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.12:1);
+     const consumed=energyUsed(delivered,km,efficiencyBonus)*(1-Math.min(0.45,Research.level(research,'engine')*0.05+Research.level(research,'fuelInjection')*0.02+Research.level(research,'lightweight')*0.02+Research.level(research,'ecoDriving')*0.03+(t.kind==='explorer'?Research.level(research,'patrol')*0.02:0)))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.12:1);
      // Energy purchases are charged at refill time, never again per driven kilometre.
      const depotLevels=upgradesFor(old,t.depotId??'main');
-     const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
-     const explorerTravelCost=(t.kind==='explorer')?km*0.50:0;
+     const fuel=0,maintenance=km*0.075*(1-Math.min(0.45,Research.level(research,'lubrication')*0.04+Research.level(research,'routing')*0.02+Research.level(research,'workshopResearch')*0.04+Research.level(research,'parts')*0.03))*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
+     const explorerTravelCost=(t.kind==='explorer')?km*0.50*(1-Math.min(0.45,Research.level(research,'survey')*0.06+Research.level(research,'navigation')*0.03)):0;
      explorationExpense+=explorerTravelCost;
-     const wearPerKm=0.025*(1-careBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
+     const wearPerKm=0.025*(1-careBonus)*(1-Math.min(0.50,Research.level(research,'durability')*0.07+Research.level(research,'defensive')*0.03))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
      const wage=(t.kind==='explorer')?0:0.009*(old.wageMultiplier??1)*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
-     const insurance=(t.kind==='explorer')?0.00045:0.00085; // €3.06 per simulated hour per taxi
+     const insurance=((t.kind==='explorer')?0.00045:0.00085)*(1-Research.level(research,'insuranceResearch')*0.05); // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
-     const earned=next.earned*(1+0.05*Research.level(research,'pricing'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
+     const earned=next.earned*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty'))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
      revenue+=earned;
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
@@ -817,7 +817,7 @@ export default function App(){
     const facilityByDepot=depotDefinitions.map(d=>{
       const assigned=assignedByDepot.get(d.id)??0;
       const daily=depotDailyTotal(d.id==='main',upgradesFor(old,d.id),depotCapacity(d,upgradesFor(old,d.id)));
-      return {id:d.id,name:d.name,assigned,cost:daily*4/86400};
+      return {id:d.id,name:d.name,assigned,cost:daily*4/86400*(1-Research.level(research,'depotEfficiency')*0.04)};
     });
     const facilityCost=facilityByDepot.reduce((a,d)=>a+d.cost,0);
     const depotHistory:DepotFinanceRecord[]=[...(old.depotFinanceHistory??[])];
