@@ -5,7 +5,7 @@ import type {VehicleOffer} from './dealership';
 export type VehicleModel={brand:string;name:string;segment:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';basePrice:number;seats:number;fuel:'Petrol'|'Hybrid'|'Diesel'|'Electric';years:number[]};
 type Row=[string,string,VehicleModel['segment'],number,number?,VehicleModel['fuel']?];
 const rows:Row[]=[
-['Toyota','Yaris','Economy',23500],['Toyota','Corolla','Standard',30500],['Toyota','Prius','Comfort',39500],['Toyota','Camry','Comfort',44500],['Toyota','RAV4','Comfort',41500],['Toyota','Proace Verso','XL',48500,8],
+['Toyota','Aygo X','Economy',24520,4,'Hybrid'],['Toyota','Yaris','Economy',23500],['Toyota','Corolla','Standard',30500],['Toyota','Prius','Comfort',39500],['Toyota','Camry','Comfort',44500],['Toyota','RAV4','Comfort',41500],['Toyota','Proace Verso','XL',48500,8],
 ['Volkswagen','Polo','Economy',25500],['Volkswagen','Golf','Standard',32500],['Volkswagen','Passat','Comfort',42500],['Volkswagen','Tiguan','Comfort',40500],['Volkswagen','ID.3','Standard',37500,4,'Electric'],['Volkswagen','ID.4','Comfort',47500,4,'Electric'],['Volkswagen','Multivan','XL',62500,6],
 ['Škoda','Fabia','Economy',23500],['Škoda','Scala','Standard',27500],['Škoda','Octavia','Standard',32500],['Škoda','Superb','Comfort',43500],['Škoda','Kodiaq','XL',46500,6],['Škoda','Enyaq','Comfort',47500,4,'Electric'],
 ['BMW','1 Series','Standard',38500],['BMW','3 Series','Premium',51500],['BMW','5 Series','Premium',67500],['BMW','7 Series','Premium',112000],['BMW','i4','Premium',62500,4,'Electric'],['BMW','i5','Premium',79500,4,'Electric'],['BMW','X3','Premium',64500],
@@ -57,7 +57,44 @@ export const DEALERSHIP_BRANDS=['Peugeot','Renault','BMW','Mercedes-Benz','Audi'
 const dealershipBrandSet=new Set<string>(DEALERSHIP_BRANDS);
 export const EUROPEAN_MODELS:VehicleModel[]=rows.filter(([brand])=>dealershipBrandSet.has(brand)).map(([brand,name,segment,basePrice,seats=segment==='XL'?6:4,fuel='Petrol'])=>({brand,name,segment,basePrice,seats,fuel:brand==='Renault'&&name==='Clio'?'Hybrid':brand==='Renault'&&name==='Austral'?'Hybrid':brand==='Renault'&&name==='Captur'?'Hybrid':fuel,years:[2025,2026]}));
 export const BRANDS=[...new Set(EUROPEAN_MODELS.map(m=>m.brand))].sort((a,b)=>a.localeCompare(b));
-export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment']};
+export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment'];trims?:string[];years?:number[];variantIds?:string[];included?:boolean;requires?:string[];excludes?:string[];includes?:string[]};
+export type VehicleColor={id:string;name:string;hex:string;price:number;trims?:string[];years?:number[];variantIds?:string[];bonus?:number};
+export type ConfiguratorChoice={id:string;name:string;price:number;trims?:string[];years?:number[];variantIds?:string[];included?:boolean;bonus?:number;hex?:string;requires?:string[];excludes?:string[]};
+export type ConfiguratorGroup={id:string;label:string;selection:'single'|'multiple';required?:boolean;choices:ConfiguratorChoice[]};
+export type VehicleConfiguration={brand:string;model:string;year:number;reference?:string;notes?:string;colors:VehicleColor[];options:FactoryOption[];configurator:ConfiguratorGroup[]};
+export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
+ 'Toyota|Aygo X|2026':{
+  brand:'Toyota',model:'Aygo X',year:2026,
+  reference:'https://www.toyota.ie/models/aygo-x.html',
+  notes:'Irish model grades and published starting prices. Paint surcharges have not been verified; €0 denotes unverified price, not a confirmed free option. HEX swatches are approximate.',
+  colors:[
+   {id:'aygo-pure-white',name:'Pure White (040)',hex:'#F4F4F0',price:0,trims:['Pulse']},
+   {id:'aygo-night-sky-black',name:'Night Sky Black (209)',hex:'#17191B',price:0,trims:['Pulse']},
+   {id:'aygo-persian-salt',name:'Persian Salt (1K3)',hex:'#C7C3B8',price:0,trims:['Pulse']},
+   {id:'aygo-tarragon',name:'Tarragon Green Bi-tone (2VN)',hex:'#69765A',price:0,trims:['Design']},
+   {id:'aygo-cinnamon',name:'Cinnamon Bi-tone (M49)',hex:'#B66A4E',price:0,trims:['Design']},
+   {id:'aygo-lavender',name:'Lavender Bi-tone (M51)',hex:'#9A8EAB',price:0,trims:['Design']},
+   {id:'aygo-pearl-white',name:'Pearl Ice White Bi-tone (2PS)',hex:'#F0F0EA',price:0,trims:['GR SPORT']},
+   {id:'aygo-tokyo-gold',name:'Tokyo Gold Bi-tone (M50)',hex:'#B29A59',price:0,trims:['GR SPORT']},
+   {id:'aygo-storm-grey',name:'Storm Grey Bi-tone (M52)',hex:'#656B70',price:0,trims:['GR SPORT']}
+  ],
+  options:[],
+  configurator:[
+   {id:'wheels',label:'Wheels',selection:'single',required:true,choices:[
+    {id:'aygo-17',name:'17-inch alloy wheels',price:0,included:true,trims:['Pulse','Design']},
+    {id:'aygo-18',name:'18-inch alloy wheels',price:0,included:true,trims:['GR SPORT']}
+   ]},
+   {id:'infotainment',label:'Standard infotainment',selection:'single',required:true,choices:[
+    {id:'aygo-9',name:'9-inch multimedia display',price:0,included:true,trims:['Pulse','Design']},
+    {id:'aygo-10',name:'10.5-inch multimedia display with Toyota Smart Connect',price:0,included:true,trims:['GR SPORT']}
+   ]}
+  ]
+ }
+};
+export function vehicleConfiguration(model:VehicleModel,year:number):VehicleConfiguration|undefined{return VEHICLE_CONFIGURATIONS[model.brand+'|'+model.name+'|'+year];}
+export function availableColors(model:VehicleModel,year:number,trim?:string):VehicleColor[]{return (vehicleConfiguration(model,year)?.colors??[]).filter(c=>(!c.years||c.years.includes(year))&&(!c.trims||(trim!==undefined&&c.trims.includes(trim))));}
+export function availableConfiguratorGroups(model:VehicleModel,year:number,trim?:string,variantId?:string):ConfiguratorGroup[]{return (vehicleConfiguration(model,year)?.configurator??[]).map(g=>({...g,choices:g.choices.filter(c=>(!c.years||c.years.includes(year))&&(!c.trims||(trim!==undefined&&c.trims.includes(trim)))&&(!c.variantIds||(variantId!==undefined&&c.variantIds.includes(variantId))))})).filter(g=>g.choices.length>0);}
+
 export const FACTORY_OPTIONS:FactoryOption[]=[
 {id:'metallic',group:'Exterior',label:'Metallic paint',price:900,bonus:1},
 {id:'special-paint',group:'Exterior',label:'Special paint finish',price:2400,bonus:3},
@@ -77,7 +114,7 @@ export const FACTORY_OPTIONS:FactoryOption[]=[
 const order=['Economy','Standard','Comfort','Premium','XL'];
 // Gameplay compatibility rules, not official manufacturer build sheets.
 export function compatibleOptions(model:VehicleModel){
- return FACTORY_OPTIONS.filter(o=>{
+ return (vehicleConfiguration(model,2026)?.options ?? FACTORY_OPTIONS).filter(o=>{
   if(o.minimum&&order.indexOf(model.segment)<order.indexOf(o.minimum))return false;
   if(model.segment==='Economy'&&['wheels20','entertainment','executive','luxury-interior'].includes(o.id))return false;
   if(model.segment==='XL'&&o.id==='wheels20')return false;
@@ -113,6 +150,11 @@ export type VerifiedVariant={id:string;trim:string;engine:string;fuel:VehicleMod
 const OCTAVIA_SOURCE='https://www.skoda.ie/_doc/84f89261-ee2b-4e9d-8e34-519ef6ed35ea';
 const GOLF_SOURCE='https://www.volkswagen.de/de/konfigurator.html/__app/der-neue-golf-2025/standardmodelle/r-line.app?modelYear-app=2026&trimName-app=R-Line';
 const VERIFIED_VARIANTS:Record<string,VerifiedVariant[]>={
+ 'Toyota|Aygo X|2026':[
+  {id:'aygo-pulse',trim:'Pulse',engine:'1.5 TNGA HEV',fuel:'Hybrid',transmission:'Multidrive 7',powerHp:0,price:24520,consumptionL100:3.8,source:'https://www.toyota.ie/models/aygo-x.html',market:'Ireland'},
+  {id:'aygo-design',trim:'Design',engine:'1.5 TNGA HEV',fuel:'Hybrid',transmission:'Multidrive 7',powerHp:0,price:26870,consumptionL100:3.8,source:'https://www.toyota.ie/models/aygo-x.html',market:'Ireland'},
+  {id:'aygo-gr-sport',trim:'GR SPORT',engine:'1.5 TNGA HEV',fuel:'Hybrid',transmission:'Multidrive 7',powerHp:0,price:30870,consumptionL100:3.8,source:'https://www.toyota.ie/models/aygo-x.html',market:'Ireland'}
+ ],
  'Škoda|Octavia|2026':[
   {id:'oct-115-man-sel',trim:'Selection',engine:'1.5 TSI',fuel:'Petrol',transmission:'6-speed manual',powerHp:115,price:33070,consumptionL100:5.6,source:OCTAVIA_SOURCE,market:'Ireland'},
   {id:'oct-115-mhev-sel',trim:'Selection',engine:'1.5 TSI mHEV',fuel:'Hybrid',transmission:'7-speed DSG',powerHp:115,price:35915,consumptionL100:5.3,source:OCTAVIA_SOURCE,market:'Ireland'},
@@ -249,6 +291,7 @@ export function trimPricing(model:VehicleModel,year:number,trim:string){
 }
 export function pricedOptions(model:VehicleModel,year:number):FactoryOption[]{
  const profile=marketPrice(model,year);
+ if(vehicleConfiguration(model,year))return compatibleOptions(model);
  const brandFactor=model.brand==='BMW'?1.5:model.brand==='Mercedes-Benz'?1.45:model.brand==='Porsche'?1.7:model.brand==='Volkswagen'?1.1:model.brand==='Toyota'?.9:1;
  return compatibleOptions(model).map(option=>({
   ...option,
