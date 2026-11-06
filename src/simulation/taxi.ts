@@ -890,10 +890,19 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   // The motorway explorer may transit undiscovered roads of any class, but
   // traversing them must never reveal them. Validate against the graph as well
   // as the dispatch assignment, including routes restored from older saves.
-  const motorwayIds=taxi.kind==='explorer'&&taxi.explorerRole==='motorway'
-   ?new Set([...graph.edges.values()].flatMap(links=>links.filter(e=>e.highway==='motorway'||e.highway==='motorway_link').map(e=>e.id)))
-   :null;
-  const newlyDiscovered=eligible?advanced.crossed.filter(id=>eligible.has(id)&&(!motorwayIds||motorwayIds.has(id))):advanced.crossed;
+  const newlyDiscovered=eligible?advanced.crossed.filter(id=>{
+   if(!eligible.has(id))return false;
+   if(taxi.explorerRole!=='motorway')return true;
+   // Only inspect edges actually crossed this tick, never scan the whole graph.
+   for(let leg=taxi.leg;leg<advanced.taxi.leg;leg++){
+    if(taxi.edgeIds[leg]!==id)continue;
+    const from=taxi.path[leg],to=taxi.path[leg+1];
+    if(!from||!to)continue;
+    const edge=graph.edges.get(key(from))?.find(e=>e.id===id&&e.to===key(to));
+    if(edge?.highway==='motorway'||edge?.highway==='motorway_link')return true;
+   }
+   return false;
+  }):advanced.crossed;
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
