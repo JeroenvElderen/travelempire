@@ -4,7 +4,7 @@ import type {VehicleOffer} from './dealership';
 // All monetary amounts below are TravelEmpire gameplay prices, NOT Toyota quotations.
 export type VehicleModel={brand:string;name:string;segment:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';basePrice:number;seats:number;fuel:'Petrol'|'Hybrid'|'Diesel'|'Electric';years:number[]};
 export const DEALERSHIP_BRANDS=['Toyota'] as const;
-export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Aygo X',segment:'Economy',basePrice:24835,seats:4,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Yaris',segment:'Economy',basePrice:28400,seats:5,fuel:'Hybrid',years:[2026]}];
+export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Aygo X',segment:'Economy',basePrice:24835,seats:4,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Yaris',segment:'Economy',basePrice:28400,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'GR Yaris',segment:'Premium',basePrice:58900,seats:4,fuel:'Petrol',years:[2026]}];
 export const BRANDS=['Toyota'];
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment'];trims?:string[];years?:number[];variantIds?:string[];included?:boolean;includedTrims?:string[];requires?:string[];excludes?:string[];includes?:string[]};
 export type VehicleColor={id:string;name:string;hex:string;price:number;trims?:string[];years?:number[];variantIds?:string[];bonus?:number};
@@ -15,7 +15,8 @@ export type VerifiedVariant={id:string;trim:string;engine:string;fuel:VehicleMod
 export type MarketPrice={market:string;from:number;year:number;source:string;note:string;trims?:readonly string[]};
 const SOURCE='https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/AYGOX-PDF-GUIDE.pdf';
 export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
- 'Toyota|Yaris|2026':{brand:'Toyota',model:'Yaris',year:2026,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',notes:'Toyota Ireland March 2026 product guide; prices are TravelEmpire gameplay estimates. Colour HEX approximate.',colors:[{id:'yaris-paint-0',name:"Pure White (040)",hex:'#F3F2EF',price:0,trims:["Luna","Luna Sport","Platinum"]},
+ 'Toyota|GR Yaris|2026':{brand:'Toyota',model:'GR Yaris',year:2026,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/GR-Yaris-PDF-Guide.pdf',notes:'Toyota Ireland GR Yaris guide dated May 2024, used as a specification reference for a 2026 game entry. Model-year availability is not verified. All prices are TravelEmpire estimates; HEX values approximate.',colors:[{id:'gr-yaris-paint-0',name:"Pure White (040)",hex:'#F2F1EC',price:0},{id:'gr-yaris-paint-1',name:"Pearl Ice White (089)",hex:'#F2F0E8',price:850},{id:'gr-yaris-paint-2',name:"Precious Black (219)",hex:'#161719',price:500},{id:'gr-yaris-paint-3',name:"Pearl Red (3US)",hex:'#9C202B',price:850},{id:'gr-yaris-paint-4',name:"Precious Metal (1L5)",hex:'#777D81',price:850}],options:[],configurator:[{id:'wheels',label:'Wheels',selection:'single',required:true,choices:[{id:'gr-yaris-18-machined',name:'18-inch machined alloy wheels with Michelin Pilot Sport 4S tyres',price:0,included:true}]}]},
+  'Toyota|Yaris|2026':{brand:'Toyota',model:'Yaris',year:2026,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',notes:'Toyota Ireland March 2026 product guide; prices are TravelEmpire gameplay estimates. Colour HEX approximate.',colors:[{id:'yaris-paint-0',name:"Pure White (040)",hex:'#F3F2EF',price:0,trims:["Luna","Luna Sport","Platinum"]},
 {id:'yaris-paint-1',name:"Storm Grey (1M2)",hex:'#62676C',price:500,trims:["Luna","Luna Sport","Platinum"]},
 {id:'yaris-paint-2',name:"Celestite Grey (1K3)",hex:'#8E9294',price:500,trims:["Luna","Luna Sport","Platinum"]},
 {id:'yaris-paint-3',name:"Night Sky Black (209)",hex:'#191B20',price:500,trims:["Luna","Luna Sport","Platinum"]},
@@ -59,6 +60,54 @@ const AYGO_VARIANTS:VerifiedVariant[]=[
 // Toyota brochure features are individual choices, not bundled packs.
 // 'included' means the feature is standard on the listed grades; it cannot be charged again.
 // Prices for non-standard selections are TravelEmpire game estimates, not factory availability claims.
+// The May 2024 GR Yaris guide lists the following as standard specification,
+// not standalone purchasable upgrades. They are retained for grade equipment data
+// and hidden by the dealership's included-equipment filter.
+export const GR_YARIS_INDIVIDUAL_OPTIONS:FactoryOption[]=[{id:'gr-yaris-exterior-0',group:'Exterior',label:"Follow-me-home headlights",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-1',group:'Exterior',label:"LED headlamps",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-2',group:'Exterior',label:"Power-adjustable heated auto-folding door mirrors",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-3',group:'Exterior',label:"Automatic High Beam",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-4',group:'Exterior',label:"Privacy glass",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-5',group:'Exterior',label:"Shark-fin antenna",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-6',group:'Exterior',label:"Carbon-fibre reinforced plastic roof with protective film",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-7',group:'Exterior',label:"Black rear spoiler",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-8',group:'Exterior',label:"Dual exhausts with diffuser",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-9',group:'Exterior',label:"Red sport brake callipers",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-10',group:'Exterior',label:"Double wishbone rear suspension",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-11',group:'Exterior',label:"MacPherson front suspension",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-12',group:'Exterior',label:"Sport/Normal/Track drive mode selector",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-13',group:'Exterior',label:"Torsen limited-slip differential",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-exterior-14',group:'Exterior',label:"GR Circuit-tuned suspension",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-0',group:'Interior',label:"12.3-inch TFT driver display",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-1',group:'Interior',label:"Three-spoke leather GR SPORT steering wheel",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-2',group:'Interior',label:"60:40 split-folding rear seats",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-3',group:'Interior',label:"Sport front seats",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-4',group:'Interior',label:"Height-adjustable driver seat",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-5',group:'Interior',label:"Black leather and UltraSuede upholstery with white stitching",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-interior-6',group:'Interior',label:"Aluminium pedals",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-0',group:'Technology',label:"8-inch Toyota Touch multimedia display",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-1',group:'Technology',label:"Apple CarPlay and Android Auto",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-2',group:'Technology',label:"Bluetooth hands-free",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-3',group:'Technology',label:"Six-speaker audio system",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-4',group:'Technology',label:"Two USB-C ports",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-technology-5',group:'Technology',label:"Embedded navigation",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-0',group:'Safety',label:"Toyota Safety Sense 2",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-1',group:'Safety',label:"SRS airbags",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-2',group:'Safety',label:"Rear-view camera",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-3',group:'Safety',label:"Road Sign Assist",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-4',group:'Safety',label:"Lane Trace Assist",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-5',group:'Safety',label:"Pre-Collision System with Emergency Steering Assist",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-6',group:'Safety',label:"Intelligent Adaptive Cruise Control",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-safety-7',group:'Safety',label:"Immobiliser and intrusion alarm",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-0',group:'Comfort',label:"Dual-zone climate control",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-1',group:'Comfort',label:"Rain sensor",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-2',group:'Comfort',label:"Dusk sensor",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-3',group:'Comfort',label:"Smart Entry and Start",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-4',group:'Comfort',label:"Electrochromatic rear-view mirror",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-5',group:'Comfort',label:"Stop and Start System",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-comfort-6',group:'Comfort',label:"Smart Digital Key",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-wheels-0',group:'Wheels',label:"Tyre repair kit",price:0,bonus:0,includedTrims:['GR Yaris M/T','GR Yaris A/T']},
+{id:'gr-yaris-paddle-shifters',group:'Interior',label:'Paddle shifters',price:0,bonus:0,includedTrims:['GR Yaris A/T']}];
 export const YARIS_INDIVIDUAL_OPTIONS:FactoryOption[]=[
 {id:'yaris-safety-0',group:'Safety',label:"Toyota Safety Sense 3",price:250,bonus:0,includedTrims:["Luna","Luna Sport","Platinum","GR SPORT"]},
 {id:'yaris-safety-1',group:'Safety',label:"Pre-Collision System with Pedestrian and Cyclist Detection",price:250,bonus:0,includedTrims:["Luna","Luna Sport","Platinum","GR SPORT"]},
@@ -175,10 +224,14 @@ export const AYGO_INDIVIDUAL_OPTIONS:FactoryOption[]=[
  {id:'aygo-side-garnish-toyota-accessory',group:'Exterior',label:"Side garnish (Toyota accessory)",price:210,bonus:0,},
 ];
 export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{
- const list=model.brand==='Toyota'&&year===2026?(model.name==='Aygo X'?AYGO_INDIVIDUAL_OPTIONS:model.name==='Yaris'?YARIS_INDIVIDUAL_OPTIONS:[]):[];
+ const list=model.brand==='Toyota'&&year===2026?(model.name==='Aygo X'?AYGO_INDIVIDUAL_OPTIONS:model.name==='Yaris'?YARIS_INDIVIDUAL_OPTIONS:model.name==='GR Yaris'?GR_YARIS_INDIVIDUAL_OPTIONS:[]):[];
  return list.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));
 }
 
+const GR_YARIS_VARIANTS:VerifiedVariant[]=[
+ {id:'gr-yaris-mt',trim:'GR Yaris M/T',engine:'1.6 Turbo AWD 280 hp',fuel:'Petrol',transmission:'6-speed manual',powerHp:280,price:58900,consumptionL100:8.7,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/GR-Yaris-PDF-Guide.pdf',market:'Ireland (game price)'},
+ {id:'gr-yaris-at',trim:'GR Yaris A/T',engine:'1.6 Turbo AWD 280 hp',fuel:'Petrol',transmission:'8-speed automatic',powerHp:280,price:61900,consumptionL100:9.5,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/GR-Yaris-PDF-Guide.pdf',market:'Ireland (game price)'}
+];
 const YARIS_VARIANTS:VerifiedVariant[]=[{id:'yaris-0',trim:'Luna',engine:'1.5 Hybrid 116 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:116,price:28400,consumptionL100:3.8,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',market:'Ireland (game price)'},{id:'yaris-1',trim:'Luna Sport',engine:'1.5 Hybrid 116 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:116,price:30400,consumptionL100:4.3,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',market:'Ireland (game price)'},{id:'yaris-2',trim:'Platinum',engine:'1.5 Hybrid 116 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:116,price:33400,consumptionL100:4.3,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',market:'Ireland (game price)'},{id:'yaris-3',trim:'GR SPORT',engine:'1.5 Hybrid 130 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:130,price:36900,consumptionL100:4.4,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/YARIS-PDF-GUIDE.pdf',market:'Ireland (game price)'}];
 export const FACTORY_OPTIONS:FactoryOption[]=[];
 export function vehicleConfiguration(model:VehicleModel,year:number):VehicleConfiguration|undefined{return VEHICLE_CONFIGURATIONS[model.brand+'|'+model.name+'|'+year];}
@@ -188,7 +241,7 @@ export function paintChoices(model:VehicleModel,year:number,trim:string):Vehicle
 export function wheelChoices(model:VehicleModel,year:number,trim:string,variantId?:string):ConfiguratorChoice[]{return availableConfiguratorGroups(model,year,trim,variantId).find(g=>g.id==='wheels')?.choices??[];}
 export function compatibleOptions(_model:VehicleModel):FactoryOption[]{return [];}
 export function pricedOptions(model:VehicleModel,year:number):FactoryOption[]{return individualOptions(model,year,trimChoices(model,year)[0]??'');}
-export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'&&year===2026?(model.name==='Aygo X'?AYGO_VARIANTS:model.name==='Yaris'?YARIS_VARIANTS:[]):[];}
+export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'&&year===2026?(model.name==='Aygo X'?AYGO_VARIANTS:model.name==='Yaris'?YARIS_VARIANTS:model.name==='GR Yaris'?GR_YARIS_VARIANTS:[]):[];}
 export function marketPrice(_model:VehicleModel,_year:number):MarketPrice|undefined{return undefined;}
 export function trimChoices(model:VehicleModel,year:number):readonly string[]{const variants=verifiedVariants(model,year);return [...new Set(variants.map(v=>v.trim))];}
 export function trimPricing(model:VehicleModel,year:number,trim:string){const variant=verifiedVariants(model,year).find(v=>v.trim===trim);return {base:variant?.price??model.basePrice,cost:0,bonus:0};}
