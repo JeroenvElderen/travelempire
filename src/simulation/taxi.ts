@@ -672,6 +672,8 @@ export function dispatchScout(
       }
      }
    }
+   // Later tiers may only transit over discovered roads, never cut through fog.
+   if(requiredFrontier&&!explored.has(edge.id))continue;
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);

@@ -141,7 +141,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const poiRoads=new Set<string>();
    const poiTargets=(msg.poiTargets??[]).slice(0,150);
    if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
-    for(const edge of links)if(!explored.has(edge.id))poiRoads.add(edge.id);
+    for(const edge of links)poiRoads.add(edge.id);
    }
    // Each class must branch from a road discovered by the immediately preceding class.
    const sequence=['motorway','trunk','primary','secondary','tertiary','residential','rural','service','poi','completion'] as const;
