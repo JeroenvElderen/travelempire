@@ -13,7 +13,9 @@ const yieldToRenderer=()=>new Promise<void>(resolve=>{
 });
 // One background tile at a time avoids concurrent structured-clone and graph updates on iPhone.
 const MAX_CONCURRENT=1;
-const GRAPH_PUBLISH_INTERVAL_MS=5000;
+// Publishing a graph snapshot invalidates expensive map and simulation consumers.
+// Keep the first usable graph immediate; coalesce later tile updates on mobile.
+const GRAPH_PUBLISH_INTERVAL_MS=15000;
 type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
 const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
