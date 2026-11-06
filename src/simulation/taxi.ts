@@ -812,45 +812,23 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  const t={...taxi};
  const crossed:string[]=[];
  let distanceMeters=0;
- // Purple Road Explorers now advance at normal 1x simulation speed.
- // Road physics and discovery behavior remain unchanged.
- const vehicleTimeScale=1;
- let time=Math.min(realSeconds,5)*GAME_SPEED*vehicleTimeScale;
- const acceleration=t.kind==='explorer'||t.kind==='surveyor'?1.35:t.drivingPolicy==='economy'?1.2:t.drivingPolicy==='performance'?2.5:1.9;
- const braking=3.5;
- // Fixed small time steps preserve smooth animation and prevent junction overshoot.
+ // Drive at the exact hardcoded road speed: no acceleration, traffic or turn slowdown.
+ let time=Math.min(realSeconds,5)*GAME_SPEED;
  while(time>0.00001&&t.leg<t.path.length-1){
   const a=t.path[t.leg],b=t.path[t.leg+1];
   const length=meters(a,b);
   const edge=graph.edges.get(key(a))?.find(e=>e.to===key(b)&&e.id===t.edgeIds[t.leg]);
-  const roadLimit=clamp(edge?.speedKph??50,5,160)/3.6;
-  const cruise=roadLimit*trafficFactor(edge?.speedKph??50)*(t.drivingPolicy==='economy'?0.82:t.drivingPolicy==='performance'?1:0.97);
+  const roadSpeed=clamp(edge?.speedKph??50,5,160);
+  const metersPerSecond=roadSpeed/3.6;
+  t.speedKph=roadSpeed;
   const remaining=Math.max(0,length-t.distanceIntoLeg);
-  const nextIndex=t.leg+1;
-  let junctionLimit=roadLimit;
-  if(nextIndex<t.path.length-1){
-   const c=t.path[nextIndex+1];
-   const nextEdge=graph.edges.get(key(b))?.find(e=>e.to===key(c)&&e.id===t.edgeIds[nextIndex]);
-   const nextLimit=clamp(nextEdge?.speedKph??50,5,160)/3.6;
-   const curveLimit=turnSpeedKph(a,b,c)/3.6;
-   junctionLimit=Math.min(nextLimit,curveLimit);
-   // Respect actual corner curvature; straight-through intersections must not
-   // force vehicles to crawl at 12 km/h on otherwise faster roads.
-  }
-  // v² = u² + 2as: brake early enough to respect the next road and turn.
-  const safeApproach=Math.sqrt(Math.max(0,junctionLimit*junctionLimit+2*braking*remaining));
-  const target=Math.min(cruise,roadLimit,safeApproach);
-  const dt=Math.min(0.1,time);
-  const current=clamp((t.speedKph??0)/3.6,0,roadLimit);
-  const change=target-current;
-  const nextSpeed=clamp(current+clamp(change,-braking*dt,acceleration*dt),0,roadLimit);
-  t.speedKph=nextSpeed*3.6;
-  const distance=(current+nextSpeed)/2*dt;
-  const moved=Math.min(distance,remaining);
+  const stepSeconds=Math.min(time,remaining/metersPerSecond);
+  const moved=metersPerSecond*stepSeconds;
   t.distanceIntoLeg+=moved;
   distanceMeters+=moved;
   const fraction=length>0?clamp(t.distanceIntoLeg/length,0,1):1;
   t.position=[a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
+  time-=stepSeconds;
   if(t.distanceIntoLeg>=length-0.0001){
    const id=t.edgeIds[t.leg];if(id)crossed.push(id);
    t.lastRoadFrom=key(a);t.lastRoadTo=key(b);
@@ -858,10 +836,10 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    if(t.leg<t.path.length-1){
     const next=t.path[t.leg+1];
     const nextEdge=graph.edges.get(key(b))?.find(e=>e.to===key(next)&&e.id===t.edgeIds[t.leg]);
-    t.speedKph=Math.min(t.speedKph??0,clamp(nextEdge?.speedKph??50,5,160));
+    t.speedKph=clamp(nextEdge?.speedKph??50,5,160);
    }
   }
-  time-=distance>0?dt*(moved/distance):dt;
+  if(stepSeconds<=0&&remaining>0)break;
  }
  return{taxi:t,crossed,distanceMeters};
 }
