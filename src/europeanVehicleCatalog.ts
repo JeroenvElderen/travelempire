@@ -82,12 +82,13 @@ export function compatibleOptions(model:VehicleModel){
   return true;
  });
 }
-export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:string):VehicleOffer{
+export function configuredOffer(model:VehicleModel,year:number,optionIds:string[],trim:string,variantId?:string):VehicleOffer{
  const options=pricedOptions(model,year).filter(o=>optionIds.includes(o.id));
+ const variant=verifiedVariants(model,year).find(v=>v.id===variantId);
  const pricing=trimPricing(model,year,trim);
- const price=pricing.base+pricing.cost+options.reduce((n,o)=>n+o.price,0);
- const revenueBonus=pricing.bonus+options.reduce((n,o)=>n+o.bonus,0);
- return {id:model.brand+'-'+model.name+'-'+year,model:model.brand+' '+model.name,year,fuel:model.fuel,className:model.segment,price,mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:options.map(o=>o.id),revenueBonus};
+ const price=(variant?variant.price:pricing.base+pricing.cost)+options.reduce((n,o)=>n+o.price,0);
+ const revenueBonus=(variant?(['Sportline','RS','R-Line'].includes(variant.trim)?10:variant.trim==='Selection +'?5:0):pricing.bonus)+options.reduce((n,o)=>n+o.bonus,0);
+ return {id:model.brand+'-'+model.name+'-'+year+(variant?'-'+variant.id:''),model:model.brand+' '+model.name+(variant?' '+variant.engine+' '+variant.transmission:''),year,fuel:variant?.fuel??model.fuel,className:model.segment,price,mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:options.map(o=>o.id),revenueBonus};
 }
 
 /** Published European-market reference prices, not live transaction quotes.
@@ -103,16 +104,43 @@ const MARKET_PRICES:Record<string,MarketPrice>={
  'Volkswagen|Golf':{market:'Germany',from:29835,year:2026,source:'https://www.volkswagen.de/de/modelle/golf.html',note:'German Golf starting price; German VAT and local delivery/registration rules apply',trims:['Life','Style','R-Line']},
  'BMW|3 Series':{market:'Ireland',from:59015,year:2026,source:'https://www.bmw.ie/en/configurator.html',note:'BMW Ireland 3 Series hybrid starting price; petrol variants differ',trims:['Sport','M Sport','M Sport Pro']}
 };
+// Manufacturer-published 2026 configurations. No extrapolation to other years.
+export type VerifiedVariant={id:string;trim:string;engine:string;fuel:VehicleModel['fuel'];transmission:string;powerHp:number;price:number;consumptionL100?:number;source:string;market:string};
+const OCTAVIA_SOURCE='https://www.skoda.ie/_doc/84f89261-ee2b-4e9d-8e34-519ef6ed35ea';
+const GOLF_SOURCE='https://www.volkswagen.de/de/konfigurator.html/__app/der-neue-golf-2025/standardmodelle/r-line.app?modelYear-app=2026&trimName-app=R-Line';
+const VERIFIED_VARIANTS:Record<string,VerifiedVariant[]>={
+ 'Škoda|Octavia|2026':[
+  {id:'oct-115-man-sel',trim:'Selection',engine:'1.5 TSI',fuel:'Petrol',transmission:'6-speed manual',powerHp:115,price:33070,consumptionL100:5.6,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-115-mhev-sel',trim:'Selection',engine:'1.5 TSI mHEV',fuel:'Hybrid',transmission:'7-speed DSG',powerHp:115,price:35915,consumptionL100:5.3,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-150-man-plus',trim:'Selection +',engine:'1.5 TSI',fuel:'Petrol',transmission:'6-speed manual',powerHp:150,price:37505,consumptionL100:5.7,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-150-mhev-plus',trim:'Selection +',engine:'1.5 TSI mHEV',fuel:'Hybrid',transmission:'7-speed DSG',powerHp:150,price:40145,consumptionL100:5.3,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-150-mhev-sport',trim:'Sportline',engine:'1.5 TSI mHEV',fuel:'Hybrid',transmission:'7-speed DSG',powerHp:150,price:45790,consumptionL100:5.3,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-115-tdi-sel',trim:'Selection',engine:'2.0 TDI',fuel:'Diesel',transmission:'6-speed manual',powerHp:115,price:36310,consumptionL100:4.6,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-150-tdi-sport',trim:'Sportline',engine:'2.0 TDI',fuel:'Diesel',transmission:'7-speed DSG',powerHp:150,price:48050,consumptionL100:4.8,source:OCTAVIA_SOURCE,market:'Ireland'},
+  {id:'oct-265-rs',trim:'RS',engine:'2.0 TSI',fuel:'Petrol',transmission:'7-speed DSG',powerHp:265,price:56790,consumptionL100:7,source:OCTAVIA_SOURCE,market:'Ireland'}
+ ],
+ 'Volkswagen|Golf|2026':[
+  {id:'golf-rline-150-tsi',trim:'R-Line',engine:'1.5 TSI',fuel:'Petrol',transmission:'6-speed manual',powerHp:150,price:36855,consumptionL100:5.4,source:GOLF_SOURCE,market:'Germany'},
+  {id:'golf-rline-204-tsi',trim:'R-Line',engine:'2.0 TSI 4MOTION',fuel:'Petrol',transmission:'7-speed DSG',powerHp:204,price:44530,consumptionL100:7.3,source:GOLF_SOURCE,market:'Germany'},
+  {id:'golf-rline-150-tdi',trim:'R-Line',engine:'2.0 TDI',fuel:'Diesel',transmission:'7-speed DSG',powerHp:150,price:42555,source:GOLF_SOURCE,market:'Germany'}
+ ]
+};
+export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{
+ return VERIFIED_VARIANTS[model.brand+'|'+model.name+'|'+year]??[];
+}
 export function marketPrice(model:VehicleModel,year:number):MarketPrice|undefined{
  const result=MARKET_PRICES[model.brand+'|'+model.name];
  return result?.year===year?result:undefined;
 }
 export function trimChoices(model:VehicleModel,year:number):readonly string[]{
- return marketPrice(model,year)?.trims??['Base','Plus','Luxury'];
+ const variants=verifiedVariants(model,year);
+ return variants.length?[...new Set(variants.map(v=>v.trim))]:marketPrice(model,year)?.trims??['Base','Plus','Luxury'];
 }
 export function trimPricing(model:VehicleModel,year:number,trim:string){
  const choices=trimChoices(model,year);
  const index=Math.max(0,choices.indexOf(trim));
+ const variants=verifiedVariants(model,year).filter(v=>v.trim===trim);
+ if(variants.length)return {base:Math.min(...variants.map(v=>v.price)),cost:0,bonus:['Sportline','RS','R-Line'].includes(trim)?10:trim==='Selection +'?5:0};
  const priceBase=marketPrice(model,year)?.from??model.basePrice;
  // Higher-grade premiums are game estimates until verified option-by-option.
  return {base:priceBase,cost:index===0?0:Math.round(priceBase*(index===1?.06:.12)),bonus:index===0?0:index===1?5:10};
