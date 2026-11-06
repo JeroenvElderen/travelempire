@@ -3,7 +3,7 @@ import type {VehicleOffer} from './dealership';
 // All purchase and upgrade prices are TravelEmpire game values, not Toyota quotes.
 export type VehicleModel={brand:string;name:string;segment:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';basePrice:number;seats:number;fuel:'Petrol'|'Hybrid'|'Diesel'|'Electric';years:number[]};
 export const DEALERSHIP_BRANDS=['Toyota'] as const;
-export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]}];
+export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Corolla Touring Sports',segment:'Standard',basePrice:37200,seats:5,fuel:'Hybrid',years:[2027]}];
 export const BRANDS=['Toyota'];
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment'];trims?:string[];years?:number[];variantIds?:string[];included?:boolean;includedTrims?:string[];requires?:string[];excludes?:string[];includes?:string[]};
 export type VehicleColor={id:string;name:string;hex:string;price:number;trims?:string[];years?:number[];variantIds?:string[];bonus?:number};
@@ -14,6 +14,8 @@ export type VerifiedVariant={id:string;trim:string;engine:string;fuel:VehicleMod
 export type MarketPrice={market:string;from:number;year:number;source:string;note:string;trims?:readonly string[]};
 const SOURCE="https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-SALOON-PDF-GUIDE.pdf";
 export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
+ 'Toyota|Corolla Touring Sports|2027':{brand:'Toyota',model:'Corolla Touring Sports',year:2027,reference:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',notes:'Toyota Ireland October 2026 product guide (MY27). Prices and colour HEX values are TravelEmpire estimates.',colors:[{id:'corolla-ts-paint-0',name:"Pure White (040)",hex:'#F3F2EF',price:0,trims:["Luna","Sol"]},{id:'corolla-ts-paint-1',name:"Night Sky Black (209)",hex:'#1B1D22',price:550,trims:["Luna","Sol"]},{id:'corolla-ts-paint-2',name:"Precious Silver (1J6)",hex:'#B7BABD',price:750,trims:["Luna","Sol"]},{id:'corolla-ts-paint-3',name:"Pearl Ice White (089)",hex:'#F3F1E9',price:850,trims:["Luna","Sol"]},{id:'corolla-ts-paint-4',name:"Pearl Red (3U5)",hex:'#9F2530',price:850,trims:["Luna","Sol"]},{id:'corolla-ts-paint-5',name:"Storm Grey (1M2)",hex:'#6F7479',price:550,trims:["Luna","Sol"]},{id:'corolla-ts-paint-6',name:"Precious Silver Bi-tone (2RD)",hex:'#B7BABD',price:1100,trims:["GR SPORT"]},{id:'corolla-ts-paint-7',name:"Pearl Ice White Bi-tone (2PU)",hex:'#F3F1E9',price:1200,trims:["GR SPORT"]},{id:'corolla-ts-paint-8',name:"Pearl Red Bi-tone (2SZ)",hex:'#9F2530',price:1200,trims:["GR SPORT"]},{id:'corolla-ts-paint-9',name:"Storm Grey Bi-tone (M52)",hex:'#6F7479',price:1100,trims:["GR SPORT"]}],options:[],configurator:[{id:'wheels',label:'Wheels',selection:'single',required:true,choices:[{id:'corolla-ts-luna-wheel',name:'16-inch alloy wheels (5-double-spoke)',price:0,included:true,trims:['Luna']},{id:'corolla-ts-sol-wheel',name:'17-inch silver alloy wheels (5-spoke)',price:0,included:true,trims:['Sol']},{id:'corolla-ts-gr-wheel',name:'18-inch black machined-face alloy wheels (10-spoke)',price:0,included:true,trims:['GR SPORT']}]}]},
+ 
  'Toyota|Corolla Saloon|2026':{
  brand:'Toyota',model:'Corolla Saloon',year:2026,reference:SOURCE,
  notes:'January 2026 Ireland product guide. Grade equipment is standard where specified; optional upgrades and prices are game mechanics, not Toyota factory ordering claims. HEX swatches are approximate.',
@@ -25,6 +27,97 @@ export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
  ]}]
  }};
 export const FACTORY_OPTIONS:FactoryOption[]=[];
+export const COROLLA_TS_OPTIONS:FactoryOption[]=[
+{id:'corolla-ts-safety-0',group:'Safety',label:"Toyota Safety Sense 3 with over-the-air updates",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-1',group:'Safety',label:"Seven SRS airbags",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-2',group:'Safety',label:"Pre-Collision System with pedestrian, cyclist and motorcycle detection",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-3',group:'Safety',label:"Driver Monitoring Camera",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-4',group:'Safety',label:"Emergency Steering Assist",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-5',group:'Safety',label:"Intersection Collision Avoidance Support",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-6',group:'Safety',label:"Lane Departure Alert with Steering Control",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-7',group:'Safety',label:"Lane Trace Assist",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-8',group:'Safety',label:"Intelligent Adaptive Cruise Control",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-9',group:'Safety',label:"Proactive Driving Assist",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-10',group:'Safety',label:"Road Sign Assist",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-11',group:'Safety',label:"Driver Attention Alert",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-12',group:'Safety',label:"Adjustable Speed Limiter",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-13',group:'Safety',label:"Rear-view camera with static guide lines",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-14',group:'Safety',label:"Rear Seat Reminder System",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-15',group:'Safety',label:"Tyre Pressure Warning System",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-16',group:'Safety',label:"Vehicle Stability Control",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-safety-17',group:'Safety',label:"eCall emergency call system",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-0',group:'Comfort',label:"Dual-zone automatic air conditioning",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-1',group:'Comfort',label:"Wireless mobile phone charger",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-2',group:'Comfort',label:"Power-adjustable heated door mirrors",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-3',group:'Comfort',label:"Push-button start",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-4',group:'Comfort',label:"Rear passenger air vents",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-5',group:'Comfort',label:"Electronic parking brake",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-6',group:'Comfort',label:"Remote door lock",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-7',group:'Comfort',label:"Remote air conditioning system",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-8',group:'Comfort',label:"Nanoe-X air purifier",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-9',group:'Comfort',label:"Power back door with kick activation and height memory",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-10',group:'Comfort',label:"Smart Digital Key",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-11',group:'Comfort',label:"Smart Entry and Start System",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-12',group:'Comfort',label:"Automatically retractable door mirrors",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-13',group:'Comfort',label:"Heated front seats",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-comfort-14',group:'Comfort',label:"Power-adjustable driver's lumbar support",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-technology-0',group:'Technology',label:"10.5-inch Toyota Touch multimedia display",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-1',group:'Technology',label:"Wireless Apple CarPlay and Android Auto",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-2',group:'Technology',label:"Six speakers",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-3',group:'Technology',label:"Cloud navigation",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-4',group:'Technology',label:"Front USB charger",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-5',group:'Technology',label:"DAB radio",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-6',group:'Technology',label:"Bluetooth hands-free",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-7',group:'Technology',label:"Hey Toyota Smart Voice Assist",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-8',group:'Technology',label:"12.3-inch TFT driver information display with 3D effect",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-9',group:'Technology',label:"Front and second-row LED personal lamps",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-technology-10',group:'Technology',label:"Electrochromatic rear-view mirror",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-technology-11',group:'Technology',label:"White ambient lighting on front cup holders and open tray",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-0',group:'Exterior',label:"Adaptive Automatic High Beam",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-1',group:'Exterior',label:"Black door mirrors",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-2',group:'Exterior',label:"Black lower front grille",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-3',group:'Exterior',label:"LED daytime running lights",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-4',group:'Exterior',label:"Dusk sensor",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-5',group:'Exterior',label:"LED front fog lamps",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-6',group:'Exterior',label:"Multi-reflector LED headlamps",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-7',group:'Exterior',label:"Body-coloured shark-fin antenna",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-8',group:'Exterior',label:"Bi-Beam LED headlamps",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-9',group:'Exterior',label:"Aluminium roof rails",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-10',group:'Exterior',label:"Rain sensor",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-11',group:'Exterior',label:"Rear privacy glass",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-12',group:'Exterior',label:"Chrome window frame",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-13',group:'Exterior',label:"Rear bumper chrome-plated inserts",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-exterior-14',group:'Exterior',label:"Black roof rails",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-15',group:'Exterior',label:"Black shark-fin antenna",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-16',group:'Exterior',label:"Dark chrome lower front grille",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-17',group:'Exterior',label:"Full bi-tone exterior styling",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-18',group:'Exterior',label:"Black rear spoiler",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-19',group:'Exterior',label:"Satin silver front spoiler",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-20',group:'Exterior',label:"GR SPORT badge on boot door",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-21',group:'Exterior',label:"Piano black door mirrors",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-exterior-22',group:'Exterior',label:"Side chrome garnish",price:220,bonus:0,includedTrims:[]},
+{id:'corolla-ts-exterior-23',group:'Exterior',label:"Front and rear mud guards",price:170,bonus:0,includedTrims:[]},
+{id:'corolla-ts-interior-0',group:'Interior',label:"Dark grey fabric upholstery",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-1',group:'Interior',label:"Three-spoke synthetic leather steering wheel",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-2',group:'Interior',label:"Synthetic leather gear shift knob",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-3',group:'Interior',label:"Manual day/night rear-view mirror",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-4',group:'Interior',label:"12V power outlets (front and boot)",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-5',group:'Interior',label:"ISOFIX seat fixing",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-6',group:'Interior',label:"Manually height-adjustable front seats",price:0,bonus:0,includedTrims:["Luna","Sol","GR SPORT"]},
+{id:'corolla-ts-interior-7',group:'Interior',label:"Recycled fabric Samara and Dinamica upholstery",price:350,bonus:0,includedTrims:["Sol","GR SPORT"]},
+{id:'corolla-ts-interior-8',group:'Interior',label:"GR SPORT door scuff plates",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-interior-9',group:'Interior',label:"GR SPORT floor mats",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-interior-10',group:'Interior',label:"Partially perforated steering wheel with red stitching",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-interior-11',group:'Interior',label:"Front sport seats",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-interior-12',group:'Interior',label:"Grey fabric with black leather-like bolsters",price:450,bonus:0,includedTrims:["GR SPORT"]},
+{id:'corolla-ts-interior-13',group:'Interior',label:"Aluminium scuff plates",price:220,bonus:0,includedTrims:[]},
+{id:'corolla-ts-interior-14',group:'Interior',label:"Boot liner",price:95,bonus:0,includedTrims:[]},
+{id:'corolla-ts-interior-15',group:'Interior',label:"Corolla 60th Anniversary floor mats",price:160,bonus:0,includedTrims:[]},
+{id:'corolla-ts-interior-16',group:'Interior',label:"Corolla 60th Anniversary badge",price:100,bonus:0,includedTrims:[]},
+{id:'corolla-ts-interior-17',group:'Interior',label:"Corolla 60th Anniversary side sills",price:280,bonus:0,includedTrims:[]},
+{id:'corolla-ts-wheels-0',group:'Wheels',label:"Locking wheel nuts",price:85,bonus:0,includedTrims:[]},
+{id:'corolla-ts-wheels-1',group:'Wheels',label:"Corolla 60th Anniversary 17-inch alloy wheels",price:850,bonus:0,includedTrims:[]}
+];
 export const COROLLA_SALOON_OPTIONS:FactoryOption[]=[{id:'corolla-saloon-extra-0',group:"Safety",label:"Toyota Safety Sense 3",price:0,bonus:0,includedTrims:["Luna","Luna Sport","Sol"]},
 {id:'corolla-saloon-extra-1',group:"Safety",label:"Pre-Collision System with pedestrian and cyclist detection",price:0,bonus:0,includedTrims:["Luna","Luna Sport","Sol"]},
 {id:'corolla-saloon-extra-2',group:"Safety",label:"Intelligent Adaptive Cruise Control",price:0,bonus:0,includedTrims:["Luna","Luna Sport","Sol"]},
@@ -82,6 +175,11 @@ export const COROLLA_SALOON_OPTIONS:FactoryOption[]=[{id:'corolla-saloon-extra-0
 {id:'corolla-saloon-extra-54',group:"Interior",label:"Leather-like front door armrests",price:220,bonus:0,includedTrims:["Sol"]},
 {id:'corolla-saloon-extra-55',group:"Interior",label:"Sliding central armrest",price:180,bonus:0,includedTrims:["Sol"]},
 {id:'corolla-saloon-extra-56',group:"Wheels",label:"Locking wheel nuts",price:85,bonus:0,includedTrims:[]}];
+const COROLLA_TS_VARIANTS:VerifiedVariant[]=[
+ {id:'corolla-ts-luna',trim:'Luna',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:37200,consumptionL100:4.4,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',market:'Ireland (game price)'},
+ {id:'corolla-ts-sol',trim:'Sol',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:40700,consumptionL100:4.7,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',market:'Ireland (game price)'},
+ {id:'corolla-ts-gr-sport',trim:'GR SPORT',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:43900,consumptionL100:4.7,source:'https://scene7.toyota.eu/is/content/toyotaeurope/toyota/nmsc/ireland/guides/COROLLA-TS-PDF-GUIDE.pdf',market:'Ireland (game price)'}
+];
 const COROLLA_VARIANTS:VerifiedVariant[]=[
  {id:'corolla-saloon-luna',trim:'Luna',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:34605,consumptionL100:4.4,source:SOURCE,market:'Ireland (game price)'},
  {id:'corolla-saloon-luna-sport',trim:'Luna Sport',engine:'1.8 Hybrid 140 hp',fuel:'Hybrid',transmission:'e-CVT automatic',powerHp:140,price:37205,consumptionL100:4.6,source:SOURCE,market:'Ireland (game price)'},
@@ -92,10 +190,10 @@ export function availableColors(model:VehicleModel,year:number,trim?:string):Veh
 export function availableConfiguratorGroups(model:VehicleModel,year:number,trim?:string,variantId?:string):ConfiguratorGroup[]{return (vehicleConfiguration(model,year)?.configurator??[]).map(g=>({...g,choices:g.choices.filter(c=>(!c.trims||!!trim&&c.trims.includes(trim))&&(!c.variantIds||!!variantId&&c.variantIds.includes(variantId)))})).filter(g=>g.choices.length>0);}
 export function paintChoices(model:VehicleModel,year:number,trim:string):VehicleColor[]{return availableColors(model,year,trim);}
 export function wheelChoices(model:VehicleModel,year:number,trim:string,variantId?:string):ConfiguratorChoice[]{return availableConfiguratorGroups(model,year,trim,variantId).find(g=>g.id==='wheels')?.choices??[];}
-export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{if(model.brand!=='Toyota'||model.name!=='Corolla Saloon'||year!==2026)return [];return COROLLA_SALOON_OPTIONS.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));}
+export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{if(model.brand!=='Toyota')return [];const list=model.name==='Corolla Saloon'&&year===2026?COROLLA_SALOON_OPTIONS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_OPTIONS:[];return list.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));}
 export function compatibleOptions(_model:VehicleModel):FactoryOption[]{return [];}
 export function pricedOptions(model:VehicleModel,year:number):FactoryOption[]{return individualOptions(model,year,trimChoices(model,year)[0]??'');}
-export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'&&model.name==='Corolla Saloon'&&year===2026?COROLLA_VARIANTS:[];}
+export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{return model.brand==='Toyota'?(model.name==='Corolla Saloon'&&year===2026?COROLLA_VARIANTS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_VARIANTS:[]):[];}
 export function marketPrice(_model:VehicleModel,_year:number):MarketPrice|undefined{return undefined;}
 export function trimChoices(model:VehicleModel,year:number):readonly string[]{return [...new Set(verifiedVariants(model,year).map(v=>v.trim))];}
 export function trimPricing(model:VehicleModel,year:number,trim:string){const variant=verifiedVariants(model,year).find(v=>v.trim===trim);return {base:variant?.price??model.basePrice,cost:0,bonus:0};}
