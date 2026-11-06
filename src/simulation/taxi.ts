@@ -1,3 +1,4 @@
+import {hardcodedRoadSpeedKph} from '../data/hardcodedSpeedLimits';
 import {fareForDistance} from './demand';
 import type {Company} from '../company';
 export type Point=[number,number];
@@ -113,7 +114,7 @@ export type FinancialTransaction={id:string;time:number;taxiId?:string;descripti
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number;highway?:string}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
-// Road speeds are in km/h; gameplay fallbacks are used only when OSM maxspeed is absent.
+// Road speeds are fixed by highway category; OSM maxspeed is deliberately ignored.
 // Deterministic, Greece-local traffic model. No external traffic feed or map overlay.
 const trafficHourFormatter=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'});
 const trafficWeekdayFormatter=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Athens',weekday:'short'});
@@ -140,23 +141,8 @@ export function trafficTravelSeconds(meters:number,speedKph:number,at=Date.now()
  return meters/(Math.max(5,speedKph)*trafficFactor(speedKph,at)/3.6);
 }
 export const GAME_SPEED = 1;
-const DEFAULT_SPEED: Record<string,number> = {
- motorway:110,motorway_link:60,trunk:100,trunk_link:60,primary:90,primary_link:50,
- secondary:70,secondary_link:45,tertiary:50,tertiary_link:40,
- residential:30,living_street:15,service:20,unclassified:50,road:50,
-};
 export function roadSpeedKph(properties:Record<string,unknown>):number {
- const roadType=String(properties.highway??properties.roadType??properties.type??'residential').toLowerCase();
- const fallback=DEFAULT_SPEED[roadType]??50;
- const raw=properties.maxspeed??properties.maxSpeed??properties.speedLimit;
- if(typeof raw==='number'&&Number.isFinite(raw)&&raw>0)return Math.min(160,raw);
- if(typeof raw!=='string')return fallback;
- const value=raw.trim().toLowerCase().split(';')[0].trim();
- if(!value||['none','signals','variable','walk','national','implicit','unknown'].includes(value))return fallback;
- const match=value.match(/^(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh|kph)?$/);
- if(!match)return fallback;
- const speed=Number(match[1])*(match[2]==='mph'?1.609344:1);
- return speed>0?Math.min(160,speed):fallback;
+ return hardcodedRoadSpeedKph(properties.highway??properties.roadType??properties.type);
 }
 export async function loadRoadGraph():Promise<RoadGraph>{
  const response=await fetch(`${import.meta.env.BASE_URL}data/roads/preview.geojson`);
