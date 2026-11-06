@@ -225,6 +225,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets);
+      if(assignment.status==='IDLE'&&(taxis[index].explorerRole==='highway'||taxis[index].explorerRole==='urban')){
+       assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,purpleAllowedRoads);
+      }
     }
     if(assignment.status!=='IDLE'){
      explorerIdleSince.delete(taxis[index].id);
