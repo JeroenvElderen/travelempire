@@ -831,7 +831,6 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    t.lastRoadFrom=key(a);t.lastRoadTo=key(b);
    t.leg++;t.distanceIntoLeg=0;t.position=b;
    if(t.leg<t.path.length-1){
-    const next=t.path[t.leg+1];
     t.speedKph=clamp(speedForEdge(graph,t.edgeIds[t.leg]),5,160);
    }
   }
