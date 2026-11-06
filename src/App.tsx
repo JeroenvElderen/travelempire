@@ -761,7 +761,7 @@ export default function App(){
      // Energy purchases are charged at refill time, never again per driven kilometre.
      const depotLevels=upgradesFor(old,t.depotId??'main');
      const fuel=0,maintenance=km*0.075*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
-     const explorerTravelCost=(t.kind==='explorer')?km*2.50:0;
+     const explorerTravelCost=(t.kind==='explorer')?km*0.50:0;
      explorationExpense+=explorerTravelCost;
      const wearPerKm=0.025*(1-careBonus)*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
      const wage=(t.kind==='explorer')?0:0.009*(old.wageMultiplier??1)*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
