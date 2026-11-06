@@ -48,10 +48,11 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <label>Exterior colour<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name} · {p.price?'+':' '}{eur(p.price)}</option>)}</select></label>
     <label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name} · {w.price?'+':' '}{eur(w.price)}</option>)}</select></label>
     <fieldset><legend>Individual equipment</legend>
-      <p className="eu-source-note">Features from the Toyota brochure. Standard equipment is included in your grade. Other items have individual TravelEmpire prices; availability as a real-world retrofit is not guaranteed.</p>
+      <p className="eu-source-note">Only optional equipment is shown. Features already included in the selected grade are hidden. Prices are TravelEmpire estimates; real-world retrofit availability is not guaranteed.</p>
       {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=>{
-       const categoryExtras=extras.filter(o=>o.group===group);
+       const categoryExtras=extras.filter(o=>o.group===group&&!o.included);
        const selectedCount=categoryExtras.filter(o=>extraIds.includes(o.id)).length;
+       if(categoryExtras.length===0)return null;
        return <details key={group} className="eu-equipment-category" style={{marginTop:'10px',border:'1px solid var(--border, #d5dbe3)',borderRadius:'8px',padding:'10px 12px'}}>
         <summary style={{cursor:'pointer',fontWeight:600}}>{group} · {selectedCount} selected · {categoryExtras.length} options</summary>
         <div className="eu-options" style={{marginTop:'10px'}}>{categoryExtras.map(o=>{
