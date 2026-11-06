@@ -684,38 +684,61 @@ export function dispatchScout(
  if(block){
   const perimeterIds=new Set<string>([best.id,...block.ids]);
   const visitedBranches=new Set<string>();
-  const MAX_BRANCH_METERS=350;
-  const MAX_TOTAL_DETOUR_METERS=1100;
-  let detourMeters=0;
+  // Branches are prioritised before the next perimeter segment. There is no
+  // distance limit: only a graph-work safety bound against malformed networks.
+  const MAX_BRANCH_NODES=12000;
   const branchFrom=(junction:string,previousNode:string|undefined,nextNode:string)=>{
    for(const candidate of graph.edges.get(junction)??[]){
     if(perimeterIds.has(candidate.id)||visitedBranches.has(candidate.id)||explored.has(candidate.id)||
        reservedEdges.has(candidate.id)||(discoveryAllowed&&!discoveryAllowed.has(candidate.id))||
        (_allowedRoads&&!_allowedRoads.has(candidate.id)))continue;
-    // Only enter a true terminal branch, not another connected block.
-    const branchNodes=[junction,candidate.to],branchIds=[candidate.id];
+    if(previousNode&&forbiddenUTurn(graph,previousNode,junction,candidate.to,_allowedRoads))continue;
+    // Walk the connected branch and collect its tree edges. If it connects
+    // back to another road on the block, it is not a dead-end branch.
+    const parent=new Map<string,{from:string;id:string}>();
     const seen=new Set<string>([junction,candidate.to]);
-    let length=candidate.meters,tip=candidate.to,prior=junction,deadEnd=false;
-    while(length<=MAX_BRANCH_METERS&&branchIds.length<16){
-     const onward=(graph.edges.get(tip)??[]).filter(e=>e.to!==prior&&
-      (!_allowedRoads||_allowedRoads.has(e.id))&&
-      (!discoveryAllowed||discoveryAllowed.has(e.id))&&!perimeterIds.has(e.id));
-     if(!onward.length){deadEnd=true;break;}
-     if(onward.length!==1||seen.has(onward[0].to))break;
-     const edge=onward[0];
-     if(explored.has(edge.id)||reservedEdges.has(edge.id)||visitedBranches.has(edge.id))break;
-     length+=edge.meters;prior=tip;tip=edge.to;seen.add(tip);
-     branchNodes.push(tip);branchIds.push(edge.id);
+    const stack=[candidate.to];
+    parent.set(candidate.to,{from:junction,id:candidate.id});
+    let hasCycle=false,overLimit=false;
+    for(let cursor=0;cursor<stack.length;cursor++){
+     if(stack.length>MAX_BRANCH_NODES){overLimit=true;break;}
+     const node=stack[cursor];
+     for(const edge of graph.edges.get(node)??[]){
+      if(edge.to===parent.get(node)?.from)continue;
+      if(perimeterIds.has(edge.id)||edge.to===junction){hasCycle=true;continue;}
+      if((_allowedRoads&&!_allowedRoads.has(edge.id))||
+         (discoveryAllowed&&!discoveryAllowed.has(edge.id)))continue;
+      if(seen.has(edge.to)){hasCycle=true;continue;}
+      if(explored.has(edge.id)||reservedEdges.has(edge.id)||visitedBranches.has(edge.id)){
+       // An already explored exit means this is not a terminal branch.
+       hasCycle=true;continue;
+      }
+      seen.add(edge.to);parent.set(edge.to,{from:node,id:edge.id});stack.push(edge.to);
+     }
     }
-    if(!deadEnd||length>MAX_BRANCH_METERS||detourMeters+length*2>MAX_TOTAL_DETOUR_METERS)continue;
-    if(previousNode&&forbiddenUTurn(graph,previousNode,junction,branchNodes[1],_allowedRoads))continue;
-    if(forbiddenUTurn(graph,branchNodes[1],junction,nextNode,_allowedRoads))continue;
-    // A terminal road necessarily requires a turn-around; preserve that route
-    // rather than repeatedly redispatching from the tip.
-    for(let i=1;i<branchNodes.length;i++){keys.push(branchNodes[i]);ids.push(branchIds[i-1]);}
-    for(let i=branchNodes.length-2;i>=0;i--){keys.push(branchNodes[i]);ids.push(branchIds[i]);}
-    for(const id of branchIds)visitedBranches.add(id);
-    detourMeters+=length*2;
+    if(hasCycle||overLimit)continue;
+    // Depth-first traversal covers each side branch before returning to its
+    // parent junction, then resumes the original block perimeter.
+    const children=new Map<string,Array<{to:string;id:string}>>();
+    for(const [to,entry] of parent){
+     const list=children.get(entry.from)??[];list.push({to,id:entry.id});children.set(entry.from,list);
+    }
+    type Frame={node:string;index:number};
+    const frames:Frame[]=[{node:junction,index:0}];
+    while(frames.length){
+     const frame=frames[frames.length-1],options=children.get(frame.node)??[];
+     if(frame.index>=options.length){
+      frames.pop();
+      if(frames.length){
+       const p=parent.get(frame.node)!;
+       keys.push(p.from);ids.push(p.id);
+      }
+      continue;
+     }
+     const edge=options[frame.index++];
+     keys.push(edge.to);ids.push(edge.id);visitedBranches.add(edge.id);
+     frames.push({node:edge.to,index:0});
+    }
    }
   };
   for(let i=1;i<block.nodes.length;i++){
