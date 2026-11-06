@@ -754,26 +754,37 @@ export function dispatchScout(
    keys.push(block.nodes[i]);ids.push(block.ids[i-1]);
   }
  }
- // Extend the assignment along connected, undiscovered streets. This avoids
- // becoming IDLE at every junction and waiting for the next worker dispatch.
+ // Prefer a continuous forward corridor rather than a short segment and distant reversal.
  const planned=new Set(ids);
  let cursor=keys[keys.length-1];
  let extraMeters=0;
- for(let step=0;step<(block?0:24)&&extraMeters<900;step++){
+ const corridorSpecialist=taxi.kind==='explorer'&&['motorway','trunk','primary','secondary','tertiary','residential','rural','service'].includes(taxi.explorerRole??'');
+ const maxSegments=corridorSpecialist?160:24;
+ const maxMeters=corridorSpecialist?16000:900;
+ const turnCost=(from:string,at:string,to:string):number=>{
+  const a=graph.nodes.get(from),b=graph.nodes.get(at),c=graph.nodes.get(to);
+  if(!a||!b||!c)return 2;
+  const scale=Math.cos(b[1]*Math.PI/180);
+  const ux=(b[0]-a[0])*scale,uy=b[1]-a[1];
+  const vx=(c[0]-b[0])*scale,vy=c[1]-b[1];
+  const mag=Math.hypot(ux,uy)*Math.hypot(vx,vy);
+  return mag>1e-14?1-(ux*vx+uy*vy)/mag:2;
+ };
+ for(let step=0;step<(block?0:maxSegments)&&extraMeters<maxMeters;step++){
+  const previousNode=keys.length>1?keys[keys.length-2]:undefined;
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
-   (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
-   !reservedTargets.has(edge.to)&&edge.meters>0&&
-   true
+   (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&
+   !reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
+   !reservedTargets.has(edge.to)&&edge.meters>0&&edge.to!==previousNode
   );
-  // Continue forward or sideways whenever possible; reverse only at a dead end.
-  const previousNode=keys[keys.length-2];
-  const forward=previousNode?links.filter(edge=>!forbiddenTurnGeometry(graph,previousNode,cursor,edge.to)):links;
-  if(forward.length)links.splice(0,links.length,...forward);
   if(!links.length)break;
-  // Prefer connected roads and shorter routes without assigning exploration sectors.
   links.sort((a,b)=>{
-   // Clear already-open streets and short side branches before heading out.
+   if(corridorSpecialist&&previousNode){
+    const turnA=turnCost(previousNode,cursor,a.to);
+    const turnB=turnCost(previousNode,cursor,b.to);
+    if(Math.abs(turnA-turnB)>0.02)return turnA-turnB;
+   }
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
    return ai-bi||a.meters-b.meters;
   });
