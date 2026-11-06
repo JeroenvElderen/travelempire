@@ -54,6 +54,9 @@ export type Taxi = {
   purchasePrice?:number;
   accumulatedDepreciation?:number;
   vehicleModel?: string;
+  vehicleTrim?: string;
+  vehicleOptionIds?: string[];
+  vehicleRevenueBonus?: number;
   vehicleYear?: number;
   vehicleFuel?: string;
   vehicleClass?: string;
