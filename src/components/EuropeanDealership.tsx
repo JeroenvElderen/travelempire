@@ -54,10 +54,15 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
        const selectedCount=categoryExtras.filter(o=>extraIds.includes(o.id)).length;
        return <details key={group} className="eu-equipment-category" style={{marginTop:'10px',border:'1px solid var(--border, #d5dbe3)',borderRadius:'8px',padding:'10px 12px'}}>
         <summary style={{cursor:'pointer',fontWeight:600}}>{group} · {selectedCount} selected · {categoryExtras.length} options</summary>
-        <div className="eu-options" style={{marginTop:'10px'}}>{categoryExtras.map(o=><label key={o.id} className="eu-option">
-         <input type="checkbox" checked={o.included||extraIds.includes(o.id)} disabled={o.included} onChange={e=>setSelectedExtras(old=>e.target.checked?[...old,o.id]:old.filter(id=>id!==o.id))}/>
-         <span><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
-        </label>)}</div>
+        <div className="eu-options" style={{marginTop:'10px'}}>{categoryExtras.map(o=>{
+         const selected=o.included||extraIds.includes(o.id);
+         return <button key={o.id} type="button" aria-pressed={selected} disabled={o.included}
+          onClick={()=>setSelectedExtras(old=>old.includes(o.id)?old.filter(id=>id!==o.id):[...old,o.id])}
+          style={{display:'flex',width:'100%',alignItems:'center',justifyContent:'space-between',gap:'12px',textAlign:'left',padding:'12px',marginBottom:'8px',borderRadius:'10px',border:selected?'2px solid #22a35a':'1px solid var(--border, #cbd5e1)',background:selected?'rgba(34,163,90,0.08)':'transparent',color:'inherit',cursor:o.included?'default':'pointer',opacity:1}}>
+          <span style={{display:'flex',flexDirection:'column',gap:'3px'}}><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
+          {selected&&<span aria-hidden="true" style={{color:'#22a35a',fontWeight:700,fontSize:'12px'}}>{o.included?'Included':'Selected'}</span>}
+         </button>;
+        })}</div>
        </details>;
       })}
     </fieldset>
