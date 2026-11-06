@@ -355,5 +355,15 @@ export function configuredOffer(model:VehicleModel,year:number,optionIds:string[
  const selectedOptions=individualOptions(model,year,trim).filter(o=>optionIds.includes(o.id)&&!o.included);
  const paint=paintChoices(model,year,trim).find(p=>p.id===paintId);
  const wheel=wheelChoices(model,year,trim,variantId).find(w=>w.id===wheelId);
- return {id:[model.brand,model.name,year,variant?.id??trim,paint?.id??'',wheel?.id??''].join('-'),model:model.brand+' '+model.name+(variant?' '+variant.engine+' '+variant.transmission:''),year,fuel:variant?.fuel??model.fuel,className:model.segment,price:(variant?.price??model.basePrice)+(paint?.price??0)+(wheel?.price??0)+selectedOptions.reduce((total,o)=>total+o.price,0),mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:[...selectedOptions.map(o=>o.id),...(paint?['paint:'+paint.id]:[]),...(wheel?['wheel:'+wheel.id]:[])],revenueBonus:0};
+ // Each paid equipment addition or upgrade above the cheapest available choice earns +1%.
+ const availablePaints=paintChoices(model,year,trim);
+ const availableWheels=wheelChoices(model,year,trim,variantId);
+ const paintPremium=paint&&paint.price>Math.min(...availablePaints.map(p=>p.price))?1:0;
+ const wheelPremium=wheel&&wheel.price>Math.min(...availableWheels.map(w=>w.price))?1:0;
+ const paidEquipment=selectedOptions.filter(o=>o.price>0).length;
+ const availableEngines=verifiedVariants(model,year).filter(v=>v.trim===trim);
+ // A sole engine/transmission choice gives +1%; a non-cheapest alternative gives +5%.
+ const engineBonus=availableEngines.length===1?1:variant&&availableEngines.length>1&&variant.price>Math.min(...availableEngines.map(v=>v.price))?5:0;
+ const revenueBonus=engineBonus+paidEquipment+paintPremium+wheelPremium;
+ return {id:[model.brand,model.name,year,variant?.id??trim,paint?.id??'',wheel?.id??''].join('-'),model:model.brand+' '+model.name+(variant?' '+variant.engine+' '+variant.transmission:''),year,fuel:variant?.fuel??model.fuel,className:model.segment,price:(variant?.price??model.basePrice)+(paint?.price??0)+(wheel?.price??0)+selectedOptions.reduce((total,o)=>total+o.price,0),mileage:0,condition:100,seats:model.seats,kind:'New',trim,optionIds:[...selectedOptions.map(o=>o.id),...(paint?['paint:'+paint.id]:[]),...(wheel?['wheel:'+wheel.id]:[])],revenueBonus};
 }
