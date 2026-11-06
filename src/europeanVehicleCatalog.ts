@@ -10,7 +10,7 @@ const rows:Row[]=[
 ['Škoda','Fabia','Economy',23500],['Škoda','Scala','Standard',27500],['Škoda','Octavia','Standard',32500],['Škoda','Superb','Comfort',43500],['Škoda','Kodiaq','XL',46500,6],['Škoda','Enyaq','Comfort',47500,4,'Electric'],
 ['BMW','1 Series','Standard',38500],['BMW','3 Series','Premium',51500],['BMW','5 Series','Premium',67500],['BMW','7 Series','Premium',112000],['BMW','i4','Premium',62500,4,'Electric'],['BMW','i5','Premium',79500,4,'Electric'],['BMW','X3','Premium',64500],
 ['Mercedes-Benz','A-Class','Standard',40500],['Mercedes-Benz','C-Class','Premium',55500],['Mercedes-Benz','E-Class','Premium',72500],['Mercedes-Benz','S-Class','Premium',123000],['Mercedes-Benz','EQE','Premium',81500,4,'Electric'],['Mercedes-Benz','V-Class','XL',78500,7],
-['Audi','A3','Standard',38500],['Audi','A5','Premium',55500],['Audi','A6','Premium',70500],['Audi','A8','Premium',112000],['Audi','Q5','Premium',65500],['Audi','Q6 e-tron','Premium',76500,4,'Electric'],
+['Audi',"A1 Sportback",'Economy',32460],['Audi',"A3",'Standard',38500],['Audi',"A3 Sportback",'Standard',38500],['Audi',"A3 Saloon",'Standard',38500],['Audi',"S3 Sportback",'Premium',65000],['Audi',"S3 Saloon",'Premium',67000],['Audi',"RS 3 Sportback",'Premium',85000],['Audi',"RS 3 Saloon",'Premium',87000],['Audi',"A5",'Premium',55500],['Audi',"A5 Saloon",'Premium',55700],['Audi',"A5 Avant",'Premium',59600],['Audi',"S5 Saloon",'Premium',98900],['Audi',"RS 5 Saloon",'Premium',115000],['Audi',"RS 5 Avant",'Premium',118900],['Audi',"A6",'Premium',70500],['Audi',"A6 Saloon",'Premium',70500],['Audi',"A6 Avant",'Premium',74000],['Audi',"A6 e-tron Sportback",'Premium',75800,4, 'Electric'],['Audi',"A6 e-tron Avant",'Premium',79000,4, 'Electric'],['Audi',"S6 e-tron Sportback",'Premium',100000,4, 'Electric'],['Audi',"S6 e-tron Avant",'Premium',103000,4, 'Electric'],['Audi',"A8",'Premium',112000],['Audi',"Q2",'Standard',37925],['Audi',"Q3",'Comfort',48515],['Audi',"Q3 Sportback",'Comfort',52770],['Audi',"Q5",'Premium',65500],['Audi',"Q5 SUV",'Premium',65500],['Audi',"Q5 Sportback",'Premium',70000],['Audi',"SQ5 SUV",'Premium',105000],['Audi',"SQ5 Sportback",'Premium',109000],['Audi',"Q7",'XL',109000,6],['Audi',"Q7 TFSI e",'XL',88070,6, 'Hybrid'],['Audi',"SQ7",'XL',152865,6],['Audi',"Q8",'Premium',125715],['Audi',"Q8 TFSI e",'Premium',102475,4, 'Hybrid'],['Audi',"SQ8",'Premium',170485],['Audi',"RS Q8",'Premium',223140],['Audi',"Q4 e-tron",'Comfort',51980,4, 'Electric'],['Audi',"Q4 Sportback e-tron",'Comfort',66335,4, 'Electric'],['Audi',"Q6 e-tron",'Premium',76500,4, 'Electric'],['Audi',"Q6 Sportback e-tron",'Premium',80000,4, 'Electric'],['Audi',"SQ6 e-tron",'Premium',99000,4, 'Electric'],['Audi',"e-tron GT",'Premium',120900,4, 'Electric'],['Audi',"S e-tron GT",'Premium',139635,4, 'Electric'],['Audi',"RS e-tron GT",'Premium',163395,4, 'Electric'],['Audi',"RS e-tron GT performance",'Premium',177650,4, 'Electric'],
 ['Hyundai','i20','Economy',24500],['Hyundai','i30','Standard',30500],['Hyundai','Tucson','Comfort',38500],['Hyundai','Kona','Standard',33500],['Hyundai','IONIQ 5','Comfort',49500,4,'Electric'],['Hyundai','IONIQ 6','Premium',54500,4,'Electric'],
 ['Kia','Picanto','Economy',20500],['Kia','Ceed','Standard',29500],['Kia','Sportage','Comfort',38500],['Kia','Sorento','XL',58500,6],['Kia','EV3','Standard',38500,4,'Electric'],['Kia','EV6','Premium',53500,4,'Electric'],['Kia','EV9','XL',76500,6,'Electric'],
 ['Peugeot','208','Economy',25500],['Peugeot','308','Standard',32500],['Peugeot','408','Comfort',40500],['Peugeot','3008','Comfort',41500],['Peugeot','5008','XL',45500,6],
@@ -63,6 +63,33 @@ export type ConfiguratorChoice={id:string;name:string;price:number;trims?:string
 export type ConfiguratorGroup={id:string;label:string;selection:'single'|'multiple';required?:boolean;choices:ConfiguratorChoice[]};
 export type VehicleConfiguration={brand:string;model:string;year:number;reference?:string;notes?:string;colors:VehicleColor[];options:FactoryOption[];configurator:ConfiguratorGroup[]};
 export const VEHICLE_CONFIGURATIONS:Record<string,VehicleConfiguration>={
+ 'Audi|Q7|2026':{
+  brand:'Audi',model:'Q7',year:2026,
+  reference:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/product-guides/my26/Q7_MY26.pdf',
+  notes:'Audi Ireland MY26 Q7: variant prices are verified from official retail price lists. Paint swatches are approximate; paint, wheel, upholstery and optional-equipment prices remain unverified and are NOT asserted to be free.',
+  colors:[
+   {id:'q7-carrara-white',name:'Carrara White',hex:'#EDEDE9',price:0},
+   {id:'q7-mythos-black',name:'Mythos Black metallic',hex:'#191B20',price:0},
+   {id:'q7-glacier-white',name:'Glacier White metallic',hex:'#E5E8E8',price:0},
+   {id:'q7-daytona-grey',name:'Daytona Grey pearl effect',hex:'#595D62',price:0,trims:['S line']},
+   {id:'q7-waitomo-blue',name:'Waitomo Blue metallic',hex:'#31475C',price:0}
+  ],
+  options:[],
+  configurator:[
+   {id:'wheels',label:'Wheels',selection:'single',required:true,choices:[
+    {id:'q7-standard-wheels',name:'Standard alloy wheels (size depends on grade)',price:0,included:true},
+    {id:'q7-21-wheels',name:'21-inch alloy wheels (availability/price to verify)',price:0}
+   ]},
+   {id:'upholstery',label:'Upholstery',selection:'single',required:true,choices:[
+    {id:'q7-standard-interior',name:'Standard upholstery (trim-dependent)',price:0,included:true},
+    {id:'q7-leather-interior',name:'Leather upholstery (price to verify)',price:0}
+   ]},
+   {id:'packages',label:'Equipment packages',selection:'multiple',choices:[
+    {id:'q7-comfort-pack',name:'Comfort package (availability/price to verify)',price:0},
+    {id:'q7-tech-pack',name:'Technology package (availability/price to verify)',price:0}
+   ]}
+  ]
+ },
  'Audi|A3|2026':{
   brand:'Audi',model:'A3',year:2026,
   reference:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/product-guides/my26/A3_MY26.pdf',
@@ -237,6 +264,21 @@ const LIVE_MARKET_PRICES:Record<string,{from:number;source:string;market:string;
 const PEUGEOT_IE='https://www.peugeot.ie/content/dam/peugeot/ireland/price-lists/peugeot-passenger-cars-retail-price-list.pdf';
 const AUDI_IE='https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistFeb2026.pdf';
 const VERIFIED_EXPANSION:Record<string,VerifiedVariant[]>={
+ 'Audi|Q7|2026':[
+  {id:'q7-45tdi-se',trim:'SE',engine:'45 TDI quattro',fuel:'Diesel',transmission:'tiptronic',powerHp:231,price:109000,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'},
+  {id:'q7-50tdi-se',trim:'SE',engine:'50 TDI quattro',fuel:'Diesel',transmission:'tiptronic',powerHp:286,price:114405,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'},
+  {id:'q7-45tdi-sline',trim:'S line',engine:'45 TDI quattro',fuel:'Diesel',transmission:'tiptronic',powerHp:231,price:116040,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/product-guides/my26/Q7_MY26.pdf',market:'Ireland'},
+  {id:'q7-50tdi-sline',trim:'S line',engine:'50 TDI quattro',fuel:'Diesel',transmission:'tiptronic',powerHp:286,price:121445,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/product-guides/my26/Q7_MY26.pdf',market:'Ireland'}
+ ],
+ 'Audi|Q7 TFSI e|2026':[
+  {id:'q7-55tfsie-se',trim:'SE',engine:'55 TFSI e quattro',fuel:'Hybrid',transmission:'tiptronic',powerHp:394,price:88070,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'},
+  {id:'q7-55tfsie-sline',trim:'S line',engine:'55 TFSI e quattro',fuel:'Hybrid',transmission:'tiptronic',powerHp:394,price:94930,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'},
+  {id:'q7-60tfsie-comp',trim:'Competition',engine:'60 TFSI e quattro',fuel:'Hybrid',transmission:'tiptronic',powerHp:490,price:99010,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'}
+ ],
+ 'Audi|SQ7|2026':[
+  {id:'sq7-tfsi',trim:'SQ7',engine:'TFSI quattro',fuel:'Petrol',transmission:'tiptronic',powerHp:507,price:152865,source:'https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistMY26010526.pdf',market:'Ireland'}
+ ],
+
  'Peugeot|208|2026':[
   {id:'p208-allure-h110',trim:'Allure',engine:'Hybrid 110 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:110,price:28995,source:PEUGEOT_IE,market:'Ireland'},
   {id:'p208-gt-h110',trim:'GT',engine:'Hybrid 110 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:110,price:33995,source:PEUGEOT_IE,market:'Ireland'},
