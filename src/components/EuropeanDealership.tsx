@@ -49,13 +49,17 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name} · {w.price?'+':' '}{eur(w.price)}</option>)}</select></label>
     <fieldset><legend>Individual equipment</legend>
       <p className="eu-source-note">Features from the Toyota brochure. Standard equipment is included in your grade. Other items have individual TravelEmpire prices; availability as a real-world retrofit is not guaranteed.</p>
-      {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=><div key={group}>
-       <strong>{group}</strong>
-       <div className="eu-options">{extras.filter(o=>o.group===group).map(o=><label key={o.id} className="eu-option">
-        <input type="checkbox" checked={o.included||extraIds.includes(o.id)} disabled={o.included} onChange={e=>setSelectedExtras(old=>e.target.checked?[...old,o.id]:old.filter(id=>id!==o.id))}/>
-        <span><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim: '+'+eur(o.price)}</small></span>
-       </label>)}</div>
-      </div>)}
+      {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=>{
+       const categoryExtras=extras.filter(o=>o.group===group);
+       const selectedCount=categoryExtras.filter(o=>extraIds.includes(o.id)).length;
+       return <details key={group} className="eu-equipment-category" style={{marginTop:'10px',border:'1px solid var(--border, #d5dbe3)',borderRadius:'8px',padding:'10px 12px'}}>
+        <summary style={{cursor:'pointer',fontWeight:600}}>{group} · {selectedCount} selected · {categoryExtras.length} options</summary>
+        <div className="eu-options" style={{marginTop:'10px'}}>{categoryExtras.map(o=><label key={o.id} className="eu-option">
+         <input type="checkbox" checked={o.included||extraIds.includes(o.id)} disabled={o.included} onChange={e=>setSelectedExtras(old=>e.target.checked?[...old,o.id]:old.filter(id=>id!==o.id))}/>
+         <span><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
+        </label>)}</div>
+       </details>;
+      })}
     </fieldset>
 
    </div>
