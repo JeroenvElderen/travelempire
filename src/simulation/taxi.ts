@@ -687,7 +687,7 @@ export function dispatchScout(
   // Branches are prioritised before the next perimeter segment. There is no
   // distance limit: only a graph-work safety bound against malformed networks.
   const MAX_BRANCH_NODES=12000;
-  const branchFrom=(junction:string,previousNode:string|undefined,nextNode:string)=>{
+  const branchFrom=(junction:string,previousNode:string|undefined)=>{
    for(const candidate of graph.edges.get(junction)??[]){
     if(perimeterIds.has(candidate.id)||visitedBranches.has(candidate.id)||explored.has(candidate.id)||
        reservedEdges.has(candidate.id)||(discoveryAllowed&&!discoveryAllowed.has(candidate.id))||
@@ -744,7 +744,7 @@ export function dispatchScout(
   for(let i=1;i<block.nodes.length;i++){
    const junction=keys[keys.length-1];
    const previousNode=keys.length>1?keys[keys.length-2]:undefined;
-   branchFrom(junction,previousNode,block.nodes[i]);
+   branchFrom(junction,previousNode);
    keys.push(block.nodes[i]);ids.push(block.ids[i-1]);
   }
  }
