@@ -130,7 +130,7 @@ const VERIFIED_VARIANTS:Record<string,VerifiedVariant[]>={
  ]
 };
 export function verifiedVariants(model:VehicleModel,year:number):readonly VerifiedVariant[]{
- return VERIFIED_VARIANTS[model.brand+'|'+model.name+'|'+year]??VW_MY26[model.brand+'|'+model.name+'|'+year]??[];
+ return VERIFIED_VARIANTS[model.brand+'|'+model.name+'|'+year]??VW_MY26[model.brand+'|'+model.name+'|'+year]??VERIFIED_EXPANSION[model.brand+'|'+model.name+'|'+year]??[];
 }
 
 const TOYOTA_IE='https://www.toyota.ie/';
@@ -152,6 +152,46 @@ const LIVE_MARKET_PRICES:Record<string,{from:number;source:string;market:string;
  'Volkswagen|Passat':{from:47995,source:VW_IE,market:'Ireland',note:'MY26 Passat Business 1.5 eHybrid DSG 204hp recommended retail price'},
  'Volkswagen|ID.3':{from:37705,source:VW_IE,market:'Ireland',note:'MY26 ID.3 Pure 52kWh recommended retail price'},
  'Volkswagen|ID.4':{from:40990,source:VW_IE,market:'Ireland',note:'MY26 ID.4 Pure 52kWh 170hp recommended retail price'}
+};
+const PEUGEOT_IE='https://www.peugeot.ie/content/dam/peugeot/ireland/price-lists/peugeot-passenger-cars-retail-price-list.pdf';
+const AUDI_IE='https://media.audi.com/is/content/audi/country/ie/assets/downloads/my26/AudiIrelandPricelistFeb2026.pdf';
+const VERIFIED_EXPANSION:Record<string,VerifiedVariant[]>={
+ 'Peugeot|208|2026':[
+  {id:'p208-allure-h110',trim:'Allure',engine:'Hybrid 110 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:110,price:28995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p208-gt-h110',trim:'GT',engine:'Hybrid 110 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:110,price:33995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p208-gt-h145',trim:'GT',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:35495,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p208-allure-ev',trim:'Allure',engine:'Electric 54 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:156,price:37995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p208-gt-ev',trim:'GT',engine:'Electric 54 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:156,price:38995,source:PEUGEOT_IE,market:'Ireland'}
+ ],
+ 'Peugeot|308|2026':[
+  {id:'p308-allure-h',trim:'Allure',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:33995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p308-gt-h',trim:'GT',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:38495,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p308-allure-ev',trim:'Allure',engine:'Electric 58 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:156,price:42695,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p308-gt-ev',trim:'GT',engine:'Electric 58 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:156,price:45695,source:PEUGEOT_IE,market:'Ireland'}
+ ],
+ 'Peugeot|408|2026':[
+  {id:'p408-allure-h',trim:'Allure',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:37995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p408-gt-h',trim:'GT',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:41995,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p408-allure-ev',trim:'Allure',engine:'Electric 58 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:210,price:45490,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p408-gt-ev',trim:'GT',engine:'Electric 58 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:210,price:49490,source:PEUGEOT_IE,market:'Ireland'}
+ ],
+ 'Peugeot|3008|2026':[
+  {id:'p3008-allure-h',trim:'Allure',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:45495,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p3008-gt-h',trim:'GT',engine:'Hybrid 145 e-DCS6',fuel:'Hybrid',transmission:'6-speed automatic',powerHp:145,price:48495,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p3008-allure-ev',trim:'Allure',engine:'Electric 73 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:210,price:50295,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p3008-gt-ev',trim:'GT',engine:'Electric 73 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:210,price:53295,source:PEUGEOT_IE,market:'Ireland'},
+  {id:'p3008-gte-awd',trim:'GT Exclusive',engine:'Electric AWD 73 kWh',fuel:'Electric',transmission:'Single-speed',powerHp:325,price:59995,source:PEUGEOT_IE,market:'Ireland'}
+ ],
+ 'Audi|A3|2026':[
+  {id:'a3-30tdi-se',trim:'SE',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:38985,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tfsi-se',trim:'SE',engine:'30 TFSI',fuel:'Petrol',transmission:'Manual',powerHp:115,price:37140,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tdi-sline',trim:'S line',engine:'30 TDI',fuel:'Diesel',transmission:'Manual',powerHp:115,price:43465,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-30tfsi-sline',trim:'S line',engine:'30 TFSI',fuel:'Petrol',transmission:'Manual',powerHp:115,price:41740,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tfsi-se',trim:'SE',engine:'35 TFSI',fuel:'Petrol',transmission:'S tronic',powerHp:150,price:41795,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-35tdi-sline',trim:'S line',engine:'35 TDI',fuel:'Diesel',transmission:'S tronic',powerHp:150,price:48640,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-40tfsie-se',trim:'SE',engine:'40 TFSI e',fuel:'Hybrid',transmission:'S tronic',powerHp:204,price:51645,source:AUDI_IE,market:'Ireland'},
+  {id:'a3-40tfsie-sline',trim:'S line',engine:'40 TFSI e',fuel:'Hybrid',transmission:'S tronic',powerHp:204,price:55695,source:AUDI_IE,market:'Ireland'}
+ ]
 };
 const VW_MY26:Record<string,VerifiedVariant[]>={
  'Volkswagen|Passat|2026':[
