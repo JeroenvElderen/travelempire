@@ -1,7 +1,7 @@
 import type {Point,Taxi,RoadGraph} from './simulation/taxi';
 import {meters,nearest,route} from './simulation/taxi';
 
-export type VehicleOffer={id:string;model:string;year:number;fuel:'Petrol'|'Diesel'|'Hybrid'|'Electric';trim?:string;optionIds?:string[];revenueBonus?:number;className:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';price:number;mileage:number;condition:number;seats:number;kind:'New'|'Used'};
+export type VehicleOffer={id:string;model:string;year:number;fuel:'Petrol'|'Diesel'|'Hybrid'|'Electric';trim?:string;optionIds?:string[];revenueBonus?:number;paintHex?:string;className:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';price:number;mileage:number;condition:number;seats:number;kind:'New'|'Used'};
 export const OFFERS:VehicleOffer[]=[
  {id:'prius-used',model:'Toyota Prius',year:2018,fuel:'Petrol',className:'Economy',price:10500,mileage:165000,condition:74,seats:4,kind:'Used'},
  {id:'octavia-used',model:'Skoda Octavia',year:2021,fuel:'Petrol',className:'Standard',price:17900,mileage:82000,condition:89,seats:4,kind:'Used'},
