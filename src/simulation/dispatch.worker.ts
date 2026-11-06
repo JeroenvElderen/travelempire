@@ -267,9 +267,10 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      idleFallbackAt.set(taxis[index].id,now+5000);
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
     }
-    if(assignment.status==='IDLE'&&taxis[index].explorerRole){unavailableExplorerRoles.add(taxis[index].explorerRole);}
+    const assignedRole=taxis[index].explorerRole;
+    if(assignment.status==='IDLE'&&assignedRole){unavailableExplorerRoles.add(assignedRole);}
     if(assignment.status!=='IDLE'){
-     if(taxis[index].explorerRole)unavailableExplorerRoles.delete(taxis[index].explorerRole);
+     if(assignedRole)unavailableExplorerRoles.delete(assignedRole);
      explorerIdleSince.delete(taxis[index].id);
      taxis[index]=assignment;
      assignedCount++;
