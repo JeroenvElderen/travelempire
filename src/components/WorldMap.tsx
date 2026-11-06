@@ -422,7 +422,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const dx=(position[0]-previousHeading.position[0])*Math.cos(position[1]*Math.PI/180);
      const dy=position[1]-previousHeading.position[1];
      const distanceSquared=dx*dx+dy*dy;
-     if(distanceSquared>1e-15){
+     // Ignore tiny coordinate oscillations while an explorer waits at a junction.
+     // Such movements are rendering noise, not a new road direction.
+     if(distanceSquared>2.5e-13){
       const target=Math.atan2(dx,dy)*180/Math.PI;
       const delta=((target-previousHeading.angle+540)%360)-180;
       const dt=Math.min(0.1,Math.max(0,(now-previousHeading.at)/1000));
