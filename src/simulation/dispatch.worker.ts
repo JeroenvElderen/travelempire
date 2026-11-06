@@ -134,11 +134,12 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const role=h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(edge.id);}
    }
+   const classifiedRoads=new Set<string>();for(const ids of byClass.values())for(const id of ids)classifiedRoads.add(id);
    const revealedNodes=new Set<string>();
    for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
    const completionRoads=new Set<string>();
    for(const [from,links] of graph.edges)if(revealedNodes.has(from))for(const edge of links)if(revealedNodes.has(edge.to)&&!explored.has(edge.id)&&!classifiedRoads.has(edge.id))completionRoads.add(edge.id);
-   const classifiedRoads=new Set<string>();for(const ids of byClass.values())for(const id of ids)classifiedRoads.add(id);
+   
    const poiRoads=new Set<string>();
    const poiTargets=(msg.poiTargets??[]).slice(0,150);
    if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
