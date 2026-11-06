@@ -633,7 +633,7 @@ export function dispatchScout(
  // Search is bounded and runs in the dispatch worker, never the animation loop.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let completionBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
- let specialistBest:typeof best=null;
+ let specialistBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let specialistScore=Infinity;
  const specialist=taxi.explorerRole;
  const poiPoints=specialist==='poi'?(poiTargets??[]).filter(p=>meters(p,taxi.position)<8000).slice(0,24):[];
