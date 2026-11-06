@@ -4,7 +4,7 @@ export type Point=[number,number];
 export type Taxi = {
   id: string;
   kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery';
-  explorerRole?: 'completion'; // Older saves default to taxi.
+  explorerRole?: 'completion'|'highway'|'urban'|'poi'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
@@ -604,7 +604,7 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[]
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -633,6 +633,11 @@ export function dispatchScout(
  // Search is bounded and runs in the dispatch worker, never the animation loop.
  let best:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let completionBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
+ let specialistBest:typeof best=null;
+ let specialistScore=Infinity;
+ const specialist=taxi.explorerRole;
+ const poiPoints=specialist==='poi'?(poiTargets??[]).filter(p=>meters(p,taxi.position)<15000).slice(0,100):[];
+ const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):false;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  const maxSearchMeters=fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
@@ -645,7 +650,7 @@ export function dispatchScout(
   // Dijkstra visits junctions in increasing travel distance. Once the
   // closest candidate is found, more distant junctions cannot beat it.
   // Completion explorers keep searching for gaps between revealed junctions.
-  if(taxi.explorerRole!=='completion'&&best&&distance>best.distance)break;
+  if(!specialist&&best&&distance>best.distance)break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
    const approach=node===start?incomingNode:previous.get(node)?.from;
@@ -658,6 +663,14 @@ export function dispatchScout(
     if(!best||candidate.distance<best.distance)best=candidate;
      // Green explorers finish undiscovered links between already explored junctions first.
      if(taxi.explorerRole==='completion'&&inside&&(!completionBest||candidate.distance<completionBest.distance))completionBest=candidate;
+     if(specialist==='highway'||specialist==='urban'){
+      if(specialistMatch(edge.highway??'')&&distance<specialistScore){specialistBest=candidate;specialistScore=distance;}
+     }else if(specialist==='poi'&&poiPoints.length){
+      const point=graph.nodes.get(edge.to);
+      if(point){let proximity=Infinity;for(const poi of poiPoints)proximity=Math.min(proximity,meters(point,poi));
+       if(proximity<2500){const score=distance+proximity*1.5;if(score<specialistScore){specialistBest=candidate;specialistScore=score;}}
+      }
+     }
    }
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
@@ -667,6 +680,7 @@ export function dispatchScout(
  }
  // Green explorers prefer missing links, falling back to nearest-road expansion.
  if(completionBest)best=completionBest;
+ else if(specialistBest)best=specialistBest;
  if(!best)return taxi;
  const block=blockPerimeter(graph,best.from,best.to,best.id,_allowedRoads);
  const keys=[best.from],ids:string[]=[];

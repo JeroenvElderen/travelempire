@@ -305,7 +305,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const displayed=renderedPosition.current.get(taxi.id);
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBrightGreenCarTopView.svg?v=purple-shape-green-2':'SimplePurpleCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBrightGreenCarTopView.svg?v=purple-shape-green-2':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleCyanCarTopView.svg':'SimplePurpleCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
@@ -314,7 +314,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const header=document.createElement('div');header.className='vehicle-service-popup-header';
      const icon=document.createElement('span');icon.textContent=current.kind==='explorer'?'◆':'●';icon.className='vehicle-service-popup-icon';
      const heading=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;
-     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?(current.explorerRole==='completion'?'Road Completion Explorer':'Road Explorer'):'Taxi')+' · '+current.status.replace(/_/g,' ');
+     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?(current.explorerRole==='completion'?'Road Completion Explorer':current.explorerRole==='highway'?'Highway Explorer':current.explorerRole==='urban'?'Urban Explorer':current.explorerRole==='poi'?'POI Explorer':'Road Explorer'):'Taxi')+' · '+current.status.replace(/_/g,' ');
      heading.append(label,subtitle);header.append(icon,heading);popupContent.appendChild(header);
      const stats=document.createElement('div');stats.className='vehicle-service-popup-stats';
      stats.textContent='Speed '+Math.round(current.speedKph??0)+' km/h · Condition '+Math.round(current.vehicleCondition??100)+'%';
@@ -637,7 +637,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(width<100||height<100)return;
    const center={x:width/2,y:height/2};
    const candidates:Array<{id:string;lng:number;lat:number;type:string;label:string;limit:number}>=[];
-   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?(t.explorerRole==='completion'?'completion-explorer':'explorer'):t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
+   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?(t.explorerRole==='completion'?'completion-explorer':t.explorerRole==='highway'?'highway-explorer':t.explorerRole==='urban'?'urban-explorer':t.explorerRole==='poi'?'poi-explorer':'explorer'):t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
    if(headquarters)candidates.push({id:'hq',lng:headquarters.lng,lat:headquarters.lat,type:'depot',label:'Headquarters',limit:150000});
    for(const d of depots)candidates.push({id:'d:'+d.id,lng:d.lng,lat:d.lat,type:'depot',label:d.name,limit:150000});
    for(const f of ferryPositionsRef.current)candidates.push({id:'f:'+f.id,lng:f.point[0],lat:f.point[1],type:'ferry',label:'Ferry '+f.id,limit:250000});

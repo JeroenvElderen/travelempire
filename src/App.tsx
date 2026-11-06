@@ -453,7 +453,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
-    hq:[company.headquarters.lng,company.headquarters.lat],stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>{if((t.kind&&t.kind!=='taxi')||!gameClockRef.current||t.shiftParked)return false;const schedule=driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs);return schedule.onDuty&&!schedule.onBreak;}).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],poiTargets:[...stationsRef.current.values()].filter(s=>s.access!=='private').slice(0,150).map(s=>[s.lng,s.lat] as [number,number]),stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>{if((t.kind&&t.kind!=='taxi')||!gameClockRef.current||t.shiftParked)return false;const schedule=driverSchedule(t,fleet.drivers??[],gameClockRef.current.epochMs);return schedule.onDuty&&!schedule.onBreak;}).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     allowScout:true});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
@@ -880,8 +880,8 @@ export default function App(){
   return()=>window.clearInterval(timer);
  },[company?.id,graph,fleet.taxis.length,research]);
 
- const buyRoadExplorer=(role?:'completion')=>{if(!company||!graph)return;try{
-  const cost=role==='completion'?3000:2500;
+ const buyRoadExplorer=(role?:Taxi['explorerRole'])=>{if(!company||!graph)return;try{
+  const cost=role==='completion'||role==='urban'?3000:role==='highway'?3500:role==='poi'?4000:2500;
   const explorerCapacity=explorerDepotCapacity(upgradesFor(fleet,'main'));
   const explorerCount=fleet.taxis.filter(t=>t.kind==='explorer'&&(t.depotId??'main')==='main').length;
   if(explorerCount>=explorerCapacity)throw Error(`Headquarters explorer parking is full (${explorerCount}/${explorerCapacity}). Expand explorer parking or move an idle explorer to another depot.`);
@@ -889,9 +889,9 @@ export default function App(){
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
   const now=Date.now();
-  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:`${role==='completion'?'Road Completion Explorer':'Road Explorer'} ${fleet.taxis.filter(t=>t.kind==='explorer').length+1}`,driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:role==='completion'?'Road Completion Explorer':'Road Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Electric'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
+  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:`${role==='completion'?'Road Completion':role==='highway'?'Highway':role==='urban'?'Urban':role==='poi'?'POI':'General'} Explorer ${fleet.taxis.filter(t=>t.kind==='explorer').length+1}`,driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:role==='completion'?'Road Completion Explorer':role==='highway'?'Highway Explorer':role==='urban'?'Urban Explorer':role==='poi'?'POI Explorer':'Road Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Electric'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
   const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cost)*100)/100};
-  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:(role==='completion'?'Road Completion Explorer':'Road Explorer')+' vehicle purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:(role==='completion'?'Road Completion':role==='highway'?'Highway':role==='urban'?'Urban':role==='poi'?'POI':'General')+' Explorer purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
  }catch(e){setSimError(String(e))}};
  const bankTransfer=(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>{
   const current=companyRef.current;if(!current)return;

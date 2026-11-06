@@ -34,3 +34,7 @@
 .te-offscreen-depot{--pointer-color:#52d69b}
 .te-offscreen-recovery{--pointer-color:#ff9d4b}
 .te-offscreen-pointer:focus-visible{outline:2px solid white;outline-offset:3px}
+
+.te-offscreen-highway-explorer{--pointer-color:#438fff}
+.te-offscreen-urban-explorer{--pointer-color:#f59e42}
+.te-offscreen-poi-explorer{--pointer-color:#06b6d4}
