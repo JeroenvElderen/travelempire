@@ -190,6 +190,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   update();
   return()=>{instance.off('style.load',update);};
  },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
+ const taxiPaintCache=useRef<Map<string,string>>(new Map());
+ const taxiPaintRequests=useRef<Set<string>>(new Set());
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const recoveryCommandRef=useRef(onRequestRecovery);recoveryCommandRef.current=onRequestRecovery;
@@ -305,7 +307,29 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const displayed=renderedPosition.current.get(taxi.id);
    const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
-  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;el.appendChild(img);el.title=taxi.name;
+  }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;
+   // Cache one recoloured SVG per HEX, rather than fetching or regenerating on each animation frame.
+   if((taxi.kind??'taxi')==='taxi'&&taxi.vehiclePaintHex&&/^#[0-9a-fA-F]{6}$/.test(taxi.vehiclePaintHex)){
+    const hex=taxi.vehiclePaintHex.toUpperCase();
+    const cache=taxiPaintCache.current;
+    const cached=cache.get(hex);
+    if(cached)img.src=cached;
+    else {
+     if(!taxiPaintRequests.current.has(hex)){
+      taxiPaintRequests.current.add(hex);
+      fetch(`${import.meta.env.BASE_URL??'/'}assets/car_topview.svg`).then(r=>{if(!r.ok)throw Error('Taxi SVG unavailable');return r.text()}).then(svg=>{
+       const rgb=(h:string)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+       const shade=(h:string,f:number)=>'#'+rgb(h).map(v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0')).join('');
+       // The source body paint uses two gradient stops; keep all non-body SVG artwork unchanged.
+       const painted=svg.replace(/stop-color="#f8ce00"/gi,`stop-color="${hex}"`).replace(/stop-color="#b79700"/gi,`stop-color="${shade(hex,0.72)}"`);
+       const blobUrl=URL.createObjectURL(new Blob([painted],{type:'image/svg+xml'}));
+       cache.set(hex,blobUrl);
+       for(const [id,marker] of taxiMarkers.current){const vehicle=taxiStateRef.current.find(t=>t.id===id);if(vehicle?.vehiclePaintHex?.toUpperCase()===hex){const image=marker.getElement().querySelector('img');if(image)image.src=blobUrl;}}
+      }).catch(err=>console.warn('Taxi paint SVG could not be loaded',err)).finally(()=>taxiPaintRequests.current.delete(hex));
+     }
+    }
+   }
+   el.appendChild(img);el.title=taxi.name;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
