@@ -694,8 +694,8 @@ export default function App(){
      }
      if(delivered.status==='REFUELLING'){
       const spec=energySpec(delivered);
-      // Petrol refuelling takes 5 seconds at a station or depot.
-       const until=delivered.refillUntil??(now+5000);
+      // Petrol refuelling takes 20 seconds at a station or depot.
+       const until=delivered.refillUntil??(now+20000);
       if(now<until)return {...delivered,refillUntil:until};
       const quantity=Math.max(0,spec.capacity-energyRemaining(delivered));
       const depotLevels=upgradesFor(old,t.depotId??'main');

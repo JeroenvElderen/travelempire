@@ -2,10 +2,9 @@ import type {Taxi} from './taxi';
 
 export type EnergyKind='petrol';
 export type EnergySpec={kind:EnergyKind;capacity:number;per100km:number;unit:'L';pricePerUnit:number};
-// Gameplay calibration: at 50 km/h, 1% of capacity is used every 15 seconds of driving.
-// Equivalent to 4.8 full-tank capacities per 100 km; actual usage still depends on distance.
+// Petrol-only gameplay: realistic baseline fuel consumption, measured by distance driven.
 export function energySpec(_t:Pick<Taxi,'vehicleFuel'>):EnergySpec {
- return {kind:'petrol',capacity:50,per100km:240,unit:'L',pricePerUnit:1.85};
+ return {kind:'petrol',capacity:50,per100km:8,unit:'L',pricePerUnit:1.85};
 }
 export function energyRemaining(t:Taxi):number {
  const spec=energySpec(t);
