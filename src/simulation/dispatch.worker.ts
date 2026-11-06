@@ -227,7 +227,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
 
     const remaining=taxi.path.length-1-taxi.leg;
-    if(remaining>2||!taxi.path.length)continue;
+    // Request the next route earlier to reduce waits at the final junction.
+    if(remaining>8||!taxi.path.length)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
     if(!from)continue;
