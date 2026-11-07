@@ -125,6 +125,19 @@ const EXTENSION_RETRY_MS=15000;
 const missionSequence=new Map<string,number>();
 const missionPlannedAt=new Map<string,number>();
 const missionLastEndpoint=new Map<string,string>();
+type ExplorerMission={id:number;vehicleId:string;role:string;status:'active'|'completed'|'interrupted';targetNode:string;assignedAt:number;plannedEdges:number};
+const explorerMissions=new Map<string,ExplorerMission>();
+let completedExplorerMissions=0;
+let interruptedExplorerMissions=0;
+let missionCounter=0;
+function recordExplorerMission(taxi:Taxi,now:number):void{
+ const destination=taxi.path.at(-1);
+ if(!destination)return;
+ const target=nearest(graph!,destination);
+ if(!target)return;
+ explorerMissions.set(taxi.id,{id:++missionCounter,vehicleId:taxi.id,role:taxi.explorerRole??'balanced',status:'active',targetNode:target,assignedAt:now,plannedEdges:taxi.edgeIds.length});
+}
+
 const MISSION_LOOKAHEAD_EDGES=24;
 const MAX_SUCCESSOR_PLANS_PER_DISPATCH=1;
 // Avoid repeated nationwide path searches for unchanged idle scouts.
@@ -144,7 +157,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -338,6 +351,24 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(destination){const target=nearest(graph,destination);if(target)reservedTargets.add(target);}
     for(const edge of taxi.edgeIds.slice(taxi.leg))reservedEdges.add(edge);
    }
+   // Mission lifecycle is worker-owned, independent of frame-by-frame movement.
+   // A vehicle leaving its assigned route completes or interrupts the mission;
+   // the next idle dispatch will issue a new one.
+   for(const taxi of taxis){
+    if(taxi.kind!=='explorer')continue;
+    const mission=explorerMissions.get(taxi.id);
+    if(!mission)continue;
+    if(taxi.status==='EXPLORING'&&taxi.path.length>1)continue;
+    if(taxi.status==='IDLE'){
+     completedExplorerMissions++;
+     mission.status='completed';
+    }else{
+     interruptedExplorerMissions++;
+     mission.status='interrupted';
+    }
+    explorerMissions.delete(taxi.id);
+    missionLastEndpoint.delete(taxi.id);
+   }
    // Mission-based exploration: a driving explorer keeps its committed route.\n   // Plan a successor mission from its known endpoint ahead of arrival.\n   let successorPlans=0;\n   // Preplan the next sequence before an Explorer reaches its final junction.
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
@@ -373,6 +404,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     missionLastEndpoint.set(taxi.id,destinationKey);
+    // The appended successor becomes the committed mission destination.
+    recordExplorerMission({...taxi,path:[...taxi.path,...extension.path.slice(1)],edgeIds:[...taxi.edgeIds,...extension.edgeIds]},now);
     missionSequence.set(taxi.id,(missionSequence.get(taxi.id)??0)+1);
     missionPlannedAt.set(taxi.id,now);
     taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
@@ -415,6 +448,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      missionSequence.set(idleVehicle.id,(missionSequence.get(idleVehicle.id)??0)+1);
      missionLastEndpoint.delete(idleVehicle.id);
      missionPlannedAt.set(idleVehicle.id,now);
+     if(assignment.status==='EXPLORING')recordExplorerMission(assignment,now);
      assignedCount++;
     }else{
      idleRetryAt.set(idleVehicle.id,now+IDLE_RETRY_MS);
@@ -431,6 +465,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{assigned:missionSequence.size,successorsPlanned:successorPlans,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlans,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
