@@ -2,11 +2,13 @@
 import {stationTileKey} from './stations';
 import type {RestStop,RestStopKind} from '../simulation/driverRest';
 const root=`${import.meta.env.BASE_URL}data/rest-stops/`;
+const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\\/+$/,'');
+const base=storage?`${storage}/storage/v1/object/public/travelempire-rest-stops/`:root;
 const cache=new Map<string,RestStop[]>();
 const inflight=new Map<string,Promise<RestStop[]>>();
 let manifestPromise:Promise<Set<string>>|undefined;
 async function manifest():Promise<Set<string>>{
- manifestPromise??=fetch(root+'manifest.json').then(async response=>{
+ manifestPromise??=fetch(base+'manifest.json').then(async response=>{
   if(response.status===404)return new Set<string>();
   if(!response.ok)throw Error('Rest POI manifest HTTP '+response.status);
   const data=await response.json() as {tiles?:string[]};
@@ -22,7 +24,7 @@ export async function loadRestStopTile(lng:number,lat:number):Promise<RestStop[]
  const task=(async()=>{
   const tiles=await manifest();
   if(!tiles.has(key)){cache.set(key,[]);return [];}
-  const response=await fetch(root+'tiles/'+encodeURIComponent(key)+'.json');
+  const response=await fetch(base+'tiles/'+encodeURIComponent(key)+'.json');
   if(!response.ok)throw Error('Rest POI tile '+key+' HTTP '+response.status);
   const raw=await response.json() as Array<{id:string;kind:RestStopKind;name:string;lng:number;lat:number;roadEdgeId?:string}>;
   if(!Array.isArray(raw))throw Error('Invalid rest POI tile '+key);
