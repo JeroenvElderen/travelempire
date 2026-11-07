@@ -40,7 +40,6 @@ import "./midnight-glass.css";
 import "./aurora-glass.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
-import {cacheAllRoadPackages,type RoadDownloadProgress} from './data/roadTiles';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
@@ -208,11 +207,6 @@ export default function App(){
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const stationLoadedRef=useRef<Set<string>>(new Set());
  const [roadPackages,setRoadPackages]=useState(0);
- const [roadDownload,setRoadDownload]=useState<RoadDownloadProgress|null>(null);
- const [initialRoadReady,setInitialRoadReady]=useState(false);
- const [nationwideReady,setNationwideReady]=useState(false);
- const [nationwideError,setNationwideError]=useState('');
- const [downloadRetry,setDownloadRetry]=useState(0);
  const [roadDiagnostics,setRoadDiagnostics]=useState({queued:0,edges:0,workerEdges:0});
  const [missionQueue,setMissionQueue]=useState<PassengerRequest[]>([]);
  const queueRef=useRef<PassengerRequest[]>([]);
@@ -399,7 +393,7 @@ export default function App(){
   networkRef.current?.dispose();networkRef.current=null;
   graphRef.current=null;setGraph(null);setRoadGraphVersion(0);setRoadPackages(0);setSimError('');setInitialRoadReady(false);setRoadDownload(null);setNationwideReady(false);setNationwideError('');
   if(!company)return()=>{active=false};
-  const downloadController=new AbortController();
+
   const run=async()=>{
    try{
     const manager=new RoadNetworkManager((next,count)=>{
@@ -434,17 +428,17 @@ export default function App(){
      });
     networkRef.current=manager;
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
-    if(active){setInitialRoadReady(true);void cacheAllRoadPackages(downloadController.signal,progress=>{if(active)setRoadDownload(progress)}).then(()=>{if(active)setNationwideReady(true)}).catch(error=>{if(active&&!downloadController.signal.aborted){setNationwideError(String(error));console.warn('[TravelEmpire] Nationwide road cache:',error)}});}
+
    }catch(error){
     if(!active)return;
     console.error('[TravelEmpire] Road tiles:',error);
-    setSimError(`Road tiles unavailable: ${String(error)}. Falling back to preview.`);setInitialRoadReady(true);
+    setSimError(`Road tiles unavailable: ${String(error)}. Falling back to preview.`);
     try{const fallback=await loadRoadGraph();if(active){graphRef.current=fallback;setGraph(fallback);}}catch(e){if(active)setSimError(String(e));}
    }
   };
   void run();
-  return()=>{active=false;downloadController.abort();networkRef.current?.dispose();networkRef.current=null};
- },[company?.id,company?.headquarters.lng,company?.headquarters.lat,downloadRetry]);
+  return()=>{active=false;networkRef.current?.dispose();networkRef.current=null};
+ },[company?.id,company?.headquarters.lng,company?.headquarters.lat
  // Route searches and passenger generation run in a dedicated worker.
  // Worker persists for the company; new road packages are synchronized as deltas.
  useEffect(()=>{
@@ -1468,16 +1462,6 @@ export default function App(){
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Dealership'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
- {company&&!nationwideReady&&<div role="status" aria-live="polite" style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(5,10,22,.96)',backdropFilter:'blur(22px)',color:'#f1f5f9',padding:24}}>
- <div style={{maxWidth:440,width:'100%',padding:32,border:'1px solid rgba(148,163,184,.22)',borderRadius:24,background:'rgba(30,41,59,.55)',textAlign:'center'}}>
- <div style={{fontSize:12,letterSpacing:4,color:'#94a3b8',marginBottom:16}}>TRAVELEMPIRE</div>
- <div style={{fontSize:26,fontWeight:700,marginBottom:12}}>Preparing Greece</div>
- <p style={{color:'#cbd5e1',lineHeight:1.6}}>{!initialRoadReady?'Loading roads around headquarters…':nationwideError?'Download interrupted. Already cached packages will be reused when you retry.':'Downloading every Greek road package before gameplay. Keep TravelEmpire open until the download finishes.'}</p>
- <div style={{fontSize:30,fontWeight:700,marginTop:18}}>{roadDownload?`${roadDownload.completed.toLocaleString()} / ${roadDownload.total.toLocaleString()}`:'Preparing…'}</div>
- <div style={{height:7,borderRadius:6,background:'rgba(148,163,184,.2)',overflow:'hidden',marginTop:18}}><div style={{height:'100%',width:`${roadDownload?Math.round(100*roadDownload.completed/Math.max(1,roadDownload.total)):0}%`,background:'#a78bfa',borderRadius:6,transition:'width .25s'}}/></div>
- <p style={{color:'#94a3b8',fontSize:12,marginTop:12}}>{roadDownload?`${Math.round(100*roadDownload.completed/Math.max(1,roadDownload.total))}% cached · ${roadDownload.total-roadDownload.completed} remaining`:'Checking local cache…'}</p>
- {nationwideError&&<><p style={{color:'#fca5a5',fontSize:12,overflowWrap:'anywhere'}}>{nationwideError}</p><button onClick={()=>setDownloadRetry(v=>v+1)} style={{marginTop:14,padding:'12px 24px',borderRadius:12,background:'#7c3aed',color:'white',border:0}}>Retry download</button></>}
- </div></div>}
  </main><nav className="mobile-tabs" aria-label="Mobile navigation">{navigation.filter(n=>['World','Fleet','Dealership','Company'].includes(n.name)).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'Map':name==='Dealership'?'Dealer':name==='Operations'?'Ops':name}</span></button>)}<button onClick={()=>setDrawerOpen(true)}><Menu size={19}/><span>More</span></button></nav></div>;
 }
 
