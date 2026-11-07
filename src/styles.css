@@ -157,3 +157,22 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
   .nav-v216.nav-map-mode .main{height:calc(100dvh - 66px - env(safe-area-inset-bottom))}
   .nav-v216.nav-map-mode .mobile-tabs{z-index:30}
 }
+
+/* World Map: extend the canvas to the bottom of the viewport behind floating navigation. */
+@media(max-width:800px){
+  .nav-v216.nav-map-mode .main{
+    height:100dvh;
+    min-height:100dvh;
+    padding-bottom:0;
+    overflow:hidden;
+  }
+  .nav-v216.nav-map-mode .world{
+    flex:1 1 0;
+    min-height:0;
+    height:auto;
+  }
+  .nav-v216.nav-map-mode .mobile-tabs{
+    position:fixed;
+    z-index:30;
+  }
+}
