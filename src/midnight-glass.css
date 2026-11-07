@@ -1,0 +1,59 @@
+/* TravelEmpire Midnight Glass — shared visual system.
+   Keep map canvas and animated vehicle markers free of backdrop filters. */
+:root{
+ color-scheme:dark;
+ --ui-bg:#08111f;--ui-surface:#14253b;--ui-raised:#1c3049;
+ --ui-border:rgba(164,199,237,.19);--ui-text:#eef6ff;
+ --ui-muted:#a4b9d0;--ui-accent:#89c7ff;
+ --nav-bg:#0a1729;--nav-border:rgba(160,195,237,.19);--nav-active:#80beff;
+ --glass-panel:linear-gradient(145deg,rgba(35,57,83,.88),rgba(15,29,48,.90));
+ --glass-border:1px solid rgba(179,213,249,.18);
+ --glass-shadow:0 14px 36px rgba(0,6,18,.27),inset 0 1px rgba(255,255,255,.075);
+}
+html,body,#root{min-height:100%;background:#08111f;color:#eef6ff}
+body{background:radial-gradient(ellipse at 75% -15%,rgba(42,95,159,.20),transparent 55%),#08111f}
+.nav-v216{background:transparent;color:var(--ui-text)}
+.nav-v216 .sidebar{background:linear-gradient(155deg,rgba(19,38,63,.98),rgba(9,21,37,.99));border-right:var(--glass-border);box-shadow:12px 0 35px #0002}
+.nav-v216 .topbar{background:linear-gradient(110deg,rgba(21,39,63,.96),rgba(13,28,48,.96));border-bottom:var(--glass-border);box-shadow:0 4px 20px #0002}
+.nav-v216 .brand-mark{background:linear-gradient(135deg,#9cd5ff,#65a8ed);box-shadow:0 4px 20px #65b6ff35;color:#071b30;border-radius:13px}
+.nav-v216 .nav-page-identity strong{color:#f3f8ff;letter-spacing:-.35px}
+.nav-v216 .nav-page-identity small{color:#a5bbd4}
+.nav-v216 .navigation button{border-radius:12px;transition:background-color .16s ease,color .16s ease}
+.nav-v216 .navigation button:hover{background:rgba(130,187,250,.10)}
+.nav-v216 .navigation button.selected{background:linear-gradient(110deg,rgba(79,143,219,.29),rgba(68,129,195,.12));color:#d2eaff;box-shadow:inset 3px 0 #89c7ff,inset 0 1px #ffffff15}
+.nav-v216 .nav-top-stat,.nav-v216 .nav-sim-status,.nav-world-layers{background:rgba(119,162,215,.10);border:var(--glass-border);box-shadow:inset 0 1px #ffffff10;color:#e3f0ff}
+.nav-world-layers:hover{background:rgba(119,176,244,.19)}
+.nav-v216 .mobile-tabs{background:linear-gradient(160deg,rgba(22,40,66,.98),rgba(10,23,42,.99));border-top:var(--glass-border);box-shadow:0 -10px 30px #0004}
+.nav-v216 .mobile-tabs button{color:#a8bfd9;border-radius:14px}
+.nav-v216 .mobile-tabs button.active{background:linear-gradient(135deg,rgba(62,123,199,.37),rgba(47,102,170,.20));color:#c9e7ff;box-shadow:inset 0 1px #ffffff20}
+.nav-v216 .main{background:transparent}
+.nav-v216 .company-dashboard,.nav-v216 .fleet-v2,.nav-v216 .finance-panel,.nav-v216 .placeholder{color:var(--ui-text)}
+/* Cards and forms throughout the app, excluding map rendering and popups. */
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) :is(article,.card,.stat-card,.metric-card,.panel,.summary-card){
+ background:var(--glass-panel);border:var(--glass-border);border-radius:18px;box-shadow:var(--glass-shadow);color:#eaf4ff;
+}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) :is(input,select,textarea){
+ background:rgba(8,21,39,.66);border:1px solid rgba(159,196,239,.25);border-radius:11px;color:#f0f7ff;
+}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) :is(button:not(.maplibregl-ctrl button),.button){
+ border-radius:11px;transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) button:hover:not(:disabled){box-shadow:0 4px 18px rgba(80,152,235,.14)}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) :is(h1,h2,h3){color:#f0f7ff;letter-spacing:-.025em}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.dealer-panel,.drivers-panel,.operations-panel,.research-panel,.company-panel,.fleet-panel) :is(table,thead,tbody,tr){border-color:rgba(169,204,241,.13)}
+/* Floating map chrome only — never filter the map canvas, vehicle icons or routes. */
+.map-layer-control{top:12px;right:12px;z-index:6;pointer-events:none}
+.map-layer-control .map-layer-options{pointer-events:auto;top:0;right:0;width:min(310px,calc(100vw - 24px));max-height:min(72dvh,650px);overflow-y:auto;
+ background:linear-gradient(145deg,rgba(24,44,70,.97),rgba(11,26,45,.98));border:var(--glass-border);border-radius:17px;box-shadow:0 20px 50px #0007,inset 0 1px #ffffff1a;color:#eaf5ff}
+.map-layer-options button{color:#e2f0ff;border-radius:10px}
+.map-layer-options button:hover{background:rgba(111,172,236,.14)}
+.map-layer-options button.active{background:rgba(94,158,230,.24);color:#bce0ff}
+.map-layer-note{border-top:1px solid rgba(174,207,241,.17);color:#b0c4db}
+.map-loading,.map-error{background:rgba(16,34,56,.94);border:var(--glass-border);box-shadow:var(--glass-shadow);color:#e8f3ff;border-radius:12px}
+.nav-v216 button:focus-visible,.nav-v216 input:focus-visible,.nav-v216 select:focus-visible{outline:2px solid #89c7ff;outline-offset:2px}
+@media(max-width:800px){
+ .nav-v216 .world-topbar{background:linear-gradient(115deg,rgba(19,37,62,.98),rgba(11,25,45,.98))}
+ .map-layer-control{top:8px;right:8px}
+ .map-layer-control .map-layer-options{width:min(310px,calc(100vw - 16px))}
+}
+@media(prefers-reduced-motion:reduce){.nav-v216 .navigation button,.nav-v216 .mobile-tabs button{transition:none}}
