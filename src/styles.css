@@ -189,3 +189,15 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 }
 .nav-v216.nav-map-mode .world-minimal-layers:focus-visible{outline:2px solid #b49aff;outline-offset:2px}
 @media(max-width:390px){.nav-v216.nav-map-mode .world-minimal-topbar{gap:7px;padding:0 9px}.nav-v216.nav-map-mode .world-minimal-date{font-size:10px}.nav-v216.nav-map-mode .world-minimal-money{font-size:11px}}
+
+/* App viewport is fixed; scroll only the active workspace, never the whole document. */
+html,body,#root{height:100%;min-height:0;width:100%;overflow:hidden}
+.nav-v216.shell{height:100dvh;min-height:0;max-height:100dvh;overflow:hidden}
+.nav-v216 .main{min-height:0;min-width:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+.nav-v216.nav-map-mode .main{overflow:hidden}
+.nav-v216.nav-map-mode .world{min-height:0}
+@media(max-width:800px){
+ .nav-v216 .main{padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+ .nav-v216.nav-map-mode .main{padding-bottom:0}
+ .nav-v216 .mobile-tabs{flex-shrink:0}
+}
