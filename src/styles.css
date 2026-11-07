@@ -130,5 +130,5 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
  .world-topbar .nav-world-clock{grid-column:2 / 4;grid-row:2;gap:6px;font-size:11px;white-space:nowrap;overflow:hidden}
  .world-topbar .nav-world-clock svg{width:14px;height:14px}
  .world-topbar .nav-world-live{font-size:10px;margin-left:auto}
- .nav-v216 .nav-map-mode .world{min-height:calc(100dvh - 142px - env(safe-area-inset-bottom))}
+ .nav-v216.nav-map-mode .world{min-height:calc(100dvh - 142px - env(safe-area-inset-bottom))}
 }
