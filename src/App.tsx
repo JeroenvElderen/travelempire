@@ -395,6 +395,8 @@ export default function App(){
   if(!company)return()=>{active=false};
 
   const run=async()=>{
+   const roadStartupAt=performance.now();
+   diagnostic('roads:startup',`begin company=${company.id}`);
    try{
     const manager=new RoadNetworkManager((next,count)=>{
       if(active){
@@ -427,9 +429,12 @@ export default function App(){
        diagnostic('dispatch:enqueue',`segments=${roads.length} batches=${Math.ceil(roads.length/2000)} ms=${Math.round(performance.now()-syncStarted)} pending=${roadSyncPendingRef.current}`);
      });
     networkRef.current=manager;
+    diagnostic('roads:startup',`initialize-start elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
+    diagnostic('roads:startup',`initialize-complete elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
 
    }catch(error){
+    diagnostic('roads:startup',`initialize-failed elapsedMs=${Math.round(performance.now()-roadStartupAt)} error=${String(error)}`);
     if(!active)return;
     console.error('[TravelEmpire] Road tiles:',error);
     setSimError(`Road tiles unavailable: ${String(error)}. Falling back to preview.`);
@@ -487,6 +492,8 @@ export default function App(){
    dispatchBusyRef.current=false;
    if(message.type==='result'){
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
+    const missionPerf=(message as typeof message & {perf?:{explorationMissions?:{active:number;idlePlans:number;vehicles:Array<{id:string;role:string;status:string;missionId:number|null;remainingEdges:number;retryInMs:number;lastPlannedAt:number|null}>};scoutTimings?:Array<{vehicleId:string;role:string;ms:number;phase:string;result?:string}>}}).perf;
+    if(missionPerf?.explorationMissions&&missionPerf.workerMs>100){const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
     if(perf&&perf.workerMs>150)diagnostic('dispatch:worker-phases',`workerMs=${Math.round(perf.workerMs)} prepareMs=${Math.round(perf.preparationMs)} passengerMs=${Math.round(perf.passengerMs)} scoutMs=${Math.round(perf.scoutMs)} nodes=${perf.graphNodes} roads=${perf.graphRoads} vehicles=${perf.vehicles} missions=${perf.missions}`);
    }
    if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150){diagnostic('dispatch:slow',`roundTripMs=${Math.round(duration)} vehicles=${taxisRef.current.length} roadSyncPending=${roadSyncPendingRef.current} workerRoads=${workerRoadCountRef.current}`);console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length,roadSyncPending:roadSyncPendingRef.current,workerRoads:workerRoadCountRef.current});}}
