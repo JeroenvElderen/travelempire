@@ -524,12 +524,14 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
 export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming=''):ReturnType<typeof route>{
  return turnAwareRoute(graph,from,to,discovered,true,incoming);
 }
-export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>):Taxi|null{
+export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>,eligibleStops?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
  const start=nearest(graph,taxi.position),pickup=nearest(graph,mission.pickup);
  if(!start||!pickup)return null;
  if(discovered){
-  const eligible=passengerRoadNodes(graph,discovered);
+  // Reuse the dispatch-wide eligibility index instead of scanning the entire
+  // discovered network once per taxi and passenger candidate.
+  const eligible=eligibleStops??passengerRoadNodes(graph,discovered);
   if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
  }
  // Passenger stops must be discovered, but taxis may travel over any road without exploring it.
