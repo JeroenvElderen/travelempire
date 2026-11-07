@@ -23,6 +23,7 @@ let discoveryIndexLastMs=0;
 let poiRoadsIndex=new Set<string>();
 let poiTargetsSignature='';
 let poiIndexedRoads=0;
+const pendingLoadedExplored=new Set<string>();
 function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|null){
  const started=performance.now();
  let rebuild=explored.size<indexedExplored.size||hqNode!==connectedHqNode;
@@ -32,6 +33,8 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
   connectedHqNode=hqNode;discoveryIndexRoads=0;discoveryIndexRebuilds++;
  }
  const touched=new Set<string>();
+ for(const node of pendingLoadedExplored){revealedNodesIndex.add(node);touched.add(node);}
+ pendingLoadedExplored.clear();
  for(const id of explored)if(!indexedExplored.has(id)){
   indexedExplored.add(id);
   const ends=roadEndpoints.get(id);
@@ -48,6 +51,14 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
   else if(revealedNodesIndex.has(edge.to))completionRoadsIndex.add(edge.id);
  }
  const pending:string[]=[];
+ // Newly explored directed edges can connect a component to the HQ frontier.
+ for(const node of touched)if(!connectedFrontierIndex.has(node))for(const edge of g.edges.get(node)??[]){
+  if(indexedExplored.has(edge.id)&&connectedFrontierIndex.has(edge.to)){
+   // Reverse traversal is not generally valid for one-way roads; the HQ
+   // traversal below still determines which direction can be reached.
+   pending.push(edge.to);
+  }
+ }
  if(hqNode&&!connectedFrontierIndex.has(hqNode)){connectedFrontierIndex.add(hqNode);pending.push(hqNode);}
  for(const node of touched)if(connectedFrontierIndex.has(node))pending.push(node);
  for(let i=0;i<pending.length;i++)for(const edge of g.edges.get(pending[i])??[]){
@@ -83,7 +94,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;
+   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -97,6 +108,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
     roadEndpoints.set(road.id,[a,b]);
+    if(indexedExplored.has(road.id)){pendingLoadedExplored.add(a);pendingLoadedExplored.add(b);}
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
     if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
     const add=(from:string,to:string)=>{
