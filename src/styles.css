@@ -176,3 +176,16 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
     z-index:30;
   }
 }
+
+/* Compact map layers action beside date and funds. */
+.nav-v216.nav-map-mode .world-minimal-topbar{justify-content:flex-start}
+.nav-v216.nav-map-mode .world-minimal-money{margin-left:auto}
+.nav-v216.nav-map-mode .world-minimal-layers{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;flex:0 0 34px;
+  color:#e6d9ff;background:rgba(154,105,235,.14);
+  border:1px solid rgba(191,153,255,.35);border-radius:11px;
+  cursor:pointer;
+}
+.nav-v216.nav-map-mode .world-minimal-layers:focus-visible{outline:2px solid #b49aff;outline-offset:2px}
+@media(max-width:390px){.nav-v216.nav-map-mode .world-minimal-topbar{gap:7px;padding:0 9px}.nav-v216.nav-map-mode .world-minimal-date{font-size:10px}.nav-v216.nav-map-mode .world-minimal-money{font-size:11px}}
