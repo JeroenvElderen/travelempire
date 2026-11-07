@@ -3,13 +3,17 @@ import type {FerryNetwork} from './ferries';
 
 // Select the closest *road segment*, not the nearest junction's arbitrary edges.
 // The spatial grid avoids a full graph scan for every harbour.
-export function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph):Map<string,string[]>{
+export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,signal?:AbortSignal):Promise<Map<string,string[]>>{
+ const yieldFrame=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
  const cell=0.01;
  type Segment={id:string;a:[number,number];b:[number,number]};
  const bins=new Map<string,Segment[]>();
  const key=(x:number,y:number)=>x+','+y;
  const seen=new Set<string>();
+ let indexed=0;
  for(const [from,edges] of graph.edges){
+  if(signal?.aborted)return new Map();
+  if(++indexed%2500===0)await yieldFrame();
   const a=graph.nodes.get(from);if(!a)continue;
   for(const edge of edges){
    if(seen.has(edge.id))continue;
@@ -27,7 +31,10 @@ export function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph):Map<strin
   }
  }
  const result=new Map<string,string[]>();
+ let processed=0;
  for(const port of network.ports){
+  if(signal?.aborted)return new Map();
+  if(++processed%8===0)await yieldFrame();
   const point=port.roadAccess??port.position;
   const x=Math.floor(point[0]/cell),y=Math.floor(point[1]/cell);
   const cos=Math.cos(point[1]*Math.PI/180);
