@@ -709,7 +709,12 @@ export function dispatchScout(
   // Dijkstra visits junctions in increasing travel distance. Once the
   // closest candidate is found, more distant junctions cannot beat it.
   // Completion explorers keep searching for gaps between revealed junctions.
-  if((!specialist&&best&&distance>best.distance)||(majorRoadScout&&specialistBest&&distance>specialistScore))break;
+  // Dijkstra expands in ascending travel distance. Once the frontier is
+  // farther than the best candidate score, no later candidate can win.
+  // This applies to all specialist roles, not only motorway/trunk scouts.
+  if((!specialist&&best&&distance>best.distance)||
+     (specialist==='completion'&&completionBest&&distance>completionBest.distance)||
+     (specialist!=='completion'&&specialistBest&&distance>specialistScore))break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
 
