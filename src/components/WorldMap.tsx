@@ -580,6 +580,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
    const geometryStarted=performance.now();
+   diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${viewportGraphRef.current!==graph} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
    const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
@@ -639,6 +640,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    visibleExploredFeatures.current=purpleById;
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
    const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...purpleById.values()]};
+   const sourceUpdateStarted=performance.now();
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
    if(existing)existing.setData(data);
    else instance.addSource(sourceId,{type:'geojson',data});
@@ -646,6 +648,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
+   diagnostic('map:source-setdata',`ms=${Math.round(performance.now()-sourceUpdateStarted)} red=${features.length} purple=${purple.features.length}`);
    startupTrace('Visible road sources ready','visible='+features.length+' purple='+purple.features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
    flushedPurpleRevision.current=purpleRevision.current;
    if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
