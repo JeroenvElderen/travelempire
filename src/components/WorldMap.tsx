@@ -618,11 +618,27 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    };
    const finishScan=()=>{
     if(cancelled||scanId!==scanRevision)return;
+   // Reconcile discovery against the latest state, not the snapshot captured at scan start.
+   // Otherwise newly explored roads can vanish when an older asynchronous scan finishes.
+   const index=new Map([...features,...exploredFeatures].map(f=>[String(f.properties?.roadId??''),f] as const));
+   const latestExplored=currentExploredRoads.current;
+   const purpleById=new Map<string,GeoJSON.Feature>();
+   for(const [id,feature] of index)if(latestExplored.has(id))purpleById.set(id,feature);
+   // Preserve known on-screen geometry while graph tiles are being republished.
+   // Do not preserve geometry outside the current viewport or roads no longer explored.
+   for(const [id,feature] of visibleExploredFeatures.current){
+    if(purpleById.has(id)||!latestExplored.has(id))continue;
+    const coordinates=(feature.geometry as GeoJSON.LineString).coordinates;
+    if(coordinates.some(p=>p[0]>=west&&p[0]<=east&&p[1]>=south&&p[1]<=north)){
+     purpleById.set(id,feature);
+     index.set(id,feature);
+    }
+   }
    visibleRoadFeatures.current=features;
-   visibleRoadIndex.current=new Map([...features,...exploredFeatures].map(f=>[String(f.properties?.roadId??''),f]));
-   visibleExploredFeatures.current=new Map(exploredFeatures.map(f=>[String(f.properties?.roadId??''),f]));
+   visibleRoadIndex.current=index;
+   visibleExploredFeatures.current=purpleById;
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
-   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...visibleExploredFeatures.current.values()]};
+   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...purpleById.values()]};
    const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
    if(existing)existing.setData(data);
    else instance.addSource(sourceId,{type:'geojson',data});
