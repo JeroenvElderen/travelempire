@@ -327,12 +327,13 @@ export default function App(){
     const purpose:RecoveryJob['purpose']=manual?(manualRecoveryPurposeRef.current.get(t.id)??'depot'):serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
     const pickup=buildRoute(depot,t.position);
     if(!pickup)continue;
-    const depots=[depot,...(companyRef.current?.depots??[]).map(d=>[d.lng,d.lat] as [number,number])];
+    const parking=[...restStopsRef.current.values()].filter(p=>p.kind==='parking'||p.kind==='services'||p.kind==='rest_area')
+     .sort((a,b)=>meters(t.position,a.position)-meters(t.position,b.position)).slice(0,12).map(p=>p.position);
     const fuelKind=(t.vehicleFuel??'').toLowerCase().includes('electric')?'charging':'fuel';
     const candidates=purpose==='fuel'?
      [...stationsRef.current.values()].filter(st=>st.kind===fuelKind&&st.access!=='private')
       .map(st=>({point:[st.lng,st.lat] as [number,number],atDepot:false})):
-     depots.map(point=>({point,atDepot:true}));
+     parking.map(point=>({point,atDepot:false}));
     const options=candidates.map(c=>({...c,path:buildRoute(t.position,c.point)}))
      .filter(c=>!!c.path)
      .sort((a,b)=>a.path!.edgeIds.reduce((sum,id)=>sum+(roadLengthByIdRef.current.get(id)??100),0)-b.path!.edgeIds.reduce((sum,id)=>sum+(roadLengthByIdRef.current.get(id)??100),0));
@@ -766,7 +767,9 @@ export default function App(){
      const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??40)
       ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
      if(delivered.status==='IDLE'&&serviceDue&&energyPercent(delivered)>10&&!delivered.refillRequested){
-      const home:[number,number]=[company!.headquarters.lng,company!.headquarters.lat];
+      const nearby=[...restStopsRef.current.values()].filter(p=>p.kind==='parking'||p.kind==='services'||p.kind==='rest_area').sort((a,b)=>meters(a.position,delivered.position)-meters(b.position,delivered.position)).slice(0,8);
+      if(!nearby.length)return delivered;
+      const home:[number,number]=nearby[0].position;
       const key=delivered.id;
       const cached=operationalRoutesRef.current.get(key);
       if(cached?.purpose==='service'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
@@ -784,7 +787,7 @@ export default function App(){
       if(worker&&workerReadyRef.current){
        const requestId=++routeSequenceRef.current;
        operationalRoutesRef.current.set(key,{requestId,purpose:'service',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
-       worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'service',from:delivered.position,targets:[home]});
+       worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'service',from:delivered.position,targets:nearby.map(p=>p.position)});
       }
       return delivered;
      }
