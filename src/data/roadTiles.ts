@@ -77,3 +77,44 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
 
 /** Free the parsed tile array after its roads have been ingested into the graph. */
 export function releaseRoadTile(id:string):void{cache.delete(id)}
+
+/** Cache every Greek road package in the background, without parsing or
+ * duplicating the nationwide graph in Safari's JavaScript heap. */
+export const ROAD_PACKAGE_CACHE='travelempire-road-packages-v1';
+export type RoadDownloadProgress={completed:number;total:number;failed:number;active:boolean};
+export async function cacheAllRoadPackages(
+ signal:AbortSignal,onProgress:(progress:RoadDownloadProgress)=>void,
+):Promise<void>{
+ const manifest=await roadTileManifest();
+ const entries=Object.entries(manifest.tiles);
+ const total=entries.length;
+ let completed=0,failed=0,next=0;
+ const report=()=>onProgress({completed,total,failed,active:!signal.aborted&&completed<total});
+ if(!('caches' in globalThis)){onProgress({completed:0,total,failed:total,active:false});return;}
+ const store=await caches.open(ROAD_PACKAGE_CACHE);
+ const fetchOne=async()=>{
+  while(!signal.aborted){
+   const index=next++;if(index>=entries.length)return;
+   const [,info]=entries[index];
+   const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
+   try{
+    const existing=await store.match(url);
+    if(!existing){
+     const response=await fetch(url,{signal});
+     if(!response.ok)throw Error(`HTTP ${response.status}`);
+     await store.put(url,response);
+    }
+   }catch(error){if(signal.aborted)return;failed++;diagnosticRoadDownloadError(info.file,error);}
+   completed++;
+   if(completed%5===0||completed===total)report();
+   // Avoid competing with animation frames and active routing.
+   await new Promise<void>(resolve=>setTimeout(resolve,40));
+  }
+ };
+ report();
+ await Promise.all([fetchOne(),fetchOne()]);
+ onProgress({completed,total,failed,active:false});
+}
+function diagnosticRoadDownloadError(file:string,error:unknown){
+ console.warn('[TravelEmpire] Road download failed',file,String(error));
+}
