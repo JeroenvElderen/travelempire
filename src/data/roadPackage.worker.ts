@@ -1,10 +1,11 @@
 /** Network fetch, gzip decompression and JSONL parsing off the UI thread. */
-import type { RoadSegment } from './roadTiles';
+import {ROAD_PACKAGE_CACHE,type RoadSegment} from './roadTiles';
 type Request={id:number;regionId:string;url:string};
 self.onmessage=async(event:MessageEvent<Request>)=>{
  const {id,regionId,url}=event.data;
  try{
-  const response=await fetch(url);
+  const stored=typeof caches!=='undefined'?await caches.open(ROAD_PACKAGE_CACHE).then(cache=>cache.match(url)).catch(()=>undefined):undefined;
+  const response=stored??await fetch(url);
   if(!response.ok||!response.body)throw Error(`Road package ${regionId}: HTTP ${response.status}`);
   const stream=response.body.pipeThrough(new DecompressionStream('gzip'));
   const content=await new Response(stream).text();
