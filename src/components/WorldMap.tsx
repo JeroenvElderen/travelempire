@@ -150,10 +150,10 @@ function viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,s
  return candidates;
 }
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
  useEffect(()=>{
@@ -240,11 +240,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const instance=map.current;
   if(!instance||!ferryNetwork)return;
   const owned=new Set(purchasedFerryRouteIds);
-  const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,ferryConnections)};
+  const update=()=>{if(instance.isStyleLoaded())syncFerryMapLayer(instance,ferryNetwork,owned,ferryConnections,new Set(unlockedHarbourIds))};
   instance.on('style.load',update);
   update();
   return()=>{instance.off('style.load',update);};
- },[ferryNetwork,purchasedFerryRouteIds,ferryConnections]);
+ },[ferryNetwork,purchasedFerryRouteIds,ferryConnections,unlockedHarbourIds]);
  const taxiPaintCache=useRef<Map<string,string>>(new Map());
  const taxiPaintRequests=useRef<Set<string>>(new Set());
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
