@@ -35,6 +35,7 @@ import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
 import "./company.css";
+import "./midnight-glass.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
