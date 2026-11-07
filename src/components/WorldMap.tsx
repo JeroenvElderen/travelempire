@@ -625,7 +625,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(!graph){remove();setRoadStatus('Waiting for geographic road tiles');return;}
    if(scanTimer!==undefined)clearTimeout(scanTimer);
    ++scanRevision;
-   const exploredSet=currentExploredRoads.current;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
