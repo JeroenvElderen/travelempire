@@ -146,3 +146,38 @@
  .finance-v214 .finance-bank-controls input,.finance-v214 .finance-bank-controls select,.finance-v214 .finance-tab-content>label input{min-height:44px;font-size:16px}
  .finance-v214 .finance-bank-controls button,.finance-v214 .finance-export{width:100%}
 }
+
+/* Premium dark-glass Finance workspace — shared visual language with Fleet and Dealer. */
+.finance-v214{
+ color:#f1ecff;
+ background:radial-gradient(ellipse at 90% 0%,rgba(125,54,185,.15),transparent 42%),radial-gradient(ellipse at 0% 50%,rgba(46,87,158,.09),transparent 44%);
+}
+.finance-heading{padding:22px 24px;border:1px solid rgba(191,151,255,.28);border-radius:22px;background:linear-gradient(120deg,rgba(44,46,84,.85),rgba(18,23,47,.85) 65%,rgba(85,38,117,.32));box-shadow:inset 0 1px 0 rgba(255,255,255,.17),0 12px 34px rgba(2,3,20,.25);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.finance-heading h1{color:#fff}
+.finance-heading p,.finance-v214 .finance-tab-content>p{color:#b7c1d9}
+.finance-live-badge{color:#80eec5;border-color:rgba(91,231,180,.4);background:rgba(20,91,76,.3);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.finance-tabs{border-bottom-color:rgba(174,138,227,.25)}
+.finance-tabs button{color:#d7cdea;border:1px solid rgba(178,149,216,.23);background:linear-gradient(140deg,rgba(44,43,79,.72),rgba(20,24,47,.72));border-radius:13px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.finance-tabs button:hover{color:#fff;background:rgba(99,59,143,.55)}
+.finance-tabs button.active{color:#fff;border-color:#d17cff;background:linear-gradient(135deg,rgba(143,63,188,.85),rgba(69,37,132,.88));box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 0 18px rgba(189,77,248,.28)}
+.finance-v214 .company-metrics article,.finance-v214 .finance-options article,.finance-v214 .finance-rows>div,.finance-v214 .finance-loan{
+ background:linear-gradient(140deg,rgba(44,47,82,.78),rgba(19,25,49,.86));
+ border:1px solid rgba(188,156,239,.26);border-radius:17px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 10px 26px rgba(2,4,20,.18);
+ backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.finance-v214 .company-metrics article strong,.finance-v214 .finance-rows strong{color:#f5efff}
+.finance-v214 .company-metrics article small,.finance-v214 .company-metrics article span,.finance-v214 .finance-rows span{color:#b8bed6}
+.finance-v214 .finance-section-heading h2{color:#f5efff}
+.finance-v214 select,.finance-v214 input,.finance-v214 .finance-ledger-controls input,.finance-v214 .finance-bank-controls select,.finance-v214 .finance-bank-controls input,.finance-v214 .finance-tab-content>label input{
+ background:rgba(28,31,59,.86);color:#f4efff;border:1px solid rgba(178,151,221,.38);border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+.finance-v214 input:focus-visible,.finance-v214 select:focus-visible,.finance-v214 button:focus-visible{outline:2px solid #ca84ff;outline-offset:2px}
+.finance-v214 .finance-options button,.finance-v214 .finance-bank-controls button,.finance-v214 .finance-export{
+ color:#fff;border:1px solid rgba(219,149,255,.58);border-radius:12px;
+ background:linear-gradient(125deg,#9a46cf,#6636b4 65%,#46338d);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 5px 17px rgba(149,61,215,.22);
+}
+.finance-v214 button:disabled{opacity:.45;box-shadow:none}
+@media(max-width:650px){.finance-heading{padding:15px;gap:10px;border-radius:18px}.finance-v214 .company-metrics article{border-radius:14px}}
+@media(prefers-reduced-motion:reduce){.finance-v214 *{scroll-behavior:auto}}
