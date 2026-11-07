@@ -331,7 +331,7 @@ export default function App(){
     const fuelKind=(t.vehicleFuel??'').toLowerCase().includes('electric')?'charging':'fuel';
     const candidates=purpose==='fuel'?
      [...stationsRef.current.values()].filter(st=>st.kind===fuelKind&&st.access!=='private')
-      .map(st=>({point:[st.lng,st.lat] as [number,number],atDepot:false})).concat(depots.map(point=>({point,atDepot:true}))):
+      .map(st=>({point:[st.lng,st.lat] as [number,number],atDepot:false})):
      depots.map(point=>({point,atDepot:true}));
     const options=candidates.map(c=>({...c,path:buildRoute(t.position,c.point)}))
      .filter(c=>!!c.path)
@@ -712,15 +712,16 @@ export default function App(){
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
-      if(passengerTaxi){
+      if(passengerTaxi||delivered.kind==='explorer'){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
+       const hotelDrivingMs=delivered.drivingSinceHotelGameMs??0;
        if(delivered.status==='PAUSED'&&delivered.shiftParked){
         const until=delivered.restUntilGameMs??(gameNow+(delivered.restStopId?.startsWith('hotel:')?9*3600000:30*60000));
         if(gameNow<until)return {...delivered,restUntilGameMs:until};
-        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,restStopId:undefined,restStopName:undefined};
+        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:delivered.restStopId?.startsWith('hotel:')?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
        }
-       if(delivered.status==='IDLE'&&drivingMs>=3600000&&!delivered.refillRequested){
-        const overnight=drivingMs>=9*3600000;
+       if(delivered.status==='IDLE'&&(drivingMs>=(passengerTaxi?3600000:4*3600000)||hotelDrivingMs>=9*3600000)&&!delivered.refillRequested){
+        const overnight=hotelDrivingMs>=9*3600000;
         const stops=[...restStopsRef.current.values()].filter(p=>overnight?p.kind==='hotel':p.kind!=='hotel')
          .sort((a,b)=>meters(delivered.position,a.position)-meters(delivered.position,b.position)).slice(0,10);
         if(stops.length){
@@ -883,7 +884,8 @@ export default function App(){
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
        driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance,
-       drivingSinceRestGameMs:(delivered.drivingSinceRestGameMs??0)+(next.distanceMeters>0?elapsedSeconds*1000*24:0)};
+       drivingSinceRestGameMs:(delivered.drivingSinceRestGameMs??0)+(next.distanceMeters>0?elapsedSeconds*1000*24:0),
+       drivingSinceHotelGameMs:(delivered.drivingSinceHotelGameMs??0)+(next.distanceMeters>0?elapsedSeconds*1000*24:0)};
      }finally{
       const duration=performance.now()-vehicleStarted;
       if(duration>slowestVehicleMs){slowestVehicleMs=duration;slowestVehicle=t.name;}
