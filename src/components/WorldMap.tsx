@@ -441,7 +441,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    }
    el.appendChild(img);
     const activity=vehicleActivity(taxi);
-    const badge=document.createElement('span');badge.className='te-vehicle-activity';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');el.appendChild(badge);
+    const badge=document.createElement('span');badge.className='te-vehicle-activity';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');const upright=document.createElement('span');upright.className='te-vehicle-activity-upright';upright.appendChild(badge);el.appendChild(upright);
     el.title=taxi.name+' · '+activity.label;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
@@ -556,7 +556,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       // keeping fast-moving taxis aligned with the road direction.
       const blend=1-Math.exp(-dt/((taxi.speedKph ?? 0)>45?0.12:0.20));
       previousHeading.angle+=delta*blend;
-      if(Math.abs(delta*blend)>0.05)marker.setRotation(previousHeading.angle);
+      if(Math.abs(delta*blend)>0.05){marker.setRotation(previousHeading.angle);marker.getElement().style.setProperty('--te-vehicle-heading',(-previousHeading.angle)+'deg');}
      }
      previousHeading.position=position;
      previousHeading.at=now;
@@ -569,6 +569,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      }
      taxiHeadingState.current.set(id,{angle:initial,position,at:now});
      marker.setRotation(initial);
+      marker.getElement().style.setProperty('--te-vehicle-heading',(-initial)+'deg');
     }
     // Avoid mutating DOM attributes on every animation frame.
     const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
