@@ -701,10 +701,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Source existence is checked to support map-style reloads.
    const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible+'|'+roadGraphVersion;
    if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
+   const graphChanged=viewportGraphRef.current!==graph;
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
    const geometryStarted=performance.now();
-   diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${viewportGraphRef.current!==graph} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
+   diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${graphChanged} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
    const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
    const seen=new Set<string>();
@@ -719,7 +720,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     if(cancelled||scanId!==scanRevision)return;
     const sliceStart=performance.now();
     let done=false;
-    while(performance.now()-sliceStart<3){
+    while(performance.now()-sliceStart<1.5){
      const next=iterator.next();
      if(next.done){done=true;break;}
      const road=next.value;
