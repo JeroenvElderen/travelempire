@@ -1,6 +1,6 @@
 import {energyPercent} from './energy';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,route,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,route,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -140,14 +140,16 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const started=performance.now();
    const from=nearest(graph,msg.from);
    const nearestMs=performance.now()-started;
-   let best:{point:Point;depot:boolean;roadKm:number;path:{path:Point[];edgeIds:string[]}}|null=null;
-   for(const target of msg.targets){
-    const to=nearest(graph,target.point);
-    const planned=from&&to?route(graph,from,to):null;
-    if(!planned)continue;
-    const roadKm=planned.path.reduce((sum,p,i)=>i?sum+meters(p,planned.path[i-1])/1000:sum,0)+(graph.nodes.get(to)?meters(graph.nodes.get(to)!,target.point)/1000:0);
-    if(!best||roadKm<best.roadKm)best={...target,roadKm,path:planned};
-   }
+   const targets=msg.targets.map(target=>{
+    const node=nearest(graph!,target.point);
+    return{node,offsetMeters:node&&graph!.nodes.has(node)?meters(graph!.nodes.get(node)!,target.point):Infinity};
+   });
+   const result=from?routeToNearestTarget(graph,from,targets):null;
+   const best=result?{
+    ...msg.targets[result.targetIndex],
+    roadKm:result.totalMeters/1000,
+    path:{path:result.path,edgeIds:result.edgeIds}
+   }:null;
    self.postMessage({type:'fuelPlanResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,position:msg.from,target:best,durationMs:performance.now()-started,perf:{nearestMs,targets:msg.targets.length}});return;
   }
   if(msg.type==='routeRequest'){
