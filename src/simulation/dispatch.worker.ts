@@ -11,6 +11,32 @@ const classifiedRoads=new Set<string>();
 const roadEndpoints=new Map<string,[string,string]>();
 const roadInsertionOrder:string[]=[];
 const roadClassCache=new Map<string,Set<string>>();
+const REGION_DEGREES=0.02;
+const regionalRoads=new Map<string,Set<string>>();
+const explorerSearchTier=new Map<string,number>();
+const SEARCH_RADII_KM=[3,8,20,60,180,Infinity];
+let regionalLookups=0;
+let regionalCandidatesExamined=0;
+const regionKey=(lat:number,lon:number)=>lat+':'+lon;
+function indexRegionalRoad(id:string,a:Point,b:Point):void{
+ const keys=new Set([a,b].map(p=>regionKey(Math.floor(p[1]/REGION_DEGREES),Math.floor(p[0]/REGION_DEGREES))));
+ for(const key of keys){let bucket=regionalRoads.get(key);if(!bucket){bucket=new Set();regionalRoads.set(key,bucket);}bucket.add(id);}
+}
+function regionalCandidates(position:Point,eligible:Set<string>,explored:Set<string>,reserved:Set<string>,radiusKm:number):Set<string>{
+ regionalLookups++;
+ if(!Number.isFinite(radiusKm))return new Set([...eligible].filter(id=>!explored.has(id)&&!reserved.has(id)));
+ const latRadius=radiusKm/111;
+ const lonRadius=radiusKm/(111*Math.max(0.25,Math.cos(position[1]*Math.PI/180)));
+ const minLat=Math.floor((position[1]-latRadius)/REGION_DEGREES),maxLat=Math.floor((position[1]+latRadius)/REGION_DEGREES);
+ const minLon=Math.floor((position[0]-lonRadius)/REGION_DEGREES),maxLon=Math.floor((position[0]+lonRadius)/REGION_DEGREES);
+ const result=new Set<string>();
+ for(let lat=minLat;lat<=maxLat;lat++)for(let lon=minLon;lon<=maxLon;lon++)
+  for(const id of regionalRoads.get(regionKey(lat,lon))??[])
+   if(eligible.has(id)&&!explored.has(id)&&!reserved.has(id))result.add(id);
+ regionalCandidatesExamined+=result.size;
+ return result;
+}
+
 // Persistent worker-local indexes, reset on graph revision.
 const indexedExplored=new Set<string>();
 const revealedNodesIndex=new Set<string>();
@@ -161,7 +187,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   nextExplorerIndex=0;nextPlanningPhase='idle';idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();explorerSearchTier.clear();regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -175,6 +201,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
     roadEndpoints.set(road.id,[a,b]);roadInsertionOrder.push(road.id);
+    indexRegionalRoad(road.id,road.coordinates[0],road.coordinates[1]);
     if(indexedExplored.has(road.id)){pendingLoadedExplored.add(a);pendingLoadedExplored.add(b);}
     if(passengerIndexedRoads.has(road.id)){passengerEligibleStops.add(a);passengerEligibleStops.add(b);}
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
