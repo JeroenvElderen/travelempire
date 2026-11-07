@@ -191,7 +191,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
-    const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered);
+    const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered,eligibleStops);
     if(!assigned)continue;
     let etaSeconds=0;
     for(let j=0;j<assigned.edgeIds.length;j++){
