@@ -14,6 +14,7 @@ export const projects=[
  {id:'fleetAnalytics',category:2,name:"Fleet Analytics",effect:"+1% passenger revenue per level",base:2400},
  {id:'survey',category:3,name:"Efficient Surveying",effect:"-6% explorer travel charge per level",base:2500},
  {id:'navigation',category:3,name:"Advanced Navigation",effect:"-3% explorer travel charge per level",base:3000},
+ {id:'explorerExpansion',category:3,name:"Explorer Fleet Expansion I",effect:"One-time: double owned explorers and explorer spaces at every depot. Requires 5,000 discovered roads and 3 explorer specializations.",base:15000},
  {id:'patrol',category:3,name:"Extended Patrol Range",effect:"-2% explorer petrol use per level",base:3500},
  {id:'trainingResearch',category:4,name:"Driver Training",effect:"+2% passenger revenue per level",base:2800},
  {id:'ecoDriving',category:4,name:"Eco-Driving",effect:"-3% petrol use per level",base:2500},
@@ -35,10 +36,10 @@ const key=(id:string)=>`travelempire.research.v1.${id}`;
 export function load(id:string):ResearchState{try{const v=JSON.parse(localStorage.getItem(key(id))||'null');return v&&v.levels?v:empty()}catch{return empty()}}
 export function save(id:string,v:ResearchState){localStorage.setItem(key(id),JSON.stringify(v))}
 export function clear(id:string){localStorage.removeItem(key(id))}
-export function maxLevel(_id:ResearchId){return 5}
+export function maxLevel(id:ResearchId){return id==='explorerExpansion'?1:5}
 export function level(s:ResearchState,id:ResearchId){return Math.max(0,Math.min(maxLevel(id),s.levels[id]||0))}
 export function price(id:ResearchId,l:number){const project=projects.find(p=>p.id===id);return (project?.base??2000)*3**(l-1)}
-export function duration(s:ResearchState,l:number){return Math.round(([5,15,30,60,180][l-1]||180)*60000*(1-0.05*level(s,'efficiency')))}
+export function duration(s:ResearchState,l:number,id?:ResearchId){if(id==='explorerExpansion')return 24*60*60*1000;return Math.round(([5,15,30,60,180][l-1]||180)*60000*(1-0.05*level(s,'efficiency')))}
 export function settle(s:ResearchState,now=Date.now()):ResearchState{if(!s.active||s.active.endsAt>now)return s;return {levels:{...s.levels,[s.active.id]:Math.max(level(s,s.active.id),s.active.level)}}}
-export function start(s:ResearchState,id:ResearchId,now=Date.now()):ResearchState{const current=settle(s,now);if(current.active)throw Error('Research already running');const l=level(current,id)+1;if(l>maxLevel(id))throw Error('Maximum level reached');return {...current,active:{id,level:l,startedAt:now,endsAt:now+duration(current,l)}}}
+export function start(s:ResearchState,id:ResearchId,now=Date.now()):ResearchState{const current=settle(s,now);if(current.active)throw Error('Research already running');const l=level(current,id)+1;if(l>maxLevel(id))throw Error('Maximum level reached');return {...current,active:{id,level:l,startedAt:now,endsAt:now+duration(current,l,id)}}}
 export function bonus(s:ResearchState, ids:readonly ResearchId[],perLevel:number,cap:number){return Math.min(cap,ids.reduce((sum,id)=>sum+level(s,id)*perLevel,0))}
