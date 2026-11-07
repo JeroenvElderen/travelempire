@@ -96,6 +96,54 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  }
  return end;
 }
+// Spatial grid for map rendering only. Routing continues to use the complete graph.
+const ROAD_GRID_DEGREES=0.05;
+type IndexedRoad={id:string;a:[number,number];b:[number,number]};
+type RoadSpatialIndex={graph:RoadGraph;cursor:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>};
+const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
+function roadCellKey(x:number,y:number){return x+':'+y;}
+function indexRoadGraph(graph:RoadGraph):RoadSpatialIndex{
+ let index=roadSpatialIndexes.get(graph);
+ if(!index){index={graph,cursor:0,cells:new Map(),ids:new Set()};roadSpatialIndexes.set(graph,index);}
+ // Node keys are append-only. Index only newly loaded road groups.
+ // Previously indexed edges remain valid because graph updates are additive.
+ for(let i=index.cursor;i<graph.nodeKeys.length;i++){
+  const from=graph.nodeKeys[i],a=graph.nodes.get(from);
+  if(!a)continue;
+  for(const edge of graph.edges.get(from)??[]){
+   if(index.ids.has(edge.id))continue;
+   const b=graph.nodes.get(edge.to);
+   if(!b)continue;
+   index.ids.add(edge.id);
+   const road:IndexedRoad={id:edge.id,a,b};
+   const minX=Math.floor(Math.min(a[0],b[0])/ROAD_GRID_DEGREES);
+   const maxX=Math.floor(Math.max(a[0],b[0])/ROAD_GRID_DEGREES);
+   const minY=Math.floor(Math.min(a[1],b[1])/ROAD_GRID_DEGREES);
+   const maxY=Math.floor(Math.max(a[1],b[1])/ROAD_GRID_DEGREES);
+   // Avoid unbounded indexing for malformed or exceptionally long segments.
+   if((maxX-minX+1)*(maxY-minY+1)>128)continue;
+   for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
+    const key=roadCellKey(x,y),cell=index.cells.get(key);
+    if(cell)cell.push(road);else index.cells.set(key,[road]);
+   }
+  }
+ }
+ index.cursor=graph.nodeKeys.length;
+ return index;
+}
+function viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,south:number,north:number){
+ const candidates:IndexedRoad[]=[];
+ const seen=new Set<string>();
+ const minX=Math.floor(west/ROAD_GRID_DEGREES),maxX=Math.floor(east/ROAD_GRID_DEGREES);
+ const minY=Math.floor(south/ROAD_GRID_DEGREES),maxY=Math.floor(north/ROAD_GRID_DEGREES);
+ for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
+  for(const road of index.cells.get(roadCellKey(x,y))??[]){
+   if(seen.has(road.id))continue;
+   seen.add(road.id);candidates.push(road);
+  }
+ }
+ return candidates;
+}
 type Basemap='standard'|'satellite';
 type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
@@ -587,7 +635,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const MAX_VISIBLE=12000;
    // Continue scanning for explored roads even after the ordinary road cap.
    const scanId=++scanRevision;
-   const iterator=graph.edges.entries();
+   const spatial=indexRoadGraph(graph);
+   const candidates=viewportRoadCandidates(spatial,west,east,south,north);
+   const iterator=candidates[Symbol.iterator]();
    let examined=0;
    const scan=()=>{
     if(cancelled||scanId!==scanRevision)return;
@@ -596,22 +646,17 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     while(performance.now()-sliceStart<3){
      const next=iterator.next();
      if(next.done){done=true;break;}
-     const [from,edges]=next.value;
+     const road=next.value;
      examined++;
-     const a=graph.nodes.get(from);
-     if(!a)continue;
-     for(const edge of edges){
-      const explored=exploredSet.has(edge.id);
-      if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
-      if(seen.has(edge.id))continue;
-      const b=graph.nodes.get(edge.to);
-      if(!b)continue;
-      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
-      seen.add(edge.id);
-      const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:edge.id},geometry:{type:'LineString',coordinates:[a,b]}};
-      if(explored)exploredFeatures.push(feature);
-      if(features.length<MAX_VISIBLE)features.push(feature);
-     }
+     const {a,b,id}=road;
+     const explored=exploredSet.has(id);
+     if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
+     if(seen.has(id))continue;
+     if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
+     seen.add(id);
+     const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[a,b]}};
+     if(explored)exploredFeatures.push(feature);
+     if(features.length<MAX_VISIBLE)features.push(feature);
     }
     if(!done){scanTimer=window.setTimeout(scan,0);return;}
     startupTrace('Visible road scan complete','nodes='+examined+' visible='+features.length+' purple='+exploredFeatures.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
