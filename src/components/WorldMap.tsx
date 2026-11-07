@@ -147,19 +147,21 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
  index.revision=revision;
  return index;
 }
-function viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,south:number,north:number){
- const candidates:IndexedRoad[]=[];
+// Stream viewport candidates instead of allocating an array containing every
+// road in all visible grid cells before the first render slice can begin.
+function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,south:number,north:number):Generator<IndexedRoad>{
  const seen=new Set<string>();
  const minX=Math.floor(west/ROAD_GRID_DEGREES),maxX=Math.floor(east/ROAD_GRID_DEGREES);
  const minY=Math.floor(south/ROAD_GRID_DEGREES),maxY=Math.floor(north/ROAD_GRID_DEGREES);
  for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
   for(const road of index.cells.get(roadCellKey(x,y))??[]){
    if(seen.has(road.id))continue;
-   seen.add(road.id);candidates.push(road);
+   seen.add(road.id);
+   yield road;
   }
  }
- return candidates;
 }
+
 type Basemap='standard'|'satellite';
 type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
