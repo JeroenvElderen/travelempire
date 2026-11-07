@@ -46,6 +46,7 @@ export type Taxi = {
   // Persistent rest planning state (timestamps are in simulated game time).
   restPreference?: 'automatic'|'parking'|'hotel'|'depot';
   drivingSinceRestGameMs?: number;
+  drivingSinceHotelGameMs?: number;
   restStopId?: string;
   restStopName?: string;
   restUntilGameMs?: number;
