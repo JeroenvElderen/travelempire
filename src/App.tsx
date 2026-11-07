@@ -36,6 +36,7 @@ import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} fr
 import "./map-update.css";
 import "./company.css";
 import "./midnight-glass.css";
+import "./aurora-glass.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
