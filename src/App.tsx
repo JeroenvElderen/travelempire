@@ -821,7 +821,7 @@ export default function App(){
       const worker=dispatchWorkerRef.current;
       if(worker&&workerReadyRef.current&&(!pending||pending.graph!==graph||now-pending.at>12000||meters(pending.position,delivered.position)>300)){
        const candidates=[...stationsRef.current.values()]
-        .filter(st=>st.kind==='fuel'&&st.access!=='private'&&st.access!=='no')
+        .filter(st=>st.kind===((delivered.vehicleFuel??'').toLowerCase().includes('electric')?'charging':'fuel')&&st.access!=='private'&&st.access!=='no')
         .sort((x,y)=>meters(delivered.position,[x.lng,x.lat])-meters(delivered.position,[y.lng,y.lat])).slice(0,12);
        const targets=candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false}));
        const requestId=++routeSequenceRef.current;
