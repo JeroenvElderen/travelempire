@@ -1,0 +1,150 @@
+/* TravelEmpire — Aurora Glass visual system.
+   Inspired by the supplied premium purple-glass mobile references.
+   Pure presentation: simulation, map canvas, routing and marker geometry are untouched. */
+:root{
+ color-scheme:dark;
+ --ui-bg:#080b1b;--ui-surface:#171a36;--ui-raised:#242541;
+ --ui-border:rgba(207,197,255,.24);--ui-text:#f8f6ff;
+ --ui-muted:#bcb9d3;--ui-accent:#d681ff;
+ --nav-bg:#101126;--nav-border:rgba(202,185,255,.26);--nav-active:#e3a3ff;
+ --glass-panel:linear-gradient(145deg,rgba(45,45,83,.91),rgba(17,22,47,.94));
+ --glass-border:1px solid rgba(215,205,255,.28);
+ --glass-shadow:0 16px 36px rgba(3,3,21,.45),inset 0 1px rgba(255,255,255,.20);
+ --aurora-violet:#d77bff;--aurora-cyan:#7fdbef;--aurora-mint:#6af5ca;
+}
+html,body,#root{background:#090c1d;color:#f7f5ff}
+body{
+ background:radial-gradient(ellipse 52% 36% at 85% 0%,rgba(100,48,167,.29),transparent 76%),
+ radial-gradient(ellipse 42% 36% at 4% 58%,rgba(42,62,132,.20),transparent 80%),#090c1d;
+}
+.nav-v216{color:#f6f4ff}
+.nav-v216 .main{background:transparent}
+.nav-v216 .sidebar{
+ background:linear-gradient(155deg,rgba(27,24,57,.99),rgba(9,13,33,.99));
+ border-right:1px solid rgba(220,201,255,.24);
+ box-shadow:12px 0 34px rgba(0,0,0,.27)
+}
+.nav-v216 .brand{border-color:rgba(211,196,255,.18)}
+.nav-v216 .brand-mark{
+ background:linear-gradient(140deg,#e2a1ff,#9362f6 60%,#73c6ff);
+ color:#180e35;box-shadow:0 0 24px rgba(207,105,255,.32),inset 0 1px rgba(255,255,255,.65)
+}
+.nav-v216 .nav-brand-copy strong{color:#faf5ff;letter-spacing:-.035em}
+.nav-v216 .nav-brand-copy strong::first-letter{color:#df9aff}
+.nav-v216 .nav-brand-copy small{color:#b9afd4}
+.nav-v216 .topbar{
+ background:linear-gradient(115deg,rgba(27,29,59,.96),rgba(14,19,42,.97));
+ border-bottom:1px solid rgba(221,209,255,.28);
+ box-shadow:0 8px 30px rgba(4,4,24,.24),inset 0 1px rgba(255,255,255,.10);
+}
+.nav-v216 .nav-page-identity strong{color:#fcf9ff;letter-spacing:-.04em}
+.nav-v216 .nav-page-identity small{color:#c4bed7}
+.nav-v216 :is(.menu-toggle,.nav-world-layers,.nav-collapse-button){
+ background:linear-gradient(155deg,rgba(84,76,124,.52),rgba(27,29,61,.83));
+ color:#f6eaff;border:1px solid rgba(219,207,255,.32);
+ box-shadow:inset 0 1px rgba(255,255,255,.26),0 6px 18px rgba(5,3,28,.30);
+ border-radius:14px;
+}
+.nav-v216 .nav-world-clock{color:#f5edff}
+.nav-v216 .nav-world-clock>svg{color:#d9a6ff}
+.nav-v216 .nav-world-live{color:#82f2ce}
+.nav-v216 .nav-world-live svg{color:#69e8c2}
+.nav-v216 .nav-top-stat,.nav-v216 .nav-sim-status{
+ background:linear-gradient(120deg,rgba(76,66,122,.34),rgba(28,32,64,.68));
+ border:1px solid rgba(210,197,255,.28);color:#f3edff;
+ box-shadow:inset 0 1px rgba(255,255,255,.16);
+ border-radius:13px;
+}
+.nav-v216 .nav-top-stat:first-child{color:#72f0bf}
+.nav-v216 .navigation button{border-radius:13px;color:#c5bedb}
+.nav-v216 .navigation button:hover{background:rgba(188,110,244,.14);color:#f5eaff}
+.nav-v216 .navigation button.selected{
+ background:linear-gradient(125deg,rgba(180,76,244,.40),rgba(97,58,162,.27));
+ color:#fff;border:1px solid rgba(225,155,255,.50);
+ box-shadow:0 0 19px rgba(184,66,249,.23),inset 0 1px rgba(255,255,255,.24),inset 0 -2px rgba(229,119,255,.43);
+}
+.nav-v216 .nav-group-label{color:#b99ed6;letter-spacing:.17em}
+.nav-v216 .mobile-tabs{
+ background:linear-gradient(145deg,rgba(34,33,65,.97),rgba(14,19,43,.98));
+ border:1px solid rgba(221,205,255,.32);border-radius:25px;
+ box-shadow:0 12px 32px rgba(2,3,20,.50),inset 0 1px rgba(255,255,255,.22);
+}
+.nav-v216 .mobile-tabs button{color:#d6cee6;border-radius:17px}
+.nav-v216 .mobile-tabs button.active{
+ background:linear-gradient(140deg,rgba(201,93,255,.57),rgba(118,54,186,.57));
+ color:#fff;border:1px solid rgba(242,163,255,.65);
+ box-shadow:0 0 21px rgba(204,69,255,.47),inset 0 2px rgba(255,255,255,.38),inset 0 -3px rgba(242,111,255,.56);
+}
+.nav-v216 .mobile-tabs button.active svg{filter:drop-shadow(0 0 6px rgba(255,199,255,.8))}
+/* Shared elevated content surfaces, scoped away from the MapLibre scene. */
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.operations-overview,.operations-exploration,.company-v213) :is(.placeholder-card,.company-v213-card,.company-v213-identity,.fleet-driver-card,.fleet-service-item,.fleet-empty-state,.fleet-stat-grid,.fleet-offers,.company-metrics,.operations-metrics,.operations-diagnostics){
+ background:linear-gradient(145deg,rgba(45,42,81,.92),rgba(17,23,49,.93));
+ border:1px solid rgba(221,206,255,.26);border-radius:19px;
+ box-shadow:0 12px 30px rgba(4,4,22,.28),inset 0 1px rgba(255,255,255,.18);
+ color:#f5f0ff;
+}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.operations-overview,.company-v213) :is(h1,h2,h3){color:#fcf9ff;letter-spacing:-.035em}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.operations-overview,.company-v213) :is(input,select,textarea){
+ background:linear-gradient(130deg,rgba(50,47,82,.85),rgba(18,24,50,.92));
+ color:#f7f2ff;border:1px solid rgba(220,204,255,.35);
+ border-radius:13px;box-shadow:inset 0 1px rgba(255,255,255,.12);
+}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.operations-overview,.company-v213) :is(input,textarea)::placeholder{color:#aaa3c4}
+.nav-v216 :is(.company-dashboard,.fleet-v2,.finance-panel,.placeholder,.operations-overview,.company-v213) :is(button,.button){
+ border-radius:13px;
+}
+.nav-v216 :is(.fleet-v2,.company-dashboard,.company-v213) :is(.fleet-tabs button,.fleet-subnav button,.ui-section-tabs button){
+ background:linear-gradient(140deg,rgba(60,55,99,.72),rgba(25,29,59,.90));
+ border:1px solid rgba(208,194,255,.30);color:#ede6ff;
+ box-shadow:inset 0 1px rgba(255,255,255,.16),0 5px 14px rgba(4,4,21,.20);
+}
+.nav-v216 :is(.fleet-v2,.company-dashboard,.company-v213) :is(.fleet-tabs button.active,.fleet-subnav button.active,.ui-section-tabs button.active,[aria-selected="true"]){
+ background:linear-gradient(135deg,rgba(201,81,247,.60),rgba(101,51,163,.64));
+ border-color:rgba(242,158,255,.72);color:#fff;
+ box-shadow:0 0 20px rgba(199,74,255,.36),inset 0 2px rgba(255,255,255,.33),inset 0 -3px rgba(233,116,255,.55);
+}
+.nav-v216 .fleet-page-heading .eyebrow,.nav-v216 .eyebrow{color:#d99cff;letter-spacing:.19em}
+.nav-v216 .fleet-metrics{gap:12px}
+.nav-v216 .fleet-metrics>*,.nav-v216 .fleet-command-metrics>*{
+ border:1px solid rgba(225,206,255,.33);border-radius:18px;
+ box-shadow:inset 0 1px rgba(255,255,255,.24),0 8px 24px rgba(4,3,25,.27);
+}
+.nav-v216 .fleet-metrics>*:nth-child(4n+1){background:radial-gradient(ellipse at 90% 110%,rgba(211,70,255,.46),transparent 65%),linear-gradient(125deg,#30234d,#161b3d)}
+.nav-v216 .fleet-metrics>*:nth-child(4n+2){background:radial-gradient(ellipse at 95% 105%,rgba(60,232,180,.36),transparent 65%),linear-gradient(125deg,#173f43,#132738)}
+.nav-v216 .fleet-metrics>*:nth-child(4n+3){background:radial-gradient(ellipse at 95% 105%,rgba(255,167,86,.34),transparent 65%),linear-gradient(125deg,#39303f,#1b2139)}
+.nav-v216 .fleet-metrics>*:nth-child(4n+4){background:radial-gradient(ellipse at 95% 105%,rgba(77,169,255,.40),transparent 65%),linear-gradient(125deg,#213b5d,#17243d)}
+.nav-v216 .fleet-cards>*{
+ background:linear-gradient(135deg,rgba(52,49,85,.88),rgba(19,26,51,.94));
+ border:1px solid rgba(213,201,255,.28);border-radius:17px;
+ box-shadow:inset 0 1px rgba(255,255,255,.18),0 7px 22px rgba(5,4,26,.24);
+}
+.nav-v216 .fleet-toolbar input,.nav-v216 .fleet-search{box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 12px rgba(192,99,255,.10)}
+.nav-v216 .company-v213-identity,.nav-v216 .company-v213-card{border-radius:19px}
+.nav-v216 .finance-panel :is(article,.card,.panel){background:linear-gradient(145deg,rgba(47,43,83,.90),rgba(18,25,52,.93));border:1px solid rgba(219,202,255,.28)}
+/* Map overlays only: never apply blur, transforms, shadows or filters to
+   .map-canvas, maplibregl marker roots, road layers, or vehicle images. */
+.map-layer-control .map-layer-options{
+ background:linear-gradient(140deg,rgba(42,40,79,.97),rgba(16,21,47,.98));
+ border:1px solid rgba(231,208,255,.38);border-radius:19px;
+ box-shadow:0 15px 40px rgba(3,3,21,.48),inset 0 1px rgba(255,255,255,.24);
+ color:#f7f1ff;
+}
+.map-layer-options button.active{background:linear-gradient(130deg,rgba(191,88,244,.36),rgba(104,70,187,.26));color:#fff}
+.map-layer-options button:hover{background:rgba(192,110,248,.18)}
+.map-layer-note{border-top-color:rgba(221,199,255,.20);color:#c7bedf}
+.map-loading,.map-error{
+ background:linear-gradient(130deg,rgba(41,39,79,.94),rgba(17,23,49,.96));
+ border:1px solid rgba(221,199,255,.35);border-radius:15px;color:#f5efff;
+ box-shadow:0 12px 30px rgba(4,3,24,.35),inset 0 1px rgba(255,255,255,.20);
+}
+.nav-v216 :is(button,input,select,textarea):focus-visible{outline:2px solid #e0a0ff;outline-offset:2px}
+@media(max-width:800px){
+ .nav-v216 .topbar{background:linear-gradient(110deg,rgba(26,24,57,.98),rgba(14,18,42,.98))}
+ .nav-v216 .mobile-tabs{margin:0 12px max(8px,env(safe-area-inset-bottom));padding:6px;min-height:66px}
+ .nav-v216 .mobile-tabs button{min-width:0}
+ .nav-v216 .main:not(:has(.map-canvas)){padding-bottom:95px}
+ .nav-v216 .fleet-metrics{gap:10px}
+}
+@media(prefers-reduced-motion:reduce){
+ .nav-v216 .navigation button,.nav-v216 .mobile-tabs button{transition:none}
+}
