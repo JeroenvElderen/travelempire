@@ -65,6 +65,22 @@ function deliveryHeading(path: [number,number][], started: number, until: number
  const bearing=Math.atan2(east,north)*180/Math.PI;
  return bearing-90;
 }
+// Render on the exact road segment used by the movement/discovery integrator.
+function roadAlignedPosition(t:Taxi):[number,number]{
+ if(t.path.length<2||t.status==='IDLE'||t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING')return t.position;
+ const leg=Math.max(0,Math.min(t.path.length-2,t.leg));
+ const a=t.path[leg],b=t.path[leg+1];
+ if(!a||!b)return t.position;
+ const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360);
+ const dy=(b[1]-a[1])*111320;
+ const length=Math.hypot(dx,dy);
+ const fraction=length>0?Math.max(0,Math.min(1,t.distanceIntoLeg/length)):1;
+ return [a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction];
+}
+function alignedTaxi(t:Taxi):Taxi{
+ const position=roadAlignedPosition(t);
+ return position===t.position?t:{...t,position};
+}
 // Interpolate the distance travelled along the actual OSM route, not the
 // straight chord between simulation snapshots (which cuts across corners).
 function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,number]{
@@ -393,10 +409,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  }
  for(const taxi of taxis){
   if(taxi.deliveryUntil&&taxi.deliveryUntil>wallNow)continue;
+  const renderTaxi=alignedTaxi(taxi);
   const previous=taxiSnapshots.current.get(taxi.id);
   // React may supply new Taxi objects with unchanged render-relevant state.
   // Preserve the animation clock and forecast in that case.
-  const sameMotion=!!previous&&previous.to.position[0]===taxi.position[0]&&previous.to.position[1]===taxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===taxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
+  const sameMotion=!!previous&&previous.to.position[0]===renderTaxi.position[0]&&previous.to.position[1]===renderTaxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===renderTaxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
   if(sameMotion){unchanged++;}else{changed++;}
   const markerElement=taxiMarkers.current.get(taxi.id)?.getElement();
   if(markerElement){
@@ -405,18 +422,18 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(badge&&badge.dataset.activity!==activity.label){badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;markerElement.title=taxi.name+' · '+activity.label;}
   }
   if(!sameMotion){
-   const predicted=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
+   const predicted=graphRef.current&&taxi.status!=='IDLE'?alignedTaxi(advanceTaxi(renderTaxi,graphRef.current,0.65).taxi):renderTaxi;
    // Do not extrapolate across a route transition to a disconnected location.
-   const forecast=predicted.path===taxi.path&&predicted.edgeIds===taxi.edgeIds&&predicted.leg>=taxi.leg?predicted:taxi;
+   const forecast=predicted.path===renderTaxi.path&&predicted.edgeIds===renderTaxi.edgeIds&&predicted.leg>=renderTaxi.leg?predicted:renderTaxi;
    // Preserve the last rendered position across simulation ticks to avoid
    // one-frame jumps when the simulation and animation clocks differ.
    // Only do this on the same route; a new job must not interpolate from
    // the old job's unrelated path.
    const sameRoute=!!previous&&previous.to.path===taxi.path&&
-    previous.to.edgeIds===taxi.edgeIds&&previous.to.leg<=taxi.leg;
+    previous.to.edgeIds===renderTaxi.edgeIds&&previous.to.leg<=renderTaxi.leg;
    const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous!.to,position:displayed}:sameRoute?previous!.to:taxi;
-   taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
+   const from=sameRoute&&displayed?{...previous!.to,position:displayed}:sameRoute?previous!.to:renderTaxi;
+   taxiSnapshots.current.set(taxi.id,{from,to:renderTaxi,forecast,at:now});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;
    // Cache one recoloured SVG per HEX, rather than fetching or regenerating on each animation frame.
    if((taxi.kind??'taxi')==='taxi'&&taxi.vehiclePaintHex&&/^#[0-9a-fA-F]{6}$/.test(taxi.vehiclePaintHex)){
@@ -488,7 +505,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
    }
-   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(taxi.position).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);created++;}}
+   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);created++;}}
  const duration=performance.now()-started;
  if(duration>12)console.warn('[TravelEmpire] Slow vehicle snapshot update',{durationMs:Math.round(duration),fleet:taxis.length,changed,unchanged,created,removed});
 },[taxis]);
