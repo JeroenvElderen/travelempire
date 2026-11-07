@@ -10,6 +10,65 @@ const allRoads=new Set<string>();
 const classifiedRoads=new Set<string>();
 const roadEndpoints=new Map<string,[string,string]>();
 const roadClassCache=new Map<string,Set<string>>();
+// Persistent worker-local indexes, reset on graph revision.
+const indexedExplored=new Set<string>();
+const revealedNodesIndex=new Set<string>();
+const completionRoadsIndex=new Set<string>();
+const connectedFrontierIndex=new Set<string>();
+let connectedHqNode:string|null=null;
+let discoveryIndexRoads=0;
+let discoveryIndexUpdates=0;
+let discoveryIndexRebuilds=0;
+let discoveryIndexLastMs=0;
+let poiRoadsIndex=new Set<string>();
+let poiTargetsSignature='';
+let poiIndexedRoads=0;
+function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|null){
+ const started=performance.now();
+ let rebuild=explored.size<indexedExplored.size||hqNode!==connectedHqNode;
+ if(!rebuild)for(const id of indexedExplored)if(!explored.has(id)){rebuild=true;break;}
+ if(rebuild){
+  indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();
+  connectedHqNode=hqNode;discoveryIndexRoads=0;discoveryIndexRebuilds++;
+ }
+ const touched=new Set<string>();
+ for(const id of explored)if(!indexedExplored.has(id)){
+  indexedExplored.add(id);
+  const ends=roadEndpoints.get(id);
+  if(ends)for(const node of ends){revealedNodesIndex.add(node);touched.add(node);}
+ }
+ // Road additions can expose new connector candidates between revealed nodes.
+ if(discoveryIndexRoads!==seenRoadIds.size){
+  for(const [id,ends] of roadEndpoints)if(!classifiedRoads.has(id)&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
+  discoveryIndexRoads=seenRoadIds.size;
+ }
+ for(const node of touched)for(const edge of g.edges.get(node)??[]){
+  if(classifiedRoads.has(edge.id))continue;
+  if(indexedExplored.has(edge.id))completionRoadsIndex.delete(edge.id);
+  else if(revealedNodesIndex.has(edge.to))completionRoadsIndex.add(edge.id);
+ }
+ const pending:string[]=[];
+ if(hqNode&&!connectedFrontierIndex.has(hqNode)){connectedFrontierIndex.add(hqNode);pending.push(hqNode);}
+ for(const node of touched)if(connectedFrontierIndex.has(node))pending.push(node);
+ for(let i=0;i<pending.length;i++)for(const edge of g.edges.get(pending[i])??[]){
+  if(!indexedExplored.has(edge.id)||connectedFrontierIndex.has(edge.to))continue;
+  connectedFrontierIndex.add(edge.to);pending.push(edge.to);
+ }
+ discoveryIndexUpdates++;discoveryIndexLastMs=performance.now()-started;
+}
+function updatePoiIndex(g:RoadGraph,targets:Point[]){
+ const signature=JSON.stringify(targets);
+ if(signature!==poiTargetsSignature){poiTargetsSignature=signature;poiRoadsIndex=new Set();poiIndexedRoads=0;}
+ if(!targets.length)return;
+ if(poiIndexedRoads===seenRoadIds.size)return;
+ for(const [id,ends] of roadEndpoints){
+  if(classifiedRoads.has(id)||poiRoadsIndex.has(id))continue;
+  const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
+  if((a&&targets.some(p=>meters(a,p)<600))||(b&&targets.some(p=>meters(b,p)<600)))poiRoadsIndex.add(id);
+ }
+ poiIndexedRoads=seenRoadIds.size;
+}
+
 const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
@@ -24,7 +83,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();
+   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -145,32 +204,14 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    // All loaded roads are eligible for independent Purple Explorer discovery.
    const allowedRoads=allRoads;
    const purpleAllowedRoads=allowedRoads;
-   const revealedNodes=new Set<string>();
-   for(const id of explored){const ends=roadEndpoints.get(id);if(ends){revealedNodes.add(ends[0]);revealedNodes.add(ends[1]);}}
-   const completionRoads=new Set<string>();
-   for(const from of revealedNodes)for(const edge of graph.edges.get(from)??[])if(revealedNodes.has(edge.to)&&!explored.has(edge.id)&&!classifiedRoads.has(edge.id))completionRoads.add(edge.id);
-   
-   const poiRoads=new Set<string>();
-   const poiTargets=(msg.poiTargets??[]).slice(0,150);
-   if(poiTargets.length)for(const [from,links] of graph.edges){const point=graph.nodes.get(from);if(!point||!poiTargets.some(p=>meters(point,p)<600))continue;
-    for(const edge of links)if(!classifiedRoads.has(edge.id))poiRoads.add(edge.id);
-   }
-   // Every specialist routes physically from headquarters across the road graph.
-   // Transit on another category is permitted but never reveals that road.
-   // A missing predecessor category must not block available specialist work.
-   // Only junctions connected to the HQ through already discovered edges
-   // may initiate a NEW discovery. Transit can cross other road classes,
-   // but those crossings do not silently extend the explored network.
    const hqNode=nearest(graph,hq);
-   const connectedFrontier=new Set<string>();
-   if(hqNode){
-    connectedFrontier.add(hqNode);
-    const queue=[hqNode];
-    for(let i=0;i<queue.length;i++)for(const edge of graph.edges.get(queue[i])??[]){
-     if(!explored.has(edge.id)||connectedFrontier.has(edge.to))continue;
-     connectedFrontier.add(edge.to);queue.push(edge.to);
-    }
-   }
+   updateDiscoveryIndex(graph,explored,hqNode);
+   const revealedNodes=revealedNodesIndex;
+   const completionRoads=completionRoadsIndex;
+   const poiTargets=(msg.poiTargets??[]).slice(0,150);
+   updatePoiIndex(graph,poiTargets);
+   const poiRoads=poiRoadsIndex;
+   const connectedFrontier=connectedFrontierIndex;
    const frontierFor=(_taxi:Taxi):Set<string>=>connectedFrontier;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
@@ -292,6 +333,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8)}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
