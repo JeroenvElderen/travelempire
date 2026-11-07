@@ -371,7 +371,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    }
    // Mission-based exploration: keep the committed route while planning its successor.
    // Use the known endpoint to prepare the next mission before arrival.
-   let successorPlans=0;\n   // Preplan the next sequence before an Explorer reaches its final junction.
+   let successorPlans=0;
+   // Preplan the next sequence before an Explorer reaches its final junction.
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
