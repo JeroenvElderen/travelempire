@@ -78,9 +78,10 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
+  // Resting explorers remain parked until the main simulation releases them.
   const taxis=msg.taxis.map(t=>
    (t.kind==='explorer')&&t.status==='PAUSED'&&
-   !t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
+   !t.shiftParked&&!t.restStopId&&!t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
     ?{...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false}:t);
 
   const activeGraph=graph;
@@ -269,35 +270,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      assignedCount++;
     }
    }
-   // After a full minute without an assignment, drive home along roads.
-   // Use wall-clock time: dispatch messages arrive every 500 ms, while the
-   // simulation clock runs faster. Never teleport or call roadside recovery.
-   const realNow=Date.now();
-   for(let index=0;index<taxis.length;index++){
-    const t=taxis[index];
-    if(t.kind!=='explorer'||t.recoveryPending||t.refillRequested||t.deliveryUntil){
-     explorerIdleSince.delete(t.id);continue;
-    }
-    if(t.status!=='IDLE'){
-     explorerIdleSince.delete(t.id);continue;
-    }
-    if(!explorerIdleSince.has(t.id))explorerIdleSince.set(t.id,realNow);
-    if(realNow-(explorerIdleSince.get(t.id)??realNow)<EXPLORER_IDLE_RETURN_MS||
-       realNow<(explorerDepotCooldown.get(t.id)??0))continue;
-    const from=nearest(graph,t.position),to=nearest(graph,hq);
-    if(!from||!to||from===to){
-     explorerDepotCooldown.set(t.id,realNow+60000);continue;
-    }
-    const home=route(graph,from,to);
-    if(!home||home.path.length<2){
-     explorerDepotCooldown.set(t.id,realNow+60000);continue;
-    }
-    taxis[index]={...t,status:'RETURNING',pauseAtHome:false,shiftParked:false,
-     path:home.path,edgeIds:home.edgeIds,leg:0,distanceIntoLeg:0,
-     speedKph:0,journeyEdges:[],explorationSection:undefined};
-    explorerIdleSince.delete(t.id);
-    explorerDepotCooldown.set(t.id,realNow+120000);
-   }
+   // Idle explorers remain at their current location and retry discovery.
+   // Never return to headquarters automatically for a lack of assignments.
    // Explorers stay IDLE when no reachable discovery target exists.
    // Do not park or pause them: the next dispatch automatically retries as
    // new eligible roads and territory arrive.
