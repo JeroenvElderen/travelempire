@@ -3,15 +3,8 @@
 .taxi-map-marker{width:9px;height:20px;font-size:0;filter:drop-shadow(0 1px 1px #0009);cursor:pointer;pointer-events:auto;will-change:transform}
 .taxi-map-marker img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none}
 
-/* Badge is counter-rotated around the vehicle centre. Only the car turns. */
-.taxi-map-marker{position:relative;overflow:visible;isolation:isolate}
-.taxi-map-marker .te-vehicle-activity-upright{
- position:absolute;left:50%;top:50%;width:0;height:0;
- transform:rotate(var(--te-vehicle-heading,0deg));
- transform-origin:center center;pointer-events:none;z-index:10;
-}
-.taxi-map-marker .te-vehicle-activity{
- position:absolute;left:0;bottom:15px;transform:translateX(-50%);
+/* Status is an independent viewport-aligned marker. It never changes the car anchor. */
+.te-vehicle-status-marker{
  display:flex;align-items:center;justify-content:center;
  width:22px;height:22px;border-radius:8px;
  background:rgba(255,255,255,.97);border:1px solid rgba(45,55,72,.18);
