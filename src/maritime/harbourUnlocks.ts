@@ -1,44 +1,56 @@
 import type {RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from './ferries';
 
-// Each harbour follows its nearest road node, regardless of terminal-to-road distance.
-// Index road nodes once rather than scanning every road for every harbour each tick.
+// Select the closest *road segment*, not the nearest junction's arbitrary edges.
+// The spatial grid avoids a full graph scan for every harbour.
 export function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph):Map<string,string[]>{
  const cell=0.01;
- const bins=new Map<string,string[]>();
- const bin=(x:number,y:number)=>Math.floor(x/cell)+','+Math.floor(y/cell);
- for(const [id,point] of graph.nodes){
-  const key=bin(point[0],point[1]);const list=bins.get(key);
-  if(list)list.push(id);else bins.set(key,[id]);
+ type Segment={id:string;a:[number,number];b:[number,number]};
+ const bins=new Map<string,Segment[]>();
+ const key=(x:number,y:number)=>x+','+y;
+ const seen=new Set<string>();
+ for(const [from,edges] of graph.edges){
+  const a=graph.nodes.get(from);if(!a)continue;
+  for(const edge of edges){
+   if(seen.has(edge.id))continue;
+   const b=graph.nodes.get(edge.to);if(!b)continue;
+   seen.add(edge.id);
+   const segment:Segment={id:edge.id,a,b};
+   const minX=Math.floor(Math.min(a[0],b[0])/cell),maxX=Math.floor(Math.max(a[0],b[0])/cell);
+   const minY=Math.floor(Math.min(a[1],b[1])/cell),maxY=Math.floor(Math.max(a[1],b[1])/cell);
+   // Extremely long segments remain searchable through their endpoints.
+   if((maxX-minX+1)*(maxY-minY+1)>100)continue;
+   for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
+    const k=key(x,y),list=bins.get(k);
+    if(list)list.push(segment);else bins.set(k,[segment]);
+   }
+  }
  }
  const result=new Map<string,string[]>();
  for(const port of network.ports){
   const point=port.roadAccess??port.position;
   const x=Math.floor(point[0]/cell),y=Math.floor(point[1]/cell);
-  let closest:string|undefined,best=Infinity;
   const cos=Math.cos(point[1]*Math.PI/180);
-  // Search expanding squares, then fall back to the full loaded network for remote ports.
+  let best=Infinity,closest:string|undefined;
+  const checked=new Set<string>();
   for(let radius=0;radius<=16;radius++){
    for(let dx=-radius;dx<=radius;dx++)for(let dy=-radius;dy<=radius;dy++){
     if(radius&&Math.max(Math.abs(dx),Math.abs(dy))!==radius)continue;
-    for(const id of bins.get((x+dx)+','+(y+dy))??[]){
-     const node=graph.nodes.get(id)!;
-     const d=Math.hypot((node[0]-point[0])*cos,node[1]-point[1]);
-     if(d<best){best=d;closest=id;}
+    for(const segment of bins.get(key(x+dx,y+dy))??[]){
+     if(checked.has(segment.id))continue;checked.add(segment.id);
+     const ax=(segment.a[0]-point[0])*cos,ay=segment.a[1]-point[1];
+     const bx=(segment.b[0]-point[0])*cos,by=segment.b[1]-point[1];
+     const vx=bx-ax,vy=by-ay;
+     const t=Math.max(0,Math.min(1,-(ax*vx+ay*vy)/(vx*vx+vy*vy||1)));
+     const d=Math.hypot(ax+t*vx,ay+t*vy);
+     if(d<best){best=d;closest=segment.id;}
     }
    }
+   // A road in a searched square cannot beat an already found closer segment
+   // once the entire surrounding grid margin is farther away.
    if(closest&&radius*cell>best*2+cell)break;
   }
-  if(!closest)for(const [id,node] of graph.nodes){
-   const d=Math.hypot((node[0]-point[0])*cos,node[1]-point[1]);
-   if(d<best){best=d;closest=id;}
-  }
-  if(!closest)continue;
-  const edges=graph.edges.get(closest)??[];
-  const incoming:string[]=[];
-  if(!edges.length)for(const links of graph.edges.values())for(const edge of links)if(edge.to===closest)incoming.push(edge.id);
-  const ids=[...new Set([...edges.map(e=>e.id),...incoming])];
-  if(ids.length)result.set(port.id,ids);
+  if(closest)result.set(port.id,[closest]);
  }
  return result;
 }
