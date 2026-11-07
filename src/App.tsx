@@ -6,7 +6,7 @@ import {loadStationTile,type Station} from './data/stations';
 import {loadRestStopTile} from './data/restStops';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
-import { useEffect, useMemo, useState, startTransition } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, Activity, CalendarClock } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import DriversPanel from "./components/DriversPanel";
@@ -706,7 +706,6 @@ export default function App(){
     const transactions:FinancialTransaction[]=[];
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     let slowestVehicleMs=0,slowestVehicle='—',routingMs=0,integratorMs=0,discoveryMs=0;
-    const depotById=new Map((company!.depots??[]).map(d=>[d.id,d]));
     const depotUpgradesById=new Map<string,ReturnType<typeof upgradesFor>>();
     const depotLevelsFor=(id:string)=>{let value=depotUpgradesById.get(id);if(!value){value=upgradesFor(old,id);depotUpgradesById.set(id,value);}return value;};
     const taxis=old.taxis.map(t=>{
@@ -810,8 +809,6 @@ export default function App(){
      // Refuel according to the shortest reachable road route, not a fixed tank percentage.
      // Cache routing for 10 seconds to avoid expensive pathfinding on every simulation tick.
      const remainingKm=energyRangeKm(delivered);
-     const assignedDepot=(company!.depots??[]).find(d=>d.id===delivered.depotId);
-     const hq:[number,number]=assignedDepot?[assignedDepot.lng,assignedDepot.lat]:[company!.headquarters.lng,company!.headquarters.lat];
      const stationCount=stationsRef.current.size;
      const cached=fuelPlanCacheRef.current.get(delivered.id);
      const planFresh=cached&&now-cached.at<10000&&cached.graph===graph&&cached.stationCount===stationCount&&meters(cached.position,delivered.position)<300;
