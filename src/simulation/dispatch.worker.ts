@@ -140,6 +140,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   const scoutStarted=performance.now();
   // Passenger assignments run first. Purple Explorers continuously select nearby eligible roads.
   let assignedCount=0;
+  const scoutTimings:{role:string;ms:number;phase:string}[]=[];
   if(msg.allowScout){
    // All loaded roads are eligible for independent Purple Explorer discovery.
    const allowedRoads=allRoads;
@@ -245,8 +246,10 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     reservedTargets.delete(from);
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
+    const extensionStarted=performance.now();
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
      graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes);
+    scoutTimings.push({role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension'});
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -262,7 +265,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(taxis[index].explorerRole==='motorway')idleFallbackAt.set(taxis[index].id,now+10000);
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
+    const idleStarted=performance.now();
     const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
+    scoutTimings.push({role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle'});
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
@@ -270,7 +275,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(assignment.status==='IDLE'&&taxis[index].kind==='explorer'&&taxis[index].explorerRole!=='motorway'&&
        now>=(idleFallbackAt.get(taxis[index].id)??0)){
      idleFallbackAt.set(taxis[index].id,now+5000);
-     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
+     const fallbackStarted=performance.now();
+     assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
+     scoutTimings.push({role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-fallbackStarted),phase:'fallback'});
     }
     if(assignment.status!=='IDLE'){
      taxis[index]=assignment;
@@ -285,6 +292,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8)}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
