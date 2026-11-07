@@ -631,9 +631,13 @@ export function dispatchScout(
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  // Motorway scouts must be able to reach highways far beyond the starting town.
- const motorwayScout=specialist==='motorway';
- const maxSearchMeters=motorwayScout?80000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&(fullRetry||visits< (motorwayScout?100000:taxi.kind==='explorer'&&specialist?25000:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+ const majorRoadScout=specialist==='motorway'||specialist==='trunk';
+ // Major-road scouts often start far from their target classification. Give
+ // trunk scouts the same connected-network search budget as motorway scouts.
+ // Transit roads remain traversable, but only matching undiscovered roads
+ // can be selected as specialist discovery targets.
+ const maxSearchMeters=majorRoadScout?80000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ while(heap.length&&(fullRetry||visits< (majorRoadScout?100000:taxi.kind==='explorer'&&specialist?25000:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
   visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;
