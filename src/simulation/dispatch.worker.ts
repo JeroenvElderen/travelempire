@@ -9,6 +9,7 @@ const byClass=new Map<string,Set<string>>();
 const allRoads=new Set<string>();
 const classifiedRoads=new Set<string>();
 const roadEndpoints=new Map<string,[string,string]>();
+const roadInsertionOrder:string[]=[];
 const roadClassCache=new Map<string,Set<string>>();
 // Persistent worker-local indexes, reset on graph revision.
 const indexedExplored=new Set<string>();
@@ -62,7 +63,10 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
  }
  // Road additions can expose new connector candidates between revealed nodes.
  if(discoveryIndexRoads!==seenRoadIds.size){
-  for(const [id,ends] of roadEndpoints)if(!classifiedRoads.has(id)&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
+  for(let i=discoveryIndexRoads;i<roadInsertionOrder.length;i++){
+   const id=roadInsertionOrder[i],ends=roadEndpoints.get(id);
+   if(ends&&!classifiedRoads.has(id)&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
+  }
   discoveryIndexRoads=seenRoadIds.size;
  }
  for(const node of touched)for(const edge of g.edges.get(node)??[]){
@@ -95,9 +99,10 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
  if(!targets.length)return;
  if(poiIndexedRoads===seenRoadIds.size)return;
  // A new road tile should not cause repeated nationwide POI scans.
- let cursor=0;
- for(const [id,ends] of roadEndpoints){
-  if(cursor++<poiRoadCursor)continue;
+ let cursor=poiRoadCursor;
+ for(;cursor<roadInsertionOrder.length;cursor++){
+  const id=roadInsertionOrder[cursor],ends=roadEndpoints.get(id);
+  if(!ends)continue;
   if(classifiedRoads.has(id))continue;
   const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
   if((a&&targets.some(p=>meters(a,p)<600))||(b&&targets.some(p=>meters(b,p)<600)))poiRoadsIndex.add(id);
@@ -132,7 +137,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleFallbackAt.clear();extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -145,7 +150,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const role=roadRole(road.highway??'');
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
-    roadEndpoints.set(road.id,[a,b]);
+    roadEndpoints.set(road.id,[a,b]);roadInsertionOrder.push(road.id);
     if(indexedExplored.has(road.id)){pendingLoadedExplored.add(a);pendingLoadedExplored.add(b);}
     if(passengerIndexedRoads.has(road.id)){passengerEligibleStops.add(a);passengerEligibleStops.add(b);}
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
