@@ -659,7 +659,7 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
 export async function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>,shouldContinue?:()=>boolean
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>,shouldContinue?:()=>boolean,regionalCandidates?:Set<string>
 ):Promise<Taxi>{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -728,7 +728,7 @@ export async function dispatchScout(
 
    // Routing can reverse at a junction when needed to reach the next specialist road.
    // The turn restriction is a preference, not a reason to strand a scout.
-   const isNew=(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
+   const isNew=(!regionalCandidates||regionalCandidates.has(edge.id))&&(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&!reservedEdges.has(edge.id)&&!reservedTargets.has(edge.to);
    // Reach the frontier through actual connected graph edges; a transit road
    // does not become discovered merely because it was used to get here.
    if(isNew&&(!requiredFrontier||requiredFrontier.has(node))){
@@ -888,7 +888,7 @@ export async function dispatchScout(
   const previousNode=keys.length>1?keys[keys.length-2]:undefined;
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
-   (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&
+   (!regionalCandidates||regionalCandidates.has(edge.id))&&(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&
    !reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&edge.to!==previousNode
   );
