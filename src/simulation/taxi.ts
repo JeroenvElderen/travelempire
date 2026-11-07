@@ -602,13 +602,13 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
 export function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>
 ):Taxi{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
  incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
- const revealed=new Set(exploredRoadNodes(graph,explored,hq));
+ const revealed=sharedRevealed??new Set(exploredRoadNodes(graph,explored,hq));
  // Independent road discovery: choose nearby unvisited roads without zones or AI priorities.
  const dist=new Map<string,number>([[start,0]]);
  const previous=new Map<string,{from:string;id:string}>();
