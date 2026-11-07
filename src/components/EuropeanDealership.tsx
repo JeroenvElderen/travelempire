@@ -43,6 +43,8 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
   return [...unique.values()];
  },[model,year,currentTrim]);
  const extraIds=selectedExtras.filter(id=>extras.some(o=>o.id===id&&!o.included));
+ const selectableExtras=extras.filter(o=>!o.included);
+ const allExtrasSelected=selectableExtras.length>0&&selectableExtras.every(o=>extraIds.includes(o.id));
  const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
  const market=marketPrice(model,year);
  const priceBreakdown=trimPricing(model,year,currentTrim);
@@ -64,6 +66,13 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <label>Exterior colour<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name} · {p.price?'+':' '}{eur(p.price)}</option>)}</select></label>
     <label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name} · {w.price?'+':' '}{eur(w.price)}</option>)}</select></label>
     <fieldset><legend>Individual equipment</legend>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',flexWrap:'wrap',marginBottom:'10px'}}>
+       <small>{extraIds.length} of {selectableExtras.length} options selected</small>
+       <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+        <button type="button" disabled={selectableExtras.length===0||allExtrasSelected} onClick={()=>setSelectedExtras(selectableExtras.map(o=>o.id))}>Select all</button>
+        <button type="button" disabled={extraIds.length===0} onClick={()=>setSelectedExtras([])}>Deselect all</button>
+       </div>
+      </div>
       <p className="eu-source-note">Only optional equipment is shown. Features already included in the selected grade are hidden. Prices are TravelEmpire estimates; real-world retrofit availability is not guaranteed.</p>
       {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=>{
        const categoryExtras=extras.filter(o=>o.group===group&&!o.included);
