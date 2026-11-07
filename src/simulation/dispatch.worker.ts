@@ -84,6 +84,11 @@ const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='t
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 const idleFallbackAt=new Map<string,number>();
+// Avoid repeating costly route extensions on every dispatch while a scout
+// continues following a valid route.
+const extensionRetryAt=new Map<string,number>();
+const extensionLastDestination=new Map<string,string>();
+const EXTENSION_RETRY_MS=2500;
 // A failed scout permits the next road class to bootstrap without motorway access.
 
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
@@ -94,7 +99,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();
+   idleFallbackAt.clear();extensionRetryAt.clear();extensionLastDestination.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -213,7 +218,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   const scoutStarted=performance.now();
   // Passenger assignments run first. Purple Explorers continuously select nearby eligible roads.
   let assignedCount=0;
-  const scoutTimings:{role:string;ms:number;phase:string}[]=[];
+  const scoutTimings:{vehicleId:string;role:string;ms:number;phase:string;result?:string}[]=[];
+  let extensionSkipped=0;
   if(msg.allowScout){
    // All loaded roads are eligible for independent Purple Explorer discovery.
    const allowedRoads=allRoads;
@@ -297,6 +303,14 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
     if(!from)continue;
+    // Keep moving on the current route; periodically retry failed extensions
+    // as nearby roads, reservations and exploration progress change.
+    const destinationKey=from+'|'+taxi.edgeIds.length;
+    if(extensionLastDestination.get(taxi.id)===destinationKey&&now<(extensionRetryAt.get(taxi.id)??0)){
+     extensionSkipped++;continue;
+    }
+    extensionLastDestination.set(taxi.id,destinationKey);
+    extensionRetryAt.set(taxi.id,now+EXTENSION_RETRY_MS);
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
     const purpleCluster=purpleAllowedRoads;
@@ -304,7 +318,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const extensionStarted=performance.now();
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
      graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes);
-    scoutTimings.push({role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension'});
+    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -322,7 +336,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const idleStarted=performance.now();
     const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
-    scoutTimings.push({role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle'});
+    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
@@ -332,7 +346,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      idleFallbackAt.set(taxis[index].id,now+5000);
      const fallbackStarted=performance.now();
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
-     scoutTimings.push({role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-fallbackStarted),phase:'fallback'});
+     scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-fallbackStarted),phase:'fallback',result:assignment.status});
     }
     if(assignment.status!=='IDLE'){
      taxis[index]=assignment;
@@ -347,6 +361,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
