@@ -99,18 +99,21 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
 type IndexedRoad={id:string;a:[number,number];b:[number,number]};
-type RoadSpatialIndex={graph:RoadGraph;cursor:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>};
+type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
-function indexRoadGraph(graph:RoadGraph):RoadSpatialIndex{
+function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
  let index=roadSpatialIndexes.get(graph);
- if(!index){index={graph,cursor:0,cells:new Map(),ids:new Set()};roadSpatialIndexes.set(graph,index);}
- // Node keys are append-only. Index only newly loaded road groups.
- // Previously indexed edges remain valid because graph updates are additive.
- for(let i=index.cursor;i<graph.nodeKeys.length;i++){
+ if(!index){index={graph,cursor:0,revision:-1,cells:new Map(),ids:new Set(),edgeCounts:new Map()};roadSpatialIndexes.set(graph,index);}
+ // Graph updates can append edges to nodes indexed in earlier tiles.
+ // Rescan existing groups only on graph revision; viewport moves stay indexed.
+ const rescan=index.revision!==revision;
+ for(let i=rescan?0:index.cursor;i<graph.nodeKeys.length;i++){
   const from=graph.nodeKeys[i],a=graph.nodes.get(from);
   if(!a)continue;
-  for(const edge of graph.edges.get(from)??[]){
+  const links=graph.edges.get(from)??[];
+  if(links.length===(index.edgeCounts.get(from)??0))continue;
+  for(const edge of links){
    if(index.ids.has(edge.id))continue;
    const b=graph.nodes.get(edge.to);
    if(!b)continue;
@@ -127,8 +130,10 @@ function indexRoadGraph(graph:RoadGraph):RoadSpatialIndex{
     if(cell)cell.push(road);else index.cells.set(key,[road]);
    }
   }
+  index.edgeCounts.set(from,links.length);
  }
  index.cursor=graph.nodeKeys.length;
+ index.revision=revision;
  return index;
 }
 function viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,south:number,north:number){
@@ -623,7 +628,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
    // Source existence is checked to support map-style reloads.
-   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible;
+   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible+'|'+roadGraphVersion;
    if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
@@ -635,7 +640,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const MAX_VISIBLE=12000;
    // Continue scanning for explored roads even after the ordinary road cap.
    const scanId=++scanRevision;
-   const spatial=indexRoadGraph(graph);
+   const spatial=indexRoadGraph(graph,roadGraphVersion);
    const candidates=viewportRoadCandidates(spatial,west,east,south,north);
    const iterator=candidates[Symbol.iterator]();
    let examined=0;
@@ -649,7 +654,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const road=next.value;
      examined++;
      const {a,b,id}=road;
-     const explored=exploredSet.has(id);
+     const explored=currentExploredRoads.current.has(id);
      if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
      if(seen.has(id))continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
