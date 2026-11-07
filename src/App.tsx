@@ -3,6 +3,8 @@ import {recordSimulationTick,recordActivity,performanceMonitorEnabled} from './p
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
+import {loadRestStopTile} from './data/restStops';
+import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, Activity, CalendarClock } from "lucide-react";
@@ -198,6 +200,8 @@ export default function App(){
 
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
+ const restStopsRef=useRef<Map<string,RestStop>>(new Map());
+ const restLoadedRef=useRef<Set<string>>(new Set());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const stationLoadedRef=useRef<Set<string>>(new Set());
  const [roadPackages,setRoadPackages]=useState(0);
@@ -231,6 +235,10 @@ export default function App(){
    const points:[[number,number],...Array<[number,number]>]=[[company.headquarters.lng,company.headquarters.lat],...taxisRef.current.map(t=>t.position)];
    for(const [lng,lat] of points){
     const tile=`${Math.floor(lng*10)}_${Math.floor(lat*10)}`;
+    if(!restLoadedRef.current.has(tile)){
+     restLoadedRef.current.add(tile);
+     void loadRestStopTile(lng,lat).then(stops=>{for(const stop of stops)restStopsRef.current.set(stop.id,stop)}).catch(()=>restLoadedRef.current.delete(tile));
+    }
     if(stationLoadedRef.current.has(tile))continue;
     stationLoadedRef.current.add(tile);
     void loadStationTile(lng,lat).then(stations=>{for(const station of stations)stationsRef.current.set(station.id,station)}).catch(()=>stationLoadedRef.current.delete(tile));
@@ -705,43 +713,39 @@ export default function App(){
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
-     if(passengerTaxi&&gameClockRef.current){
-      const schedule=driverSchedule(delivered,old.drivers??[],gameClockRef.current.epochMs);
-      const breakActive=schedule.onDuty&&schedule.onBreak;
-      const offDuty=!schedule.onDuty;
-      // A passenger trip finishes before a break or rest begins.
-      if(delivered.status==='PAUSED'&&delivered.shiftParked){
-       if(offDuty||breakActive)return delivered;
-       return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,scheduledBreakUntil:undefined};
-      }
-      if(delivered.status==='IDLE'&&(offDuty||breakActive)&&energyPercent(delivered)>10&&!delivered.refillRequested){
-       const assigned=depotById.get(delivered.depotId??'');
-       const depot:[number,number]=assigned?[assigned.lng,assigned.lat]:[company!.headquarters.lng,company!.headquarters.lat];
-       const stations=breakActive?[...stationsRef.current.values()].filter(st=>st.kind==='fuel'&&st.access!=='private')
-        .sort((a,b)=>meters(delivered.position,[a.lng,a.lat])-meters(delivered.position,[b.lng,b.lat])).slice(0,8):[];
-       const targets=[...stations.map(st=>[st.lng,st.lat] as [number,number]),depot];
-       const key=delivered.id;
-       const cached=operationalRoutesRef.current.get(key);
-       if(cached?.purpose==='shift'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
-        if(cached.ready){
-         if(cached.path&&cached.edgeIds){
-          operationalRoutesRef.current.delete(key);
-          const extra={shiftParked:true,scheduledBreakUntil:breakActive?schedule.breakEndsAt:undefined};
-          if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
-          return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+      if(passengerTaxi){
+       const drivingMs=delivered.drivingSinceRestGameMs??0;
+       if(delivered.status==='PAUSED'&&delivered.shiftParked&&delivered.restUntilGameMs!==undefined){
+        if(gameNow<delivered.restUntilGameMs)return delivered;
+        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,restStopId:undefined,restStopName:undefined};
+       }
+       if(delivered.status==='IDLE'&&drivingMs>=3600000&&!delivered.refillRequested){
+        const overnight=drivingMs>=9*3600000;
+        const stops=[...restStopsRef.current.values()].filter(p=>overnight?p.kind==='hotel':p.kind!=='hotel')
+         .sort((a,b)=>meters(delivered.position,a.position)-meters(delivered.position,b.position)).slice(0,10);
+        if(stops.length){
+         const key=delivered.id;
+         const cached=operationalRoutesRef.current.get(key);
+         if(cached?.purpose==='shift'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
+          if(cached.ready&&cached.path&&cached.edgeIds){
+           operationalRoutesRef.current.delete(key);
+           const destination=stops[0];
+           const extra={shiftParked:true,restUntilGameMs:gameNow+(overnight?9*3600000:30*60000),restStopId:destination.id,restStopName:destination.name};
+           if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
+           return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+          }
+          if(now-cached.at<12000)return delivered;
          }
-         if(now-cached.at<10000)return delivered;
-        }else if(now-cached.at<12000)return delivered;
-       }
-       const worker=dispatchWorkerRef.current;
-       if(worker&&workerReadyRef.current){
-        const requestId=++routeSequenceRef.current;
-        operationalRoutesRef.current.set(key,{requestId,purpose:'shift',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
-        worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'shift',from:delivered.position,targets});
+         const worker=dispatchWorkerRef.current;
+         if(worker&&workerReadyRef.current){
+          const requestId=++routeSequenceRef.current;
+          operationalRoutesRef.current.set(key,{requestId,purpose:'shift',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
+          worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'shift',from:delivered.position,targets:stops.map(p=>p.position)});
+         }
+        }
+        return delivered;
        }
       }
-     }
-
      // Automatic scheduled service: vehicles stop accepting work at 40% condition.
      // Service is billed on completion; insufficient cash postpones completion.
      if(delivered.status==='SERVICING'){
@@ -812,7 +816,7 @@ export default function App(){
        const candidates=[...stationsRef.current.values()]
         .filter(st=>st.kind==='fuel'&&st.access!=='private'&&st.access!=='no')
         .sort((x,y)=>meters(delivered.position,[x.lng,x.lat])-meters(delivered.position,[y.lng,y.lat])).slice(0,12);
-       const targets=[...candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false})),{point:hq,depot:true}];
+       const targets=candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false}));
        const requestId=++routeSequenceRef.current;
        pendingFuelRef.current.set(delivered.id,{requestId,position:[...delivered.position],at:now,graph});
        worker.postMessage({type:'fuelPlan',revision:graphRevisionRef.current,requestId,vehicleId:delivered.id,from:delivered.position,targets});
@@ -877,7 +881,8 @@ export default function App(){
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
        fuelLitres:(t.fuelLitres??0)+(spec.unit==='L'?consumed:0),tripRevenue:(t.tripRevenue??0)+earned,
-       driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance};
+       driverWages:(t.driverWages??0)+wage,insuranceExpense:(t.insuranceExpense??0)+insurance,
+       drivingSinceRestGameMs:(delivered.drivingSinceRestGameMs??0)+(next.distanceMeters>0?elapsedSeconds*1000*24:0)};
      }finally{
       const duration=performance.now()-vehicleStarted;
       if(duration>slowestVehicleMs){slowestVehicleMs=duration;slowestVehicle=t.name;}
