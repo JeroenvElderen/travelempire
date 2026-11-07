@@ -9,9 +9,6 @@ type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles')
 const idleFallbackAt=new Map<string,number>();
 // A failed scout permits the next road class to bootstrap without motorway access.
 
-const explorerIdleSince=new Map<string,number>();
-const explorerDepotCooldown=new Map<string,number>();
-const EXPLORER_IDLE_RETURN_MS=60000;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point};
@@ -20,7 +17,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   explorerIdleSince.clear();explorerDepotCooldown.clear();idleFallbackAt.clear();
+   idleFallbackAt.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -265,7 +262,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
      assignment=dispatchScout({...taxis[index],shiftParked:true},graph,explored,hq,new Set<string>(),new Set<string>(),undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
     }
     if(assignment.status!=='IDLE'){
-     explorerIdleSince.delete(taxis[index].id);
      taxis[index]=assignment;
      assignedCount++;
     }
