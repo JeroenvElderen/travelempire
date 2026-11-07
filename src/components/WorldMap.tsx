@@ -72,12 +72,12 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
  if(fraction<=0)return start;
  if(fraction>=1)return end;
  if(from.path.length<2||to.path.length<2||from.path!==to.path && (from.edgeIds.length>to.edgeIds.length||!from.edgeIds.every((id,i)=>id===to.edgeIds[i]))){
-  return [start[0]+(end[0]-start[0])*fraction,start[1]+(end[1]-start[1])*fraction];
+  return end;
  }
  const path=to.path;
  // On a mission transition, the old and new routes differ: don't attempt
  // to traverse unrelated geometry.
- if(from.leg>to.leg||from.leg>=path.length-1||to.leg>=path.length)return [start[0]+(end[0]-start[0])*fraction,start[1]+(end[1]-start[1])*fraction];
+ if(from.leg>to.leg||from.leg>=path.length-1||to.leg>=path.length)return end;
  const points:[number,number][]=[start];
  for(let leg=from.leg;leg<to.leg&&leg<path.length-1;leg++)points.push(path[leg+1]);
  points.push(end);
