@@ -132,3 +132,28 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
  .world-topbar .nav-world-live{font-size:10px;margin-left:auto}
  .nav-v216.nav-map-mode .world{min-height:calc(100dvh - 142px - env(safe-area-inset-bottom))}
 }
+
+/* Minimal full-height World Map: preserve the live MapLibre canvas and touch gestures. */
+.nav-v216.nav-map-mode .world-minimal-topbar{
+  height:46px;min-height:46px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;gap:12px;
+  background:linear-gradient(110deg,#15132b,#101323);
+  border-bottom:1px solid rgba(191,153,255,.2);
+}
+.world-minimal-date,.world-minimal-money{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px;font-weight:650}
+.world-minimal-date{color:#e5def6;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.world-minimal-date svg{color:#b49aff;flex-shrink:0}
+.world-minimal-money{color:#75edbb;flex-shrink:0}
+.nav-v216.nav-map-mode .main{height:100dvh;min-height:0;overflow:hidden}
+.nav-v216.nav-map-mode .world{flex:1 1 auto;min-height:0;height:auto;overflow:hidden}
+.nav-v216.nav-map-mode .map-debug-performance,
+.nav-v216.nav-map-mode .map-debug-startup,
+.nav-v216.nav-map-mode .map-container .maplibregl-ctrl-top-right,
+.nav-v216.nav-map-mode .map-container .maplibregl-ctrl-bottom-right{display:none!important}
+@media(max-width:800px){
+  .nav-v216.nav-map-mode .world-minimal-topbar{height:44px;min-height:44px;padding:0 12px}
+  .nav-v216.nav-map-mode .world{min-height:0;height:auto}
+  .nav-v216.nav-map-mode .main{height:calc(100dvh - 66px - env(safe-area-inset-bottom))}
+  .nav-v216.nav-map-mode .mobile-tabs{z-index:30}
+}
