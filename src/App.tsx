@@ -7,7 +7,7 @@ import {loadRestStopTile} from './data/restStops';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useState, startTransition } from "react";
-import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, Activity, CalendarClock, Layers3 } from "lucide-react";
+import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, CalendarClock } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import DriversPanel from "./components/DriversPanel";
 import FleetPanel from "./components/FleetPanel";
@@ -51,7 +51,7 @@ type Page=(typeof navigation)[number]['name'];
 type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
 
 export default function App(){
- const [page,setPage]=useState<Page>('World');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
+ const [page,setPage]=useState<Page>('World');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
  const gameClockRef=useRef(gameClock);gameClockRef.current=gameClock;
  useEffect(()=>{
