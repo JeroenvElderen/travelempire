@@ -92,42 +92,72 @@ export async function cacheAllRoadPackages(
  signal:AbortSignal,onProgress:(progress:RoadDownloadProgress)=>void,
 ):Promise<void>{
  const manifest=await roadTileManifest();
- const entries=Object.entries(manifest.tiles);
+ const entries=Object.values(manifest.tiles);
  const total=entries.length;
- let completed=0;
- if(!('caches' in globalThis))throw Error('Browser Cache Storage is unavailable. Nationwide offline download requires Cache Storage.');
+ if(!('caches' in globalThis))throw Error('Browser Cache Storage is unavailable.');
  const store=await caches.open(ROAD_PACKAGE_CACHE);
+ let completed=0,next=0,concurrency=2,successStreak=0,cooldownUntil=0;
+ let fatal:Error|null=null;
  const report=(current?:string)=>onProgress({completed,total,failed:0,active:completed<total,current});
- report();
- for(const [,info] of entries){
+ const urlFor=(file:string)=>storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(file)}`:`${root}tiles/${encodeURIComponent(file)}`;
+ // Cache lookups happen first: no network calls for packages retained by Safari.
+ const missing:string[]=[];
+ for(const info of entries){
   if(signal.aborted)throw Error('Download cancelled');
-  const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
-  if(await store.match(url)){completed++;if(completed%5===0||completed===total)report(info.file);continue;}
-  let success=false;
-  for(let attempt=0;attempt<8&&!signal.aborted;attempt++){
+  const url=urlFor(info.file);
+  if(await store.match(url))completed++;
+  else missing.push(info.file);
+  if(completed%50===0)report();
+ }
+ report();
+ const waitForCooldown=async()=>{
+  const remaining=cooldownUntil-Date.now();
+  if(remaining>0)await pause(remaining,signal);
+ };
+ const fetchPackage=async(file:string)=>{
+  const url=urlFor(file);
+  for(let attempt=0;attempt<12;attempt++){
+   if(signal.aborted)throw Error('Download cancelled');
+   await waitForCooldown();
    try{
     const response=await fetch(url,{signal});
     if(response.status===429||response.status===503){
+     concurrency=1;successStreak=0;
      const header=response.headers.get('Retry-After');
      const seconds=header?Number(header):NaN;
      const dateMs=header&&!Number.isFinite(seconds)?Date.parse(header)-Date.now():NaN;
-     const retryMs=Number.isFinite(seconds)?seconds*1000:Number.isFinite(dateMs)?dateMs:Math.min(120000,3000*2**attempt);
-     console.warn('[TravelEmpire] Road download rate limited',info.file,'retry',attempt+1);
-     await pause(Math.max(3000,Math.min(180000,retryMs)),signal);continue;
+     const retryMs=Number.isFinite(seconds)?seconds*1000:Number.isFinite(dateMs)?dateMs:Math.min(120000,4000*2**Math.min(attempt,5));
+     cooldownUntil=Math.max(cooldownUntil,Date.now()+Math.max(4000,Math.min(180000,retryMs)));
+     console.warn('[TravelEmpire] Road server throttled; pausing downloads',file,'attempt',attempt+1);
+     continue;
     }
-    if(!response.ok)throw Error(`HTTP ${response.status} for ${info.file}`);
+    if(!response.ok)throw Error(`HTTP ${response.status}`);
     await store.put(url,response);
-    success=true;break;
+    successStreak++;
+    if(successStreak>=40&&concurrency<3){concurrency++;successStreak=0;}
+    completed++;report(file);
+    return;
    }catch(error){
     if(signal.aborted)throw Error('Download cancelled');
-    if(attempt===7)throw Error(`Cannot cache ${info.file}: ${String(error)}`);
-    await pause(Math.min(120000,3000*2**attempt),signal);
+    if(attempt===11)throw Error(`Cannot cache ${file}: ${String(error)}`);
+    await pause(Math.min(60000,1500*2**Math.min(attempt,5)),signal);
    }
   }
-  if(!success)throw Error(`Download stopped after repeated server throttling: ${info.file}`);
-  completed++;report(info.file);
-  // Avoid flooding the host with thousands of requests.
-  await pause(450,signal);
- }
+  throw Error(`Road server repeatedly throttled download of ${file}. Retry to resume cached progress.`);
+ };
+ const worker=async(index:number)=>{
+  while(!signal.aborted&&!fatal){
+   if(index>=concurrency){await pause(500,signal);continue;}
+   const item=next++;
+   if(item>=missing.length)return;
+   try{await fetchPackage(missing[item]);}
+   catch(error){if(!signal.aborted)fatal=error instanceof Error?error:Error(String(error));return;}
+   await pause(120,signal);
+  }
+ };
+ await Promise.allSettled([worker(0),worker(1),worker(2)]);
+ if(signal.aborted)throw Error('Download cancelled');
+ if(fatal)throw fatal;
+ if(completed!==total)throw Error(`Only ${completed} of ${total} road packages cached.`);
  onProgress({completed,total,failed:0,active:false});
 }
