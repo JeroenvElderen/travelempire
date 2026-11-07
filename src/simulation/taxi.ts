@@ -43,6 +43,13 @@ export type Taxi = {
   scheduledBreakUntil?: number;
   scheduledBreakPending?: boolean;
   scheduledRestPending?: boolean;
+  // Persistent rest planning state (timestamps are in simulated game time).
+  restPreference?: 'automatic'|'parking'|'hotel'|'depot';
+  drivingSinceRestGameMs?: number;
+  restStopId?: string;
+  restStopName?: string;
+  restUntilGameMs?: number;
+  restExpense?: number;
   recoveryPending?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
