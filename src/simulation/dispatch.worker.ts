@@ -56,6 +56,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   if(msg.type==='fuelPlan'){
    const started=performance.now();
    const from=nearest(graph,msg.from);
+   const nearestMs=performance.now()-started;
    let best:{point:Point;depot:boolean;roadKm:number;path:{path:Point[];edgeIds:string[]}}|null=null;
    for(const target of msg.targets){
     const to=nearest(graph,target.point);
@@ -64,7 +65,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const roadKm=planned.path.reduce((sum,p,i)=>i?sum+meters(p,planned.path[i-1])/1000:sum,0)+(graph.nodes.get(to)?meters(graph.nodes.get(to)!,target.point)/1000:0);
     if(!best||roadKm<best.roadKm)best={...target,roadKm,path:planned};
    }
-   self.postMessage({type:'fuelPlanResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,position:msg.from,target:best,durationMs:performance.now()-started});return;
+   self.postMessage({type:'fuelPlanResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,position:msg.from,target:best,durationMs:performance.now()-started,perf:{nearestMs,targets:msg.targets.length}});return;
   }
   if(msg.type==='routeRequest'){
    const started=performance.now();
@@ -73,6 +74,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    self.postMessage({type:'routeResult',revision:activeRevision,requestId:msg.requestId,from:msg.from,to:msg.to,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
    return;
   }
+  const dispatchStarted=performance.now();
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
   // Resting explorers remain parked until the main simulation releases them.
@@ -93,6 +95,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier);
    if(request){queue.push(request);generatedMission=true;}
   }
+  const preparationMs=performance.now()-dispatchStarted;
+  const passengerStarted=performance.now();
   // Prioritise older waiting passengers, then choose the fastest reachable taxi.
   // Evaluate actual discovered-road routes, never straight-line proximity alone.
   queue.sort((a,b)=>a.createdAt-b.createdAt);
@@ -120,6 +124,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    else pending.push(mission);
   }
   queue.length=0;queue.push(...pending);
+  const passengerMs=performance.now()-passengerStarted;
+  const scoutStarted=performance.now();
   // Passenger assignments run first. Purple Explorers continuously select nearby eligible roads.
   let assignedCount=0;
   if(msg.allowScout){
@@ -272,6 +278,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    // Do not park or pause them: the next dispatch automatically retries as
    // new eligible roads and territory arrive.
   }
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size});
+  const scoutMs=performance.now()-scoutStarted;
+  const workerMs=performance.now()-dispatchStarted;
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
