@@ -585,10 +585,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   // then add only changed IDs instead of rebuilding the whole road graph.
   const visible=visibleRoadIndex.current;
   let changed=false;
+  // Restore purple geometry when a road tile/index is rebuilt without new IDs.
   for(const id of next){
-   if(previous.has(id))continue;
    const feature=visible.get(id);
-   if(feature){visibleExploredFeatures.current.set(id,feature);changed=true;}
+   if(feature&&!visibleExploredFeatures.current.has(id)){
+    visibleExploredFeatures.current.set(id,feature);changed=true;
+   }
   }
   for(const id of previous){
    if(next.has(id))continue;
