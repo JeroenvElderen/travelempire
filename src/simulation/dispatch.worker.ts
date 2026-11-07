@@ -416,8 +416,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extensionStarted=performance.now();
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes);
-    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision);
+    if(msg.revision!==activeRevision)return;
+   scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -450,8 +451,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const idleStarted=performance.now();
     idleMissionPlans++;
     planningCalls++;
-    const scout=await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
-    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
+    const scout=await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision);
+    if(msg.revision!==activeRevision)return;
+   scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
     let assignment=scout;
     // No immediate second expensive search: retry in a later planning turn.
     if(assignment.status!=='IDLE'){
