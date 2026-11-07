@@ -442,11 +442,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extensionStarted=performance.now();
+    const extensionTier=explorerSearchTier.get(taxi.id)??0;
+    const extensionCandidates=regionalCandidates(destination,discoveryRoads(taxi),explored,reservedEdges,SEARCH_RADII_KM[extensionTier]);
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
-    if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
+    if(extension.status!=='EXPLORING'||extension.path.length<2){explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));continue;}
+    explorerSearchTier.set(taxi.id,0);
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
     missionLastEndpoint.set(taxi.id,destinationKey);
@@ -478,12 +481,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const idleStarted=performance.now();
     idleMissionPlans++;
     planningCalls++;
-    const scout=await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision);
+    const tier=explorerSearchTier.get(idleVehicle.id)??0;
+    const candidates=regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier]);
+    const scout=await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates);
     if(msg.revision!==activeRevision)return;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
     let assignment=scout;
     // No immediate second expensive search: retry in a later planning turn.
     if(assignment.status!=='IDLE'){
+     explorerSearchTier.set(idleVehicle.id,0);
      idleRetryAt.delete(idleVehicle.id);
      taxis[index]=assignment;
      missionSequence.set(idleVehicle.id,(missionSequence.get(idleVehicle.id)??0)+1);
@@ -492,6 +498,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(assignment.status==='EXPLORING')recordExplorerMission(assignment,now);
      assignedCount++;
     }else{
+     explorerSearchTier.set(idleVehicle.id,Math.min(tier+1,SEARCH_RADII_KM.length-1));
      idleRetryAt.set(idleVehicle.id,now+IDLE_RETRY_MS);
      idleRetryRoadCount.set(idleVehicle.id,seenRoadIds.size);
      idleRetryExploredCount.set(idleVehicle.id,explored.size);
@@ -506,6 +513,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
