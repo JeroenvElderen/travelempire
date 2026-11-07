@@ -459,14 +459,14 @@ export default function App(){
     return;
    }
    if(message.type==='fuelPlanResult'){
-    const result=message as typeof message & {vehicleId:string;requestId:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null;durationMs:number};
+    const result=message as typeof message & {vehicleId:string;requestId:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null;durationMs:number;perf?:{nearestMs:number;targets:number}};
     const pending=pendingFuelRef.current.get(result.vehicleId);
     if(!pending||pending.requestId!==result.requestId)return;
     pendingFuelRef.current.delete(result.vehicleId);
     const current=taxisRef.current.find(t=>t.id===result.vehicleId);
     if(!current||meters(current.position,pending.position)>300)return;
     fuelPlanCacheRef.current.set(result.vehicleId,{at:Date.now(),position:pending.position,graph:pending.graph,stationCount:stationsRef.current.size,target:result.target});
-    if(result.durationMs>100){diagnostic('routing:fuel-slow',`durationMs=${Math.round(result.durationMs)} vehicle=${result.vehicleId} roadSyncPending=${roadSyncPendingRef.current}`);console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs),vehicleId:result.vehicleId,roadSyncPending:roadSyncPendingRef.current});}
+    if(result.durationMs>100){diagnostic('routing:fuel-slow',`durationMs=${Math.round(result.durationMs)} vehicle=${result.vehicleId} targets=${result.perf?.targets??'unknown'} nearestMs=${Math.round(result.perf?.nearestMs??0)} roadSyncPending=${roadSyncPendingRef.current}`);console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs),vehicleId:result.vehicleId,roadSyncPending:roadSyncPendingRef.current});}
     return;
    }
    if(message.type==='routeResult'){
@@ -483,6 +483,10 @@ export default function App(){
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
    if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;if(roadSyncPendingRef.current===0)diagnostic('dispatch:roads-ready',`workerRoads=${workerRoadCountRef.current}`);return;}
    dispatchBusyRef.current=false;
+   if(message.type==='result'){
+    const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
+    if(perf&&perf.workerMs>150)diagnostic('dispatch:worker-phases',`workerMs=${Math.round(perf.workerMs)} prepareMs=${Math.round(perf.preparationMs)} passengerMs=${Math.round(perf.passengerMs)} scoutMs=${Math.round(perf.scoutMs)} nodes=${perf.graphNodes} roads=${perf.graphRoads} vehicles=${perf.vehicles} missions=${perf.missions}`);
+   }
    if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150){diagnostic('dispatch:slow',`roundTripMs=${Math.round(duration)} vehicles=${taxisRef.current.length} roadSyncPending=${roadSyncPendingRef.current} workerRoads=${workerRoadCountRef.current}`);console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length,roadSyncPending:roadSyncPendingRef.current,workerRoads:workerRoadCountRef.current});}}
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
