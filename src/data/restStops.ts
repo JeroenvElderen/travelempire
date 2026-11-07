@@ -2,7 +2,7 @@
 import {stationTileKey} from './stations';
 import type {RestStop,RestStopKind} from '../simulation/driverRest';
 const root=`${import.meta.env.BASE_URL}data/rest-stops/`;
-const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\\/+$/,'');
+const storage=(import.meta.env.VITE_SUPABASE_URL??'').trim().replace(/\/+$/,'');
 const base=storage?`${storage}/storage/v1/object/public/travelempire-rest-stops/`:root;
 const cache=new Map<string,RestStop[]>();
 const inflight=new Map<string,Promise<RestStop[]>>();
