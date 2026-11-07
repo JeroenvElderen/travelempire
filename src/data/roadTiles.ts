@@ -78,43 +78,56 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
 /** Free the parsed tile array after its roads have been ingested into the graph. */
 export function releaseRoadTile(id:string):void{cache.delete(id)}
 
-/** Cache every Greek road package in the background, without parsing or
- * duplicating the nationwide graph in Safari's JavaScript heap. */
+/** Download the entire compressed nationwide dataset before gameplay.
+ * Cached packages are decoded only when a region is actually needed. */
 export const ROAD_PACKAGE_CACHE='travelempire-road-packages-v1';
-export type RoadDownloadProgress={completed:number;total:number;failed:number;active:boolean};
+export type RoadDownloadProgress={completed:number;total:number;failed:number;active:boolean;current?:string};
+const pause=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{
+ if(signal.aborted){reject(Error('Download cancelled'));return;}
+ const timer=setTimeout(()=>{signal.removeEventListener('abort',cancel);resolve()},ms);
+ const cancel=()=>{clearTimeout(timer);reject(Error('Download cancelled'))};
+ signal.addEventListener('abort',cancel,{once:true});
+});
 export async function cacheAllRoadPackages(
  signal:AbortSignal,onProgress:(progress:RoadDownloadProgress)=>void,
 ):Promise<void>{
  const manifest=await roadTileManifest();
  const entries=Object.entries(manifest.tiles);
  const total=entries.length;
- let completed=0,failed=0,next=0;
- const report=()=>onProgress({completed,total,failed,active:!signal.aborted&&completed<total});
- if(!('caches' in globalThis)){onProgress({completed:0,total,failed:total,active:false});return;}
+ let completed=0;
+ if(!('caches' in globalThis))throw Error('Browser Cache Storage is unavailable. Nationwide offline download requires Cache Storage.');
  const store=await caches.open(ROAD_PACKAGE_CACHE);
- const fetchOne=async()=>{
-  while(!signal.aborted){
-   const index=next++;if(index>=entries.length)return;
-   const [,info]=entries[index];
-   const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
-   try{
-    const existing=await store.match(url);
-    if(!existing){
-     const response=await fetch(url,{signal});
-     if(!response.ok)throw Error(`HTTP ${response.status}`);
-     await store.put(url,response);
-    }
-   }catch(error){if(signal.aborted)return;failed++;diagnosticRoadDownloadError(info.file,error);}
-   completed++;
-   if(completed%5===0||completed===total)report();
-   // Avoid competing with animation frames and active routing.
-   await new Promise<void>(resolve=>setTimeout(resolve,40));
-  }
- };
+ const report=(current?:string)=>onProgress({completed,total,failed:0,active:completed<total,current});
  report();
- await Promise.all([fetchOne(),fetchOne()]);
- onProgress({completed,total,failed,active:false});
-}
-function diagnosticRoadDownloadError(file:string,error:unknown){
- console.warn('[TravelEmpire] Road download failed',file,String(error));
+ for(const [,info] of entries){
+  if(signal.aborted)throw Error('Download cancelled');
+  const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
+  if(await store.match(url)){completed++;if(completed%5===0||completed===total)report(info.file);continue;}
+  let success=false;
+  for(let attempt=0;attempt<8&&!signal.aborted;attempt++){
+   try{
+    const response=await fetch(url,{signal});
+    if(response.status===429||response.status===503){
+     const header=response.headers.get('Retry-After');
+     const seconds=header?Number(header):NaN;
+     const dateMs=header&&!Number.isFinite(seconds)?Date.parse(header)-Date.now():NaN;
+     const retryMs=Number.isFinite(seconds)?seconds*1000:Number.isFinite(dateMs)?dateMs:Math.min(120000,3000*2**attempt);
+     console.warn('[TravelEmpire] Road download rate limited',info.file,'retry',attempt+1);
+     await pause(Math.max(3000,Math.min(180000,retryMs)),signal);continue;
+    }
+    if(!response.ok)throw Error(`HTTP ${response.status} for ${info.file}`);
+    await store.put(url,response);
+    success=true;break;
+   }catch(error){
+    if(signal.aborted)throw Error('Download cancelled');
+    if(attempt===7)throw Error(`Cannot cache ${info.file}: ${String(error)}`);
+    await pause(Math.min(120000,3000*2**attempt),signal);
+   }
+  }
+  if(!success)throw Error(`Download stopped after repeated server throttling: ${info.file}`);
+  completed++;report(info.file);
+  // Avoid flooding the host with thousands of requests.
+  await pause(450,signal);
+ }
+ onProgress({completed,total,failed:0,active:false});
 }
