@@ -8,6 +8,8 @@ const seenRoadIds=new Set<string>();
 const byClass=new Map<string,Set<string>>();
 const allRoads=new Set<string>();
 const classifiedRoads=new Set<string>();
+const roadEndpoints=new Map<string,[string,string]>();
+const roadClassCache=new Map<string,Set<string>>();
 const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
@@ -22,7 +24,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();
+   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -35,6 +37,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const role=roadRole(road.highway??'');
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
+    roadEndpoints.set(road.id,[a,b]);
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
     if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
     const add=(from:string,to:string)=>{
@@ -45,6 +48,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(road.oneway!==-1)add(a,b);
     if(road.oneway!==1)add(b,a);
    }
+   roadClassCache.clear();
    self.postMessage({type:'roadsAdded',revision:activeRevision,roadCount:seenRoadIds.size});return;
   }
   if(msg.type==='operationalRoute'){
@@ -141,9 +145,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    const allowedRoads=allRoads;
    const purpleAllowedRoads=allowedRoads;
    const revealedNodes=new Set<string>();
-   for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
+   for(const id of explored){const ends=roadEndpoints.get(id);if(ends){revealedNodes.add(ends[0]);revealedNodes.add(ends[1]);}}
    const completionRoads=new Set<string>();
-   for(const [from,links] of graph.edges)if(revealedNodes.has(from))for(const edge of links)if(revealedNodes.has(edge.to)&&!explored.has(edge.id)&&!classifiedRoads.has(edge.id))completionRoads.add(edge.id);
+   for(const from of revealedNodes)for(const edge of graph.edges.get(from)??[])if(revealedNodes.has(edge.to)&&!explored.has(edge.id)&&!classifiedRoads.has(edge.id))completionRoads.add(edge.id);
    
    const poiRoads=new Set<string>();
    const poiTargets=(msg.poiTargets??[]).slice(0,150);
@@ -171,8 +175,12 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
     if(role==='completion')return new Set([...completionRoads].filter(id=>!poiRoads.has(id)));
-    if(role==='highway')return new Set([...['motorway','trunk','primary','secondary'].flatMap(k=>[...(byClass.get(k)??[])] )]);
-    if(role==='urban')return new Set([...['tertiary','residential','rural','service'].flatMap(k=>[...(byClass.get(k)??[])] )]);
+    if(role==='highway'||role==='urban'){
+     const cached=roadClassCache.get(role);if(cached)return cached;
+     const roles=role==='highway'?['motorway','trunk','primary','secondary']:['tertiary','residential','rural','service'];
+     const combined=new Set<string>();for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
+     roadClassCache.set(role,combined);return combined;
+    }
     return byClass.get(role??'')??new Set<string>();
    };
    // Trim any previously assigned Explorer route at the first forbidden edge.
@@ -195,16 +203,14 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    }
    // Stranded idle Explorers return to the nearest reachable permitted road.
    // Returning never discovers roads or reveals territory.
-   const permittedNodes=new Set<string>();
-   for(const [from,links] of graph.edges)for(const edge of links)if(allowedRoads.has(edge.id)){
-    permittedNodes.add(from);permittedNodes.add(edge.to);
-   }
+   // All indexed graph edges are permitted transit roads.
+   const permittedNodes=graph.nodes;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if((taxi.kind!=='explorer')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const start=nearest(graph,taxi.position);
     if(!start||permittedNodes.has(start))continue;
-    const candidates=[...permittedNodes].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
+    const candidates=[...permittedNodes.keys()].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
      .sort((a,b)=>a.d-b.d).slice(0,12);
     for(const candidate of candidates){
      const home=route(graph,start,candidate.k);
