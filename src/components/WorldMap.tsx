@@ -880,7 +880,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  },[ready,basemap,phase]);
  const selectBasemap=(mode:Basemap)=>{if(mode===basemap){setSelectorOpen(false);return;}const style=styleFor(mode);if(!style||!map.current)return;setError(null);map.current.setStyle(style);setBasemap(mode);setSelectorOpen(false);};
  return <div className="map-container">
- <div style={{position:'absolute',bottom:16,left:12,zIndex:25,maxWidth:'min(85vw,280px)',fontSize:12}}>
+ <div className="map-debug-performance" style={{position:'absolute',bottom:16,left:12,zIndex:25,maxWidth:'min(85vw,280px)',fontSize:12}}>
   <button type="button" onClick={()=>setPerfOpen(v=>!v)} aria-expanded={perfOpen} style={{background:'#152b34',color:'#fff',border:'1px solid #4a6570',borderRadius:10,padding:'7px 11px',cursor:'pointer'}}>{perfOpen?'Hide performance':'Performance'}</button>
   {perfOpen&&perfSnapshot&&<div role="status" style={{background:'#10232deF',color:'#f5f9fb',padding:12,borderRadius:12,marginTop:6,boxShadow:'0 3px 15px #0008',lineHeight:1.8}}>
    <strong>Mobile performance</strong>
@@ -904,7 +904,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div style={{position:'absolute',bottom:70,right:12,zIndex:25,maxWidth:'min(92vw,420px)',fontSize:12}}>
+ </div><div className="map-debug-startup" style={{position:'absolute',bottom:70,right:12,zIndex:25,maxWidth:'min(92vw,420px)',fontSize:12}}>
  <button type="button" onClick={()=>setStartupLogOpen(v=>!v)} style={{padding:'8px 10px',background:'#102b36',color:'white',borderRadius:9}}>Startup log</button>
  {startupLogOpen&&<div style={{marginTop:6,background:'#102b36',color:'white',padding:10,borderRadius:10,maxHeight:'45vh',overflow:'auto'}}>
   <button type="button" onClick={()=>void copyStartupLog()} style={{padding:'7px 10px',background:'#23667b',color:'white',borderRadius:8}}>{startupCopied?'Copied!':'Copy full log'}</button>
