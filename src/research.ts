@@ -30,7 +30,7 @@ export const projects=[
  {id:'efficiency',category:7,name:"Research Efficiency",effect:"-5% future research time per level",base:1500},
 ] as const;
 export type ResearchId=typeof projects[number]['id'];
-export type ResearchState={levels:Partial<Record<ResearchId,number>>;active?:{id:ResearchId;level:number;startedAt:number;endsAt:number}};
+export type ResearchState={levels:Partial<Record<ResearchId,number>>;active?:{id:ResearchId;level:number;startedAt:number;endsAt:number};clockVersion?:2};
 export const empty=():ResearchState=>({levels:{}});
 const key=(id:string)=>`travelempire.research.v1.${id}`;
 export function load(id:string):ResearchState{try{const v=JSON.parse(localStorage.getItem(key(id))||'null');return v&&v.levels?v:empty()}catch{return empty()}}
@@ -40,6 +40,7 @@ export function maxLevel(id:ResearchId){return id==='explorerExpansion'?1:5}
 export function level(s:ResearchState,id:ResearchId){return Math.max(0,Math.min(maxLevel(id),s.levels[id]||0))}
 export function price(id:ResearchId,l:number){const project=projects.find(p=>p.id===id);return (project?.base??2000)*3**(l-1)}
 export function duration(s:ResearchState,l:number,id?:ResearchId){if(id==='explorerExpansion')return 24*60*60*1000;return Math.round(([5,15,30,60,180][l-1]||180)*60000*(1-0.05*level(s,'efficiency')))}
-export function settle(s:ResearchState,now=Date.now()):ResearchState{if(!s.active||s.active.endsAt>now)return s;return {levels:{...s.levels,[s.active.id]:Math.max(level(s,s.active.id),s.active.level)}}}
-export function start(s:ResearchState,id:ResearchId,now=Date.now()):ResearchState{const current=settle(s,now);if(current.active)throw Error('Research already running');const l=level(current,id)+1;if(l>maxLevel(id))throw Error('Maximum level reached');return {...current,active:{id,level:l,startedAt:now,endsAt:now+duration(current,l,id)}}}
+export function migrateToGameTime(s:ResearchState,gameNow:number,realNow=Date.now()):ResearchState{if(s.clockVersion===2)return s;if(!s.active)return {...s,clockVersion:2};const remaining=Math.max(0,s.active.endsAt-realNow);const total=Math.max(1,s.active.endsAt-s.active.startedAt);return {...s,clockVersion:2,active:{...s.active,startedAt:gameNow-(total-remaining),endsAt:gameNow+remaining}}}
+export function settle(s:ResearchState,now:number):ResearchState{if(!s.active||s.active.endsAt>now)return s;return {levels:{...s.levels,[s.active.id]:Math.max(level(s,s.active.id),s.active.level)}}}
+export function start(s:ResearchState,id:ResearchId,now:number):ResearchState{const current=settle(s,now);if(current.active)throw Error('Research already running');const l=level(current,id)+1;if(l>maxLevel(id))throw Error('Maximum level reached');return {...current,clockVersion:2,active:{id,level:l,startedAt:now,endsAt:now+duration(current,l,id)}}}
 export function bonus(s:ResearchState, ids:readonly ResearchId[],perLevel:number,cap:number){return Math.min(cap,ids.reduce((sum,id)=>sum+level(s,id)*perLevel,0))}
