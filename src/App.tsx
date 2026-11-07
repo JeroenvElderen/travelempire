@@ -1389,7 +1389,16 @@ export default function App(){
  useEffect(()=>{
   harbourSeenRef.current=false;setHarbourNotice(null);setUnlockedHarbours([]);
  },[company?.id]);
- const harbourEdges=useMemo(()=>harbourNetwork&&graph?harbourRoadEdges(harbourNetwork,graph):null,[harbourNetwork,graph]);
+ const [harbourEdges,setHarbourEdges]=useState<Map<string,string[]>|null>(null);
+ useEffect(()=>{
+  setHarbourEdges(null);
+  if(!harbourNetwork||!graph)return;
+  const controller=new AbortController();
+  void harbourRoadEdges(harbourNetwork,graph,controller.signal).then(result=>{
+   if(!controller.signal.aborted)setHarbourEdges(result);
+  }).catch(error=>{if(!controller.signal.aborted)console.error('Harbour road indexing failed',error)});
+  return()=>controller.abort();
+ },[harbourNetwork,graph]);
  useEffect(()=>{
   if(!company||!harbourEdges||!harbourNetwork)return;
   // Legacy saved unlocks were calculated from arbitrary nearby junctions and
