@@ -438,7 +438,7 @@ export default function App(){
   };
   void run();
   return()=>{active=false;networkRef.current?.dispose();networkRef.current=null};
- },[company?.id,company?.headquarters.lng,company?.headquarters.lat
+ },[company?.id,company?.headquarters.lng,company?.headquarters.lat]);
  // Route searches and passenger generation run in a dedicated worker.
  // Worker persists for the company; new road packages are synchronized as deltas.
  useEffect(()=>{
