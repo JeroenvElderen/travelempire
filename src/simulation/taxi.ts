@@ -490,8 +490,8 @@ export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<s
  }
  return eligible;
 }
-export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1):PassengerRequest|null{
- const allEligible=[...passengerRoadNodes(graph,explored)];
+export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1,eligibleStops?:Set<string>):PassengerRequest|null{
+ const allEligible=[...(eligibleStops??passengerRoadNodes(graph,explored))];
  if(allEligible.length<2)return null;
  const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
  for(let attempt=0;attempt<35;attempt++){
