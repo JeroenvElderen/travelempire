@@ -275,6 +275,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   queue.length=0;queue.push(...pending);
   const passengerMs=performance.now()-passengerStarted;
   const scoutStarted=performance.now();
+  let successorPlansThisDispatch=0;
   // Passenger assignments run first. Purple Explorers continuously select nearby eligible roads.
   let assignedCount=0;
   const scoutTimings:{vehicleId:string;role:string;ms:number;phase:string;result?:string}[]=[];
@@ -371,7 +372,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    }
    // Mission-based exploration: keep the committed route while planning its successor.
    // Use the known endpoint to prepare the next mission before arrival.
-   let successorPlans=0;
+
    // Preplan the next sequence before an Explorer reaches its final junction.
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
@@ -381,7 +382,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
     if(remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
-    if(successorPlans>=MAX_SUCCESSOR_PLANS_PER_DISPATCH)continue;
+    if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
     if(!from)continue;
@@ -394,7 +395,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     }
     extensionLastDestination.set(taxi.id,destinationKey);
     extensionRetryAt.set(taxi.id,now+EXTENSION_RETRY_MS);
-    successorPlans++;
+    successorPlansThisDispatch++;
     // This vehicle may continue from its own reserved destination.
     reservedTargets.delete(from);
     const purpleCluster=purpleAllowedRoads;
@@ -468,6 +469,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlans,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
