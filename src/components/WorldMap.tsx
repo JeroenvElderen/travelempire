@@ -267,6 +267,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const taxiPaintCache=useRef<Map<string,string>>(new Map());
  const taxiPaintRequests=useRef<Set<string>>(new Set());
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
+ const activityMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const recoveryCommandRef=useRef(onRequestRecovery);recoveryCommandRef.current=onRequestRecovery;
  const recoveryStateRef=useRef({active:new Set<string>(),requested:new Set<string>()});recoveryStateRef.current={active:new Set(recoveryTargetIds),requested:new Set(recoveryRequestedIds)};
@@ -300,7 +301,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.addImage(event.id,{width:1,height:1,data:new Uint8Array(4)});
  });instance.on('load',()=>{startupTrace('MapLibre load event');setReady(true);});instance.on('error',e=>{diagnostic('map:error',String(e.error).slice(0,200));console.error('MapLibre:',e.error);setError('Some map resources failed to load. Check your API key and network.');});
  instance.on('click',async e=>{if(!selectingRef.current)return;if(busy.current)return;busy.current=true;setLookingUp(true);setError(null);const {lng,lat}=e.lngLat;try{if(!key)throw Error('MapTiler API key required for location lookup.');const response=await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${encodeURIComponent(key)}&language=en`);if(!response.ok)throw Error(`Location lookup failed (${response.status})`);const data=await response.json() as {features?:Array<{text?:string;place_name?:string;place_type?:string[];properties?:Record<string,unknown>;context?:Array<{id?:string;text?:string;short_code?:string}>}>};const features=data.features??[];const place=features[0];const context=[...(place?.context??[])];for(const f of features){if(f.place_type?.includes('country'))context.push({id:'country',text:f.text,short_code:String(f.properties?.short_code??'')});if(f.place_type?.includes('region'))context.push({id:'region',text:f.text});}const country=context.find(c=>c.id?.startsWith('country'));const region=context.find(c=>c.id?.startsWith('region'));if(!country?.text)throw Error('Select a location on land within a recognized country.');onLocationRef.current({lng,lat,label:place?.text||place?.place_name||`${lat.toFixed(4)}, ${lng.toFixed(4)}`,country:country.text,countryCode:country.short_code??'',region:region?.text??''});}catch(err){setError(err instanceof Error?err.message:'Unable to identify this location.');}finally{busy.current=false;setLookingUp(false);}});
- return()=>{taxiMarkers.current.forEach(m=>m.remove());taxiMarkers.current.clear();stationMarkers.current.forEach(m=>m.remove());stationMarkers.current.clear();restMarkers.current.forEach(m=>m.remove());restMarkers.current.clear();depotMarkers.current.forEach(m=>m.remove());depotMarkers.current.clear();deliveryMarkers.current.forEach(m=>m.remove());deliveryMarkers.current.clear();marker.current?.remove();marker.current=null;map.current=null;instance.remove();};},[]);
+ return()=>{taxiMarkers.current.forEach(m=>m.remove());taxiMarkers.current.clear();activityMarkers.current.forEach(m=>m.remove());activityMarkers.current.clear();stationMarkers.current.forEach(m=>m.remove());stationMarkers.current.clear();restMarkers.current.forEach(m=>m.remove());restMarkers.current.clear();depotMarkers.current.forEach(m=>m.remove());depotMarkers.current.clear();deliveryMarkers.current.forEach(m=>m.remove());deliveryMarkers.current.clear();marker.current?.remove();marker.current=null;map.current=null;instance.remove();};},[]);
  useEffect(()=>{if(!map.current)return;map.current.getCanvas().style.cursor=selecting?'crosshair':'';},[selecting]);
  useEffect(()=>{if(!map.current)return;marker.current?.remove();marker.current=null;if(headquarters){marker.current=new maplibregl.Marker({color:'#4bd9ac'}).setLngLat([headquarters.lng,headquarters.lat]).setPopup(new maplibregl.Popup({offset:20}).setText(`${headquarters.label} — ${headquarters.country}`)).addTo(map.current);marker.current.getElement().style.zIndex='3';if(!firstHeadquartersPositioned.current){firstHeadquartersPositioned.current=true;map.current.jumpTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}else{map.current.flyTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}}},[headquarters]);
  useEffect(()=>{if(!map.current)return;const ids=new Set(depots.map(d=>d.id));for(const [id,m] of depotMarkers.current)if(!ids.has(id)){m.remove();depotMarkers.current.delete(id);}for(const d of depots){const existing=depotMarkers.current.get(d.id);if(existing){existing.setLngLat([d.lng,d.lat]);continue;}const marker=new maplibregl.Marker({color:'#f7ae43'}).setLngLat([d.lng,d.lat]).setPopup(new maplibregl.Popup({offset:18}).setText(`${d.name} · ${d.capacity} spaces`)).addTo(map.current);depotMarkers.current.set(d.id,marker);}},[depots]);
@@ -405,7 +406,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const ids=new Set<string>();
  for(const taxi of taxis)if(!taxi.deliveryUntil||taxi.deliveryUntil<=wallNow)ids.add(taxi.id);
  for(const [id,m] of taxiMarkers.current){
-  if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);removed++;}
+  if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);activityMarkers.current.get(id)?.remove();activityMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);removed++;}
  }
  for(const taxi of taxis){
   if(taxi.deliveryUntil&&taxi.deliveryUntil>wallNow)continue;
@@ -415,11 +416,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   // Preserve the animation clock and forecast in that case.
   const sameMotion=!!previous&&previous.to.position[0]===renderTaxi.position[0]&&previous.to.position[1]===renderTaxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===renderTaxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
   if(sameMotion){unchanged++;}else{changed++;}
-  const markerElement=taxiMarkers.current.get(taxi.id)?.getElement();
-  if(markerElement){
-   const activity=vehicleActivity(taxi);
-   const badge=markerElement.querySelector<HTMLElement>('.te-vehicle-activity');
-   if(badge&&badge.dataset.activity!==activity.label){badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;markerElement.title=taxi.name+' · '+activity.label;}
+  const activity=vehicleActivity(taxi);
+  const activityElement=activityMarkers.current.get(taxi.id)?.getElement();
+  if(activityElement&&activityElement.dataset.activity!==activity.label){
+   activityElement.textContent=activity.icon;activityElement.dataset.activity=activity.label;activityElement.title=activity.label;
   }
   if(!sameMotion){
    const predicted=graphRef.current&&taxi.status!=='IDLE'?alignedTaxi(advanceTaxi(renderTaxi,graphRef.current,0.65).taxi):renderTaxi;
@@ -458,7 +458,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    }
    el.appendChild(img);
     const activity=vehicleActivity(taxi);
-    const badge=document.createElement('span');badge.className='te-vehicle-activity';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');const upright=document.createElement('span');upright.className='te-vehicle-activity-upright';upright.appendChild(badge);el.appendChild(upright);
     el.title=taxi.name+' · '+activity.label;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
@@ -505,7 +504,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
    }
-   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);created++;}}
+   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);
+   const badge=document.createElement('span');badge.className='te-vehicle-status-marker';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');
+   const activityMarker=new maplibregl.Marker({element:badge,anchor:'center',offset:[0,-27],rotationAlignment:'viewport',pitchAlignment:'viewport'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);
+   activityMarker.getElement().style.zIndex='4';activityMarkers.current.set(taxi.id,activityMarker);created++;}}
  const duration=performance.now()-started;
  if(duration>12)console.warn('[TravelEmpire] Slow vehicle snapshot update',{durationMs:Math.round(duration),fleet:taxis.length,changed,unchanged,created,removed});
 },[taxis]);
@@ -553,6 +555,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     const lastRendered=renderedPosition.current.get(id);
     if(!lastRendered||Math.abs(lastRendered[0]-position[0])+Math.abs(lastRendered[1]-position[1])>1e-9){
      marker.setLngLat(position);
+     activityMarkers.current.get(id)?.setLngLat(position);
      renderedPosition.current.set(id,position);
     }
     // Derive heading from the interpolated *displayed* motion, not the next
@@ -573,7 +576,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       // keeping fast-moving taxis aligned with the road direction.
       const blend=1-Math.exp(-dt/((taxi.speedKph ?? 0)>45?0.12:0.20));
       previousHeading.angle+=delta*blend;
-      if(Math.abs(delta*blend)>0.05){marker.setRotation(previousHeading.angle);marker.getElement().style.setProperty('--te-vehicle-heading',(-previousHeading.angle)+'deg');}
+      if(Math.abs(delta*blend)>0.05){marker.setRotation(previousHeading.angle);}
      }
      previousHeading.position=position;
      previousHeading.at=now;
@@ -586,7 +589,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      }
      taxiHeadingState.current.set(id,{angle:initial,position,at:now});
      marker.setRotation(initial);
-      marker.getElement().style.setProperty('--te-vehicle-heading',(-initial)+'deg');
+      
     }
     // Avoid mutating DOM attributes on every animation frame.
     const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
