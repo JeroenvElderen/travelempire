@@ -156,6 +156,7 @@ export default function App(){
   return()=>window.clearInterval(timer);
  },[]);
  // Lightweight diagnostics: correlate React commits, animation frames and browser pauses.
+ const [graph,setGraph]=useState<RoadGraph|null>(null);
  const graphEnqueueRef=useRef<{nodes:number;at:number}|null>(null);
  useEffect(()=>{
   if(!graph)return;
@@ -192,7 +193,7 @@ export default function App(){
   }catch{observer?.disconnect();observer=undefined;}
   return()=>{stopped=true;observer?.disconnect();document.removeEventListener('visibilitychange',visibility);};
  },[]);
- const [graph,setGraph]=useState<RoadGraph|null>(null);
+
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
