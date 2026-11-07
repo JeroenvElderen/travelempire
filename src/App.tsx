@@ -715,8 +715,9 @@ export default function App(){
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
       if(passengerTaxi){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
-       if(delivered.status==='PAUSED'&&delivered.shiftParked&&delivered.restUntilGameMs!==undefined){
-        if(gameNow<delivered.restUntilGameMs)return delivered;
+       if(delivered.status==='PAUSED'&&delivered.shiftParked){
+        const until=delivered.restUntilGameMs??(gameNow+(delivered.restStopId?.startsWith('hotel:')?9*3600000:30*60000));
+        if(gameNow<until)return {...delivered,restUntilGameMs:until};
         return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,restStopId:undefined,restStopName:undefined};
        }
        if(delivered.status==='IDLE'&&drivingMs>=3600000&&!delivered.refillRequested){
@@ -729,8 +730,9 @@ export default function App(){
          if(cached?.purpose==='shift'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
           if(cached.ready&&cached.path&&cached.edgeIds){
            operationalRoutesRef.current.delete(key);
-           const destination=stops[0];
-           const extra={shiftParked:true,restUntilGameMs:gameNow+(overnight?9*3600000:30*60000),restStopId:destination.id,restStopName:destination.name};
+           const last=cached.path[cached.path.length-1];
+           const destination=[...stops].sort((x,y)=>meters(x.position,last)-meters(y.position,last))[0];
+           const extra={shiftParked:true,restUntilGameMs:undefined,restStopId:(overnight?'hotel:':'parking:')+destination.id,restStopName:destination.name};
            if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
            return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
           }
