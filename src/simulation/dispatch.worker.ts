@@ -369,7 +369,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     explorerMissions.delete(taxi.id);
     missionLastEndpoint.delete(taxi.id);
    }
-   // Mission-based exploration: a driving explorer keeps its committed route.\n   // Plan a successor mission from its known endpoint ahead of arrival.\n   let successorPlans=0;\n   // Preplan the next sequence before an Explorer reaches its final junction.
+   // Mission-based exploration: keep the committed route while planning its successor.
+   // Use the known endpoint to prepare the next mission before arrival.
+   let successorPlans=0;\n   // Preplan the next sequence before an Explorer reaches its final junction.
    // Append the new path without resetting its current leg or position.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
