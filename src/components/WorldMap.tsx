@@ -15,6 +15,7 @@ import maplibregl from 'maplibre-gl';
 import {Layers3,Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
+import {vehicleActivity} from '../simulation/vehicleActivity';
 import {deliveryPosition} from '../dealership';
 import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
@@ -397,6 +398,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   // Preserve the animation clock and forecast in that case.
   const sameMotion=!!previous&&previous.to.position[0]===taxi.position[0]&&previous.to.position[1]===taxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===taxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
   if(sameMotion){unchanged++;}else{changed++;}
+  const markerElement=taxiMarkers.current.get(taxi.id)?.getElement();
+  if(markerElement){
+   const activity=vehicleActivity(taxi);
+   const badge=markerElement.querySelector<HTMLElement>('.te-vehicle-activity');
+   if(badge&&badge.dataset.activity!==activity.label){badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;markerElement.title=taxi.name+' · '+activity.label;}
+  }
   if(!sameMotion){
    const predicted=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
    // Do not extrapolate across a route transition to a disconnected location.
@@ -432,7 +439,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      }
     }
    }
-   el.appendChild(img);el.title=taxi.name;
+   el.appendChild(img);
+    const activity=vehicleActivity(taxi);
+    const badge=document.createElement('span');badge.className='te-vehicle-activity';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');el.appendChild(badge);
+    el.title=taxi.name+' · '+activity.label;
    if(taxi.kind!=='recovery'){
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
@@ -458,7 +468,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const details=document.createElement('div');details.className='te-sheet-details';details.hidden=true;
      const addRow=(label:string,value:string)=>{const row=document.createElement('div');row.className='te-sheet-row';const a=document.createElement('span');a.textContent=label;const b=document.createElement('strong');b.textContent=value;row.append(a,b);details.appendChild(row);};
      addRow('Driver',current.driver||'Autonomous');
-     addRow('Current operation',current.status.replaceAll('_',' '));
+     addRow('Current operation',vehicleActivity(current).label);
+      if(current.restStopName)addRow('Rest destination',current.restStopName);
      addRow('Mileage',Math.round(current.operatingKm??0).toLocaleString()+' km');
      addRow('Completed trips',String(current.completed??0));
      if(current.kind==='explorer')addRow('Roads discovered',(current.uniqueDiscoveredKm??0).toFixed(1)+' km');
