@@ -320,6 +320,61 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:states[finish].cost};
 }
 export function route(graph:RoadGraph,from:string,to:string,incoming=''){return turnAwareRoute(graph,from,to,undefined,false,incoming);}
+
+// Single turn-aware Dijkstra for multiple destinations. Stops when the cheapest
+// reachable target is settled; never substitutes straight-line proximity for
+// actual road distance. A target's off-road connection is part of its cost.
+export function routeToNearestTarget(
+ graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming=''
+):{targetIndex:number;path:Point[];edgeIds:string[];roadMeters:number;totalMeters:number}|null{
+ if(!graph.nodes.has(from)||!targets.length)return null;
+ const atNode=new Map<string,{index:number;offset:number}[]>();
+ for(let i=0;i<targets.length;i++){
+  const target=targets[i];
+  if(!graph.nodes.has(target.node))continue;
+  const items=atNode.get(target.node)??[];
+  items.push({index:i,offset:target.offsetMeters});
+  atNode.set(target.node,items);
+ }
+ if(!atNode.size)return null;
+ type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
+ const states:State[]=[{node:from,incoming,cost:0,parent:-1,edgeId:''}];
+ const best=new Map<string,number>([[JSON.stringify([from,incoming]),0]]);
+ const heap:number[]=[0];
+ const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
+ const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
+ let finish=-1,selected=-1,selectedCost=Infinity,visits=0;
+ while(heap.length&&visits++<150000){
+  const id=pop()!,state=states[id];
+  if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
+  if(state.cost>selectedCost)break;
+  for(const target of atNode.get(state.node)??[]){
+   const total=state.cost+target.offset;
+   if(total<selectedCost||(total===selectedCost&&target.index<selected)){
+    selectedCost=total;selected=target.index;finish=id;
+   }
+  }
+  for(const edge of graph.edges.get(state.node)??[]){
+   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to))continue;
+   const cost=state.cost+edge.meters;
+   if(cost>selectedCost)continue;
+   const k=JSON.stringify([edge.to,state.node]);
+   if(cost>=(best.get(k)??Infinity))continue;
+   best.set(k,cost);
+   const next=states.length;
+   states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id});push(next);
+  }
+ }
+ if(finish<0)return null;
+ const keys:string[]=[],edgeIds:string[]=[];
+ for(let id=finish;id>=0;id=states[id].parent){
+  keys.push(states[id].node);
+  if(states[id].parent>=0)edgeIds.push(states[id].edgeId);
+ }
+ keys.reverse();edgeIds.reverse();
+ return{targetIndex:selected,path:keys.map(k=>graph.nodes.get(k)!),edgeIds,roadMeters:states[finish].cost,totalMeters:selectedCost};
+}
+
 export const fleetKey=(id:string)=>`travelempire.fleet.v0.8.${id}`;
 export function loadFleet(id:string):FleetState{try{const saved=JSON.parse(localStorage.getItem(fleetKey(id))??'null') as FleetState|null;if(saved&&Array.isArray(saved.taxis)){
   // Migrate legacy saves without changing any existing taxi assignment.
