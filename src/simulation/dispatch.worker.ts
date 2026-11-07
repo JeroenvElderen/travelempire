@@ -4,6 +4,11 @@ import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
+// Classification is stable for each road tile; build it once as roads arrive.
+const byClass=new Map<string,Set<string>>();
+const allRoads=new Set<string>();
+const classifiedRoads=new Set<string>();
+const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 const idleFallbackAt=new Map<string,number>();
@@ -17,7 +22,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();
+   idleFallbackAt.clear();byClass.clear();allRoads.clear();classifiedRoads.clear();
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -26,6 +31,9 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
    for(const road of msg.roads){
     if(road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0||seenRoadIds.has(road.id))continue;
     seenRoadIds.add(road.id);
+    allRoads.add(road.id);
+    const role=roadRole(road.highway??'');
+    if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
     if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
@@ -130,17 +138,8 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   let assignedCount=0;
   if(msg.allowScout){
    // All loaded roads are eligible for independent Purple Explorer discovery.
-   const allowedRoads=new Set<string>();
-   for(const links of graph.edges.values())for(const edge of links)allowedRoads.add(edge.id);
+   const allowedRoads=allRoads;
    const purpleAllowedRoads=allowedRoads;
-   // Shared discovery classification: one road type per specialist.
-   const byClass=new Map<string,Set<string>>();
-   for(const links of graph.edges.values())for(const edge of links){
-    const h=edge.highway??'';
-    const role=h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'?'rural':h==='service'?'service':null;
-    if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(edge.id);}
-   }
-   const classifiedRoads=new Set<string>();for(const ids of byClass.values())for(const id of ids)classifiedRoads.add(id);
    const revealedNodes=new Set<string>();
    for(const [from,links] of graph.edges)for(const edge of links)if(explored.has(edge.id)){revealedNodes.add(from);revealedNodes.add(edge.to);}
    const completionRoads=new Set<string>();
@@ -241,7 +240,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extension=dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]));
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes);
     if(extension.status!=='EXPLORING'||extension.path.length<2)continue;
     // The nearest node at the destination must match the new route's start.
     if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
@@ -257,7 +256,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     if(taxis[index].explorerRole==='motorway')idleFallbackAt.set(taxis[index].id,now+10000);
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
-    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]));
+    const scout=dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes);
     let assignment=scout;
     // A saved section may have remaining roads but no reachable target from
     // this vehicle. Search eligible connected roads without stale ownership
