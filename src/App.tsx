@@ -466,7 +466,7 @@ export default function App(){
     const current=taxisRef.current.find(t=>t.id===result.vehicleId);
     if(!current||meters(current.position,pending.position)>300)return;
     fuelPlanCacheRef.current.set(result.vehicleId,{at:Date.now(),position:pending.position,graph:pending.graph,stationCount:stationsRef.current.size,target:result.target});
-    if(result.durationMs>100)console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs)});
+    if(result.durationMs>100){diagnostic('routing:fuel-slow',`durationMs=${Math.round(result.durationMs)} vehicle=${result.vehicleId} roadSyncPending=${roadSyncPendingRef.current}`);console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs),vehicleId:result.vehicleId,roadSyncPending:roadSyncPendingRef.current});}
     return;
    }
    if(message.type==='routeResult'){
@@ -481,9 +481,9 @@ export default function App(){
     return;
    }
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
-   if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
+   if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;if(roadSyncPendingRef.current===0)diagnostic('dispatch:roads-ready',`workerRoads=${workerRoadCountRef.current}`);return;}
    dispatchBusyRef.current=false;
-   if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150)console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length});}
+   if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150){diagnostic('dispatch:slow',`roundTripMs=${Math.round(duration)} vehicles=${taxisRef.current.length} roadSyncPending=${roadSyncPendingRef.current} workerRoads=${workerRoadCountRef.current}`);console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length,roadSyncPending:roadSyncPendingRef.current,workerRoads:workerRoadCountRef.current});}}
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
    if(message.generatedMission)lastMissionAt.current=Date.now();
