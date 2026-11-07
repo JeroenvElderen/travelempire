@@ -1387,26 +1387,32 @@ export default function App(){
  const harbourSeenRef=useRef(false);
  useEffect(()=>{let cancelled=false;void loadFerryNetwork().then(data=>{if(!cancelled){harbourPoiRef.current=data.ports.map(p=>p.roadAccess??p.position);setHarbourNetwork(data)}}).catch(console.warn);return()=>{cancelled=true}},[]);
  useEffect(()=>{
-  harbourSeenRef.current=false;setHarbourNotice(null);
-  if(!company){setUnlockedHarbours([]);return;}
-  try{setUnlockedHarbours(JSON.parse(localStorage.getItem(harbourStorageKey(company.id))??'[]') as string[])}
-  catch{setUnlockedHarbours([])}
+  harbourSeenRef.current=false;setHarbourNotice(null);setUnlockedHarbours([]);
  },[company?.id]);
  const harbourEdges=useMemo(()=>harbourNetwork&&graph?harbourRoadEdges(harbourNetwork,graph):null,[harbourNetwork,graph]);
  useEffect(()=>{
   if(!company||!harbourEdges||!harbourNetwork)return;
-  const discovered=new Set(fleet.exploredEdgeIds??[]);
-  if(!discovered.size){harbourSeenRef.current=true;return;}
-  const previous=new Set(unlockedHarbours);
-  const added:string[]=[];
-  for(const [id,edges] of harbourEdges)if(!previous.has(id)&&edges.some(edge=>discovered.has(edge)))added.push(id);
-  if(added.length){
-   const next=[...previous,...added];setUnlockedHarbours(next);
-   try{localStorage.setItem(harbourStorageKey(company.id),JSON.stringify(next))}catch{}
-   if(harbourSeenRef.current){
-    const port=harbourNetwork.ports.find(p=>p.id===added[0]);
-    if(port)setHarbourNotice({id:port.id,name:englishFerryName(port.name)});
-   }
+  // Legacy saved unlocks were calculated from arbitrary nearby junctions and
+  // cannot be trusted. Rebuild from actual discovered access-road segments.
+  const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
+  const verified:string[]=[];
+  for(const [id,edges] of harbourEdges){
+   if(edges.some(edge=>discovered.has(edge)))verified.push(id);
+  }
+  const verifiedSet=new Set(verified);
+  const newlyUnlocked=verified.filter(id=>!unlockedHarbours.includes(id));
+  if(verified.length!==unlockedHarbours.length||unlockedHarbours.some(id=>!verifiedSet.has(id))){
+   setUnlockedHarbours(verified);
+  }
+  try{
+   const key=harbourStorageKey(company.id);
+   const stored=localStorage.getItem(key);
+   const encoded=JSON.stringify(verified);
+   if(stored!==encoded)localStorage.setItem(key,encoded);
+  }catch{}
+  if(harbourSeenRef.current&&newlyUnlocked.length){
+   const port=harbourNetwork.ports.find(p=>p.id===newlyUnlocked[0]);
+   if(port)setHarbourNotice({id:port.id,name:englishFerryName(port.name)});
   }
   harbourSeenRef.current=true;
  },[company?.id,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
