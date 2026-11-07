@@ -1,3 +1,5 @@
+import {energyPercent} from '../simulation/energy';
+import './vehicle-sheet.css';
 import {diagnostic,diagnosticReport} from '../frontendDiagnostics';
 import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordActiveFrame,markMonitorSuspended,recordActivity,recordLongTask,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
@@ -334,33 +336,42 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.style.cursor='pointer';el.setAttribute('role','button');el.setAttribute('tabindex','0');
     const openControls=(event:Event)=>{event.stopPropagation();const current=taxiStateRef.current.find(t=>t.id===taxi.id);if(!current||!map.current)return;
      const pending=current.recoveryPending||recoveryStateRef.current.active.has(current.id)||recoveryStateRef.current.requested.has(current.id);
-     const popupContent=document.createElement('div');popupContent.className='vehicle-service-popup';
-     const header=document.createElement('div');header.className='vehicle-service-popup-header';
-     const icon=document.createElement('span');icon.textContent=current.kind==='explorer'?'◆':'●';icon.className='vehicle-service-popup-icon';
-     const heading=document.createElement('div');const label=document.createElement('strong');label.textContent=current.name;
-     const subtitle=document.createElement('small');subtitle.textContent=(current.kind==='explorer'?(current.explorerRole==='completion'?'Road Completion Explorer':current.explorerRole==='highway'?'Highway Explorer':current.explorerRole==='urban'?'Urban Explorer':current.explorerRole==='poi'?'POI Explorer':'Road Explorer'):'Taxi')+' · '+current.status.replace(/_/g,' ');
-     heading.append(label,subtitle);header.append(icon,heading);popupContent.appendChild(header);
-     const stats=document.createElement('div');stats.className='vehicle-service-popup-stats';
-     stats.textContent='Speed '+Math.round(current.speedKph??0)+' km/h · Condition '+Math.round(current.vehicleCondition??100)+'%';
-     popupContent.appendChild(stats);
-     const section=document.createElement('div');section.className='vehicle-service-popup-section';section.textContent='ROADSIDE ASSISTANCE';popupContent.appendChild(section);
-     const addAction=(text:string,purpose:'fuel'|'depot')=>{
-      const button=document.createElement('button');button.type='button';button.className='vehicle-service-popup-action';
-      button.textContent=text;button.disabled=pending||Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());
-      button.addEventListener('click',()=>{recoveryCommandRef.current?.(current.id,purpose);popup.remove();});
-      popupContent.appendChild(button);
-     };
-     if(pending){const notice=document.createElement('p');notice.className='vehicle-service-popup-notice';notice.textContent='Recovery already requested or in progress';popupContent.appendChild(notice);}
-     addAction('⛽ Tow to nearest fuel / charging station','fuel');
-     addAction('⌂ Tow to nearest depot','depot');
-     if(current.kind==='explorer'){
-      const button=document.createElement('button');button.type='button';button.className='vehicle-service-popup-action secondary';
-      const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';
-      button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));
-      button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');popup.remove();});popupContent.appendChild(button);
-     }
-     const popup=new maplibregl.Popup({offset:22,closeOnClick:true,maxWidth:'310px',className:'vehicle-service-map-popup'})
-      .setLngLat(renderedPosition.current.get(current.id)??current.position).setDOMContent(popupContent).addTo(map.current);
+     // One shared, map-independent bottom sheet avoids map popup repositioning and marker occlusion.
+     document.querySelector('.te-vehicle-sheet')?.remove();
+     const sheet=document.createElement('section');sheet.className='te-vehicle-sheet';sheet.setAttribute('role','dialog');sheet.setAttribute('aria-label',current.name+' vehicle details');
+     const grab=document.createElement('button');grab.type='button';grab.className='te-sheet-grab';grab.setAttribute('aria-label','Expand or collapse vehicle details');
+     const header=document.createElement('div');header.className='te-sheet-header';
+     const icon=document.createElement('div');icon.className='te-sheet-icon';icon.textContent=current.kind==='explorer'?'◆':'🚕';
+     const title=document.createElement('div');title.className='te-sheet-title';
+     const name=document.createElement('strong');name.textContent=current.vehicleModel||current.name;
+     const subtitle=document.createElement('small');subtitle.textContent=current.name+' · '+(current.kind==='explorer'?'Explorer':'Taxi')+' · '+current.status.replaceAll('_',' ');
+     title.append(name,subtitle);
+     const close=document.createElement('button');close.type='button';close.className='te-sheet-close';close.textContent='×';close.setAttribute('aria-label','Close vehicle details');close.addEventListener('click',()=>sheet.remove());
+     header.append(icon,title,close);
+     const stats=document.createElement('div');stats.className='te-sheet-stats';
+     const metric=(label:string,value:string)=>{const box=document.createElement('div');const number=document.createElement('strong');number.textContent=value;const caption=document.createElement('small');caption.textContent=label;box.append(number,caption);stats.appendChild(box);};
+     metric('Speed',Math.round(current.speedKph??0)+' km/h');
+     metric('Condition',Math.round(current.vehicleCondition??100)+'%');
+     metric('Energy',Math.round(energyPercent(current))+'%');
+     const toggle=document.createElement('button');toggle.type='button';toggle.className='te-sheet-toggle';toggle.textContent='More details ↑';
+     const details=document.createElement('div');details.className='te-sheet-details';details.hidden=true;
+     const addRow=(label:string,value:string)=>{const row=document.createElement('div');row.className='te-sheet-row';const a=document.createElement('span');a.textContent=label;const b=document.createElement('strong');b.textContent=value;row.append(a,b);details.appendChild(row);};
+     addRow('Driver',current.driver||'Autonomous');
+     addRow('Current operation',current.status.replaceAll('_',' '));
+     addRow('Mileage',Math.round(current.operatingKm??0).toLocaleString()+' km');
+     addRow('Completed trips',String(current.completed??0));
+     if(current.kind==='explorer')addRow('Roads discovered',(current.uniqueDiscoveredKm??0).toFixed(1)+' km');
+     const actions=document.createElement('div');actions.className='te-sheet-actions';
+     const heading=document.createElement('strong');heading.className='te-sheet-section';heading.textContent='ROADSIDE ASSISTANCE';details.appendChild(heading);
+     const addAction=(text:string,purpose:'fuel'|'depot')=>{const button=document.createElement('button');button.type='button';button.textContent=text;button.disabled=pending||Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());button.addEventListener('click',()=>{if(window.confirm('Request recovery for '+current.name+'?')){recoveryCommandRef.current?.(current.id,purpose);sheet.remove();}});actions.appendChild(button);};
+     addAction('⛽ Fuel / charging station','fuel');addAction('⌂ Nearest depot','depot');
+     if(current.kind==='explorer'){const button=document.createElement('button');button.type='button';const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');sheet.remove();});actions.appendChild(button);}
+     if(pending){const notice=document.createElement('small');notice.textContent='Recovery already requested or in progress';details.appendChild(notice);}
+     details.appendChild(actions);
+     const setExpanded=(value:boolean)=>{sheet.classList.toggle('expanded',value);details.hidden=!value;toggle.textContent=value?'Less details ↓':'More details ↑';};
+     toggle.addEventListener('click',()=>setExpanded(details.hidden));grab.addEventListener('click',()=>setExpanded(details.hidden));
+     let touchStartY=0;sheet.addEventListener('touchstart',e=>{touchStartY=e.touches[0]?.clientY??0},{passive:true});sheet.addEventListener('touchend',e=>{const delta=(e.changedTouches[0]?.clientY??touchStartY)-touchStartY;if(delta < -45)setExpanded(true);else if(delta>45&&(!sheet.classList.contains('expanded')||details.scrollTop===0))setExpanded(false);},{passive:true});
+     sheet.append(grab,header,stats,toggle,details);document.body.appendChild(sheet);
     };
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
