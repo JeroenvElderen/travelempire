@@ -5,11 +5,11 @@ import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
-type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,onOrder}:Props){
- const [brand,setBrand]=useState('Toyota');
+type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+ const [brand,setBrand]=useState(initialBrand);
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
- const [selected,setSelected]=useState('Toyota Corolla Saloon');
+ const [selected,setSelected]=useState(initialModel??'Toyota Corolla Saloon');
  const model:VehicleModel=models.find(m=>m.brand+' '+m.name===selected)??models[0];
  const [selectedYear,setYear]=useState(2026);
  const year=model.years.includes(selectedYear)?selectedYear:model.years[0];
@@ -19,6 +19,7 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const [selectedExtras,setSelectedExtras]=useState<string[]>([]);
  const [variantId,setVariantId]=useState('');
  const [search,setSearch]=useState('');
+ const [reviewing,setReviewing]=useState(false);
  const filteredBrands=BRANDS.filter(b=>b.toLowerCase().includes(search.toLowerCase()));
  const choices=trimChoices(model,year);
  const currentTrim=choices.includes(trim)?trim:choices[0];
@@ -51,8 +52,9 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const cheapestEnginePrice=availableVariants.length?Math.min(...availableVariants.map(v=>v.price)):0;
  const engineBonus=availableVariants.length===1?1:activeVariant&&activeVariant.price>cheapestEnginePrice?5:0;
  return <section className="eu-dealership">
+  {onBack&&<button type="button" className="eu-back" onClick={onBack}>← Browse vehicles</button>}
   <header className="eu-dealer-hero"><span>TRAVELEMPIRE MOTORS · EUROPE</span><h2>Build your next vehicle</h2><p>{BRANDS.length} manufacturers · {EUROPEAN_MODELS.length} models · brochure-based · factory-style configuration</p></header>
-  <div className="eu-dealer-grid">
+  <div className={'eu-dealer-grid'+(reviewing?' eu-reviewing':'')}>
    <div className="eu-dealer-controls">
     <label>Find manufacturer<input type="search" placeholder="Search brands…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
     <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setYear(EUROPEAN_MODELS.find(m=>m.brand===b)?.years[0]??2026);setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
@@ -97,7 +99,7 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <div className="eu-price-line"><span>Estimated energy cost / 100 km</span><strong>{eur((activeVariant?.fuel??model.fuel)==='Electric'?18*.32:(activeVariant?.fuel??model.fuel)==='Hybrid'?4.6*1.85:(activeVariant?.fuel??model.fuel)==='Diesel'?5.8*1.75:8*1.85)}</strong></div>
     <div className="eu-price-line"><span>Order quantity</span><strong>{quantity}</strong></div>
     <div className="eu-price-total"><span>Due at checkout incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
-    <button className="eu-order" disabled={!ready||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Order {quantity} configured {quantity===1?'vehicle':'vehicles'}</button>
+    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-source-note">Review your configuration and payment before confirming. {quantity} vehicle(s) · {mode} · {eur(upfront*quantity)} due now · {eur(Math.max(0,cash-upfront*quantity))} cash remaining.</p><button className="eu-order" disabled={!ready||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
     <small className="eu-disclaimer">Curated European-market-inspired game catalogue. Selected 2026 models have published manufacturer variant prices; other 2026 references may be undated live starting prices. All remaining prices and factory upgrades are gameplay estimates. Model-year availability and equipment compatibility are not fully manufacturer-verified. Petrol, diesel, hybrid and electric vehicles now use separate simplified energy-consumption and operating-cost profiles; model-specific WLTP data and charging infrastructure are not yet implemented.</small>
    </aside>
   </div>
