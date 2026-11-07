@@ -24,7 +24,9 @@ function indexRegionalRoad(id:string,a:Point,b:Point):void{
 }
 function regionalCandidates(position:Point,eligible:Set<string>,explored:Set<string>,reserved:Set<string>,radiusKm:number):Set<string>{
  regionalLookups++;
- if(!Number.isFinite(radiusKm))return new Set([...eligible].filter(id=>!explored.has(id)&&!reserved.has(id)));
+ // A broad fallback should scan the eligible class once rather than iterating
+ // tens of thousands of empty geographic cells.
+ if(!Number.isFinite(radiusKm)||radiusKm>25)return new Set([...eligible].filter(id=>!explored.has(id)&&!reserved.has(id)));
  const latRadius=radiusKm/111;
  const lonRadius=radiusKm/(111*Math.max(0.25,Math.cos(position[1]*Math.PI/180)));
  const minLat=Math.floor((position[1]-latRadius)/REGION_DEGREES),maxLat=Math.floor((position[1]+latRadius)/REGION_DEGREES);
