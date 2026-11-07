@@ -10,9 +10,7 @@ const photoFiles:Record<string,string>={
  'Volvo|XC90':'2025 Volvo XC90 (facelift), front 4.11.25.jpg',
  'Volvo|XC60':'Volvo XC60 II 2025 facelift 001.jpg',
  'Volvo|V60':'2020 Volvo V60 R-Design in Bursting Blue Metallic, front right, 2024-10-03.jpg',
- 'Volvo|XC40':'2024 Volvo XC40 B4 facelift front.jpg',
- 'Toyota|Corolla':'2025 Toyota Corolla - 2025 Toyota Corolla.jpg',
- 'Škoda|Octavia':'Skoda Octavia IV facelift.jpg'
+ 'Volvo|XC40':'2024 Volvo XC40 B4 facelift front.jpg'
 };
 // Wikimedia Commons photos are model references, not representations of the configured paint or grade.
 // All photos use the same 16:9 crop; only verified model-specific images are displayed.
