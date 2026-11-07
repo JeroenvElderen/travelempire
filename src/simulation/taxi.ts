@@ -659,7 +659,7 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
 export async function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
- _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>
+ _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>,shouldContinue?:()=>boolean
 ):Promise<Taxi>{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
@@ -706,7 +706,10 @@ export async function dispatchScout(
  const SCOUT_SLICE_NODES=384;
  while(heap.length&&visits<maxScoutVisits){
   visits++;
-  if(visits%SCOUT_SLICE_NODES===0)await new Promise<void>(resolve=>setTimeout(resolve,0));
+  if(visits%SCOUT_SLICE_NODES===0){
+   await new Promise<void>(resolve=>setTimeout(resolve,0));
+   if(shouldContinue&&!shouldContinue())return taxi;
+  }
   const current=pop();if(!current)break;
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
