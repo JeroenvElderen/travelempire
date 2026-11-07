@@ -630,14 +630,12 @@ export function dispatchScout(
  const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):specialist==='motorway'?['motorway','motorway_link'].includes(h):specialist==='trunk'?['trunk','trunk_link'].includes(h):specialist==='primary'?['primary','primary_link'].includes(h):specialist==='secondary'?['secondary','secondary_link'].includes(h):specialist==='tertiary'?['tertiary','tertiary_link'].includes(h):specialist==='residential'?['residential','living_street'].includes(h):specialist==='rural'?h==='unclassified':specialist==='service'?h==='service':false;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
- // Motorway scouts must be able to reach highways far beyond the starting town.
+ // Major-road specialists search the entire connected discovered-road network,
+ // rather than an arbitrary radius or node count. Only an undiscovered road
+ // of their own class can be selected as a discovery target.
  const majorRoadScout=specialist==='motorway'||specialist==='trunk';
- // Major-road scouts often start far from their target classification. Give
- // trunk scouts the same connected-network search budget as motorway scouts.
- // Transit roads remain traversable, but only matching undiscovered roads
- // can be selected as specialist discovery targets.
- const maxSearchMeters=majorRoadScout?80000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
- while(heap.length&&(fullRetry||visits< (majorRoadScout?100000:taxi.kind==='explorer'&&specialist?25000:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
+ const maxSearchMeters=majorRoadScout?Infinity:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ while(heap.length&&(fullRetry||majorRoadScout||visits< (taxi.kind==='explorer'&&specialist?25000:taxi.kind==='explorer'&&taxi.shiftParked?16000:12000))){
   visits++;
   const current=pop();if(!current)break;
   const [distance,node]=current;
@@ -646,7 +644,7 @@ export function dispatchScout(
   // Dijkstra visits junctions in increasing travel distance. Once the
   // closest candidate is found, more distant junctions cannot beat it.
   // Completion explorers keep searching for gaps between revealed junctions.
-  if(!specialist&&best&&distance>best.distance)break;
+  if((!specialist&&best&&distance>best.distance)||(majorRoadScout&&specialistBest&&distance>specialistScore))break;
   for(const edge of graph.edges.get(node)??[]){
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
 
@@ -672,6 +670,9 @@ export function dispatchScout(
      }
    }
    // Transit is allowed on other classes; only discoveryAllowed edges reveal roads.
+   // Major-road scouts travel to the frontier on already discovered roads;
+   // do not plan transit through undiscovered roads of another class.
+   if(majorRoadScout&&!explored.has(edge.id))continue;
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
