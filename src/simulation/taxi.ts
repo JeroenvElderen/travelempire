@@ -656,11 +656,11 @@ function blockPerimeter(graph:RoadGraph,from:string,to:string,excludeId:string,a
  return null;
 }
 
-export function dispatchScout(
+export async function dispatchScout(
  taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point,
  reservedTargets:Set<string>=new Set(),reservedEdges:Set<string>=new Set(),
  _frontierNodes?:string[],_allowedRoads?:Set<string>,discoveryAllowed?:Set<string>,_territoryCovered?:Set<string>,incomingNode?:string,_sectionOwners?:Set<string>,poiTargets?:Point[],requiredFrontier?:Set<string>,sharedRevealed?:Set<string>
-):Taxi{
+):Promise<Taxi>{
  if(taxi.status!=='IDLE')return taxi;
  const start=nearest(graph,taxi.position);
  if(!start)return taxi;
@@ -702,9 +702,11 @@ export function dispatchScout(
  const maxSearchMeters=majorRoadScout?Infinity:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
  // Every role, including motorway and recovery searches, must have a finite work limit.
  // The scheduler retries later as more road tiles and discoveries become available.
- const maxScoutVisits=taxi.kind==='explorer'?12000:12000;
+ const maxScoutVisits=12000;
+ const SCOUT_SLICE_NODES=384;
  while(heap.length&&visits<maxScoutVisits){
   visits++;
+  if(visits%SCOUT_SLICE_NODES===0)await new Promise<void>(resolve=>setTimeout(resolve,0));
   const current=pop();if(!current)break;
   const [distance,node]=current;
   if(distance!==(dist.get(node)??Infinity))continue;
