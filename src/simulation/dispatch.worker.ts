@@ -1,6 +1,6 @@
 import {energyPercent} from './energy';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,passengerRoadNodes,dispatchScout,route,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,assignPassenger,dispatchScout,route,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 let activeRevision=0;
 const seenRoadIds=new Set<string>();
@@ -24,6 +24,26 @@ let poiRoadsIndex=new Set<string>();
 let poiTargetsSignature='';
 let poiIndexedRoads=0;
 const pendingLoadedExplored=new Set<string>();
+// Incremental passenger stop index, independent of the 600k-edge graph scan.
+const passengerIndexedRoads=new Set<string>();
+const passengerEligibleStops=new Set<string>();
+let passengerIndexRebuilds=0;
+let passengerIndexAdded=0;
+function passengerStopsFor(explored:Set<string>):Set<string>{
+ let reset=explored.size<passengerIndexedRoads.size;
+ if(!reset&&explored.size===passengerIndexedRoads.size){
+  for(const id of passengerIndexedRoads)if(!explored.has(id)){reset=true;break;}
+ }
+ if(reset){passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds++;}
+ for(const id of explored){
+  if(passengerIndexedRoads.has(id))continue;
+  passengerIndexedRoads.add(id);
+  const ends=roadEndpoints.get(id);
+  if(ends){passengerEligibleStops.add(ends[0]);passengerEligibleStops.add(ends[1]);}
+  passengerIndexAdded++;
+ }
+ return passengerEligibleStops;
+}
 function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|null){
  const started=performance.now();
  let rebuild=explored.size<indexedExplored.size||hqNode!==connectedHqNode;
@@ -112,7 +132,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleFallbackAt.clear();extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();
+   idleFallbackAt.clear();extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -127,6 +147,7 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
     const a=String(road.a),b=String(road.b);
     roadEndpoints.set(road.id,[a,b]);
     if(indexedExplored.has(road.id)){pendingLoadedExplored.add(a);pendingLoadedExplored.add(b);}
+    if(passengerIndexedRoads.has(road.id)){passengerEligibleStops.add(a);passengerEligibleStops.add(b);}
     if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
     if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
     const add=(from:string,to:string)=>{
@@ -189,13 +210,13 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   const activeGraph=graph;
   // Purple Explorer's driven roads are valid for taxi jobs regardless of Black Explorer territory.
   const validDiscovered=explored;
-  const eligibleStops=passengerRoadNodes(activeGraph,validDiscovered);
+  const eligibleStops=passengerStopsFor(validDiscovered);
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
   const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
   const demand=demandAt(now,passengerTaxis.length);
   if(msg.allowMission&&queue.length<demand.queueLimit){
-   const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier);
+   const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier,eligibleStops);
    if(request){queue.push(request);generatedMission=true;}
   }
   const preparationMs=performance.now()-dispatchStarted;
@@ -389,6 +410,6 @@ self.onmessage=(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanR
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
