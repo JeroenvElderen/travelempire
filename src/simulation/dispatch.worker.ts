@@ -286,6 +286,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   let extensionSkipped=0;
   let idleSkipped=0;
   let idleMissionPlans=0;
+  let orderedExplorerIndices:number[]=[];
   let planningCalls=0;
   const planningBudget=1;
   const planningPhase=nextPlanningPhase;
@@ -385,7 +386,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Preplan the next sequence before an Explorer reaches its final junction.
    // Append the new path without resetting its current leg or position.
    const explorerOrder=taxis.map((t,i)=>t.kind==='explorer'?i:-1).filter(i=>i>=0);
-   const orderedExplorerIndices=explorerOrder.length?explorerOrder.slice(nextExplorerIndex%explorerOrder.length).concat(explorerOrder.slice(0,nextExplorerIndex%explorerOrder.length)):[];
+   orderedExplorerIndices=explorerOrder.length?explorerOrder.slice(nextExplorerIndex%explorerOrder.length).concat(explorerOrder.slice(0,nextExplorerIndex%explorerOrder.length)):[];
    if(explorerOrder.length)nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
    for(const index of orderedExplorerIndices){
     const taxi=taxis[index];
