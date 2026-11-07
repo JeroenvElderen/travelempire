@@ -391,7 +391,7 @@ export default function App(){
  useEffect(()=>{
   let active=true;
   networkRef.current?.dispose();networkRef.current=null;
-  graphRef.current=null;setGraph(null);setRoadGraphVersion(0);setRoadPackages(0);setSimError('');setInitialRoadReady(false);setRoadDownload(null);setNationwideReady(false);setNationwideError('');
+  graphRef.current=null;setGraph(null);setRoadGraphVersion(0);setRoadPackages(0);setSimError('');
   if(!company)return()=>{active=false};
 
   const run=async()=>{
