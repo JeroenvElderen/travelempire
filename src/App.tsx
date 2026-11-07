@@ -567,7 +567,8 @@ export default function App(){
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],poiTargets:[...harbourPoiRef.current,...[...stationsRef.current.values()].filter(s=>s.access!=='private').slice(0,80).map(s=>[s.lng,s.lat] as [number,number])].slice(0,150),stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!t.shiftParked&&!t.restStopId).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
-    allowScout:true});
+    // iOS suspends background tabs; avoid expensive route planning while hidden.
+    allowScout:document.visibilityState==='visible'});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
   },500);
