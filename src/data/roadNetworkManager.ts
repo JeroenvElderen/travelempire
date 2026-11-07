@@ -27,7 +27,7 @@ export class RoadNetworkManager {
  private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
- private publishGraph(){if(this.disposed)return;diagnostic('roads:publish',`nodes=${this.graph.nodeKeys.length} edges=${this.edgeTotal} tiles=${this.loaded.size}`);this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
+ private publishGraph(){if(this.disposed)return;const started=performance.now();diagnostic('roads:publish',`nodes=${this.graph.nodeKeys.length} edges=${this.edgeTotal} tiles=${this.loaded.size}`);this.graph={...this.graph};this.onGraph(this.graph,this.loaded.size);const elapsed=performance.now()-started;diagnostic('roads:publish-complete',`callbackMs=${Math.round(elapsed)} nodes=${this.graph.nodeKeys.length}`);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
  private scheduleGraphPublish(){if(this.disposed)return;const elapsed=performance.now()-this.lastPublishedAt;if(!this.publishedOnce||elapsed>=GRAPH_PUBLISH_INTERVAL_MS){if(this.publishTimer!==null){clearTimeout(this.publishTimer);this.publishTimer=null;}this.publishGraph();return;}if(this.publishTimer!==null)return;this.publishTimer=setTimeout(()=>{this.publishTimer=null;this.publishGraph();},Math.max(0,GRAPH_PUBLISH_INTERVAL_MS-elapsed));}
  private edgeTotal=0;
  private graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
