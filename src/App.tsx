@@ -10,7 +10,6 @@ import { useEffect, useMemo, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, Activity, CalendarClock } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import DriversPanel from "./components/DriversPanel";
-import {driverSchedule} from "./simulation/driverSchedule";
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
