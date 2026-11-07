@@ -352,15 +352,17 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const sameMotion=!!previous&&previous.to.position[0]===taxi.position[0]&&previous.to.position[1]===taxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===taxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
   if(sameMotion){unchanged++;}else{changed++;}
   if(!sameMotion){
-   const forecast=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
+   const predicted=graphRef.current&&taxi.status!=='IDLE'?advanceTaxi(taxi,graphRef.current,0.65).taxi:taxi;
+   // Do not extrapolate across a route transition to a disconnected location.
+   const forecast=predicted.path===taxi.path&&predicted.edgeIds===taxi.edgeIds&&predicted.leg>=taxi.leg?predicted:taxi;
    // Preserve the last rendered position across simulation ticks to avoid
    // one-frame jumps when the simulation and animation clocks differ.
    // Only do this on the same route; a new job must not interpolate from
    // the old job's unrelated path.
-   const sameRoute=!!previous&&previous.to.edgeIds.length<=taxi.edgeIds.length&&
-    previous.to.edgeIds.every((id,i)=>id===taxi.edgeIds[i])&&previous.to.leg<=taxi.leg;
+   const sameRoute=!!previous&&previous.to.path===taxi.path&&
+    previous.to.edgeIds===taxi.edgeIds&&previous.to.leg<=taxi.leg;
    const displayed=renderedPosition.current.get(taxi.id);
-   const from=sameRoute&&displayed?{...previous.to,position:displayed}:previous?.to??taxi;
+   const from=sameRoute&&displayed?{...previous!.to,position:displayed}:sameRoute?previous!.to:taxi;
    taxiSnapshots.current.set(taxi.id,{from,to:taxi,forecast,at:now});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;
    // Cache one recoloured SVG per HEX, rather than fetching or regenerating on each animation frame.
