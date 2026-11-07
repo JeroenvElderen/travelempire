@@ -10,7 +10,7 @@ export function loadGameClock(companyId:string, now=Date.now()):GameClock {
       return {epochMs:saved.epochMs+elapsed*GAME_TIME_SCALE,lastRealMs:now};
     }
   } catch { /* New clock */ }
-  const initial=new Date(now); initial.setHours(8,0,0,0);
+  const initial=new Date(now); initial.setUTCHours(8,0,0,0);
   return {epochMs:initial.getTime(),lastRealMs:now};
 }
 export function advanceGameClock(clock:GameClock,now=Date.now()):GameClock {
@@ -21,12 +21,12 @@ export function saveGameClock(companyId:string,clock:GameClock):void {
 }
 export function gameHour(clock:GameClock):number {
   const date=new Date(clock.epochMs);
-  return date.getHours()+date.getMinutes()/60+date.getSeconds()/3600;
+  return date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600;
 }
 export function isShiftActive(clock:GameClock,startHour=8,lengthHours=8):boolean {
   const elapsed=(gameHour(clock)-startHour+24)%24;
   return elapsed<lengthHours;
 }
 export function formatGameClock(clock:GameClock):string {
-  return new Intl.DateTimeFormat('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'UTC'}).format(new Date(clock.epochMs));
+  return new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'UTC'}).format(new Date(clock.epochMs));
 }
