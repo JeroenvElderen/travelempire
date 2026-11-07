@@ -155,6 +155,43 @@ export default function App(){
   },500);
   return()=>window.clearInterval(timer);
  },[]);
+ // Lightweight diagnostics: correlate React commits, animation frames and browser pauses.
+ const graphEnqueueRef=useRef<{nodes:number;at:number}|null>(null);
+ useEffect(()=>{
+  if(!graph)return;
+  const pending=graphEnqueueRef.current;
+  if(pending&&pending.nodes===graph.nodeKeys.length){
+   diagnostic('roads:react-commit',`nodes=${pending.nodes} latencyMs=${Math.round(performance.now()-pending.at)}`);
+   graphEnqueueRef.current=null;
+  }
+ },[graph]);
+ useEffect(()=>{
+  let previous=performance.now();let frame=0;let lastReport=previous;
+  let stopped=false;
+  const tick=(now:number)=>{
+   if(stopped)return;
+   const gap=now-previous;previous=now;
+   if(gap>250)diagnostic('main:raf-gap',`gapMs=${Math.round(gap)} visibility=${document.visibilityState}`);
+   frame++;
+   if(now-lastReport>=10000){
+    const memory=(performance as Performance & {memory?:{usedJSHeapSize:number;jsHeapSizeLimit:number}}).memory;
+    diagnostic('main:health',`frames=${frame} periodMs=${Math.round(now-lastReport)} heapMB=${memory?Math.round(memory.usedJSHeapSize/1048576):'unavailable'} heapLimitMB=${memory?Math.round(memory.jsHeapSizeLimit/1048576):'unavailable'} visibility=${document.visibilityState}`);
+    frame=0;lastReport=now;
+   }
+   requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  const visibility=()=>diagnostic('main:visibility',`state=${document.visibilityState}`);
+  document.addEventListener('visibilitychange',visibility);
+  let observer:PerformanceObserver|undefined;
+  try{
+   observer=new PerformanceObserver(list=>{
+    for(const entry of list.getEntries())if(entry.duration>=100)diagnostic('main:long-task',`durationMs=${Math.round(entry.duration)} startMs=${Math.round(entry.startTime)}`);
+   });
+   observer.observe({entryTypes:['longtask']});
+  }catch{observer?.disconnect();observer=undefined;}
+  return()=>{stopped=true;observer?.disconnect();document.removeEventListener('visibilitychange',visibility);};
+ },[]);
  const [graph,setGraph]=useState<RoadGraph|null>(null);
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
@@ -328,6 +365,7 @@ export default function App(){
        // Road graph updates are background work; keep user input and vehicle UI responsive.
        // Do not clone the graph: the road manager already publishes a snapshot.
        const queuedAt=performance.now();
+       graphEnqueueRef.current={nodes:next.nodeKeys.length,at:queuedAt};
        startTransition(()=>{setGraph(next);setRoadPackages(count);});
        diagnostic('roads:react-enqueue',`nodes=${next.nodeKeys.length} ms=${Math.round(performance.now()-queuedAt)}`);
       }
