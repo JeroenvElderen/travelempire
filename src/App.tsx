@@ -40,6 +40,7 @@ import "./midnight-glass.css";
 import "./aurora-glass.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
+import {cacheAllRoadPackages,type RoadDownloadProgress} from './data/roadTiles';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
@@ -207,6 +208,8 @@ export default function App(){
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const stationLoadedRef=useRef<Set<string>>(new Set());
  const [roadPackages,setRoadPackages]=useState(0);
+ const [roadDownload,setRoadDownload]=useState<RoadDownloadProgress|null>(null);
+ const [initialRoadReady,setInitialRoadReady]=useState(false);
  const [roadDiagnostics,setRoadDiagnostics]=useState({queued:0,edges:0,workerEdges:0});
  const [missionQueue,setMissionQueue]=useState<PassengerRequest[]>([]);
  const queueRef=useRef<PassengerRequest[]>([]);
@@ -391,8 +394,9 @@ export default function App(){
  useEffect(()=>{
   let active=true;
   networkRef.current?.dispose();networkRef.current=null;
-  graphRef.current=null;setGraph(null);setRoadGraphVersion(0);setRoadPackages(0);setSimError('');
+  graphRef.current=null;setGraph(null);setRoadGraphVersion(0);setRoadPackages(0);setSimError('');setInitialRoadReady(false);setRoadDownload(null);
   if(!company)return()=>{active=false};
+  const downloadController=new AbortController();
   const run=async()=>{
    try{
     const manager=new RoadNetworkManager((next,count)=>{
@@ -427,15 +431,16 @@ export default function App(){
      });
     networkRef.current=manager;
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
+    if(active){setInitialRoadReady(true);void cacheAllRoadPackages(downloadController.signal,progress=>{if(active)setRoadDownload(progress)}).catch(error=>{if(active)console.warn('[TravelEmpire] Nationwide road cache:',error)});}
    }catch(error){
     if(!active)return;
     console.error('[TravelEmpire] Road tiles:',error);
-    setSimError(`Road tiles unavailable: ${String(error)}. Falling back to preview.`);
+    setSimError(`Road tiles unavailable: ${String(error)}. Falling back to preview.`);setInitialRoadReady(true);
     try{const fallback=await loadRoadGraph();if(active){graphRef.current=fallback;setGraph(fallback);}}catch(e){if(active)setSimError(String(e));}
    }
   };
   void run();
-  return()=>{active=false;networkRef.current?.dispose();networkRef.current=null};
+  return()=>{active=false;downloadController.abort();networkRef.current?.dispose();networkRef.current=null};
  },[company?.id,company?.headquarters.lng,company?.headquarters.lat]);
  // Route searches and passenger generation run in a dedicated worker.
  // Worker persists for the company; new road packages are synchronized as deltas.
@@ -1460,6 +1465,14 @@ export default function App(){
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Dealership'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
+ {company&&!initialRoadReady&&<div role="status" aria-live="polite" style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(5,10,22,.94)',backdropFilter:'blur(22px)',color:'#f1f5f9',padding:24}}>
+ <div style={{maxWidth:420,width:'100%',padding:32,border:'1px solid rgba(148,163,184,.22)',borderRadius:24,background:'rgba(30,41,59,.5)',textAlign:'center'}}>
+ <div style={{fontSize:12,letterSpacing:4,color:'#94a3b8',marginBottom:16}}>TRAVELEMPIRE</div>
+ <div style={{fontSize:26,fontWeight:700,marginBottom:12}}>Preparing your road network</div>
+ <p style={{color:'#cbd5e1',lineHeight:1.6}}>Loading roads around headquarters. The rest of Greece will download in the background while you play.</p>
+ <div style={{height:5,borderRadius:6,background:'rgba(148,163,184,.2)',overflow:'hidden',marginTop:24}}><div style={{height:'100%',width:'35%',background:'#a78bfa',borderRadius:6}}/></div>
+ </div></div>}
+ {company&&initialRoadReady&&roadDownload&&roadDownload.active&&<div role="status" style={{position:'fixed',bottom:85,right:16,zIndex:1000,padding:'9px 14px',borderRadius:12,background:'rgba(15,23,42,.85)',color:'#e2e8f0',fontSize:12,backdropFilter:'blur(12px)',border:'1px solid rgba(148,163,184,.2)'}}>Caching Greece roads · {roadDownload.completed.toLocaleString()}/{roadDownload.total.toLocaleString()} tiles ({Math.round(100*roadDownload.completed/Math.max(1,roadDownload.total))}%)</div>}
  </main><nav className="mobile-tabs" aria-label="Mobile navigation">{navigation.filter(n=>['World','Fleet','Dealership','Company'].includes(n.name)).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'Map':name==='Dealership'?'Dealer':name==='Operations'?'Ops':name}</span></button>)}<button onClick={()=>setDrawerOpen(true)}><Menu size={19}/><span>More</span></button></nav></div>;
 }
 
