@@ -4,7 +4,7 @@ import {readExploration,writeExploration,clearExploration} from './data/explorat
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
 import {demandAt} from './simulation/demand';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, Activity, CalendarClock } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import DriversPanel from "./components/DriversPanel";
@@ -146,6 +146,15 @@ export default function App(){
   const timer=window.setInterval(settle,5000);
   return()=>{cancelled=true;window.clearInterval(timer)};
  },[company?.id]);
+ // Diagnose stalls that occur after graph publication, including Safari scheduling pauses.
+ useEffect(()=>{
+  let previous=performance.now();
+  const timer=window.setInterval(()=>{
+   const now=performance.now();const delay=now-previous-500;previous=now;
+   if(delay>250)diagnostic('main:heartbeat-gap',`delayMs=${Math.round(delay)} visibility=${document.visibilityState}`);
+  },500);
+  return()=>window.clearInterval(timer);
+ },[]);
  const [graph,setGraph]=useState<RoadGraph|null>(null);
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
@@ -315,7 +324,13 @@ export default function App(){
   const run=async()=>{
    try{
     const manager=new RoadNetworkManager((next,count)=>{
-      if(active){setGraph(next);setRoadPackages(count);}
+      if(active){
+       // Road graph updates are background work; keep user input and vehicle UI responsive.
+       // Do not clone the graph: the road manager already publishes a snapshot.
+       const queuedAt=performance.now();
+       startTransition(()=>{setGraph(next);setRoadPackages(count);});
+       diagnostic('roads:react-enqueue',`nodes=${next.nodeKeys.length} ms=${Math.round(performance.now()-queuedAt)}`);
+      }
     },message=>{if(active)console.warn('[TravelEmpire road tiles]',message)},roads=>{
        if(!active)return;
        const worker=dispatchWorkerRef.current;
