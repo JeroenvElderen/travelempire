@@ -155,11 +155,20 @@ function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,exp
  ranked.sort((a,b)=>a.distance-b.distance);
  // Limit the candidate set and graph work per planning turn. Normal regional
  // tier escalation remains the fallback if the nearest targets are unreachable.
- const entries=ranked.slice(0,96);
+ // Spread entry points across the sorted candidate range; the nearest 96
+ // can all belong to the same disconnected road component.
+ const entries=ranked.length<=96?ranked:([
+  ...ranked.slice(0,48),
+  ...Array.from({length:32},(_,i)=>ranked[Math.floor(48+(ranked.length-48)*(i+.5)/32)]),
+  ...ranked.slice(-16)
+ ]);
  stats.entries=entries.length;
  const incoming=taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'';
  const routeStats:{reason?:'invalid-start'|'no-valid-targets'|'search-budget'|'unreachable'|'success';visits?:number}={};
- const routeResult=routeToNearestTarget(g,start,entries.map(entry=>({node:entry.from,offsetMeters:0})),incoming,24000,routeStats);
+ // Escalate search effort across dispatch turns, not in a single long task.
+ // Avoid making every retry pay for the largest graph traversal.
+ const visitBudget=[24000,48000,72000][Math.min(2,Math.floor((stats.attempts-1)/2))];
+ const routeResult=routeToNearestTarget(g,start,entries.map(entry=>({node:entry.from,offsetMeters:0})),incoming,visitBudget,routeStats);
  stats.visits=routeStats.visits??0;
  stats.outcome=routeStats.reason??'unknown';
  if(!routeResult)return null;
@@ -316,6 +325,7 @@ let autoParkReactivations=0,deferredDepotReturns=0,obsoleteReturnRecoveries=0;
 // Limit expensive new mission searches per worker dispatch. Existing routes continue unaffected.
 const MAX_IDLE_MISSION_PLANS_PER_DISPATCH=1;
 let nextExplorerIndex=0;
+const explorerLastPlanAttempt=new Map<string,number>();
 let nextPlanningPhase:'idle'|'successor'='idle';
 let poiRoadCursor=0;
 // A failed scout permits the next road class to bootstrap without motorway access.
@@ -328,7 +338,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -602,7 +612,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Append the new path without resetting its current leg or position.
    const explorerOrder=taxis.map((t,i)=>t.kind==='explorer'?i:-1).filter(i=>i>=0);
    orderedExplorerIndices=explorerOrder.length?explorerOrder.slice(nextExplorerIndex%explorerOrder.length).concat(explorerOrder.slice(0,nextExplorerIndex%explorerOrder.length)):[];
-   if(explorerOrder.length&&planningPhase==='idle')nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
+   if(explorerOrder.length&&planningPhase==='idle'){
+     // Schedule least-served explorers first. Previously, a rotating cursor
+     // could repeatedly serve an eligible scout while others never planned.
+     orderedExplorerIndices.sort((a,b)=>
+      (explorerPlanningAttempts.get(taxis[a].id)??0)-(explorerPlanningAttempts.get(taxis[b].id)??0)||
+      (explorerLastPlanAttempt.get(taxis[a].id)??0)-(explorerLastPlanAttempt.get(taxis[b].id)??0));
+     nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
+    }
    for(const index of orderedExplorerIndices){
     const taxi=taxis[index];
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
@@ -707,12 +724,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const idleStarted=performance.now();
     explorerPlanningAttempts.set(idleVehicle.id,(explorerPlanningAttempts.get(idleVehicle.id)??0)+1);
+    explorerLastPlanAttempt.set(idleVehicle.id,performance.now());
     idleMissionPlans++;
     planningCalls++;
     const scoutRouteStarted=performance.now();
     const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk';
     const targeted=majorRoad?targetMajorRoadMission(idleVehicle,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
-    const scout=targeted??await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates);
+    // Search-budget exhaustion is inconclusive. Do not immediately repeat
+    // another large graph search with dispatchScout in the same dispatch.
+    const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
+    const scout=targeted??(majorRoad&&majorStats?.outcome==='search-budget'
+     ?idleVehicle
+     :await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-scoutRouteStarted;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
