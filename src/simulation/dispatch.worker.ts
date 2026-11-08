@@ -413,10 +413,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     for(let i=0;i<taxis.length;i++){
      const t=taxis[i];
      const parked=autoParkedExplorers.get(t.id);
-     if(t.kind==='explorer'&&t.status==='PAUSED'&&parked&&(parked.roads!==seenRoadIds.size||parked.explored!==explored.size)&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>10){
-      taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
-      autoParkedExplorers.delete(t.id);autoParkReactivations++;continue;
-     }
      if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.shiftParked&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>10){taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};pausedExplorerRecoveries++;}
     }
    // All loaded roads are eligible for independent Purple Explorer discovery.
@@ -443,6 +439,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     return byClass.get(role??'')??new Set<string>();
    };
+   // Only wake auto-parked explorers when eligible roads are undiscovered.
+   for(let i=0;i<taxis.length;i++){
+    const t=taxis[i],parked=autoParkedExplorers.get(t.id);
+    if(!parked||t.kind!=='explorer'||t.status!=='PAUSED')continue;
+    if(parked.roads===seenRoadIds.size&&parked.explored===explored.size)continue;
+    if(t.deliveryUntil||t.refillRequested||energyPercent(t)<=10)continue;
+    let available=false;
+    for(const id of discoveryRoads(t)){if(!explored.has(id)){available=true;break;}}
+    if(!available)continue;
+    taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+    autoParkedExplorers.delete(t.id);autoParkReactivations++;
+   }
    // Trim any previously assigned Explorer route at the first forbidden edge.
    // Do this before reserving routes or extending them, so stale assignments
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
