@@ -412,7 +412,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   if(msg.allowScout){
     for(let i=0;i<taxis.length;i++){
      const t=taxis[i];
-     const parked=autoParkedExplorers.get(t.id);
      if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.shiftParked&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>10){taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};pausedExplorerRecoveries++;}
     }
    // All loaded roads are eligible for independent Purple Explorer discovery.
