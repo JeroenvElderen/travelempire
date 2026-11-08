@@ -1,6 +1,7 @@
 import {diagnostic} from './frontendDiagnostics';
 let lastTaxiDispatchSignature='';
 let lastTaxiDispatchLogAt=0;
+let lastMajorExplorerLogAt=0;
 import {recordSimulationTick,recordActivity,performanceMonitorEnabled} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
@@ -496,6 +497,10 @@ export default function App(){
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
     const missionPerf=(message as typeof message & {perf?:{explorationMissions?:{active:number;idlePlans:number;vehicles:Array<{id:string;role:string;status:string;missionId:number|null;remainingEdges:number;retryInMs:number;lastPlannedAt:number|null}>};scoutTimings?:Array<{vehicleId:string;role:string;ms:number;phase:string;result?:string}>}}).perf;
     if(missionPerf?.explorationMissions&&(perf?.workerMs??0)>100){const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} queue=${JSON.stringify((missionPerf as typeof missionPerf & {planningQueue?:{phase:string;searches:number;queued:number;cursor:number}}).planningQueue??{})} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
+    if(performance.now()-lastMajorExplorerLogAt>15000){
+     const explorers=(message as typeof message & {perf?:{explorationMissions?:{vehicles:Array<{id:string;role:string;status:string;planningAttempts?:number;majorRoadSearch?:{outcome:string;eligible:number;candidates:number;entries:number;visits:number;attempts:number}|null}>}}}).perf?.explorationMissions?.vehicles;
+     if(explorers){lastMajorExplorerLogAt=performance.now();diagnostic('dispatch:explorer-routing',JSON.stringify(explorers.map(v=>({id:v.id,role:v.role,status:v.status,planningAttempts:v.planningAttempts??0,routing:v.majorRoadSearch??null}))));}
+    }
     const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
     if(taxiPerf){
      const idleTaxis=taxiPerf.vehicles.filter(t=>t.status==='IDLE');
