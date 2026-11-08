@@ -1,1 +1,49 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#10191b"/><title>TravelEmpire | WorldFront 2.0</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8"/>
+ <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+ <meta name="theme-color" content="#10191b"/>
+ <title>TravelEmpire</title>
+ <style>
+  html,body{margin:0;min-height:100%;background:#10191b;color:#e8f5f6;font-family:system-ui,-apple-system,sans-serif}
+  #startup-failure{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:24px;background:#10191b;box-sizing:border-box}
+  #startup-failure.visible{display:flex}
+  #startup-failure article{width:min(100%,420px);padding:24px;border:1px solid #375365;border-radius:18px;background:#17252d}
+  #startup-failure h1{font-size:20px;margin:0 0 12px}
+  #startup-failure p{font-size:14px;line-height:1.5;color:#c4d3db}
+  #startup-failure button{padding:12px 16px;border:0;border-radius:10px;background:#65dcc0;color:#071e1c;font-weight:700}
+ </style>
+ <script>
+  (function(){
+   var failed=false;
+   function report(message){
+    if(failed)return;failed=true;
+    var panel=document.getElementById('startup-failure');
+    var detail=document.getElementById('startup-error-detail');
+    if(detail)detail.textContent=String(message||'Application failed to load').slice(0,300);
+    if(panel)panel.className='visible';
+   }
+   window.addEventListener('error',function(e){
+    if(!document.getElementById('root')?.children.length)report(e.message||'A script failed to load');
+   });
+   window.addEventListener('unhandledrejection',function(e){
+    if(!document.getElementById('root')?.children.length)report(e.reason&&e.reason.message||'Startup promise failed');
+   });
+   window.setTimeout(function(){
+    var root=document.getElementById('root');
+    if(root&&!root.children.length)report('The application did not start. Check whether the latest deployment completed successfully.');
+   },12000);
+  })();
+ </script>
+</head>
+<body>
+ <div id="root"></div>
+ <div id="startup-failure" role="alert"><article><h1>TravelEmpire could not start</h1>
+  <p id="startup-error-detail">The latest application bundle did not load.</p>
+  <p>Your saved company and discoveries have not been cleared.</p>
+  <button type="button" onclick="location.reload()">Try again</button>
+ </article></div>
+ <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
