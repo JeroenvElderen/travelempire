@@ -47,7 +47,7 @@ const successorNegativeCache=new Map<string,{signature:string;until:number}>();
 const failedRouteCache=new Map<string,{signature:string;until:number}>();
 const FAILED_ROUTE_RETRY_MS=25000;
 let failedRouteCacheHits=0,failedRouteSearches=0;
-const failedRouteSignature=(id:string,role:string,position:Point,tier:number,roadCount:number,exploredCount:number,poiSignature:string)=>[id,role,position[0].toFixed(5),position[1].toFixed(5),tier,roadCount,exploredCount,role==='poi'?poiSignature:''].join('|');
+const failedRouteSignature=(id:string,role:string,position:Point,tier:number,roadCount:number,_exploredCount:number,poiSignature:string)=>[id,role,position[0].toFixed(5),position[1].toFixed(5),tier,roadCount,role==='poi'?poiSignature:''].join('|');
 let successorNegativeCacheHits=0;
 const POI_RETRY_MS=20000;
 const poiRetryWallClock=new Map<string,{until:number;roadCount:number;poiSignature:string}>();
@@ -355,7 +355,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Legacy automatic depot returns carry pauseAtHome. Preserve operational trips.
    if(t.kind==='explorer'&&t.status==='RETURNING'&&t.pauseAtHome&&
       !t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
-      !t.restStopId&&!t.deliveryUntil){
+      !(t.deliveryUntil&&t.deliveryUntil>now)){
+    // Stale rest-stop references and expired rest timers can survive older saves.
+    // Only a currently active rest timer should block legacy return recovery.
     obsoleteReturnRecoveries++;
     return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,
      path:[],edgeIds:[],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
