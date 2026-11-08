@@ -3,8 +3,8 @@ import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} f
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
-const PREFETCH_METERS=10000;
-const BACKGROUND_TILE_DELAY_MS=35;
+const PREFETCH_METERS=6000;
+const BACKGROUND_TILE_DELAY_MS=350;
 // Safari needs an actual rendering frame between expensive graph batches.
 const MERGE_BUDGET_MS=3;
 const yieldToRenderer=()=>new Promise<void>(resolve=>{
@@ -18,7 +18,7 @@ const MAX_CONCURRENT=1;
 const GRAPH_PUBLISH_INTERVAL_MS=15000;
 type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
-const MAX_PENDING_TILES=96; // Bound speculative prefetch work for large fleets.
+const MAX_PENDING_TILES=32; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
@@ -42,7 +42,7 @@ export class RoadNetworkManager {
   const id=++this.workerSequence;
   return new Promise((resolve,reject)=>{this.workerRequests.set(id,{resolve,reject});this.graphWorker!.postMessage({id,roads});});
  }
- constructor(private onGraph:(graph:RoadGraph,count:number)=>void,private onError:(message:string)=>void,private onRoads?:(roads:RoadSegment[])=>void){}
+ constructor(private onGraph:(graph:RoadGraph,count:number)=>void,private onError:(message:string)=>void,private onRoads?:(roads:RoadSegment[])=>void|Promise<void>){}
  /** Request road tiles around ferry boarding points without crossing water. */
  considerFerryTerminals(network:FerryNetwork){this.consider(network.ports.map(p=>p.roadAccess??p.position));}
  /** Resolve currently loaded ferry terminals to real road nodes; repeat after tile loads. */
@@ -95,7 +95,7 @@ export class RoadNetworkManager {
   }
   choices.sort((a,b)=>a.distance-b.distance);
   const capacity=Math.max(0,MAX_PENDING_TILES-this.queue.length);
-  const selected=choices.slice(0,Math.min(48,capacity));
+  const selected=choices.slice(0,Math.min(8,capacity));
   for(const {id,distance} of selected){this.queued.add(id);this.queue.push(id);
    // Viewer geometry is requested on demand, without displacing routes
    // needed by actively moving vehicles.
@@ -152,7 +152,13 @@ export class RoadNetworkManager {
    if(this.disposed)return;
   }
   diagnostic('roads:apply',`elapsedMs=${Math.round(performance.now()-applyStarted)} cpuMs=${Math.round(applyCpuMs)} yields=${applyYields} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
-  this.loaded.add(id);const syncStarted=performance.now();this.onRoads?.(roads);diagnostic('roads:dispatch-sync',`enqueueMs=${Math.round(performance.now()-syncStarted)} segments=${roads.length}`);this.scheduleGraphPublish();
+  this.loaded.add(id);this.scheduleGraphPublish();
+   // Backpressure: do not start another tile while the dispatch worker is
+   // processing this tile. Unbounded postMessage cloning exhausted iOS memory.
+   const syncStarted=performance.now();
+   await this.onRoads?.(roads);
+   if(this.disposed)return;
+   diagnostic('roads:dispatch-sync',`ackMs=${Math.round(performance.now()-syncStarted)} segments=${roads.length}`);
   // The routing graph and dispatch worker now own the data; discard the duplicate parsed array.
   releaseRoadTile(id);
  }
