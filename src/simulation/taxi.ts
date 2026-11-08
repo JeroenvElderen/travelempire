@@ -535,7 +535,10 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
   if(!eligible.has(pickup)||!eligible.has(nearest(graph,mission.dropoff)))return null;
  }
  // Passenger stops must be discovered, but taxis may travel over any road without exploring it.
- const toPickup=discovered?routeDiscovered(graph,start,pickup,discovered,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':''):route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
+ // Empty taxis may return from fuel, hotels or rest stops on undiscovered roads.
+ // The pickup transfer is operational travel, not exploration; passenger trips
+ // remain restricted to discovered roads in the TO_PICKUP -> TO_DROPOFF transition.
+ const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
 }
