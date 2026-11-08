@@ -129,6 +129,44 @@ function prioritizeScoutCandidates(g:RoadGraph,position:Point,candidates:Set<str
  return new Set(ranked.map(v=>v.id));
 }
 
+// Target a reachable motorway/trunk entry node instead of blindly expanding a
+// broad local Dijkstra. Transit edges do not count as discoveries.
+function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,explored:Set<string>,reservedTargets:Set<string>,reservedEdges:Set<string>):Taxi|null{
+ const start=nearest(g,taxi.position);
+ if(!start||!candidates.size)return null;
+ const ranked:{from:string;to:string;id:string;distance:number}[]=[];
+ for(const id of candidates){
+  if(explored.has(id)||reservedEdges.has(id))continue;
+  const endpoints=roadEndpoints.get(id);
+  if(!endpoints)continue;
+  for(const [from,to] of [endpoints,[endpoints[1],endpoints[0]]] as [string,string][]){
+   if(reservedTargets.has(to))continue;
+   if(!(g.edges.get(from)??[]).some(e=>e.id===id&&e.to===to))continue;
+   const point=g.nodes.get(from);
+   if(!point)continue;
+   ranked.push({from,to,id,distance:meters(taxi.position,point)});
+  }
+ }
+ if(!ranked.length)return null;
+ ranked.sort((a,b)=>a.distance-b.distance);
+ // Limit the candidate set and graph work per planning turn. Normal regional
+ // tier escalation remains the fallback if the nearest targets are unreachable.
+ const entries=ranked.slice(0,96);
+ const incoming=taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'';
+ const routeResult=routeToNearestTarget(g,start,entries.map(entry=>({node:entry.from,offsetMeters:0})),incoming,24000);
+ if(!routeResult)return null;
+ const entry=entries[routeResult.targetIndex];
+ const destination=g.nodes.get(entry.to);
+ if(!entry||!destination)return null;
+ reservedTargets.add(entry.to);
+ for(const edgeId of routeResult.edgeIds)reservedEdges.add(edgeId);
+ reservedEdges.add(entry.id);
+ return {...taxi,status:'EXPLORING',path:[...routeResult.path,destination],
+  edgeIds:[...routeResult.edgeIds,entry.id],discoveryEdgeIds:[entry.id],
+  journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,fare:0,
+  scoutingRuns:(taxi.scoutingRuns??0)+1};
+}
+
 // Persistent worker-local indexes, reset on graph revision.
 const indexedExplored=new Set<string>();
 const revealedNodesIndex=new Set<string>();
@@ -663,7 +701,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     idleMissionPlans++;
     planningCalls++;
     const scoutRouteStarted=performance.now();
-    const scout=await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates);
+    const targeted=(idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk')
+      ?targetMajorRoadMission(idleVehicle,graph,candidates,explored,reservedTargets,reservedEdges):null;
+    const scout=targeted??await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates);
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-scoutRouteStarted;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
