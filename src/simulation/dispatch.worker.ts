@@ -57,7 +57,7 @@ function indexRegionalRoad(id:string,a:Point,b:Point):void{
  const keys=new Set([a,b].map(p=>regionKey(Math.floor(p[1]/REGION_DEGREES),Math.floor(p[0]/REGION_DEGREES))));
  for(const key of keys){let bucket=regionalRoads.get(key);if(!bucket){bucket=new Set();regionalRoads.set(key,bucket);}bucket.add(id);regionalCellVersions.set(key,(regionalCellVersions.get(key)??0)+1);}
 }
-function regionalCandidates(position:Point,eligible:Set<string>,explored:Set<string>,reserved:Set<string>,radiusKm:number,role='balanced'):Set<string>{
+function regionalCandidates(position:Point,eligible:Set<string>,explored:Set<string>,reserved:Set<string>,radiusKm:number,_role='balanced'):Set<string>{
  regionalLookups++;
  // A broad fallback should scan the eligible class once rather than iterating
  // tens of thousands of empty geographic cells.
