@@ -451,7 +451,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
    const connectedFrontier=connectedFrontierIndex;
-   const frontierFor=(_taxi:Taxi):Set<string>=>connectedFrontier;
+   const frontierFor=(taxi:Taxi):Set<string>|undefined=>
+     // Specialists may use the full road graph to reach remote roads of their own
+     // class. Requiring the local discovered frontier incorrectly strands them.
+     taxi.explorerRole==='completion'?connectedFrontier:undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
