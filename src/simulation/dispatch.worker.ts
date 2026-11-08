@@ -131,55 +131,121 @@ function prioritizeScoutCandidates(g:RoadGraph,position:Point,candidates:Set<str
  return new Set(ranked.map(v=>v.id));
 }
 
+// Incremental targeted routing: preserve the Dijkstra frontier between worker
+// dispatches instead of restarting a nationwide 24k-visit search each time.
+type MajorEntry={from:string;to:string;id:string;distance:number};
+type MajorState={node:string;incoming:string;cost:number;parent:number;edgeId:string};
+type MajorSearch={start:string;role:string;born:number;entries:MajorEntry[];targets:Map<string,number[]>;
+ states:MajorState[];best:Map<string,number>;heap:number[];visits:number;roadCount:number;complete:boolean};
+const majorSearches=new Map<string,MajorSearch>();
+const MAJOR_ROUTE_SLICE=1800;
+function majorSearchPush(search:MajorSearch,id:number):void{
+ const {heap,states}=search;heap.push(id);let i=heap.length-1;
+ while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}
+ heap[i]=id;
+}
+function majorSearchPop(search:MajorSearch):number|undefined{
+ const {heap,states}=search;if(!heap.length)return undefined;
+ const first=heap[0],last=heap.pop()!;
+ if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;
+  if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;
+  if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;
+ }heap[i]=last;}
+ return first;
+}
+function resumeMajorSearch(search:MajorSearch,g:RoadGraph,explored:Set<string>,reservedEdges:Set<string>,reservedTargets:Set<string>):{path:Point[];edgeIds:string[];target:MajorEntry}|null{
+ let slice=0;
+ while(search.heap.length&&slice++<MAJOR_ROUTE_SLICE){
+  const id=majorSearchPop(search)!;
+  const state=search.states[id];
+  const key=state.node+'|'+state.incoming;
+  if(state.cost!==(search.best.get(key)??Infinity))continue;
+  search.visits++;
+  for(const targetIndex of search.targets.get(state.node)??[]){
+   const entry=search.entries[targetIndex];
+   if(explored.has(entry.id)||reservedEdges.has(entry.id)||reservedTargets.has(entry.to))continue;
+   if(!(g.edges.get(entry.from)??[]).some(e=>e.id===entry.id&&e.to===entry.to))continue;
+   const keys:string[]=[],edgeIds:string[]=[];
+   for(let n=id;n>=0;n=search.states[n].parent){
+    const step=search.states[n];const point=g.nodes.get(step.node);
+    if(!point)return null;
+    keys.push(step.node);if(step.parent>=0)edgeIds.push(step.edgeId);
+   }
+   keys.reverse();edgeIds.reverse();
+   return {path:keys.map(k=>g.nodes.get(k)!),edgeIds,target:entry};
+  }
+  for(const edge of g.edges.get(state.node)??[]){
+   // Do not reverse direction at a junction unless it is a dead-end.
+   if(state.incoming===edge.to&&(g.edges.get(state.node)??[]).some(e=>e.to!==state.incoming))continue;
+   const cost=state.cost+edge.meters;
+   const nextKey=edge.to+'|'+state.node;
+   if(cost>=(search.best.get(nextKey)??Infinity))continue;
+   search.best.set(nextKey,cost);
+   const next=search.states.length;
+   search.states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id});
+   majorSearchPush(search,next);
+  }
+ }
+ search.complete=search.heap.length===0;
+ return null;
+}
 // Target a reachable motorway/trunk entry node instead of blindly expanding a
 // broad local Dijkstra. Transit edges do not count as discoveries.
 function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,explored:Set<string>,reservedTargets:Set<string>,reservedEdges:Set<string>,eligibleCount:number):Taxi|null{
- const stats={role:taxi.explorerRole??'',outcome:'no-start-or-candidates',eligible:eligibleCount,candidates:candidates.size,entries:0,visits:0,attempts:(majorRoadSearchDiagnostics.get(taxi.id)?.attempts??0)+1,at:performance.now()};
+ const previous=majorRoadSearchDiagnostics.get(taxi.id);
+ const stats={role:taxi.explorerRole??'',outcome:'searching',eligible:eligibleCount,candidates:candidates.size,entries:0,visits:0,attempts:(previous?.attempts??0)+1,at:performance.now()};
  majorRoadSearchDiagnostics.set(taxi.id,stats);
  const start=nearest(g,taxi.position);
- if(!start||!candidates.size)return null;
- const ranked:{from:string;to:string;id:string;distance:number}[]=[];
- for(const id of candidates){
-  if(explored.has(id)||reservedEdges.has(id))continue;
-  const endpoints=roadEndpoints.get(id);
-  if(!endpoints)continue;
-  for(const [from,to] of [endpoints,[endpoints[1],endpoints[0]]] as [string,string][]){
-   if(reservedTargets.has(to))continue;
-   if(!(g.edges.get(from)??[]).some(e=>e.id===id&&e.to===to))continue;
-   const point=g.nodes.get(from);
-   if(!point)continue;
-   ranked.push({from,to,id,distance:meters(taxi.position,point)});
-  }
+ if(!start||!candidates.size){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
+ let search=majorSearches.get(taxi.id);
+ // New tiles add graph edges; old searches remain valid for a short bounded
+ // lifetime and are refreshed to discover newly reachable components.
+ if(search&&(search.start!==start||search.role!==taxi.explorerRole||
+    search.complete||performance.now()-search.born>60000)){
+  majorSearches.delete(taxi.id);search=undefined;
  }
- if(!ranked.length){stats.outcome='no-valid-entry';return null;}
- ranked.sort((a,b)=>a.distance-b.distance);
- // Limit the candidate set and graph work per planning turn. Normal regional
- // tier escalation remains the fallback if the nearest targets are unreachable.
- // Spread entry points across the sorted candidate range; the nearest 96
- // can all belong to the same disconnected road component.
- const entries=ranked.length<=96?ranked:([
-  ...ranked.slice(0,48),
-  ...Array.from({length:32},(_,i)=>ranked[Math.floor(48+(ranked.length-48)*(i+.5)/32)]),
-  ...ranked.slice(-16)
- ]);
- stats.entries=entries.length;
- const incoming=taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'';
- const routeStats:{reason?:'invalid-start'|'no-valid-targets'|'search-budget'|'unreachable'|'success';visits?:number}={};
- // Escalate search effort across dispatch turns, not in a single long task.
- // Avoid making every retry pay for the largest graph traversal.
- const visitBudget=[24000,48000,72000][Math.min(2,Math.floor((stats.attempts-1)/2))];
- const routeResult=routeToNearestTarget(g,start,entries.map(entry=>({node:entry.from,offsetMeters:0})),incoming,visitBudget,routeStats);
- stats.visits=routeStats.visits??0;
- stats.outcome=routeStats.reason??'unknown';
- if(!routeResult)return null;
- const entry=entries[routeResult.targetIndex];
- const destination=g.nodes.get(entry.to);
- if(!entry||!destination){stats.outcome='invalid-destination';return null;}
- reservedTargets.add(entry.to);
- for(const edgeId of routeResult.edgeIds)reservedEdges.add(edgeId);
- reservedEdges.add(entry.id);
- return {...taxi,status:'EXPLORING',path:[...routeResult.path,destination],
-  edgeIds:[...routeResult.edgeIds,entry.id],discoveryEdgeIds:[entry.id],
+ if(!search){
+  const ranked:MajorEntry[]=[];
+  for(const id of candidates){
+   if(explored.has(id)||reservedEdges.has(id))continue;
+   const ends=roadEndpoints.get(id);if(!ends)continue;
+   for(const [from,to] of [ends,[ends[1],ends[0]]] as [string,string][]){
+    if(reservedTargets.has(to)||!(g.edges.get(from)??[]).some(e=>e.id===id&&e.to===to))continue;
+    const point=g.nodes.get(from);if(point)ranked.push({from,to,id,distance:meters(taxi.position,point)});
+   }
+  }
+  if(!ranked.length){stats.outcome='no-valid-entry';return null;}
+  ranked.sort((a,b)=>a.distance-b.distance);
+  const entries=ranked.length<=96?ranked:[
+   ...ranked.slice(0,48),
+   ...Array.from({length:32},(_,i)=>ranked[Math.floor(48+(ranked.length-48)*(i+.5)/32)]),
+   ...ranked.slice(-16)
+  ];
+  const targets=new Map<string,number[]>();
+  entries.forEach((entry,i)=>{const list=targets.get(entry.from)??[];list.push(i);targets.set(entry.from,list);});
+  const incoming=taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'';
+  const state:MajorState={node:start,incoming,cost:0,parent:-1,edgeId:''};
+  search={start,role:taxi.explorerRole??'',born:performance.now(),entries,targets,
+   states:[state],best:new Map([[start+'|'+incoming,0]]),heap:[0],visits:0,roadCount:seenRoadIds.size,complete:false};
+  majorSearches.set(taxi.id,search);
+ }
+ stats.entries=search.entries.length;
+ const result=resumeMajorSearch(search,g,explored,reservedEdges,reservedTargets);
+ stats.visits=search.visits;
+ if(!result){
+  stats.outcome=search.complete?'unreachable':'search-in-progress';
+  if(search.complete)majorSearches.delete(taxi.id);
+  return null;
+ }
+ majorSearches.delete(taxi.id);
+ stats.outcome='success';
+ reservedTargets.add(result.target.to);
+ for(const id of result.edgeIds)reservedEdges.add(id);
+ reservedEdges.add(result.target.id);
+ const destination=g.nodes.get(result.target.to);
+ if(!destination)return null;
+ return {...taxi,status:'EXPLORING',path:[...result.path,destination],
+  edgeIds:[...result.edgeIds,result.target.id],discoveryEdgeIds:[result.target.id],
   journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:undefined,dropoff:undefined,fare:0,
   scoutingRuns:(taxi.scoutingRuns??0)+1};
 }
@@ -341,7 +407,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -745,7 +811,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Search-budget exhaustion is inconclusive. Do not immediately repeat
     // another large graph search with dispatchScout in the same dispatch.
     const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
-    const scout=targeted??(majorRoad&&majorStats?.outcome==='search-budget'
+    const scout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
      ?idleVehicle
      :await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
     if(msg.revision!==activeRevision)return;
