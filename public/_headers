@@ -1,0 +1,10 @@
+# Always request the latest application shell and service worker.
+/
+  Cache-Control: no-store
+/index.html
+  Cache-Control: no-store
+/sw.js
+  Cache-Control: no-store
+# Vite emits content-hashed app bundles; safe to cache by filename.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
