@@ -355,7 +355,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Legacy automatic depot returns carry pauseAtHome. Preserve operational trips.
    if(t.kind==='explorer'&&t.status==='RETURNING'&&t.pauseAtHome&&
       !t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
-      !t.restStopId&&!t.deliveryUntil&&energyPercent(t)>10){
+      !t.restStopId&&!t.deliveryUntil){
     obsoleteReturnRecoveries++;
     return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,
      path:[],edgeIds:[],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
@@ -460,7 +460,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const legacyParked=!parked&&t.shiftParked&&!t.restStopId&&!t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&!t.deliveryUntil;
      if(!parked&&!legacyParked)continue;
     if(parked&&parked.roads===seenRoadIds.size&&parked.explored===explored.size)continue;
-    if(t.deliveryUntil||t.refillRequested||energyPercent(t)<=10)continue;
+    if(t.deliveryUntil||t.refillRequested||t.restStopId||t.serviceDestination||t.refillDestination||t.recoveryPending||energyPercent(t)<=10)continue;
     let available=false;
     for(const id of discoveryRoads(t)){if(!explored.has(id)){available=true;break;}}
     if(!available)continue;
