@@ -225,6 +225,7 @@ export default function App(){
  const graphRevisionRef=useRef(0);
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
+  const roadSyncAcksRef=useRef<Array<()=>void>>([]);
  const workerRoadCountRef=useRef(0);
  const discoveredCacheRef=useRef<{ids:string[];set:Set<string>}|null>(null);
  const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
@@ -418,19 +419,34 @@ export default function App(){
        });
        diagnostic('roads:react-enqueue',`nodes=${next.nodeKeys.length} ms=${Math.round(performance.now()-queuedAt)}`);
       }
-    },message=>{if(active)console.warn('[TravelEmpire road tiles]',message)},roads=>{
+    },message=>{if(active)console.warn('[TravelEmpire road tiles]',message)},async roads=>{
        if(!active)return;
        const worker=dispatchWorkerRef.current;
        if(!worker)return;
-       // Synchronize newly loaded tile edges with the dispatch worker.
+       // Serialize dispatch-worker transfers: one 4000-road batch in flight.
+       // The previous unbounded postMessage loop could queue 100+ copies.
        const syncStarted=performance.now();
-       workerReadyRef.current=false;
-       for(let i=0;i<roads.length;i+=2000){
+       const revision=graphRevisionRef.current;
+       let batches=0;
+       for(let i=0;i<roads.length;i+=4000){
+        if(!active||dispatchWorkerRef.current!==worker||revision!==graphRevisionRef.current)break;
+        workerReadyRef.current=false;
         roadSyncPendingRef.current++;
-        worker.postMessage({type:'addRoads',revision:graphRevisionRef.current,roads:roads.slice(i,i+2000)});
+        await new Promise<void>(resolve=>{
+         roadSyncAcksRef.current.push(resolve);
+         try{
+          worker.postMessage({type:'addRoads',revision,roads:roads.slice(i,i+4000)});
+         }catch(error){
+          roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);
+          roadSyncAcksRef.current.pop();
+          resolve();
+          diagnostic('dispatch:sync-error',String(error));
+         }
+        });
+        batches++;
        }
-       diagnostic('dispatch:enqueue',`segments=${roads.length} batches=${Math.ceil(roads.length/2000)} ms=${Math.round(performance.now()-syncStarted)} pending=${roadSyncPendingRef.current}`);
-     });
+       diagnostic('dispatch:enqueue',`segments=${roads.length} ackedBatches=${batches} ms=${Math.round(performance.now()-syncStarted)} pending=${roadSyncPendingRef.current}`);
+     }););
     networkRef.current=manager;
     diagnostic('roads:startup',`initialize-start elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
@@ -453,7 +469,7 @@ export default function App(){
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
   pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();
-  dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
+  for(const ack of roadSyncAcksRef.current.splice(0))ack();dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
    const message=event.data;
@@ -491,7 +507,7 @@ export default function App(){
     return;
    }
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
-   if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;if(roadSyncPendingRef.current===0)diagnostic('dispatch:roads-ready',`workerRoads=${workerRoadCountRef.current}`);return;}
+   if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;roadSyncAcksRef.current.shift()?.();if(roadSyncPendingRef.current===0)diagnostic('dispatch:roads-ready',`workerRoads=${workerRoadCountRef.current}`);return;}
    dispatchBusyRef.current=false;
    if(message.type==='result'){
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
@@ -567,7 +583,7 @@ export default function App(){
   };
   worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
-  return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();worker.terminate();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
+  return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();worker.terminate();for(const ack of roadSyncAcksRef.current.splice(0))ack();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph)return;
