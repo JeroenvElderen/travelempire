@@ -296,7 +296,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
  const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
  let finish=-1,visits=0;
- while(heap.length&&visits++<maxVisits){
+ while(heap.length&&visits++<150000){
   const id=pop()!,state=states[id];
   if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
   if(state.node===to){finish=id;break;}
@@ -344,7 +344,7 @@ export function routeToNearestTarget(
  const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
  const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
  let finish=-1,selected=-1,selectedCost=Infinity,visits=0;
- while(heap.length&&visits++<150000){
+ while(heap.length&&visits++<maxVisits){
   const id=pop()!,state=states[id];
   if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
   if(state.cost>selectedCost)break;
