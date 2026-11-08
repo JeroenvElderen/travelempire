@@ -581,7 +581,7 @@ export default function App(){
    queueRef.current=queue;
    setMissionQueue(old=>old.length===queue.length&&old.every((q,i)=>q.id===queue[i].id)?old:queue);
   };
-  worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;console.warn('[TravelEmpire] Dispatch worker error',event.message)};
+  worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;workerReadyRef.current=false;diagnostic('dispatch:worker-error',String(event.message));for(const ack of roadSyncAcksRef.current.splice(0))ack();console.warn('[TravelEmpire] Dispatch worker error',event.message)};
   worker.postMessage({type:'init',revision});
   return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();worker.terminate();for(const ack of roadSyncAcksRef.current.splice(0))ack();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
