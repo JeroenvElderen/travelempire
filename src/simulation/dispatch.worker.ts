@@ -139,6 +139,7 @@ type MajorSearch={start:string;role:string;born:number;entries:MajorEntry[];targ
  states:MajorState[];best:Map<string,number>;heap:number[];visits:number;roadCount:number;complete:boolean};
 const majorSearches=new Map<string,MajorSearch>();
 const MAJOR_ROUTE_SLICE=1800;
+const MAJOR_ROUTE_MAX_VISITS=100000;
 function majorSearchPush(search:MajorSearch,id:number):void{
  const {heap,states}=search;heap.push(id);let i=heap.length-1;
  while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}
@@ -155,7 +156,7 @@ function majorSearchPop(search:MajorSearch):number|undefined{
 }
 function resumeMajorSearch(search:MajorSearch,g:RoadGraph,explored:Set<string>,reservedEdges:Set<string>,reservedTargets:Set<string>):{path:Point[];edgeIds:string[];target:MajorEntry}|null{
  let slice=0;
- while(search.heap.length&&slice++<MAJOR_ROUTE_SLICE){
+ while(search.heap.length&&slice++<MAJOR_ROUTE_SLICE&&search.visits<MAJOR_ROUTE_MAX_VISITS){
   const id=majorSearchPop(search)!;
   const state=search.states[id];
   const key=state.node+'|'+state.incoming;
@@ -186,7 +187,7 @@ function resumeMajorSearch(search:MajorSearch,g:RoadGraph,explored:Set<string>,r
    majorSearchPush(search,next);
   }
  }
- search.complete=search.heap.length===0;
+ search.complete=search.heap.length===0||search.visits>=MAJOR_ROUTE_MAX_VISITS;
  return null;
 }
 // Target a reachable motorway/trunk entry node instead of blindly expanding a
@@ -764,7 +765,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(idleVehicle.id,'operational-unavailable');continue;
     }
     if(idleMissionPlans>=MAX_IDLE_MISSION_PLANS_PER_DISPATCH||planningCalls>=planningBudget){
-     explorerPlanSkipReason.set(idleVehicle.id,'planning-budget');idleSkipped++;continue;
+     // Leave remaining explorers unconsidered so each gets a fair next turn.
+     break;
     }
     if(idleVehicle.explorerRole==='poi'){const p=poiRetryWallClock.get(idleVehicle.id);if(p&&performance.now()<p.until&&p.roadCount===seenRoadIds.size&&p.poiSignature===poiTargetsSignature){poiCooldownSkips++;idleSkipped++;continue;}}
     const positionKey=idleVehicle.position.join(',');
@@ -830,6 +832,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(assignment.status==='EXPLORING')recordExplorerMission(assignment,now);
      assignedCount++;
     }else{
+     if(majorRoad&&majorStats?.outcome==='search-in-progress'){
+      explorerPlanSkipReason.set(idleVehicle.id,'incremental-search');
+      continue;
+     }
      failedRouteSearches++;failedRouteCache.set('idle|'+idleVehicle.id,{signature:idleFailureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});
       if(idleVehicle.explorerRole==='poi')poiRetryWallClock.set(idleVehicle.id,{until:performance.now()+POI_RETRY_MS,roadCount:seenRoadIds.size,poiSignature:poiTargetsSignature});
       negativeScoutCache.set(idleVehicle.id,{signature,until:now+NEGATIVE_SCOUT_TTL_MS});
