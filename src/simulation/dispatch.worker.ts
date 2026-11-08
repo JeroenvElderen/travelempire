@@ -20,8 +20,11 @@ const negativeScoutCache=new Map<string,{signature:string;until:number}>();
 let negativeScoutCacheHits=0;
 let negativeScoutEmptySkips=0;
 const NEGATIVE_SCOUT_TTL_MS=30000;
-function scoutSignature(position:Point,tier:number,candidates:Set<string>,reservedCount:number,frontierCount:number,exploredCount:number,roadCount:number):string{
- return [position[0].toFixed(4),position[1].toFixed(4),tier,candidates.size,reservedCount,frontierCount,Math.floor(exploredCount/25),roadCount].join('|');
+function scoutSignature(position:Point,tier:number,roadCount:number,role:string):string{
+ // Exploration elsewhere changes on almost every tick. Including global
+ // explored/frontier counts invalidated negative results before reuse.
+ // Bound stale results with a short TTL; new road tiles invalidate immediately.
+ return [role,position[0].toFixed(4),position[1].toFixed(4),tier,roadCount].join('|');
 }
 const SEARCH_RADII_KM=[3,8,20,60,180,Infinity];
 let regionalLookups=0;
@@ -490,12 +493,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const tier=explorerSearchTier.get(idleVehicle.id)??0;
-    const candidates=regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier]);
-    const signature=scoutSignature(idleVehicle.position,tier,candidates,reservedEdges.size,connectedFrontier.size,explored.size,seenRoadIds.size);
+    const signature=scoutSignature(idleVehicle.position,tier,seenRoadIds.size,idleVehicle.explorerRole??'balanced');
     const cached=negativeScoutCache.get(idleVehicle.id);
     if(cached&&cached.signature===signature&&now<cached.until){
      negativeScoutCacheHits++;idleSkipped++;continue;
     }
+    const candidates=regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier]);
     if(candidates.size===0){
      negativeScoutEmptySkips++;idleSkipped++;
      negativeScoutCache.set(idleVehicle.id,{signature,until:now+NEGATIVE_SCOUT_TTL_MS});
