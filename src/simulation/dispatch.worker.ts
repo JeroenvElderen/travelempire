@@ -261,6 +261,8 @@ const idleRetryExploredCount=new Map<string,number>();
 const idleRetryPosition=new Map<string,string>();
 const IDLE_RETRY_MS=5000;
 let pausedExplorerRecoveries=0,depotReturns=0,depotRouteFailures=0;
+const autoParkedExplorers=new Map<string,{roads:number;explored:number}>();
+let autoParkReactivations=0;
 // Limit expensive new mission searches per worker dispatch. Existing routes continue unaffected.
 const MAX_IDLE_MISSION_PLANS_PER_DISPATCH=1;
 let nextExplorerIndex=0;
@@ -276,7 +278,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -410,6 +412,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   if(msg.allowScout){
     for(let i=0;i<taxis.length;i++){
      const t=taxis[i];
+     const parked=autoParkedExplorers.get(t.id);
+     if(t.kind==='explorer'&&t.status==='PAUSED'&&parked&&(parked.roads!==seenRoadIds.size||parked.explored!==explored.size)&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>10){
+      taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+      autoParkedExplorers.delete(t.id);autoParkReactivations++;continue;
+     }
      if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.shiftParked&&!t.deliveryUntil&&!t.refillRequested&&energyPercent(t)>10){taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};pausedExplorerRecoveries++;}
     }
    // All loaded roads are eligible for independent Purple Explorer discovery.
@@ -622,7 +629,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerSearchTier.set(idleVehicle.id,0);
      negativeScoutCache.delete(idleVehicle.id);failedRouteCache.delete('idle|'+idleVehicle.id);
      idleRetryAt.delete(idleVehicle.id);poiRetryWallClock.delete(idleVehicle.id);
-     taxis[index]=assignment;
+     taxis[index]=assignment;autoParkedExplorers.delete(idleVehicle.id);
      missionSequence.set(idleVehicle.id,(missionSequence.get(idleVehicle.id)??0)+1);
      missionLastEndpoint.delete(idleVehicle.id);
      missionPlannedAt.set(idleVehicle.id,now);
@@ -643,12 +650,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        if(start&&home&&start!==home){
         const homeRoute=route(graph,start,home);
         if(homeRoute&&homeRoute.path.length>=2){
-         taxis[index]={...idleVehicle,status:'RETURNING',path:homeRoute.path,edgeIds:homeRoute.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[],pauseAtHome:true,shiftParked:true};
-         depotReturns++;
+         taxis[index]={...idleVehicle,status:'RETURNING',path:homeRoute.path,edgeIds:homeRoute.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[],pauseAtHome:true,shiftParked:true,discoveryEdgeIds:[]};
+         autoParkedExplorers.set(idleVehicle.id,{roads:seenRoadIds.size,explored:explored.size});depotReturns++;
         }else depotRouteFailures++;
        }else if(start&&home&&start===home){
-        taxis[index]={...idleVehicle,status:'PAUSED',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:true};
-        depotReturns++;
+        taxis[index]={...idleVehicle,status:'PAUSED',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:true,discoveryEdgeIds:[]};
+        autoParkedExplorers.set(idleVehicle.id,{roads:seenRoadIds.size,explored:explored.size});depotReturns++;
        }else depotRouteFailures++;
       }
     }
@@ -661,6 +668,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,pausedExplorerRecoveries,depotReturns,depotRouteFailures,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
