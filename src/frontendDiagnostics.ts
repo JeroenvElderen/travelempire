@@ -26,6 +26,16 @@ function frame(now:number){
 }
 if(typeof window!=='undefined'){
  diagnostic('session',`diagnostics enabled build=${buildId} builtAt=${buildTime}`);
+ const navigation=performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming|undefined;
+ const discarded=(document as Document&{wasDiscarded?:boolean}).wasDiscarded;
+ diagnostic('session:navigation',`type=${navigation?.type??'unknown'} wasDiscarded=${discarded??'unsupported'} visibility=${document.visibilityState}`);
+ try{
+  const lastExit=sessionStorage.getItem('travelempire.last-exit');
+  diagnostic('session:previous-exit',lastExit??'none recorded');
+  sessionStorage.setItem('travelempire.last-exit','active');
+  window.addEventListener('pagehide',()=>sessionStorage.setItem('travelempire.last-exit','pagehide'));
+ }catch{/* session storage can be unavailable in private browsing */}
+
  requestAnimationFrame(frame);
  window.addEventListener('error',e=>diagnostic('error',String(e.message).slice(0,400)));
  const nativeWarn=console.warn.bind(console),nativeError=console.error.bind(console);
