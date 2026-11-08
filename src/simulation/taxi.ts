@@ -296,7 +296,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
  const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
  let finish=-1,visits=0;
- while(heap.length&&visits++<150000){
+ while(heap.length&&visits++<maxVisits){
   const id=pop()!,state=states[id];
   if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
   if(state.node===to){finish=id;break;}
@@ -325,7 +325,7 @@ export function route(graph:RoadGraph,from:string,to:string,incoming=''){return 
 // reachable target is settled; never substitutes straight-line proximity for
 // actual road distance. A target's off-road connection is part of its cost.
 export function routeToNearestTarget(
- graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming=''
+ graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming='',maxVisits=150000
 ):{targetIndex:number;path:Point[];edgeIds:string[];roadMeters:number;totalMeters:number}|null{
  if(!graph.nodes.has(from)||!targets.length)return null;
  const atNode=new Map<string,{index:number;offset:number}[]>();
