@@ -325,9 +325,9 @@ export function route(graph:RoadGraph,from:string,to:string,incoming=''){return 
 // reachable target is settled; never substitutes straight-line proximity for
 // actual road distance. A target's off-road connection is part of its cost.
 export function routeToNearestTarget(
- graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming='',maxVisits=150000
+ graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming='',maxVisits=150000,diagnostics?:{reason?:'invalid-start'|'no-valid-targets'|'search-budget'|'unreachable'|'success';visits?:number}
 ):{targetIndex:number;path:Point[];edgeIds:string[];roadMeters:number;totalMeters:number}|null{
- if(!graph.nodes.has(from)||!targets.length)return null;
+ if(!graph.nodes.has(from)||!targets.length){if(diagnostics)diagnostics.reason='invalid-start';return null;}
  const atNode=new Map<string,{index:number;offset:number}[]>();
  for(let i=0;i<targets.length;i++){
   const target=targets[i];
@@ -336,7 +336,7 @@ export function routeToNearestTarget(
   items.push({index:i,offset:target.offsetMeters});
   atNode.set(target.node,items);
  }
- if(!atNode.size)return null;
+ if(!atNode.size){if(diagnostics)diagnostics.reason='no-valid-targets';return null;}
  type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
  const states:State[]=[{node:from,incoming,cost:0,parent:-1,edgeId:''}];
  const best=new Map<string,number>([[JSON.stringify([from,incoming]),0]]);
@@ -365,6 +365,7 @@ export function routeToNearestTarget(
    states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id});push(next);
   }
  }
+ if(diagnostics){diagnostics.visits=visits;diagnostics.reason=finish>=0?'success':heap.length?'search-budget':'unreachable';}
  if(finish<0)return null;
  const keys:string[]=[],edgeIds:string[]=[];
  for(let id=finish;id>=0;id=states[id].parent){
