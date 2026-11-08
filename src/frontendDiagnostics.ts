@@ -6,7 +6,7 @@ export function diagnosticEntries():DiagnosticEntry[]{return entries.slice()}
 export function clearDiagnostics(){entries.length=0}
 const started=performance.now();
 const buildId=import.meta.env.VITE_BUILD_ID||'unknown';
-const buildTime=__TRAVELEMPIRE_BUILD_TIME__;
+const buildTime=import.meta.env.VITE_BUILD_TIME||'not supplied';
 let hiddenAt:number|null=null;
 let lastFrame=performance.now();
 let frameCount=0,frameTotal=0,frameWorst=0,frameDrops=0;
