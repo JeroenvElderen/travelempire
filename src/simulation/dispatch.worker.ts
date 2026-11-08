@@ -156,7 +156,8 @@ function majorSearchPop(search:MajorSearch):number|undefined{
 }
 function resumeMajorSearch(search:MajorSearch,g:RoadGraph,explored:Set<string>,reservedEdges:Set<string>,reservedTargets:Set<string>):{path:Point[];edgeIds:string[];target:MajorEntry}|null{
  let slice=0;
- while(search.heap.length&&slice++<MAJOR_ROUTE_SLICE&&search.visits<MAJOR_ROUTE_MAX_VISITS){
+ const sliceStarted=performance.now();
+ while(search.heap.length&&slice++<MAJOR_ROUTE_SLICE&&search.visits<MAJOR_ROUTE_MAX_VISITS&&performance.now()-sliceStarted<12){
   const id=majorSearchPop(search)!;
   const state=search.states[id];
   const key=state.node+'|'+state.incoming;
@@ -197,7 +198,7 @@ function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,exp
  const stats={role:taxi.explorerRole??'',outcome:'searching',eligible:eligibleCount,candidates:candidates.size,entries:0,visits:0,attempts:(previous?.attempts??0)+1,at:performance.now()};
  majorRoadSearchDiagnostics.set(taxi.id,stats);
  const start=nearest(g,taxi.position);
- if(!start||!candidates.size){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
+ if(!start||(!candidates.size&&!majorSearches.has(taxi.id))){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
  let search=majorSearches.get(taxi.id);
  // New tiles add graph edges; old searches remain valid for a short bounded
  // lifetime and are refreshed to discover newly reachable components.
@@ -770,28 +771,39 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     if(idleVehicle.explorerRole==='poi'){const p=poiRetryWallClock.get(idleVehicle.id);if(p&&performance.now()<p.until&&p.roadCount===seenRoadIds.size&&p.poiSignature===poiTargetsSignature){poiCooldownSkips++;idleSkipped++;continue;}}
     const positionKey=idleVehicle.position.join(',');
+    // Resume an existing pathfinding frontier before considering normal cooldowns.
+    const existingMajorSearch=majorSearches.get(idleVehicle.id);
+    const continuingMajorSearch=!!existingMajorSearch&&!existingMajorSearch.complete&&
+     existingMajorSearch.role===idleVehicle.explorerRole&&
+     existingMajorSearch.start===nearest(graph,idleVehicle.position)&&
+     performance.now()-existingMajorSearch.born<=60000;
     const unchanged=idleRetryRoadCount.get(idleVehicle.id)===seenRoadIds.size&&
       idleRetryExploredCount.get(idleVehicle.id)===explored.size&&
       idleRetryPosition.get(idleVehicle.id)===positionKey;
-    if(unchanged&&now<(idleRetryAt.get(idleVehicle.id)??0)){
+    if(!continuingMajorSearch&&unchanged&&now<(idleRetryAt.get(idleVehicle.id)??0)){
      explorerPlanSkipReason.set(idleVehicle.id,'retry-cooldown');idleSkipped++;continue;
     }
-    // Long-distance motorway scans are expensive: retry only every 10 seconds.
-    if(taxis[index].explorerRole==='motorway'&&now<(idleFallbackAt.get(taxis[index].id)??0))continue;
-    if(taxis[index].explorerRole==='motorway')idleFallbackAt.set(taxis[index].id,now+10000);
+    // Throttle starting a new motorway search, not resuming its bounded slices.
+    if(!continuingMajorSearch&&taxis[index].explorerRole==='motorway'&&now<(idleFallbackAt.get(taxis[index].id)??0)){
+     explorerPlanSkipReason.set(idleVehicle.id,'major-search-throttle');continue;
+    }
+    if(!continuingMajorSearch&&taxis[index].explorerRole==='motorway')idleFallbackAt.set(taxis[index].id,now+10000);
     const purpleCluster=purpleAllowedRoads;
     if(taxis[index].kind==='explorer'&&!purpleCluster)continue;
     const tier=explorerSearchTier.get(idleVehicle.id)??0;
      const idleFailureSignature=failedRouteSignature(idleVehicle.id,idleVehicle.explorerRole??'balanced',idleVehicle.position,tier,seenRoadIds.size,explored.size,poiTargetsSignature);
      const failedIdle=failedRouteCache.get('idle|'+idleVehicle.id);
-     if(failedIdle?.signature===idleFailureSignature&&performance.now()<failedIdle.until){failedRouteCacheHits++;idleSkipped++;continue;}
+     if(!continuingMajorSearch&&failedIdle?.signature===idleFailureSignature&&performance.now()<failedIdle.until){failedRouteCacheHits++;idleSkipped++;continue;}
     const signature=scoutSignature(idleVehicle.position,tier,seenRoadIds.size,idleVehicle.explorerRole??'balanced');
     const cached=negativeScoutCache.get(idleVehicle.id);
-    if(cached&&cached.signature===signature&&now<cached.until){
+    if(!continuingMajorSearch&&cached&&cached.signature===signature&&now<cached.until){
      explorerPlanSkipReason.set(idleVehicle.id,'negative-cache');negativeScoutCacheHits++;idleSkipped++;continue;
     }
     const candidateStarted=performance.now();
-    const candidates=prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced'));
+    // Do not rescan and sort regional candidates for every incremental slice.
+    const candidates=continuingMajorSearch
+     ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
+     :prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced'));
     candidateSelectionMs+=performance.now()-candidateStarted;
     if(candidates.size===0){
      explorerPlanSkipReason.set(idleVehicle.id,'no-eligible-candidates');negativeScoutEmptySkips++;idleSkipped++;
