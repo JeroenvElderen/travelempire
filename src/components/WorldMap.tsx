@@ -110,12 +110,12 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
 type IndexedRoad={id:string;a:[number,number];b:[number,number]};
-type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;edgeCounts:Map<string,number>};
+type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
 function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
  let index=roadSpatialIndexes.get(graph);
- if(!index){index={graph,cursor:0,revision:-1,cells:new Map(),ids:new Set(),edgeCounts:new Map()};roadSpatialIndexes.set(graph,index);}
+ if(!index){index={graph,cursor:0,revision:-1,cells:new Map(),ids:new Set(),byId:new Map(),edgeCounts:new Map()};roadSpatialIndexes.set(graph,index);}
  // Graph updates can append edges to nodes indexed in earlier tiles.
  // Rescan existing groups only on graph revision; viewport moves stay indexed.
  const rescan=index.revision!==revision;
@@ -130,6 +130,8 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
    if(!b)continue;
    index.ids.add(edge.id);
    const road:IndexedRoad={id:edge.id,a,b};
+   // Keep geometry addressable by ID when viewport indexing misses a cell.
+   index.byId.set(edge.id,road);
    const minX=Math.floor(Math.min(a[0],b[0])/ROAD_GRID_DEGREES);
    const maxX=Math.floor(Math.max(a[0],b[0])/ROAD_GRID_DEGREES);
    const minY=Math.floor(Math.min(a[1],b[1])/ROAD_GRID_DEGREES);
@@ -748,7 +750,23 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const index=new Map([...features,...exploredFeatures].map(f=>[String(f.properties?.roadId??''),f] as const));
    const latestExplored=currentExploredRoads.current;
    const purpleById=new Map<string,GeoJSON.Feature>();
-   for(const [id,feature] of index)if(latestExplored.has(id))purpleById.set(id,feature);
+   // The saved discovery IDs, not the ordinary viewport scan, determine
+   // which segments belong in the purple overlay.
+   let recoveredPurple=0;
+   for(const id of latestExplored){
+    let feature=index.get(id);
+    if(!feature){
+     const road=spatial.byId.get(id);
+     if(road&&!(Math.max(road.a[0],road.b[0])<west||Math.min(road.a[0],road.b[0])>east||
+      Math.min(road.a[1],road.b[1])>north||Math.max(road.a[1],road.b[1])<south)){
+      feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[road.a,road.b]}};
+      index.set(id,feature);
+      recoveredPurple++;
+     }
+    }
+    if(feature)purpleById.set(id,feature);
+   }
+   if(recoveredPurple)diagnostic('map:purple-recovered',`segments=${recoveredPurple} visible=${purpleById.size}`);
    // Preserve known on-screen geometry while graph tiles are being republished.
    // Do not preserve geometry outside the current viewport or roads no longer explored.
    for(const [id,feature] of visibleExploredFeatures.current){
