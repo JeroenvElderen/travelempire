@@ -458,6 +458,13 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const extensionStarted=performance.now();
     const extensionTier=explorerSearchTier.get(taxi.id)??0;
     const extensionCandidates=regionalCandidates(destination,discoveryRoads(taxi),explored,reservedEdges,SEARCH_RADII_KM[extensionTier]);
+    // No eligible undiscovered roads in this tier: skip the costly route
+    // search, and try a wider tier on the next successor planning turn.
+    if(extensionCandidates.size===0){
+     negativeScoutEmptySkips++;
+     explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));
+     continue;
+    }
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
      graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
