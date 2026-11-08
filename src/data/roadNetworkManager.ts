@@ -70,6 +70,40 @@ export class RoadNetworkManager {
    for(let y=Math.floor((p[1]-dy)/s);y<=Math.floor((p[1]+dy)/s);y++)ids.push(`${x}_${y}`);
   return ids;
  }
+ // Display-only demand: load available map tiles in the visible viewport,
+ // even if no vehicle is nearby. Bound each request so a large zoom-out
+ // cannot flood Safari with hundreds of road tile downloads.
+ considerViewport(west:number,east:number,south:number,north:number){
+  if(this.disposed||!this.available.size)return;
+  if(![west,east,south,north].every(Number.isFinite))return;
+  const width=Math.min(360,Math.max(0,east-west));
+  if(!width||north<=south)return;
+  const minX=Math.floor(west/this.tileSize),maxX=Math.floor(east/this.tileSize);
+  const minY=Math.floor(south/this.tileSize),maxY=Math.floor(north/this.tileSize);
+  const center:Point=[(west+east)/2,(south+north)/2];
+  const choices:{id:string;distance:number}[]=[];
+  // Limit very broad views to a bounded central region, instead of
+  // iterating millions of cells after a zoom-out.
+  const x0=Math.max(minX,Math.floor(center[0]/this.tileSize)-16);
+  const x1=Math.min(maxX,Math.floor(center[0]/this.tileSize)+16);
+  const y0=Math.max(minY,Math.floor(center[1]/this.tileSize)-16);
+  const y1=Math.min(maxY,Math.floor(center[1]/this.tileSize)+16);
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
+   const id=x+'_'+y;
+   if(this.available.has(id)&&!this.loaded.has(id)&&!this.queued.has(id)&&
+    (this.failedUntil.get(id)??0)<=Date.now())choices.push({id,distance:this.tileDistance(id,center)});
+  }
+  choices.sort((a,b)=>a.distance-b.distance);
+  const capacity=Math.max(0,MAX_PENDING_TILES-this.queue.length);
+  const selected=choices.slice(0,Math.min(48,capacity));
+  for(const {id,distance} of selected){this.queued.add(id);this.queue.push(id);
+   // Viewer geometry is requested on demand, without displacing routes
+   // needed by actively moving vehicles.
+   this.priority.set(id,10+distance);
+  }
+  if(selected.length){diagnostic('roads:viewport',`requested=${selected.length} candidates=${choices.length}`);
+   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));this.pump();}
+ }
  considerPoint(p:Point){this.consider([p]);}
  considerRoute(path:Point[]){if(!path.length)return;const points:Point[]=[path[0]];
   for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i];const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),dy=(b[1]-a[1])*111320;
