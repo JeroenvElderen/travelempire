@@ -621,6 +621,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      negativeScoutEmptySkips++;idleSkipped++;
      negativeScoutCache.set(idleVehicle.id,{signature,until:now+NEGATIVE_SCOUT_TTL_MS});
      explorerSearchTier.set(idleVehicle.id,Math.min(tier+1,SEARCH_RADII_KM.length-1));
+     // No candidate even at nationwide scope: route home rather than retry forever.
+     if(tier===SEARCH_RADII_KM.length-1){
+      const start=nearest(graph,idleVehicle.position),home=nearest(graph,hq);
+      if(start&&home&&start!==home){
+       const homeRoute=route(graph,start,home);
+       if(homeRoute&&homeRoute.path.length>=2){
+        taxis[index]={...idleVehicle,status:'RETURNING',path:homeRoute.path,edgeIds:homeRoute.edgeIds,leg:0,distanceIntoLeg:0,journeyEdges:[],pauseAtHome:true,shiftParked:true,discoveryEdgeIds:[]};
+        autoParkedExplorers.set(idleVehicle.id,{roads:seenRoadIds.size,explored:explored.size});depotReturns++;
+       }else depotRouteFailures++;
+      }else if(start&&home&&start===home){
+       taxis[index]={...idleVehicle,status:'PAUSED',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:true,discoveryEdgeIds:[]};
+       autoParkedExplorers.set(idleVehicle.id,{roads:seenRoadIds.size,explored:explored.size});depotReturns++;
+      }else depotRouteFailures++;
+     }
      continue;
     }
     const idleStarted=performance.now();
