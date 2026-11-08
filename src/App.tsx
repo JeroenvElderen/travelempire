@@ -446,7 +446,7 @@ export default function App(){
         batches++;
        }
        diagnostic('dispatch:enqueue',`segments=${roads.length} ackedBatches=${batches} ms=${Math.round(performance.now()-syncStarted)} pending=${roadSyncPendingRef.current}`);
-     }););
+     });
     networkRef.current=manager;
     diagnostic('roads:startup',`initialize-start elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
