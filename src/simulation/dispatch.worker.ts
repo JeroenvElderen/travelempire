@@ -262,7 +262,7 @@ const idleRetryPosition=new Map<string,string>();
 const IDLE_RETRY_MS=5000;
 let pausedExplorerRecoveries=0,depotReturns=0,depotRouteFailures=0;
 const autoParkedExplorers=new Map<string,{roads:number;explored:number}>();
-let autoParkReactivations=0,deferredDepotReturns=0;
+let autoParkReactivations=0,deferredDepotReturns=0,obsoleteReturnRecoveries=0;
 // Limit expensive new mission searches per worker dispatch. Existing routes continue unaffected.
 const MAX_IDLE_MISSION_PLANS_PER_DISPATCH=1;
 let nextExplorerIndex=0;
@@ -349,10 +349,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const {now,hq}=msg;
   const explored=new Set(msg.discovered);
   // Resting explorers remain parked until the main simulation releases them.
-  const taxis=msg.taxis.map(t=>
-   (t.kind==='explorer')&&t.status==='PAUSED'&&
-   !t.shiftParked&&!t.restStopId&&!t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10
-    ?{...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false}:t);
+  const taxis=msg.taxis.map(t=>{
+   // Legacy automatic depot returns carry pauseAtHome. Preserve operational trips.
+   if(t.kind==='explorer'&&t.status==='RETURNING'&&t.pauseAtHome&&
+      !t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
+      !t.restStopId&&!t.deliveryUntil&&energyPercent(t)>10){
+    obsoleteReturnRecoveries++;
+    return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,
+     path:[],edgeIds:[],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+   }
+   if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.shiftParked&&
+      !t.restStopId&&!t.recoveryPending&&!t.refillRequested&&energyPercent(t)>10)
+    return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false};
+   return t;
+  });
 
   const activeGraph=graph;
   // Purple Explorer's driven roads are valid for taxi jobs regardless of Black Explorer territory.
@@ -665,6 +675,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,obsoleteReturnRecoveries,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,returnReason:t.status==='RETURNING'?(t.serviceDestination?'service':t.refillDestination?'refuel':t.pauseAtHome?'legacy-no-mission':t.shiftParked?'shift-or-parking':'unspecified'):null,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
