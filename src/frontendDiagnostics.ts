@@ -5,6 +5,9 @@ const entries:Entry[]=[];
 export function diagnosticEntries():DiagnosticEntry[]{return entries.slice()}
 export function clearDiagnostics(){entries.length=0}
 const started=performance.now();
+const buildId=import.meta.env.VITE_BUILD_ID||'unknown';
+const buildTime=__TRAVELEMPIRE_BUILD_TIME__;
+let hiddenAt:number|null=null;
 let lastFrame=performance.now();
 let frameCount=0,frameTotal=0,frameWorst=0,frameDrops=0;
 let lastSample=performance.now();
@@ -22,7 +25,7 @@ function frame(now:number){
  requestAnimationFrame(frame);
 }
 if(typeof window!=='undefined'){
- diagnostic('session','diagnostics enabled');
+ diagnostic('session',`diagnostics enabled build=${buildId} builtAt=${buildTime}`);
  requestAnimationFrame(frame);
  window.addEventListener('error',e=>diagnostic('error',String(e.message).slice(0,400)));
  const nativeWarn=console.warn.bind(console),nativeError=console.error.bind(console);
@@ -30,7 +33,9 @@ if(typeof window!=='undefined'){
  console.warn=(...values:unknown[])=>{diagnostic('console:warn',describe(values));nativeWarn(...values)};
  console.error=(...values:unknown[])=>{diagnostic('console:error',describe(values));nativeError(...values)};
  window.addEventListener('unhandledrejection',e=>diagnostic('promise',String(e.reason).slice(0,250)));
- document.addEventListener('visibilitychange',()=>diagnostic('visibility',document.visibilityState));
+ document.addEventListener('visibilitychange',()=>{const now=performance.now();if(document.visibilityState==='hidden'){hiddenAt=now;diagnostic('visibility','hidden');}else{diagnostic('visibility',`visible backgroundMs=${hiddenAt===null?'unknown':Math.round(now-hiddenAt)}`);hiddenAt=null;}});
+ window.addEventListener('pageshow',e=>diagnostic('lifecycle',`pageshow persisted=${e.persisted}`));
+ window.addEventListener('pagehide',e=>diagnostic('lifecycle',`pagehide persisted=${e.persisted}`));
  try{
   const observer=new PerformanceObserver(list=>{for(const e of list.getEntries())diagnostic('longtask',`duration=${Math.round(e.duration)}ms`);});
   observer.observe({entryTypes:['longtask']});
@@ -38,5 +43,5 @@ if(typeof window!=='undefined'){
 }
 export function diagnosticReport(){
  const nav=performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming|undefined;
- return ['TravelEmpire full frontend diagnostics',`Elapsed: ${Math.round(performance.now()-started)}ms`,`Navigation: ${nav?JSON.stringify({domInteractive:Math.round(nav.domInteractive),loadEventEnd:Math.round(nav.loadEventEnd)}):'unavailable'}`,`User agent: ${navigator.userAgent}`,`Entries: ${entries.length} (latest 1500)`,...entries.map(e=>`${e.ms}ms | ${e.category} | ${e.message}`)].join('\n');
+ return ['TravelEmpire full frontend diagnostics',`Build: ${buildId}`,`Built at: ${buildTime}`,`Elapsed: ${Math.round(performance.now()-started)}ms`,`Navigation: ${nav?JSON.stringify({domInteractive:Math.round(nav.domInteractive),loadEventEnd:Math.round(nav.loadEventEnd)}):'unavailable'}`,`User agent: ${navigator.userAgent}`,`Entries: ${entries.length} (latest 1500)`,...entries.map(e=>`${e.ms}ms | ${e.category} | ${e.message}`)].join('\n');
 }
