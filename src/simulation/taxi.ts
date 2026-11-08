@@ -701,11 +701,11 @@ export async function dispatchScout(
  // Major-road specialists search the entire connected discovered-road network,
  // rather than an arbitrary radius or node count. Only an undiscovered road
  // of their own class can be selected as a discovery target.
- const majorRoadScout=specialist==='motorway'||specialist==='trunk';
+ const majorRoadScout=specialist==='motorway'||specialist==='trunk'||specialist==='primary';
  const maxSearchMeters=majorRoadScout?Infinity:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
  // Every role, including motorway and recovery searches, must have a finite work limit.
  // The scheduler retries later as more road tiles and discoveries become available.
- const maxScoutVisits=12000;
+ const maxScoutVisits=majorRoadScout?18000:12000;
  const SCOUT_SLICE_NODES=384;
  while(heap.length&&visits<maxScoutVisits){
   visits++;
@@ -750,10 +750,8 @@ export async function dispatchScout(
       }
      }
    }
-   // Transit is allowed on other classes; only discoveryAllowed edges reveal roads.
-   // Major-road scouts travel to the frontier on already discovered roads;
-   // do not plan transit through undiscovered roads of another class.
-   if(majorRoadScout&&!explored.has(edge.id))continue;
+   // Transit may use any loaded road class. Only discoveryAllowed roads
+   // become explorer targets and get revealed when the vehicle traverses them.
    const next=distance+edge.meters;
    if(next<=maxSearchMeters&&next<(dist.get(edge.to)??Infinity)){
     dist.set(edge.to,next);previous.set(edge.to,{from:node,id:edge.id});push([next,edge.to]);
