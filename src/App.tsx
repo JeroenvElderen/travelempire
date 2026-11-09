@@ -547,6 +547,9 @@ export default function App(){
     if(performance.now()-lastMajorExplorerLogAt>15000){
      const explorers=(message as typeof message & {perf?:{explorationMissions?:{vehicles:Array<{id:string;role:string;status:string;planningAttempts?:number;majorRoadSearch?:{outcome:string;eligible:number;candidates:number;entries:number;visits:number;attempts:number}|null}>}}}).perf?.explorationMissions?.vehicles;
      if(explorers){lastMajorExplorerLogAt=performance.now();diagnostic('dispatch:explorer-routing',JSON.stringify(explorers.map(v=>({id:v.id,role:v.role,status:v.status,planningAttempts:v.planningAttempts??0,routing:v.majorRoadSearch??null}))));}
+     const pool=(message as typeof message & {perf?:{plannerPool?:{workers:number;busy:number;pending:number;results:number;vehicles:Array<{id:string;role:string;result:string;ms:number;queueMs:number;waiting:boolean}>}}}).perf?.plannerPool;
+     if(pool)diagnostic('dispatch:explorer-planner-pool',
+      `workers=${pool.workers} busy=${pool.busy} pending=${pool.pending} results=${pool.results} vehicles=${JSON.stringify(pool.vehicles.map(v=>({id:v.id,role:v.role,outcome:v.result,routeMs:Math.round(v.ms),queueMs:Math.round(v.queueMs),waiting:v.waiting})))}`);
     }
     const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
     if(taxiPerf){
