@@ -607,7 +607,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updateDiscoveryIndex(graph,explored,hqNode);
    const revealedNodes=revealedNodesIndex;
    const completionRoads=completionRoadsIndex;
-   const poiTargets=(msg.harbourTargets??[]).slice(0,150);
+   const poiTargets=(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]).slice(0,150);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
