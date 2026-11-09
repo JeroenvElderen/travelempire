@@ -306,12 +306,11 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
  if(discoveryIndexRoads!==seenRoadIds.size){
   for(let i=discoveryIndexRoads;i<roadInsertionOrder.length;i++){
    const id=roadInsertionOrder[i],ends=roadEndpoints.get(id);
-   if(ends&&!classifiedRoads.has(id)&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
+   if(ends&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
   }
   discoveryIndexRoads=seenRoadIds.size;
  }
  for(const node of touched)for(const edge of g.edges.get(node)??[]){
-  if(classifiedRoads.has(edge.id))continue;
   if(indexedExplored.has(edge.id))completionRoadsIndex.delete(edge.id);
   else if(revealedNodesIndex.has(edge.to))completionRoadsIndex.add(edge.id);
  }
@@ -344,7 +343,7 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
  for(;cursor<roadInsertionOrder.length;cursor++){
   const id=roadInsertionOrder[cursor],ends=roadEndpoints.get(id);
   if(!ends)continue;
-  if(classifiedRoads.has(id))continue;
+  // Harbour access roads may belong to any road class.
   const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
   if((a&&targets.some(p=>meters(a,p)<600))||(b&&targets.some(p=>meters(b,p)<600)))poiRoadsIndex.add(id);
  }
@@ -404,7 +403,7 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point};
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];availableTaxiIds?:string[]};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];harbourTargets?:Point[];availableTaxiIds?:string[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
@@ -574,7 +573,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updateDiscoveryIndex(graph,explored,hqNode);
    const revealedNodes=revealedNodesIndex;
    const completionRoads=completionRoadsIndex;
-   const poiTargets=(msg.poiTargets??[]).slice(0,150);
+   const poiTargets=(msg.harbourTargets??[]).slice(0,150);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
    const connectedFrontier=connectedFrontierIndex;
@@ -585,7 +584,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
-    if(role==='completion')return new Set([...completionRoads].filter(id=>!poiRoads.has(id)));
+    if(role==='completion')return completionRoads;
     if(role==='highway'||role==='urban'){
      const cached=roadClassCache.get(role);if(cached)return cached;
      const roles=role==='highway'?['motorway','trunk','primary','secondary']:['tertiary','residential','rural','service'];
@@ -737,7 +736,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const extensionRouteStarted=performance.now();
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,msg.poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision,extensionCandidates);
+     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-extensionRouteStarted;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
@@ -827,7 +826,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
     const scout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
      ?idleVehicle
-     :await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,msg.poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
+     :await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-scoutRouteStarted;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
