@@ -410,7 +410,7 @@ function recordExplorerMission(taxi:Taxi,now:number):void{
  explorerMissions.set(taxi.id,{id:++missionCounter,vehicleId:taxi.id,role:taxi.explorerRole??'balanced',status:'active',targetNode:target,assignedAt:now,plannedEdges:taxi.edgeIds.length});
 }
 
-const MISSION_LOOKAHEAD_EDGES=24;
+const MISSION_LOOKAHEAD_EDGES=48;
 const MAX_SUCCESSOR_PLANS_PER_DISPATCH=2;
 // Avoid repeated nationwide path searches for unchanged idle scouts.
 const idleRetryAt=new Map<string,number>();
@@ -428,7 +428,7 @@ const explorerLastPlanAttempt=new Map<string,number>();
 const explorerLastConsidered=new Map<string,number>();
 let explorerConsiderationSequence=0;
 const explorerPlanSkipReason=new Map<string,string>();
-let nextPlanningPhase:'idle'|'successor'='idle';
+
 let poiRoadCursor=0;
 // A failed scout permits the next road class to bootstrap without motorway access.
 
@@ -440,7 +440,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -591,9 +591,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   let idleMissionPlans=0;
   let orderedExplorerIndices:number[]=[];
   let planningCalls=0;
-  const planningBudget=2;
-  const planningPhase=nextPlanningPhase;
-  nextPlanningPhase=planningPhase==='idle'?'successor':'idle';
+  // Plan successors and idle explorers in every cycle, with a bounded shared budget.
+  // Two moving scouts can extend while one idle scout can still receive work.
+  const planningBudget=3;
+  const planningPhase='continuous';
   if(msg.allowScout){
     for(let i=0;i<taxis.length;i++){
      const t=taxis[i];
@@ -718,14 +719,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Append the new path without resetting its current leg or position.
    const explorerOrder=taxis.map((t,i)=>t.kind==='explorer'?i:-1).filter(i=>i>=0);
    orderedExplorerIndices=explorerOrder.length?explorerOrder.slice(nextExplorerIndex%explorerOrder.length).concat(explorerOrder.slice(0,nextExplorerIndex%explorerOrder.length)):[];
-   if(explorerOrder.length&&planningPhase==='idle'){
-     // Schedule least-served explorers first. Previously, a rotating cursor
-     // could repeatedly serve an eligible scout while others never planned.
-     orderedExplorerIndices.sort((a,b)=>
-      (explorerLastConsidered.get(taxis[a].id)??0)-(explorerLastConsidered.get(taxis[b].id)??0)||
-      (explorerPlanningAttempts.get(taxis[a].id)??0)-(explorerPlanningAttempts.get(taxis[b].id)??0));
-     nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
-    }
+   // Prioritise moving explorers closest to completing their route. Stable
+   // rotating order breaks ties, so fast vehicles cannot monopolise planning.
+   orderedExplorerIndices.sort((a,b)=>{
+    const ta=taxis[a],tb=taxis[b];
+    const aa=ta.status==='EXPLORING'?Math.max(0,ta.edgeIds.length-ta.leg):Infinity;
+    const bb=tb.status==='EXPLORING'?Math.max(0,tb.edgeIds.length-tb.leg):Infinity;
+    return aa-bb;
+   });
+   if(explorerOrder.length)nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
    for(const index of orderedExplorerIndices){
     const taxi=taxis[index];
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
@@ -733,7 +735,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
     if(remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
-    if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget||planningPhase!=='successor')continue;
+    if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-1)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
     if(!from)continue;
@@ -806,8 +808,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      edgeIds:[...taxi.edgeIds,...extension.edgeIds],discoveryEdgeIds:[...(taxi.discoveryEdgeIds??taxi.edgeIds),...(extension.discoveryEdgeIds??[])],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
-   for(const index of orderedExplorerIndices){
-    if(planningPhase!=='idle')break;
+   // Idle missions use the remaining reserved planning slot each dispatch.
+   // Fairness is maintained by oldest consideration rather than fleet order.
+   const idleOrder=[...orderedExplorerIndices].sort((a,b)=>
+    (explorerLastConsidered.get(taxis[a].id)??0)-(explorerLastConsidered.get(taxis[b].id)??0));
+   for(const index of idleOrder){
     const idleVehicle=taxis[index];
     if(idleVehicle.kind!=='explorer'||idleVehicle.ferryTrip||idleVehicle.status!=='IDLE')continue;
     // A skipped candidate counts as considered, ensuring every idle explorer
