@@ -4,3 +4,15 @@
 .investment-property-performance span{display:flex;justify-content:space-between;gap:5px;color:#9db5c9;font-size:11px;line-height:1.45}
 .investment-property-performance strong{color:#e7f6ff;font-size:12px;font-variant-numeric:tabular-nums}
 @media(max-width:410px){.investment-property-performance{grid-template-columns:1fr}}
+
+
+/* Purchase projections change with the selected investment denomination. */
+.investment-preview{margin:16px 0 18px;border:1px solid rgba(175,133,231,.38);background:linear-gradient(135deg,rgba(91,52,134,.22),rgba(30,47,76,.40));border-radius:13px;padding:14px;display:grid;gap:12px}
+.investment-preview-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+.investment-preview-heading strong{font-size:13px;color:#f2e6ff}
+.investment-preview-heading small{font-size:10px;color:#ceb5e9}
+.investment-preview-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 9px}
+.investment-preview-metrics>div{display:grid;gap:4px;min-width:0}
+.investment-preview-metrics span{color:#aab5d1;letter-spacing:.5px;font-weight:750;font-size:9px}
+.investment-preview-metrics strong{color:#eddbff;font-size:16px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.investment-preview>small{color:#adabc8;font-size:10px;line-height:1.55}
