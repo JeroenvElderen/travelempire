@@ -266,7 +266,7 @@ export default function App(){
  useEffect(()=>{
   if(!company)return;
   const timer=window.setInterval(()=>{
-   const points:[[number,number],...Array<[number,number]>]=[[company.headquarters.lng,company.headquarters.lat],...taxisRef.current.map(t=>t.position)];
+   const points:[[number,number],...Array<[number,number]>]=[[company.headquarters.lng,company.headquarters.lat],...taxisRef.current.filter(t=>t.ferryTrip?.stage!=='sailing').map(t=>t.position)];
    for(const [lng,lat] of points){
     const tile=`${Math.floor(lng*10)}_${Math.floor(lat*10)}`;
     if(!restLoadedRef.current.has(tile)){
@@ -650,6 +650,7 @@ export default function App(){
   const check=()=>{
    const positions:[number,number][]=[[company.headquarters.lng,company.headquarters.lat]];
    for(const taxi of taxisRef.current){
+     if(taxi.ferryTrip?.stage==='sailing')continue;
      positions.push(taxi.position);
      if(taxi.pickup)positions.push(taxi.pickup);
      if(taxi.dropoff)positions.push(taxi.dropoff);
@@ -670,7 +671,7 @@ export default function App(){
    networkRef.current?.consider(positions);
    // Request one harbour-access tile near an active POI explorer each cycle.
    // Avoid bulk ferry-port downloads that could exhaust mobile Safari memory.
-   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi');
+   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi'&&!t.ferryTrip);
    if(poiExplorers.length&&harbourPoiRef.current.length){
     let closest:[number,number]|null=null,closestMeters=20000;
     for(const harbour of harbourPoiRef.current)for(const explorer of poiExplorers){
