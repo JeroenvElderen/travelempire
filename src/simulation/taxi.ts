@@ -677,7 +677,11 @@ export async function dispatchScout(
  // It can discover an adjacent eligible edge, not jump across red transit roads.
  incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
  const revealed=sharedRevealed??new Set(exploredRoadNodes(graph,explored,hq));
- if(taxi.kind==='explorer'&&!revealed.has(start))return taxi;
+ // HQ proximity is not discovery. Every specialist must begin at a node
+ // touching an actually purple-discovered road (including successors).
+ if(taxi.kind==='explorer'&&
+   (!(graph.edges.get(start)??[]).some(e=>explored.has(e.id))||!revealed.has(start)))
+  return taxi;
  // Independent road discovery: choose nearby unvisited roads without zones or AI priorities.
  const dist=new Map<string,number>([[start,0]]);
  const previous=new Map<string,{from:string;id:string}>();
