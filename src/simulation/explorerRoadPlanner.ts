@@ -2,7 +2,7 @@ import type {RoadGraph,Point,Taxi} from './taxi';
 
 export type ExplorerRouteDiagnostic={
  visitedPurpleNodes:number;reachableClassEdges:number;
- eligibleClassRoads:number;reason:string;
+ eligibleClassRoads:number;unsafeOneWaySkipped:number;reason:string;
 };
 export type ExplorerRoutePlan={
  path:Point[];edgeIds:string[];discoveryEdgeIds:string[];
@@ -17,7 +17,7 @@ export function planReachableExplorerRoad(
  role:Taxi['explorerRole'],
 ):{route:ExplorerRoutePlan|null;diagnostic:ExplorerRouteDiagnostic}{
  const diag:ExplorerRouteDiagnostic={visitedPurpleNodes:0,reachableClassEdges:0,
-  eligibleClassRoads:eligible.size,reason:'no-connected-class-road'};
+  eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
  if(!graph.nodes.has(start))return {route:null,diagnostic:{...diag,reason:'no-start-node'}};
  const distances=new Map<string,number>([[start,0]]);
  const parent=new Map<string,{from:string;id:string}>();
@@ -37,6 +37,58 @@ export function planReachableExplorerRoad(
   }heap[i]=last;}
   return first;
  };
+ // A one-way entrance is allowed only if there is a directed escape to
+ // the existing purple network. Reversing a bidirectional edge is always
+ // legal; a true one-way cul-de-sac is never an automatic exploration target.
+ // The escape must use purple transit or roads this specialist can reveal.
+ type EscapeStep={from:string;to:string;id:string};
+ const escapes=new Map<string,EscapeStep[]|null>();
+ const safeExit=(from:string,to:string,id:string):EscapeStep[]|null=>{
+  const cacheKey=to+'|'+id;
+  if(escapes.has(cacheKey))return escapes.get(cacheKey)!;
+  const reverse=(graph.edges.get(to)??[]).some(e=>e.to===from&&e.id===id&&e.meters>0);
+  if(reverse){escapes.set(cacheKey,[]);return [];}
+  // Already at a purple road junction, hence an existing connected exit.
+  if((graph.edges.get(to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
+   escapes.set(cacheKey,[]);return [];
+  }
+  const visited=new Set([to]),parents=new Map<string,EscapeStep>();
+  const queue=[to];let finish:string|undefined;
+  // Bounded directed BFS: checks actual available exits, not visual map
+  // intersections. On incomplete tiles, defer and retry when roads load.
+  for(let i=0;i<queue.length&&i<7000;i++){
+   const node=queue[i];
+   for(const edge of graph.edges.get(node)??[]){
+    if(edge.meters<=0)continue;
+    const purple=explored.has(edge.id);
+    if(!purple&&(!eligible.has(edge.id)||reservedRoads.has(edge.id)))continue;
+    if(!purple&&reservedTargets.has(edge.to))continue;
+    if(visited.has(edge.to))continue;
+    visited.add(edge.to);
+    parents.set(edge.to,{from:node,to:edge.to,id:edge.id});
+    if(purple||(graph.edges.get(edge.to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
+     finish=edge.to;break;
+    }
+    queue.push(edge.to);
+   }
+   if(finish)break;
+  }
+  if(!finish){escapes.set(cacheKey,null);return null;}
+  const result:EscapeStep[]=[];
+  let at=finish;
+  while(at!==to){
+   const step=parents.get(at);if(!step){escapes.set(cacheKey,null);return null;}
+   result.push(step);at=step.from;
+  }
+  result.reverse();
+  escapes.set(cacheKey,result);
+  return result;
+ };
+ const safeRoad=(from:string,to:string,id:string):boolean=>{
+  if(safeExit(from,to,id)!==null)return true;
+  diag.unsafeOneWaySkipped++;
+  return false;
+ };
  const maxVisits=role==='highway'||role==='poi'?30000:12000;
  const maxTravel=role==='highway'||role==='poi'?85000:26000;
  let winner:{from:string;to:string;id:string}|null=null;
@@ -52,6 +104,7 @@ export function planReachableExplorerRoad(
    if(edge.meters<=0||!eligible.has(edge.id)||explored.has(edge.id)||
       reservedRoads.has(edge.id)||reservedTargets.has(edge.to))continue;
    diag.reachableClassEdges++;
+   if(!safeRoad(current.node,edge.to,edge.id))continue;
    winner={from:current.node,to:edge.to,id:edge.id};break;
   }
   if(winner)break;
@@ -64,6 +117,7 @@ export function planReachableExplorerRoad(
   }
  }
  if(!winner){
+  if(diag.unsafeOneWaySkipped>0&&diag.reason==='no-connected-class-road')diag.reason='one-way-no-legal-exit';
   if(diag.reason==='no-connected-class-road'&&diag.visitedPurpleNodes>=maxVisits)
    diag.reason='search-node-budget';
   return {route:null,diagnostic:diag};
@@ -97,10 +151,21 @@ export function planReachableExplorerRoad(
    !reservedTargets.has(e.to)&&e.to!==previous)
     .map(e=>({e,cos:angle(previous,cursor,e.to)}))
     .filter(item=>item.cos>=0.70).sort((a,b)=>b.cos-a.cos);
-  if(!forwards.length)break;
-  const next=forwards[0].e;
+  const next=forwards.find(item=>safeRoad(cursor,item.e.to,item.e.id))?.e;
+  if(!next)break;
   ids.push(next.id);keys.push(next.to);discovery.push(next.id);
   used.add(next.id);meters+=next.meters;previous=cursor;cursor=next.to;
+ }
+ // If the last segment is one-way and cannot reverse, commit its
+ // known legal escape in the SAME assignment so the vehicle never idles in
+ // the middle of an unsafe one-way corridor.
+ const lastFrom=keys[keys.length-2],lastTo=keys[keys.length-1],
+  lastId=ids[ids.length-1];
+ const exit=lastFrom&&lastTo&&lastId?safeExit(lastFrom,lastTo,lastId):[];
+ if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
+ for(const step of exit??[]){
+  keys.push(step.to);ids.push(step.id);
+  if(!explored.has(step.id)&&!discovery.includes(step.id))discovery.push(step.id);
  }
  const path=keys.map(id=>graph.nodes.get(id)!).filter(Boolean);
  diag.reason='planned';
