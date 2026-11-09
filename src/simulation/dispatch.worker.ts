@@ -47,7 +47,7 @@ const MAX_REACHABILITY_CACHE=12;
 let reachabilityCacheHits=0,reachabilityCacheMisses=0;
 const successorNegativeCache=new Map<string,{signature:string;until:number}>();
 const failedRouteCache=new Map<string,{signature:string;until:number}>();
-const FAILED_ROUTE_RETRY_MS=25000;
+const FAILED_ROUTE_RETRY_MS=8000;
 let failedRouteCacheHits=0,failedRouteSearches=0;
 const majorRoadSearchDiagnostics=new Map<string,{role:string;outcome:string;eligible:number;candidates:number;entries:number;visits:number;attempts:number;at:number}>();
 const explorerPlanningAttempts=new Map<string,number>();
@@ -391,7 +391,7 @@ const idleFallbackAt=new Map<string,number>();
 // continues following a valid route.
 const extensionRetryAt=new Map<string,number>();
 const extensionLastDestination=new Map<string,string>();
-const EXTENSION_RETRY_MS=15000;
+const EXTENSION_RETRY_MS=4000;
 // An exploration mission is a committed route. Its successor is calculated
 // from the known endpoint before the vehicle finishes the current mission.
 const missionSequence=new Map<string,number>();
@@ -411,7 +411,7 @@ function recordExplorerMission(taxi:Taxi,now:number):void{
 }
 
 const MISSION_LOOKAHEAD_EDGES=24;
-const MAX_SUCCESSOR_PLANS_PER_DISPATCH=1;
+const MAX_SUCCESSOR_PLANS_PER_DISPATCH=2;
 // Avoid repeated nationwide path searches for unchanged idle scouts.
 const idleRetryAt=new Map<string,number>();
 const idleRetryRoadCount=new Map<string,number>();
@@ -591,7 +591,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   let idleMissionPlans=0;
   let orderedExplorerIndices:number[]=[];
   let planningCalls=0;
-  const planningBudget=1;
+  const planningBudget=2;
   const planningPhase=nextPlanningPhase;
   nextPlanningPhase=planningPhase==='idle'?'successor':'idle';
   if(msg.allowScout){
