@@ -1547,7 +1547,14 @@ export default function App(){
    portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
    if(result.incomeCents>0){
     const income=Math.round(result.incomeCents)/100;
-    pendingCashRef.current=Math.round((pendingCashRef.current+income)*100)/100;
+    // Persist the cash credit immediately alongside the settled-hour marker.
+    // A Safari restart must not drop a pending dividend after its hour is marked paid.
+    const current=companyRef.current;
+    if(current&&current.id===companyId){
+     const updated={...current,cash:Math.round((current.cash+pendingCashRef.current+income)*100)/100};
+     pendingCashRef.current=0;
+     companyRef.current=updated;saveCompany(updated);setCompany(updated);
+    }
     setFleet(old=>{
      const date=new Date(now).toISOString().slice(0,10);
      const history=[...(old.financeHistory??[])];
