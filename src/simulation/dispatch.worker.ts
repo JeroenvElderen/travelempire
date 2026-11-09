@@ -1079,9 +1079,30 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const startNode=purpleStartNear(origin,projected);
     if(!startNode){reject('no-purple-segment-at-departure');continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
+    const escapeOnly=new Set(route.escapeTransitEdgeIds??[]);
+    // Escape-only roads are explicitly identified by the planner. They can
+    // never be discovered here, and must be a legal directed path that exits
+    // back to the already-purple network.
+    const firstDiscovery=route.edgeIds.findIndex(id=>selected.has(id));
+    const validEscape=escapeOnly.size===0||(
+     firstDiscovery>=0&&
+     [...escapeOnly].every(id=>!selected.has(id)&&!projected.has(id)&&
+      !reservedEdges.has(id)&&route.edgeIds.includes(id))&&
+     route.edgeIds.every((id,i)=>{
+      if(!escapeOnly.has(id))return true;
+      if(i<=firstDiscovery)return false;
+      const from=nearest(graph,route.path[i]),to=nearest(graph,route.path[i+1]);
+      return !!from&&!!to&&(graph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to);
+     })&&
+     (()=>{const last=nearest(graph,route.path.at(-1)!);
+      return !!last&&(graph.edges.get(last)??[]).some(e=>projected.has(e.id));})()
+    );
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
-     (projected.has(id)||selected.has(id)));
-    if(!valid||![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id))){reject('reservation-or-unrevealed-transit');continue;}
+     (projected.has(id)||selected.has(id)||escapeOnly.has(id)));
+    if(!valid||!validEscape||
+      ![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id))){
+     reject('reservation-or-invalid-escape-transit');continue;
+    }
     const end=nearest(graph,route.path.at(-1)!);
     if(end&&reservedTargets.has(end)&&
        (!append||end!==nearest(graph,current.path.at(-1)!))){reject('reserved-destination');continue;}
@@ -1089,6 +1110,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      path:[...current.path,...route.path.slice(1)],
      edgeIds:[...current.edgeIds,...route.edgeIds],
      discoveryEdgeIds:[...(current.discoveryEdgeIds??[]),...(route.discoveryEdgeIds??[])],
+     escapeTransitEdgeIds:[...(current.escapeTransitEdgeIds??[]),...(route.escapeTransitEdgeIds??[])],
      scoutingRuns:route.scoutingRuns}:
      {...route,position:current.position,driver:current.driver,
       deliveryUntil:current.deliveryUntil,vehicleCondition:current.vehicleCondition,
