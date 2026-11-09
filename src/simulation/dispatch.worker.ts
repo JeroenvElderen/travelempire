@@ -1095,8 +1095,19 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
      planningBackoff.get(t.id)!.roads!==seenRoadIds.size||
      planningBackoff.get(t.id)!.explored!==explored.size));
-   explorers.sort((a,b)=>(planningLastSent.get(a.id)??0)-
-    (planningLastSent.get(b.id)??0));
+   // Give the local explorer the first opportunity to expand the purple
+   // network. Once every role has received a turn, use fair oldest-first
+   // scheduling so highway and POI planning do not starve other explorers.
+   const initialPriority=(t:Taxi)=>t.explorerRole==='residential'?0:
+    t.explorerRole==='secondary'?1:t.explorerRole==='primary'?2:
+    t.explorerRole==='highway'?3:4;
+   explorers.sort((a,b)=>{
+    const aa=planningLastSent.get(a.id),bb=planningLastSent.get(b.id);
+    if(aa===undefined&&bb===undefined)return initialPriority(a)-initialPriority(b);
+    if(aa===undefined)return -1;
+    if(bb===undefined)return 1;
+    return aa-bb;
+   });
    for(const slot of planningPool){
     if(!slot.ready||slot.busy||slot.roads===0)continue;
     const vehicle=explorers.shift();
