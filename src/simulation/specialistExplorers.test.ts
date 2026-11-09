@@ -57,7 +57,13 @@ describe('explorer operational discovery',()=>{
    purpose==='fuel'?{refillDestination:nodes.get('B')!}:
    purpose==='service'?{serviceDestination:nodes.get('B')!}:
    {pauseAtHome:true})};
-  return tickTaxi(t,graph,5,new Set());
+  const discovered:string[]=[];let current=t;
+  for(let i=0;i<8;i++){
+   const result=tickTaxi(current,graph,5,new Set());
+   discovered.push(...result.discovered);current=result.taxi;
+   if(current.path.length<2)break;
+  }
+  return {discovered};
  };
  it.each(['hotel','parking','fuel','service'] as const)(
   'reveals the physically travelled road on a %s journey',purpose=>{
