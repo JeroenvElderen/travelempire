@@ -647,7 +647,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const taxi=taxis[index];
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING')continue;
     const permitted=taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads;
-    const firstForbidden=taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&!permitted.has(id));
+    const discoveryAssignment=new Set(taxi.discoveryEdgeIds??[]);
+     const startNode=taxi.path[0]?nearest(graph,taxi.path[0]):'';
+     // Saved missions from older builds may start on isolated red roads.
+     // Keep only routes that start from an actual discovered junction, and
+     // never transit an undiscovered edge unless this mission discovers it.
+     const invalidStart=!!startNode&&!revealedNodesIndex.has(startNode);
+     const firstForbidden=invalidStart?taxi.leg:taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&
+      (!permitted.has(id)||(!explored.has(id)&&!discoveryAssignment.has(id))));
     if(firstForbidden<0)continue;
     if(firstForbidden<=taxi.leg){
      // A vehicle already traversing an invalid edge is held at its current
