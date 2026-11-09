@@ -41,7 +41,7 @@ const currentHour=(gameNow:number)=>Math.floor(gameNow/HOUR_MS);
 /** Preserve paid daily dividends on v1 saves. A paid day ends at 23:00. */
 function lastPaidHour(h:PropertyHolding):number{
  if(Number.isFinite(h.lastHour))return h.lastHour!;
- return Number.isFinite(h.lastDay)?(h.lastDay!+1)*24-1:0;
+ return Number.isFinite(h.lastDay)?(h.lastDay!+1)*24:0;
 }
 export function buyPropertyShare(portfolio:PropertyPortfolio,p:InvestablePOI,amountCents:number,gameNow:number):PropertyPortfolio{
  const old=portfolio.holdings[p.id];
