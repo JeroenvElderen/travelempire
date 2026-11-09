@@ -75,6 +75,14 @@ const roadEndpoints=new Map<string,[string,string]>();
 const roadInsertionOrder:string[]=[];
 const roadClassCache=new Map<string,Set<string>>();
 const REGION_DEGREES=0.02;
+function purpleStartNear(position:Point,explored:Set<string>){
+ const lat=Math.floor(position[1]/REGION_DEGREES);
+ const lon=Math.floor(position[0]/REGION_DEGREES);
+ const nearby=new Set<string>();
+ for(let y=lat-1;y<=lat+1;y++)for(let x=lon-1;x<=lon+1;x++)
+  for(const id of regionalRoads.get(regionKey(y,x))??[])nearby.add(id);
+ return resolvePurpleExplorerStart(graph!,position,explored,roadEndpoints,20,nearby);
+}
 const regionalRoads=new Map<string,Set<string>>();
 const explorerSearchTier=new Map<string,number>();
 // Cache negative planning outcomes while the relevant regional frontier remains stable.
@@ -965,7 +973,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     planningCalls++;
     const scoutRouteStarted=performance.now();
     const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk'||idleVehicle.explorerRole==='poi';
-    const purpleOrigin=resolvePurpleExplorerStart(graph,idleVehicle.position,explored,roadEndpoints);
+    const purpleOrigin=purpleStartNear(idleVehicle.position,explored);
     if(!purpleOrigin){explorerPlanSkipReason.set(idleVehicle.id,'no-purple-segment-near-vehicle');continue;}
     const anchoredTaxi={...idleVehicle,position:graph.nodes.get(purpleOrigin.node)!};
     const targeted=majorRoad?targetMajorRoadMission(anchoredTaxi,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
@@ -1068,7 +1076,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!origin||!route.path.length||meters(origin,route.path[0])>20||
        route.edgeIds.length!==route.path.length-1){reject('route-start-or-shape');continue;}
     const projected=append?new Set([...explored,...current.discoveryEdgeIds??[]]):explored;
-    const startNode=resolvePurpleExplorerStart(graph,origin,projected,roadEndpoints);
+    const startNode=purpleStartNear(origin,projected);
     if(!startNode){reject('no-purple-segment-at-departure');continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
@@ -1121,7 +1129,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!slot.ready||slot.busy||slot.roads===0)continue;
     const vehicle=explorers.shift();
     if(!vehicle)break;
-    const start=resolvePurpleExplorerStart(graph,vehicle.position,explored,roadEndpoints);
+    const start=purpleStartNear(vehicle.position,explored);
     if(!start){
      explorerPlanSkipReason.set(vehicle.id,'no-purple-start');continue;
     }
@@ -1161,7 +1169,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(!destination)continue;
      const projected=new Set([...explored,...vehicle.discoveryEdgeIds??[]]);
      const endNode=nearest(graph,destination);
-     if(!resolvePurpleExplorerStart(graph,destination,projected,roadEndpoints)||!endNode)continue;
+     if(!purpleStartNear(destination,projected)||!endNode)continue;
      const requestId=++nextPlanningRequest;
      slot.busy=true;slot.requestId=requestId;
      planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
