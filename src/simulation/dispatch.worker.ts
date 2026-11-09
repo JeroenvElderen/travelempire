@@ -771,8 +771,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      continue;
     }
     const extensionRouteStarted=performance.now();
+    // Successor planning starts at the end of the current mission. The last
+    // junction may still be undiscovered because the explorer is driving
+    // towards it. Project only THIS explorer's committed discovery edges for
+    // route planning, without changing the actual saved discovery network.
+    const projectedExplored=new Set(explored);
+    const projectedRevealed=new Set(revealedNodes);
+    for(const id of taxi.discoveryEdgeIds??[]){
+     if(projectedExplored.has(id))continue;
+     projectedExplored.add(id);
+     const ends=roadEndpoints.get(id);
+     if(ends){projectedRevealed.add(ends[0]);projectedRevealed.add(ends[1]);}
+    }
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,new Set([from]),revealedNodes,()=>msg.revision===activeRevision,extensionCandidates);
+     graph,projectedExplored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,new Set([from]),projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-extensionRouteStarted;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
