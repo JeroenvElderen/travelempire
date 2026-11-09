@@ -6,7 +6,7 @@ type Init={type:'init';revision:number};
 type Roads={type:'addRoads';revision:number;roads:RoadSegment[]};
 type Plan={type:'plan';revision:number;requestId:number;vehicle:Taxi;
  explored:string[];reservedRoads:string[];reservedDestinations:string[];
- hq:Point;poiRoadIds:string[];};
+ hq:Point;poiRoadIds:string[];poiTargets:Point[];};
 type Message=Init|Roads|Plan;
 
 let revision=0;
@@ -71,7 +71,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
   const valid=new Set(roleAllowed(msg.vehicle.explorerRole,msg.poiRoadIds));
   const planned=await dispatchScout({...msg.vehicle,status:'IDLE'},
    graph,explored,msg.hq,new Set(msg.reservedDestinations),new Set(msg.reservedRoads),
-   undefined,known,valid,undefined,undefined,undefined,[],undefined,undefined,
+   undefined,known,valid,undefined,undefined,undefined,msg.poiTargets,undefined,undefined,
    ()=>revision===msg.revision);
   const assigned=planned.status==='EXPLORING'&&planned.path.length>=2;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,vehicleId:msg.vehicle.id,
