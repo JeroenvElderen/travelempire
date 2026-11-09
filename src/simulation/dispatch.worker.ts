@@ -8,6 +8,7 @@ let graph:RoadGraph|null=null;
 type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
  outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string;
  mode?:'idle'|'successor';baseEdgeIds?:string[];};
+type PoolMessage=PoolResult|{type:'ready'|'roadsAdded';revision:number;roadCount?:number};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
 const planningRequests=new Map<number,{id:string;at:number;position:Point;exploredCount:number;
@@ -30,12 +31,12 @@ function startPlanningPool(revision:number):void{
   for(let i=0;i<2;i++){
    const worker=new Worker(new URL('./explorationPlanner.worker.ts',import.meta.url),{type:'module'});
    const slot:PoolSlot={worker,busy:false,requestId:0,ready:false,roads:0};
-   worker.onmessage=(event:MessageEvent<{type:string;revision:number;requestId?:number;roadCount?:number}&Partial<PoolResult>>)=>{
+   worker.onmessage=(event:MessageEvent<PoolMessage>)=>{
     const msg=event.data;
     if(msg.revision!==plannerPoolRevision)return;
     if(msg.type==='ready'){slot.ready=true;return;}
     if(msg.type==='roadsAdded'){slot.roads=msg.roadCount??slot.roads;return;}
-    if(msg.type!=='planResult'||typeof msg.requestId!=='number'||msg.requestId!==slot.requestId)return;
+    if(msg.type!=='planResult'||msg.requestId!==slot.requestId)return;
     slot.busy=false;
     const request=planningRequests.get(msg.requestId);
     if(!request)return;
