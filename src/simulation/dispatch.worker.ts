@@ -9,9 +9,10 @@ type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:st
  outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
-const planningRequests=new Map<number,{id:string;at:number;position:Point}>();
+const planningRequests=new Map<number,{id:string;at:number;position:Point;exploredCount:number}>();
 const planningResults=new Map<string,PoolResult>();
 const planningLastSent=new Map<string,number>();
+const planningBackoff=new Map<string,{until:number;roads:number;explored:number}>();
 const planningStats=new Map<string,{result:string;ms:number;queueMs:number;at:number}>();
 let nextPlanningRequest=0;
 
@@ -19,7 +20,7 @@ let plannerPoolRevision=0;
 function stopPlanningPool():void{
  for(const slot of planningPool)slot.worker.terminate();
  planningPool.length=0;planningRequests.clear();planningResults.clear();
- planningLastSent.clear();planningStats.clear();nextPlanningRequest=0;
+ planningLastSent.clear();planningStats.clear();planningBackoff.clear();nextPlanningRequest=0;
 }
 function startPlanningPool(revision:number):void{
  stopPlanningPool();plannerPoolRevision=revision;
@@ -32,7 +33,7 @@ function startPlanningPool(revision:number):void{
     if(msg.revision!==plannerPoolRevision)return;
     if(msg.type==='ready'){slot.ready=true;return;}
     if(msg.type==='roadsAdded'){slot.roads=msg.roadCount??slot.roads;return;}
-    if(msg.type!=='planResult'||msg.requestId!==slot.requestId)return;
+    if(msg.type!=='planResult'||typeof msg.requestId!=='number'||msg.requestId!==slot.requestId)return;
     slot.busy=false;
     const request=planningRequests.get(msg.requestId);
     if(!request)return;
@@ -40,6 +41,10 @@ function startPlanningPool(revision:number):void{
     planningResults.set(request.id,msg as PoolResult);
     planningStats.set(request.id,{result:msg.outcome??'unknown',ms:msg.ms??0,
      queueMs:performance.now()-request.at,at:performance.now()});
+    if(msg.outcome==='planned')planningBackoff.delete(request.id);
+    else planningBackoff.set(request.id,{until:performance.now()+
+     (msg.outcome==='no-purple-start'?6000:msg.outcome==='error'?8000:5000),
+     roads:msg.roadCount??0,explored:request.exploredCount});
    };
    worker.onerror=()=>{
     // Disable the pool and let the existing dispatcher take over rather
@@ -1047,7 +1052,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const explorers=taxis.filter(t=>t.kind==='explorer'&&t.status==='IDLE'&&
     !t.ferryTrip&&!t.deliveryUntil&&!t.serviceDestination&&
     !t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
-    energyPercent(t)>10&&!inFlight.has(t.id));
+    energyPercent(t)>10&&!inFlight.has(t.id)&&
+    (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
+     planningBackoff.get(t.id)!.roads!==seenRoadIds.size||
+     planningBackoff.get(t.id)!.explored!==explored.size));
    explorers.sort((a,b)=>(planningLastSent.get(a.id)??0)-
     (planningLastSent.get(b.id)??0));
    for(const slot of planningPool){
@@ -1061,7 +1069,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     slot.busy=true;
     const requestId=++nextPlanningRequest;
     slot.requestId=requestId;
-    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position});
+    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position,exploredCount:explored.size});
     planningLastSent.set(vehicle.id,performance.now());
     explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
     explorerPlanSkipReason.set(vehicle.id,'pool-search');
