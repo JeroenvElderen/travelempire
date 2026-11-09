@@ -102,6 +102,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
    vehicleId:msg.vehicle.id,outcome:route?'planned':planned.diagnostic.reason,
    taxi:route?{...msg.vehicle,status:'EXPLORING',path:route.path,
     edgeIds:route.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
+    escapeTransitEdgeIds:planned.route?.escapeTransitEdgeIds??[],
     journeyEdges:[],leg:0,distanceIntoLeg:0,
     scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}:undefined,
    diagnostic:planned.diagnostic,roadCount,ms:performance.now()-started});
