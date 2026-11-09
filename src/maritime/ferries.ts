@@ -26,8 +26,20 @@ export function validateFerryNetwork(input:unknown):FerryNetwork{
  if(obj.version!==1||!Array.isArray(obj.ports)||!Array.isArray(obj.routes))throw new Error('Unsupported ferry network version');
  const ports=new Map<string,FerryPort>();
  for(const p of obj.ports){if(!p||typeof p.id!=='string'||!p.id||!validPoint(p.position)||ports.has(p.id))throw new Error('Invalid or duplicate ferry port');ports.set(p.id,{...p,name:englishFerryName(p.name)});}
+ // OSM ferry ways may stop short of the actual port nodes or be stored in
+ // reverse order. Complete the visible/sailable route at both declared ports.
+ const completeGeometry=(geometry:Coordinate[],from:Coordinate,to:Coordinate):Coordinate[]=>{
+  const distance=(a:Coordinate,b:Coordinate)=>Math.hypot(
+   (a[0]-b[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),(a[1]-b[1])*111320);
+  const points=distance(geometry[0],from)+distance(geometry[geometry.length-1],to)
+   <=distance(geometry[0],to)+distance(geometry[geometry.length-1],from)
+   ?[...geometry]:[...geometry].reverse();
+  if(distance(from,points[0])>2)points.unshift(from);
+  if(distance(to,points[points.length-1])>2)points.push(to);
+  return points;
+ };
  const routes:FerryRoute[]=[];const ids=new Set<string>();
- for(const r of obj.routes){if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id)||!ports.has(r.from)||!ports.has(r.to)||r.from===r.to||!Number.isFinite(r.durationMinutes)||r.durationMinutes<=0||!Array.isArray(r.geometry)||r.geometry.length<2||!r.geometry.every(validPoint))throw new Error('Invalid vehicle ferry route');ids.add(r.id);routes.push({...r,name:r.name?englishFerryName(r.name):r.name});}
+ for(const r of obj.routes){if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id)||!ports.has(r.from)||!ports.has(r.to)||r.from===r.to||!Number.isFinite(r.durationMinutes)||r.durationMinutes<=0||!Array.isArray(r.geometry)||r.geometry.length<2||!r.geometry.every(validPoint))throw new Error('Invalid vehicle ferry route');ids.add(r.id);routes.push({...r,geometry:completeGeometry(r.geometry,ports.get(r.from)!.position,ports.get(r.to)!.position),name:r.name?englishFerryName(r.name):r.name});}
  return {version:1,ports:[...ports.values()],routes};
 }
 /** Only validated road-compatible ferry links are returned. No arbitrary sea shortcuts. */
