@@ -130,6 +130,23 @@ function prioritizeScoutCandidates(g:RoadGraph,position:Point,candidates:Set<str
  prioritizedCandidates+=Math.min(ranked.length,MAX_PRIORITY_CANDIDATES);
  return new Set(ranked.map(v=>v.id));
 }
+// Prefer the current road block before distant discovery targets. Only
+// narrow candidates when a nearby eligible class road is available.
+function preferConnectedCandidates(g:RoadGraph,position:Point,candidates:Set<string>,role:string):Set<string>{
+ if(role==='poi'||!candidates.size)return candidates;
+ const start=nearest(g,position);
+ if(!start)return candidates;
+ const touching=new Set<string>(),nearby=new Set<string>();
+ for(const id of candidates){
+  const ends=roadEndpoints.get(id);if(!ends)continue;
+  if(ends[0]===start||ends[1]===start){touching.add(id);continue;}
+  if(!revealedNodesIndex.has(ends[0])&&!revealedNodesIndex.has(ends[1]))continue;
+  const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
+  if((a&&meters(a,position)<1800)||(b&&meters(b,position)<1800))nearby.add(id);
+ }
+ return touching.size?touching:nearby.size?nearby:candidates;
+}
+
 
 // Incremental targeted routing: preserve the Dijkstra frontier between worker
 // dispatches instead of restarting a nationwide 24k-visit search each time.
@@ -306,13 +323,13 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
  if(discoveryIndexRoads!==seenRoadIds.size){
   for(let i=discoveryIndexRoads;i<roadInsertionOrder.length;i++){
    const id=roadInsertionOrder[i],ends=roadEndpoints.get(id);
-   if(ends&&!indexedExplored.has(id)&&revealedNodesIndex.has(ends[0])&&revealedNodesIndex.has(ends[1]))completionRoadsIndex.add(id);
+   if(ends&&!indexedExplored.has(id)&&(revealedNodesIndex.has(ends[0])||revealedNodesIndex.has(ends[1])))completionRoadsIndex.add(id);
   }
   discoveryIndexRoads=seenRoadIds.size;
  }
  for(const node of touched)for(const edge of g.edges.get(node)??[]){
   if(indexedExplored.has(edge.id))completionRoadsIndex.delete(edge.id);
-  else if(revealedNodesIndex.has(edge.to))completionRoadsIndex.add(edge.id);
+  else completionRoadsIndex.add(edge.id);
  }
  const pending:string[]=[];
  // Newly explored directed edges can connect a component to the HQ frontier.
@@ -577,10 +594,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
    const connectedFrontier=connectedFrontierIndex;
-   const frontierFor=(taxi:Taxi):Set<string>|undefined=>
-     // Specialists may use the full road graph to reach remote roads of their own
-     // class. Requiring the local discovered frontier incorrectly strands them.
-     taxi.explorerRole==='completion'?connectedFrontier:undefined;
+   const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='poi')return poiRoads;
@@ -724,7 +738,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const purpleCluster=purpleAllowedRoads;
     if(taxi.kind==='explorer'&&!purpleCluster)continue;
     const extensionStarted=performance.now();
-    const extensionCandidates=prioritizeScoutCandidates(graph,destination,regionalCandidates(destination,discoveryRoads(taxi),explored,reservedEdges,SEARCH_RADII_KM[extensionTier],taxi.explorerRole??'balanced'));
+    const extensionCandidates=preferConnectedCandidates(graph,destination,prioritizeScoutCandidates(graph,destination,regionalCandidates(destination,discoveryRoads(taxi),explored,reservedEdges,SEARCH_RADII_KM[extensionTier],taxi.explorerRole??'balanced')),taxi.explorerRole??'balanced');
     candidateSelectionMs+=performance.now()-extensionStarted;
     // No eligible undiscovered roads in this tier: skip the costly route
     // search, and try a wider tier on the next successor planning turn.
@@ -802,7 +816,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Do not rescan and sort regional candidates for every incremental slice.
     const candidates=continuingMajorSearch
      ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
-     :prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced'));
+     :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
     candidateSelectionMs+=performance.now()-candidateStarted;
     if(candidates.size===0){
      explorerPlanSkipReason.set(idleVehicle.id,'no-eligible-candidates');negativeScoutEmptySkips++;idleSkipped++;
