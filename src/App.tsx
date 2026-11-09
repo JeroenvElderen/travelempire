@@ -584,7 +584,7 @@ export default function App(){
        // road is still present locally, never stop a moving explorer merely
        // because a worker snapshot temporarily lacks that road ID.
        const activeRoadId=t.edgeIds[t.leg];
-       if(activeRoadId&&roadLengthByIdRef.current.has(activeRoadId))return t;
+       if(!assigned.routeInvalid&&activeRoadId&&roadLengthByIdRef.current.has(activeRoadId))return t;
        return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
       }
      if(assigned.edgeIds.length>t.leg&&
