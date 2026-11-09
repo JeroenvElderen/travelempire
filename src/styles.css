@@ -212,3 +212,40 @@ html,body,#root{height:100%;min-height:0;width:100%;overflow:hidden}
 .research-header-progress-track{display:block;width:100%;height:4px;overflow:hidden;background:rgba(162,198,204,.16);border-radius:20px}
 .research-header-progress-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4acbb5,#81edd7);transition:width .5s linear}
 @media(max-width:800px){.research-header-progress{padding:6px 12px 7px}.research-header-progress-title,.research-header-progress-time{font-size:9px}}
+
+
+/* Keep the brand and company shortcut visible while the navigation scrolls.
+   The shell itself must not scroll (especially in iPhone Safari map mode). */
+.nav-v216 .sidebar{
+ height:100dvh;
+ max-height:100dvh;
+ min-height:0;
+ overflow:hidden;
+}
+.nav-v216 .sidebar > .brand{
+ flex:0 0 auto;
+}
+.nav-v216 .sidebar > .navigation{
+ flex:1 1 auto;
+ min-height:0;
+ overflow-y:auto;
+ overflow-x:hidden;
+ overscroll-behavior-y:contain;
+ -webkit-overflow-scrolling:touch;
+ padding-bottom:16px;
+ scrollbar-width:thin;
+ scrollbar-color:rgba(180,155,220,.45) transparent;
+}
+.nav-v216 .sidebar > .navigation::-webkit-scrollbar{width:5px}
+.nav-v216 .sidebar > .navigation::-webkit-scrollbar-thumb{background:rgba(180,155,220,.45);border-radius:6px}
+.nav-v216 .sidebar > .nav-company-shortcut{
+ flex:0 0 auto;
+ margin-top:10px;
+}
+@media(max-width:800px){
+ .nav-v216 .sidebar{
+  height:100dvh;
+  max-height:100dvh;
+  padding-bottom:env(safe-area-inset-bottom);
+ }
+}
