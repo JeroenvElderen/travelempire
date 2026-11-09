@@ -765,7 +765,7 @@ export async function dispatchScout(
   }
  }
  // Green explorers prefer missing links, falling back to nearest-road expansion.
- if(specialist==='completion')best=completionBest;
+ if(specialist==='completion')best=completionBest??best;
  else if(specialist)best=specialistBest;
  // Keep specialist scouts moving along the road they are already following.
  // The nearest-frontier search otherwise sends them backwards even when an
