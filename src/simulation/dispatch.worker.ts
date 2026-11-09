@@ -6,10 +6,12 @@ let graph:RoadGraph|null=null;
 // Their results are committed by this coordinator only after validating the
 // shared discovered network and current route reservations.
 type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
- outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string};
+ outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string;
+ mode?:'idle'|'successor';baseEdgeIds?:string[];};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
-const planningRequests=new Map<number,{id:string;at:number;position:Point;exploredCount:number}>();
+const planningRequests=new Map<number,{id:string;at:number;position:Point;exploredCount:number;
+ mode:'idle'|'successor';baseEdgeIds?:string[]}>();
 const planningResults=new Map<string,PoolResult>();
 const planningLastSent=new Map<string,number>();
 const planningBackoff=new Map<string,{until:number;roads:number;explored:number}>();
@@ -38,7 +40,7 @@ function startPlanningPool(revision:number):void{
     const request=planningRequests.get(msg.requestId);
     if(!request)return;
     planningRequests.delete(msg.requestId);
-    planningResults.set(request.id,msg as PoolResult);
+    planningResults.set(request.id,{...msg,mode:request.mode,baseEdgeIds:request.baseEdgeIds} as PoolResult);
     planningStats.set(request.id,{result:msg.outcome??'unknown',ms:msg.ms??0,
      queueMs:performance.now()-request.at,at:performance.now()});
     if(msg.outcome==='planned')planningBackoff.delete(request.id);
@@ -1069,7 +1071,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     slot.busy=true;
     const requestId=++nextPlanningRequest;
     slot.requestId=requestId;
-    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position,exploredCount:explored.size});
+    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position,exploredCount:explored.size,mode:'idle'});
     planningLastSent.set(vehicle.id,performance.now());
     explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
     explorerPlanSkipReason.set(vehicle.id,'pool-search');
