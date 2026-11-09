@@ -7,7 +7,7 @@ export type Taxi = {
   kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery';
   ferryVisitedPorts?: string[];
   ferryTrip?: {stage:'boarding'|'sailing';routeId:string;fromPortId:string;toPortId:string;geometry:Point[];destination:Point;durationGameMs:number;startedGameMs?:number;ticketEuros:number;seedRoadId?:string};
-  explorerRole?: 'motorway'|'trunk'|'primary'|'secondary'|'tertiary'|'residential'|'rural'|'service'|'poi'|'completion'|'highway'|'urban'; // Older saves default to taxi.
+  explorerRole?: 'motorway'|'trunk'|'primary'|'secondary'|'tertiary'|'residential'|'rural'|'service'|'poi'|'completion'|'highway'|'urban'|'balanced'; // Older saves default to taxi.
   name: string;
   driver: string;
   position: Point;
@@ -702,6 +702,18 @@ export async function dispatchScout(
  let specialistBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let specialistScore=Infinity;
  const specialist=taxi.explorerRole;
+ const balanced=taxi.kind==='explorer'&&(specialist==='balanced'||!specialist);
+ const roadPriority=(h:string):number=>['motorway','motorway_link'].includes(h)?0:['trunk','trunk_link'].includes(h)?1:['primary','primary_link'].includes(h)?2:['secondary','secondary_link'].includes(h)?3:['tertiary','tertiary_link'].includes(h)?4:['residential','living_street','unclassified'].includes(h)?5:6;
+ const forwardPenalty=(from:string,to:string):number=>{
+  if(!balanced||!incomingNode||from!==start)return 0;
+  if(to===incomingNode)return 2500;
+  const a=graph.nodes.get(incomingNode),b=graph.nodes.get(start),c=graph.nodes.get(to);
+  if(!a||!b||!c)return 0;
+  const scale=Math.cos(b[1]*Math.PI/180),ux=(b[0]-a[0])*scale,uy=b[1]-a[1],vx=(c[0]-b[0])*scale,vy=c[1]-b[1];
+  const cosine=(ux*vx+uy*vy)/Math.max(1e-14,Math.hypot(ux,uy)*Math.hypot(vx,vy));
+  return cosine<-.5?900:cosine<0?280:0;
+ };
+ let balancedBestScore=Infinity;
  // POI candidate edges are already indexed near harbours by the worker.
  const poiPoints=specialist==='poi'?(poiTargets??[]):[];
  const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):specialist==='motorway'?['motorway','motorway_link'].includes(h):specialist==='trunk'?['trunk','trunk_link'].includes(h):specialist==='primary'?['primary','primary_link'].includes(h):specialist==='secondary'?['secondary','secondary_link'].includes(h):specialist==='tertiary'?['tertiary','tertiary_link'].includes(h):specialist==='residential'?['residential','living_street'].includes(h):specialist==='rural'?h==='unclassified':specialist==='service'?h==='service':false;
@@ -711,7 +723,7 @@ export async function dispatchScout(
  // rather than an arbitrary radius or node count. Only an undiscovered road
  // of their own class can be selected as a discovery target.
  const majorRoadScout=specialist==='motorway'||specialist==='trunk'||specialist==='primary';
- const maxSearchMeters=majorRoadScout?Infinity:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
+ const maxSearchMeters=majorRoadScout?Infinity:balanced?15000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
  // Every role, including motorway and recovery searches, must have a finite work limit.
  // The scheduler retries later as more road tiles and discoveries become available.
  const maxScoutVisits=majorRoadScout?18000:12000;
@@ -732,7 +744,8 @@ export async function dispatchScout(
   // Dijkstra expands in ascending travel distance. Once the frontier is
   // farther than the best candidate score, no later candidate can win.
   // This applies to all specialist roles, not only motorway/trunk scouts.
-  if((!specialist&&best&&distance>best.distance)||
+  if((balanced&&best&&distance>best.distance+900)||
+     (!specialist&&best&&distance>best.distance)||
      (specialist==='completion'&&completionBest&&distance>completionBest.distance)||
      (specialist!=='completion'&&specialistBest&&distance>specialistScore))break;
   for(const edge of graph.edges.get(node)??[]){
@@ -747,7 +760,10 @@ export async function dispatchScout(
     const inside=revealed.has(node)&&revealed.has(edge.to);
     const candidate={from:node,to:edge.to,id:edge.id,distance,inside,local:true};
     // Nearest undiscovered road by shortest travel distance to its junction.
-    if(!best||candidate.distance<best.distance)best=candidate;
+    if(balanced){
+      const score=distance+roadPriority(edge.highway??'')*85+forwardPenalty(node,edge.to);
+      if(score<balancedBestScore){best=candidate;balancedBestScore=score;}
+     }else if(!best||candidate.distance<best.distance)best=candidate;
      // Green explorers finish undiscovered links between already explored junctions first.
      if(taxi.explorerRole==='completion'&&inside&&(!completionBest||candidate.distance<completionBest.distance))completionBest=candidate;
      if(specialist&&specialist!=='poi'&&specialist!=='completion'){
@@ -768,11 +784,11 @@ export async function dispatchScout(
  }
  // Green explorers prefer missing links, falling back to nearest-road expansion.
  if(specialist==='completion')best=completionBest??best;
- else if(specialist)best=specialistBest;
+ else if(specialist&&!balanced)best=specialistBest;
  // Keep specialist scouts moving along the road they are already following.
  // The nearest-frontier search otherwise sends them backwards even when an
  // eligible undiscovered continuation is connected to the current junction.
- if(taxi.kind==='explorer'&&specialist&&specialist!=='completion'&&specialist!=='poi'&&incomingNode){
+ if(taxi.kind==='explorer'&&(balanced||(specialist&&specialist!=='completion'&&specialist!=='poi'))&&incomingNode){
   const previousPoint=graph.nodes.get(incomingNode),at=graph.nodes.get(start);
   if(previousPoint&&at){
    const scale=Math.cos(at[1]*Math.PI/180);
@@ -783,7 +799,7 @@ export async function dispatchScout(
    for(const edge of graph.edges.get(start)??[]){
     if(edge.to===incomingNode||edge.meters<=0||explored.has(edge.id)||reservedEdges.has(edge.id)||reservedTargets.has(edge.to)||
        (_allowedRoads&&!_allowedRoads.has(edge.id))||(discoveryAllowed&&!discoveryAllowed.has(edge.id))||
-       (requiredFrontier&&!requiredFrontier.has(start))||!specialistMatch(edge.highway??''))continue;
+       (requiredFrontier&&!requiredFrontier.has(start))||(specialist!=='balanced'&&!balanced&&!specialistMatch(edge.highway??'')))continue;
     const end=graph.nodes.get(edge.to);if(!end||am<1e-12)continue;
     const bx=(end[0]-at[0])*scale,by=end[1]-at[1],bm=Math.hypot(bx,by);
     if(bm<1e-12)continue;
@@ -881,7 +897,7 @@ export async function dispatchScout(
  const planned=new Set(ids);
  let cursor=keys[keys.length-1];
  let extraMeters=0;
- const corridorSpecialist=taxi.kind==='explorer'&&['motorway','trunk','primary','secondary','tertiary','residential','rural','service'].includes(taxi.explorerRole??'');
+ const corridorSpecialist=taxi.kind==='explorer'&&(balanced||['motorway','trunk','primary','secondary','tertiary','residential','rural','service'].includes(taxi.explorerRole??''));
  const maxSegments=corridorSpecialist?160:24;
  const maxMeters=corridorSpecialist?16000:900;
  const turnCost=(from:string,at:string,to:string):number=>{
@@ -911,7 +927,7 @@ export async function dispatchScout(
     if(Math.abs(turnA-turnB)>0.02)return turnA-turnB;
    }
    const ai=revealed.has(a.to)?0:1,bi=revealed.has(b.to)?0:1;
-   return ai-bi||a.meters-b.meters;
+   return ai-bi||(balanced?roadPriority(a.highway??'')-roadPriority(b.highway??''):0)||a.meters-b.meters;
   });
   const edge=links[0];
   keys.push(edge.to);ids.push(edge.id);planned.add(edge.id);
