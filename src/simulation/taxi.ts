@@ -897,7 +897,9 @@ export async function dispatchScout(
   const previousNode=keys.length>1?keys[keys.length-2]:undefined;
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
-   (!regionalCandidates||regionalCandidates.has(edge.id))&&(!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&
+   // A regional candidate shortlist locates the first road. It must not
+   // truncate an otherwise contiguous corridor in the same road class.
+   (!discoveryAllowed||discoveryAllowed.has(edge.id))&&!explored.has(edge.id)&&
    !reservedEdges.has(edge.id)&&!planned.has(edge.id)&&
    !reservedTargets.has(edge.to)&&edge.meters>0&&edge.to!==previousNode
   );
