@@ -6,6 +6,8 @@ export type ExplorerRouteDiagnostic={
 };
 export type ExplorerRoutePlan={
  path:Point[];edgeIds:string[];discoveryEdgeIds:string[];
+ /** Undiscovered cross-class roads used only for a legally directed escape. */
+ escapeTransitEdgeIds:string[];
  diagnostic:ExplorerRouteDiagnostic;
 };
 
@@ -40,11 +42,12 @@ export function planReachableExplorerRoad(
  // A one-way entrance is allowed only if there is a directed escape to
  // the existing purple network. Reversing a bidirectional edge is always
  // legal; a true one-way cul-de-sac is never an automatic exploration target.
- // The escape must use purple transit or roads this specialist can reveal.
+ // Escape traversal may cross other road classes, but only eligible roads
+ // become purple. A safe escape must terminate back on a purple road.
  type EscapeStep={from:string;to:string;id:string};
  const escapes=new Map<string,EscapeStep[]|null>();
  const safeExit=(from:string,to:string,id:string):EscapeStep[]|null=>{
-  const cacheKey=to+'|'+id;
+  const cacheKey=from+'|'+to+'|'+id;
   if(escapes.has(cacheKey))return escapes.get(cacheKey)!;
   const reverse=(graph.edges.get(to)??[]).some(e=>e.to===from&&e.id===id&&e.meters>0);
   if(reverse){escapes.set(cacheKey,[]);return [];}
@@ -61,8 +64,9 @@ export function planReachableExplorerRoad(
    for(const edge of graph.edges.get(node)??[]){
     if(edge.meters<=0)continue;
     const purple=explored.has(edge.id);
-    if(!purple&&(!eligible.has(edge.id)||reservedRoads.has(edge.id)))continue;
-    if(!purple&&reservedTargets.has(edge.to))continue;
+    // Discovery class restrictions do not apply to a *legal escape*.
+    // Do not traverse another explorer's reserved discovery target.
+    if(!purple&&(reservedRoads.has(edge.id)||reservedTargets.has(edge.to)))continue;
     if(visited.has(edge.to))continue;
     visited.add(edge.to);
     parents.set(edge.to,{from:node,to:edge.to,id:edge.id});
@@ -163,11 +167,17 @@ export function planReachableExplorerRoad(
   lastId=ids[ids.length-1];
  const exit=lastFrom&&lastTo&&lastId?safeExit(lastFrom,lastTo,lastId):[];
  if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
+ const escapeTransitEdgeIds:string[]=[];
  for(const step of exit??[]){
   keys.push(step.to);ids.push(step.id);
-  if(!explored.has(step.id)&&!discovery.includes(step.id))discovery.push(step.id);
+  // Cross-class escape roads remain red, even though the explorer drives on them.
+  if(!explored.has(step.id)){
+   if(eligible.has(step.id)){if(!discovery.includes(step.id))discovery.push(step.id);}
+   else escapeTransitEdgeIds.push(step.id);
+  }
  }
  const path=keys.map(id=>graph.nodes.get(id)!).filter(Boolean);
  diag.reason='planned';
- return {route:{path,edgeIds:ids,discoveryEdgeIds:discovery,diagnostic:diag},diagnostic:diag};
+ return {route:{path,edgeIds:ids,discoveryEdgeIds:discovery,
+  escapeTransitEdgeIds,diagnostic:diag},diagnostic:diag};
 }
