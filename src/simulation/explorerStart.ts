@@ -1,0 +1,88 @@
+import {meters,nearest,type RoadGraph,type Point} from './taxi';
+
+/**
+ * Resolve an explorer's true starting road, rather than assuming that the
+ * geographically nearest OSM node belongs to the discovered (purple) network.
+ * The position must lie on a discovered segment (within snap tolerance).
+ *
+ * The connector always follows that segment's allowed driving direction.
+ * A one-way road can only join the graph at its permitted downstream node.
+ */
+export type PurpleStart={
+ node:string;
+ roadId:string;
+ distanceFromRoadMeters:number;
+ connector?:{from:Point;to:Point;edgeId:string};
+};
+
+export function resolvePurpleExplorerStart(
+ graph:RoadGraph,position:Point,discovered:Set<string>,
+ endpoints?:Map<string,[string,string]>,
+ maxOffsetMeters=20,
+):PurpleStart|null{
+ if(!discovered.size)return null;
+ const closestNode=nearest(graph,position);
+ let best:PurpleStart|null=null;
+ let bestScore=Infinity;
+ const seen=new Set<string>();
+ const cos=Math.max(0.1,Math.cos(position[1]*Math.PI/180));
+ const projected=(a:Point,b:Point)=>{
+  const ax=(a[0]-position[0])*111320*cos,ay=(a[1]-position[1])*111320;
+  const bx=(b[0]-position[0])*111320*cos,by=(b[1]-position[1])*111320;
+  const dx=bx-ax,dy=by-ay;
+  const t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy||1)));
+  return Math.hypot(ax+t*dx,ay+t*dy);
+ };
+ const inspect=(from:string,to:string,id:string)=>{
+  const a=graph.nodes.get(from),b=graph.nodes.get(to);
+  if(!a||!b)return;
+  const legal=(graph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to&&e.meters>0);
+  if(!legal)return;
+  const offset=projected(a,b);
+  if(offset>maxOffsetMeters)return;
+  // Do not prefer a faraway endpoint just because it is on a nominally
+  // closer parallel road. Use perpendicular match first, then travel length.
+  const travel=meters(position,b);
+  const score=offset*1000+travel;
+  if(score>=bestScore)return;
+  const connector=travel>12?{from:position,to:b,edgeId:id}:undefined;
+  best={node:to,roadId:id,distanceFromRoadMeters:offset,connector};
+  bestScore=score;
+ };
+ if(endpoints){
+  for(const id of discovered){
+   const pair=endpoints.get(id);if(!pair)continue;
+   const [a,b]=pair;
+   inspect(a,b,id);inspect(b,a,id);
+  }
+ }else{
+  for(const [from,edges] of graph.edges)for(const e of edges){
+   if(!discovered.has(e.id))continue;
+   const key=from+'|'+e.to+'|'+e.id;
+   if(seen.has(key))continue;
+   seen.add(key);inspect(from,e.to,e.id);
+  }
+ }
+ // No virtual access from a nearby, unrelated red road. A closest node
+ // counts only when there really is a discovered graph edge at that node.
+ if(!best&&closestNode){
+  for(const e of graph.edges.get(closestNode)??[]){
+   if(!discovered.has(e.id))continue;
+   const p=graph.nodes.get(closestNode);
+   if(p&&meters(p,position)<=maxOffsetMeters){
+    return {node:closestNode,roadId:e.id,
+     distanceFromRoadMeters:meters(p,position)};
+   }
+  }
+ }
+ return best;
+}
+
+export function prependPurpleStart(
+ route:{path:Point[];edgeIds:string[];discoveryEdgeIds?:string[]},
+ start:PurpleStart,
+):{path:Point[];edgeIds:string[];discoveryEdgeIds?:string[]}{
+ if(!start.connector)return route;
+ return {...route,path:[start.connector.from,...route.path],
+  edgeIds:[start.connector.edgeId,...route.edgeIds]};
+}
