@@ -12,15 +12,17 @@ export type PassengerFerryOffer={
 export function passengerFerryTicketEuros(durationMinutes:number):number{
  return Math.round(Math.max(10,Math.min(100,10+durationMinutes*0.18))*100)/100;
 }
+const hierarchy=['motorway','trunk','primary','secondary','tertiary','residential','rural','service'] as const;
+function classOf(highway:string|undefined):string{
+ const raw=(highway??'').replace(/_link$/,'');
+ return raw==='living_street'?'residential':raw==='unclassified'?'rural':raw;
+}
 function candidateRoadRole(role:Taxi['explorerRole'],highway:string|undefined):boolean{
- if(!highway)return role==='completion'||role==='urban'||role==='highway';
- if(role==='completion'||!role)return true;
- if(role==='poi')return true;
- if(role==='highway')return ['motorway','trunk','primary','secondary'].includes(highway);
- if(role==='urban')return ['tertiary','residential','living_street','service','unclassified'].includes(highway);
- if(role==='rural')return ['unclassified','track','residential','service'].includes(highway);
- if(role==='residential')return ['residential','living_street'].includes(highway);
- return role===highway;
+ const type=classOf(highway);
+ if(role==='completion'||role==='poi')return hierarchy.includes(type as typeof hierarchy[number]);
+ if(role==='highway')return ['motorway','trunk','primary','secondary'].includes(type);
+ if(role==='urban')return ['tertiary','residential','rural','service'].includes(type);
+ return role==='rural'?type==='rural':role===type;
 }
 /** Examine only the local road area near the destination, with strict work limits. */
 function hasDestinationWork(graph:RoadGraph,start:string,role:Taxi['explorerRole'],discovered:ReadonlySet<string>):boolean{
@@ -44,10 +46,9 @@ function accessibleNode(graph:RoadGraph,p:Point):{id:string;point:Point}|null{
 }
 /** Road-class priority for ferry exploration. Completion and POI run after
  * ordinary road hierarchy has opened the destination's network. */
-const roadPriority=['motorway','trunk','primary','secondary','tertiary','residential','living_street','unclassified','service','track'];
+const roadPriority:readonly string[]=hierarchy;
 function priorityOf(highway:string|undefined):number{
- const raw=(highway??'').replace(/_link$/,'');
- const index=roadPriority.indexOf(raw);
+ const index=roadPriority.indexOf(classOf(highway));
  return index<0?roadPriority.length:index;
 }
 function destinationPriority(graph:RoadGraph,anchor:string,discovered:ReadonlySet<string>):{
@@ -106,7 +107,7 @@ export function choosePassengerFerry(
     const gate=destinationPriority(graph,destination.id,discovered);
     if(!gate.seedRoadId||gate.highest>=roadPriority.length)continue;
     const role=explorer.explorerRole;
-    const rank=role==='highway'?0:role==='urban'?5:role==='rural'?roadPriority.indexOf('unclassified'):role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
+    const rank=role==='highway'?0:role==='urban'?5:role==='rural'?roadPriority.indexOf('rural'):role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
     // A fresh island opens with its highest available road class. All other
     // vehicle classes wait until a highest-class edge has been discovered.
     if(!gate.highestDiscovered&&rank!==gate.highest)continue;
