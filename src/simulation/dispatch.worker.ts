@@ -777,6 +777,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // route planning, without changing the actual saved discovery network.
     const projectedExplored=new Set(explored);
     const projectedRevealed=new Set(revealedNodes);
+    // This explorer may reuse its own committed roads as transit, while
+    // other vehicles' reservations remain off limits.
+    const successorReservations=new Set(reservedEdges);
+    for(const id of taxi.edgeIds.slice(taxi.leg))successorReservations.delete(id);
     for(const id of taxi.discoveryEdgeIds??[]){
      if(projectedExplored.has(id))continue;
      projectedExplored.add(id);
@@ -784,7 +788,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(ends){projectedRevealed.add(ends[0]);projectedRevealed.add(ends[1]);}
     }
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,projectedExplored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,new Set([from]),projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
+     graph,projectedExplored,hq,reservedTargets,successorReservations,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,undefined,projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-extensionRouteStarted;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
