@@ -58,6 +58,8 @@ export type Taxi = {
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
   discoveryEdgeIds?: string[];
+  /** Red roads traversed only as a legally verified escape from a one-way route. */
+  escapeTransitEdgeIds?: string[];
   /** Worker explicitly rejected a disconnected or invalid legacy route. */
   routeInvalid?:boolean;
   speedKph?: number;
