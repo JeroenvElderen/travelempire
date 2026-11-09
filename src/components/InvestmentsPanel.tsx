@@ -15,7 +15,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,onInve
  const entries=useMemo(()=>{
   const byId=new Map<string,InvestablePOI>();
   for(const item of available)if(item.kind==='hotel'||item.kind==='parking')byId.set(item.id,item);
-  for(const item of holdings)if(!byId.has(item.id))byId.set(item);
+  for(const item of holdings)if(!byId.has(item.id))byId.set(item.id,item);
   return [...byId.values()].filter(p=>(category==='all'||p.kind===category)&&(!filter||((p.name||'')+' '+p.id).toLowerCase().includes(filter.toLowerCase()))).sort((a,b)=>Number(holdingsIds.has(b.id))-Number(holdingsIds.has(a.id))||(a.name||'').localeCompare(b.name||'')).slice(0,160);
  },[available,portfolio,category,filter]);
  const invested=holdings.reduce((sum,h)=>sum+h.investedCents,0);
