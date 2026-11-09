@@ -998,13 +998,20 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  // when the vehicle reaches its destination node, never partway through.
  // Discovery is not the same as driving: transit on another category never reveals it.
   // The assignment's discoveryEdgeIds are the sole authority for explorer discoveries.
-  const eligible=taxi.kind==='explorer'?new Set(taxi.status==='EXPLORING'?(taxi.discoveryEdgeIds??[]):[]):null;
+  // Operational journeys to hotels, parking and fuel/service facilities
+  // also discover roads physically traversed, regardless of specialist class.
+  // Other returning journeys (including depot travel) remain transit-only.
+  const operationalDiscovery=taxi.kind==='explorer'&&taxi.status==='RETURNING'&&
+   Boolean(taxi.restStopId||taxi.refillDestination||taxi.serviceDestination);
+  const eligible=taxi.kind==='explorer'?new Set(
+   taxi.status==='EXPLORING'?(taxi.discoveryEdgeIds??[]):
+   operationalDiscovery?taxi.edgeIds:[]):null;
   // The motorway explorer may transit undiscovered roads of any class, but
   // traversing them must never reveal them. Validate against the graph as well
   // as the dispatch assignment, including routes restored from older saves.
   const newlyDiscovered=eligible?advanced.crossed.filter(id=>{
    if(!eligible.has(id))return false;
-   if(taxi.explorerRole!=='motorway')return true;
+   if(operationalDiscovery||taxi.explorerRole!=='motorway')return true;
    // Only inspect edges actually crossed this tick, never scan the whole graph.
    for(let leg=taxi.leg;leg<advanced.taxi.leg;leg++){
     if(taxi.edgeIds[leg]!==id)continue;
@@ -1027,15 +1034,15 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  }
  if(t.status==='RETURNING'&&t.pauseAtHome){
   t={...t,status:t.kind==='surveyor'?'IDLE':'PAUSED',pauseAtHome:false,shiftParked:t.kind==='surveyor'?false:t.shiftParked,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
-  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
+  return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.serviceDestination){
   t={...t,status:'SERVICING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,serviceUntil:undefined,serviceDestination:undefined,journeyEdges:[]};
-  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
+  return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.refillDestination){
   t={...t,status:'REFUELLING',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,refillUntil:undefined,journeyEdges:[]};
-  return{taxi:t,earned:0,finished:false,discovered:[],distanceMeters:advanced.distanceMeters};
+  return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  }
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=[...new Set(t.journeyEdges??[])];
