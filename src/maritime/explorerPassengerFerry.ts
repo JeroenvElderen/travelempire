@@ -57,15 +57,15 @@ function destinationPriority(graph:RoadGraph,anchor:string,discovered:ReadonlySe
  const origin=graph.nodes.get(anchor);
  let highest=roadPriority.length,highestDiscovered=false;
  let seedRoadId:string|undefined;
- let seedLength=Infinity;
+ let seedLength=Infinity,seedRank=roadPriority.length;
  if(!origin)return {highest,highestDiscovered,seedRoadId};
  const visited=new Set([anchor]),queue=[anchor];
  for(let cursor=0;cursor<queue.length&&cursor<500;cursor++){
   const node=queue[cursor],at=graph.nodes.get(node);
   if(!at||meters(at,origin)>1800)continue;
   for(const edge of graph.edges.get(node)??[]){
-   if(node===anchor&&edge.meters<seedLength){
-    seedRoadId=edge.id;seedLength=edge.meters;
+   if(node===anchor&&(priorityOf(edge.highway)<seedRank||(priorityOf(edge.highway)===seedRank&&edge.meters<seedLength))){
+    seedRoadId=edge.id;seedLength=edge.meters;seedRank=priorityOf(edge.highway);
    }
    const rank=priorityOf(edge.highway);
    if(rank<highest){highest=rank;highestDiscovered=discovered.has(edge.id);}
