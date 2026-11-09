@@ -411,7 +411,7 @@ function recordExplorerMission(taxi:Taxi,now:number):void{
 }
 
 const MISSION_LOOKAHEAD_EDGES=48;
-const MAX_SUCCESSOR_PLANS_PER_DISPATCH=2;
+const MAX_SUCCESSOR_PLANS_PER_DISPATCH=1;
 // Avoid repeated nationwide path searches for unchanged idle scouts.
 const idleRetryAt=new Map<string,number>();
 const idleRetryRoadCount=new Map<string,number>();
@@ -422,7 +422,7 @@ let pausedExplorerRecoveries=0,depotReturns=0,depotRouteFailures=0;
 const autoParkedExplorers=new Map<string,{roads:number;explored:number}>();
 let autoParkReactivations=0,deferredDepotReturns=0,obsoleteReturnRecoveries=0;
 // Limit expensive new mission searches per worker dispatch. Existing routes continue unaffected.
-const MAX_IDLE_MISSION_PLANS_PER_DISPATCH=1;
+const MAX_IDLE_MISSION_PLANS_PER_DISPATCH=3;
 let nextExplorerIndex=0;
 const explorerLastPlanAttempt=new Map<string,number>();
 const explorerLastConsidered=new Map<string,number>();
@@ -592,8 +592,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   let orderedExplorerIndices:number[]=[];
   let planningCalls=0;
   // Plan successors and idle explorers in every cycle, with a bounded shared budget.
-  // Two moving scouts can extend while one idle scout can still receive work.
-  const planningBudget=3;
+  // At most one moving scout extends, while three idle scouts can start missions.
+  const planningBudget=4;
   const planningPhase='continuous';
   if(msg.allowScout){
     for(let i=0;i<taxis.length;i++){
@@ -743,7 +743,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
     if(remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
-    if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-1)continue;
+    if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-3)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
     if(!from)continue;
@@ -816,7 +816,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      edgeIds:[...taxi.edgeIds,...extension.edgeIds],discoveryEdgeIds:[...(taxi.discoveryEdgeIds??taxi.edgeIds),...(extension.discoveryEdgeIds??[])],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
-   // Idle missions use the remaining reserved planning slot each dispatch.
+   // Reserve three of four route-planning slots for idle explorers.
    // Fairness is maintained by oldest consideration rather than fleet order.
    const idleOrder=[...orderedExplorerIndices].sort((a,b)=>
     (explorerLastConsidered.get(taxis[a].id)??0)-(explorerLastConsidered.get(taxis[b].id)??0));
@@ -865,9 +865,13 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const candidateStarted=performance.now();
     // Do not rescan and sort regional candidates for every incremental slice.
+    // Indexed POIs form a small target set; never discard a reachable
+    // harbour/facility road just because a nearer POI is disconnected.
     const candidates=continuingMajorSearch
      ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
-     :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
+     :idleVehicle.explorerRole==='poi'
+      ?new Set([...discoveryRoads(idleVehicle)].filter(id=>!explored.has(id)&&!reservedEdges.has(id)))
+      :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
     candidateSelectionMs+=performance.now()-candidateStarted;
     if(candidates.size===0){
      explorerPlanSkipReason.set(idleVehicle.id,'no-eligible-candidates');negativeScoutEmptySkips++;idleSkipped++;
