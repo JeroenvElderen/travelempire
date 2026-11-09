@@ -52,7 +52,8 @@ describe('hourly property investments',()=>{
   const legacy={...owned.holdings[hotel.id],lastDay:1,lastHour:undefined};
   const portfolio={holdings:{[hotel.id]:legacy}};
   expect(settlePropertyDividends(portfolio,day+20*hour).incomeCents).toBe(0);
-  const next=settlePropertyDividends(portfolio,day*2);
+  expect(settlePropertyDividends(portfolio,day*2).incomeCents).toBe(0);
+  const next=settlePropertyDividends(portfolio,day*2+hour);
   expect(next.hours).toBe(1);
  });
 });
