@@ -5,7 +5,7 @@ import {meters,nearest} from '../simulation/taxi';
 export type PassengerFerryOffer={
  routeId:string;fromPortId:string;toPortId:string;
  boarding:Point;destination:Point;geometry:Point[];
- durationMinutes:number;ticketEuros:number;
+ durationMinutes:number;ticketEuros:number;seedRoadId?:string;
 };
 
 /** A vehicle ticket is not a route ownership purchase. Charged once at departure. */
@@ -42,6 +42,40 @@ function accessibleNode(graph:RoadGraph,p:Point):{id:string;point:Point}|null{
  const id=nearest(graph,p),point=id?graph.nodes.get(id):undefined;
  return point&&meters(point,p)<=300?{id,point}:null;
 }
+/** Road-class priority for ferry exploration. Completion and POI run after
+ * ordinary road hierarchy has opened the destination's network. */
+const roadPriority=['motorway','trunk','primary','secondary','tertiary','residential','living_street','unclassified','service','track'];
+function priorityOf(highway:string|undefined):number{
+ const raw=(highway??'').replace(/_link$/,'');
+ const index=roadPriority.indexOf(raw);
+ return index<0?roadPriority.length:index;
+}
+function destinationPriority(graph:RoadGraph,anchor:string,discovered:ReadonlySet<string>):{
+ highest:number;highestDiscovered:boolean;seedRoadId:string|undefined;
+}{
+ const origin=graph.nodes.get(anchor);
+ let highest=roadPriority.length,highestDiscovered=false;
+ let seedRoadId:string|undefined;
+ let seedLength=Infinity;
+ if(!origin)return {highest,highestDiscovered,seedRoadId};
+ const visited=new Set([anchor]),queue=[anchor];
+ for(let cursor=0;cursor<queue.length&&cursor<500;cursor++){
+  const node=queue[cursor],at=graph.nodes.get(node);
+  if(!at||meters(at,origin)>1800)continue;
+  for(const edge of graph.edges.get(node)??[]){
+   if(node===anchor&&edge.meters<seedLength){
+    seedRoadId=edge.id;seedLength=edge.meters;
+   }
+   const rank=priorityOf(edge.highway);
+   if(rank<highest){highest=rank;highestDiscovered=discovered.has(edge.id);}
+   else if(rank===highest&&discovered.has(edge.id))highestDiscovered=true;
+   if(visited.size<600&&!visited.has(edge.to)){
+    visited.add(edge.to);queue.push(edge.to);
+   }
+  }
+ }
+ return {highest,highestDiscovered,seedRoadId};
+}
 /** Limited topological checks; missing destination data must be loaded first. */
 export function choosePassengerFerry(
  explorer:Taxi,network:FerryNetwork,graph:RoadGraph,discovered:ReadonlySet<string>,
@@ -59,6 +93,8 @@ export function choosePassengerFerry(
   if(!options.length)continue;
   const boarding=accessibleNode(graph,source.roadAccess??source.position);
   if(!boarding)continue;
+  // Ferry departures must be reachable on an already discovered road.
+  if(!(graph.edges.get(boarding.id)??[]).some(e=>discovered.has(e.id)))continue;
   for(const ferry of options){
    const reverse=ferry.to===source.id;
    const destinationPortId=reverse?ferry.from:ferry.to;
@@ -67,13 +103,21 @@ export function choosePassengerFerry(
    if(!dest||meters(source.position,dest.position)<800)continue;
    const destination=accessibleNode(graph,dest.roadAccess??dest.position);
    if(!destination||!hasDestinationWork(graph,destination.id,explorer.explorerRole,discovered))continue;
+    const gate=destinationPriority(graph,destination.id,discovered);
+    if(!gate.seedRoadId||gate.highest>=roadPriority.length)continue;
+    const role=explorer.explorerRole;
+    const rank=role==='highway'?0:role==='urban'?5:role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
+    // A fresh island opens with its highest available road class. All other
+    // vehicle classes wait until a highest-class edge has been discovered.
+    if(!gate.highestDiscovered&&rank!==gate.highest)continue;
    const score=distance+ferry.durationMinutes*20;
    if(score>=bestScore)continue;
    bestScore=score;
    best={routeId:ferry.id,fromPortId:source.id,toPortId:dest.id,
     boarding:boarding.point,destination:destination.point,
     geometry:reverse?[...ferry.geometry].reverse():ferry.geometry,
-    durationMinutes:ferry.durationMinutes,ticketEuros:passengerFerryTicketEuros(ferry.durationMinutes)};
+    durationMinutes:ferry.durationMinutes,ticketEuros:passengerFerryTicketEuros(ferry.durationMinutes),
+     seedRoadId:gate.highestDiscovered?undefined:gate.seedRoadId};
   }
  }
  return best;
