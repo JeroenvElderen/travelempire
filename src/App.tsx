@@ -630,6 +630,17 @@ export default function App(){
      }
    }
    networkRef.current?.consider(positions);
+   // Request one harbour-access tile near an active POI explorer each cycle.
+   // Avoid bulk ferry-port downloads that could exhaust mobile Safari memory.
+   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi');
+   if(poiExplorers.length&&harbourPoiRef.current.length){
+    let closest:[number,number]|null=null,closestMeters=20000;
+    for(const harbour of harbourPoiRef.current)for(const explorer of poiExplorers){
+     const distance=meters(harbour,explorer.position);
+     if(distance<closestMeters){closest=harbour;closestMeters=distance;}
+    }
+    if(closest)networkRef.current?.considerHarbour(closest);
+   }
    const manager=networkRef.current;
    if(manager)setRoadDiagnostics({queued:manager.queuedCount,edges:manager.edgeCount,workerEdges:workerRoadCountRef.current});
   };
