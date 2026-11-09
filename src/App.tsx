@@ -998,17 +998,17 @@ export default function App(){
      if(next.finished)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
      const discoveryStarted=performance.now();
-     if(t.kind==='explorer'&&t.status==='EXPLORING'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
+     if(t.kind==='explorer'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
-     next.discovered.forEach(id=>{if(t.status==='EXPLORING'){
-      if(t.kind==='explorer'&&!discovered.has(id)){
+     next.discovered.forEach(id=>{if(t.kind==='explorer'){
+      if(!discovered.has(id)){
        const length=roadLengthByIdRef.current.get(id)??0;
        newRoadKm+=length/1000;
       }
-      if(t.kind==='explorer')discovered.add(id);
+      discovered.add(id);
      }});
      discoveryMs+=performance.now()-discoveryStarted;
-     return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&t.status==='EXPLORING'?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
+     return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&(t.status==='EXPLORING'||(t.status==='RETURNING'&&Boolean(t.restStopId||t.refillDestination||t.serviceDestination)))?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
