@@ -1,5 +1,5 @@
 import {useMemo,useState} from 'react';
-import {Building2,CarFront,Coins,Hotel,Landmark,MapPin,Search} from 'lucide-react';
+import {Building2,CarFront,Hotel,Landmark,MapPin,Search} from 'lucide-react';
 import type {InvestablePOI,PropertyPortfolio} from '../investments';
 import {euro,ownership,propertyValuationCents} from '../investments';
 import './InvestmentsPanel.css';
