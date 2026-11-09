@@ -1515,6 +1515,85 @@ export default function App(){
  const [harbourNotice,setHarbourNotice]=useState<{id:string;name:string}|null>(null);
  const harbourSeenRef=useRef(false);
  useEffect(()=>{let cancelled=false;void loadFerryNetwork().then(data=>{if(!cancelled){harbourPoiRef.current=data.ports.map(p=>p.roadAccess??p.position);setHarbourNetwork(data)}}).catch(console.warn);return()=>{cancelled=true}},[]);
+
+ // Automatic explorer ferry passenger tickets: never require route ownership.
+ useEffect(()=>{
+  ferryReadinessRef.current.clear();ferryBookingRef.current.clear();ferryAttemptRef.current.clear();
+  if(!company?.id||!graph||!harbourNetwork)return;
+  const companyId=company.id;
+  const timer=window.setInterval(()=>{
+   if(document.visibilityState==='hidden'||!workerReadyRef.current||!dispatchWorkerRef.current)return;
+   if(companyRef.current?.id!==companyId)return;
+   const now=Date.now();
+   const discovered=discoveredCacheRef.current?.set??new Set(fleetSaveRef.current.exploredEdgeIds??[]);
+   const candidates=taxisRef.current.filter(t=>{
+    const signal=ferryReadinessRef.current.get(t.id);
+    return t.kind==='explorer'&&t.status==='IDLE'&&!t.ferryTrip&&!t.refillRequested&&
+     !t.recoveryPending&&!t.deliveryUntil&&energyPercent(t)>15&&
+     !!signal?.ready&&signal.idleMs>=90000&&!ferryBookingRef.current.has(t.id)&&
+     now-(ferryAttemptRef.current.get(t.id)??0)>25000;
+   }).slice(0,2);
+   for(const scout of candidates){
+    ferryAttemptRef.current.set(scout.id,now);
+    // Preload only nearby linked destination harbours. When road data is not
+    // present yet, retry on a subsequent scan rather than jumping across water.
+    const starts=harbourNetwork.ports
+     .filter(p=>meters(scout.position,p.roadAccess??p.position)<=7500)
+     .sort((a,b)=>meters(scout.position,a.roadAccess??a.position)-meters(scout.position,b.roadAccess??b.position))
+     .slice(0,3);
+    let queued=0;
+    for(const start of starts){
+     for(const link of harbourNetwork.routes){
+      if(queued>=4)break;
+      const destinationId=link.from===start.id?link.to:link.to===start.id?link.from:null;
+      if(!destinationId)continue;
+      const port=harbourNetwork.ports.find(p=>p.id===destinationId);
+      if(port){networkRef.current?.considerHarbour(port.roadAccess??port.position);queued++;}
+     }
+    }
+    const offer=choosePassengerFerry(scout,harbourNetwork,graph,discovered);
+    if(!offer)continue;
+    const worker=dispatchWorkerRef.current;
+    if(!worker)continue;
+    ferryBookingRef.current.add(scout.id);
+    const requestId=++routeSequenceRef.current;
+    pendingRoutesRef.current.set(requestId,{vehicleId:scout.id,position:[...scout.position],status:'IDLE',
+     onResult:(path,edgeIds)=>{
+      ferryBookingRef.current.delete(scout.id);
+      if(!path||!edgeIds||!path.length)return;
+      const latest=taxisRef.current.find(t=>t.id===scout.id);
+      const current=companyRef.current;
+      if(!latest||latest.status!=='IDLE'||latest.ferryTrip||!current||current.id!==companyId)return;
+      const fare=offer.ticketEuros;
+      if(current.cash+pendingCashRef.current<fare){
+       diagnostic('explorers:ferry-ticket','insufficient funds for '+scout.id);return;
+      }
+      const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-fare)*100)/100};
+      pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+      setFleet(old=>({...old,
+       explorationExpense:(old.explorationExpense??0)+fare,
+       transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),
+        taxiId:scout.id,description:`${scout.name} · passenger ferry ticket · ${offer.routeId}`,amount:-fare},
+        ...(old.transactions??[])].slice(0,100),
+       taxis:old.taxis.map(t=>t.id!==scout.id?t:{
+        ...t,status:'RETURNING' as const,pauseAtHome:false,shiftParked:false,
+        path,edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[],
+        ferryTrip:{stage:'boarding' as const,routeId:offer.routeId,
+         fromPortId:offer.fromPortId,toPortId:offer.toPortId,
+         geometry:offer.geometry,destination:offer.destination,
+         durationGameMs:Math.max(1,offer.durationMinutes)*60000,ticketEuros:fare}
+       })
+      }));
+      networkRef.current?.considerHarbour(offer.destination);
+      diagnostic('explorers:ferry-booked',`vehicle=${scout.id} route=${offer.routeId} fare=${fare} durationMin=${offer.durationMinutes}`);
+     }});
+    worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,requestId,from:scout.position,to:offer.boarding});
+    break; // At most one passenger ticket route search per scan.
+   }
+  },12000);
+  return()=>window.clearInterval(timer);
+ },[company?.id,graph,harbourNetwork]);
+
  useEffect(()=>{
   harbourSeenRef.current=false;setHarbourNotice(null);setUnlockedHarbours([]);
  },[company?.id]);
