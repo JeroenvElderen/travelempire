@@ -1151,7 +1151,7 @@ export default function App(){
  const buyRoadExplorer=(_role?:Taxi['explorerRole'])=>{if(!company||!graph)return;try{
   if(fleet.taxis.some(t=>t.kind==='explorer'))throw Error('The universal explorer is already owned. Only one explorer is allowed.');
   const role:Taxi['explorerRole']='balanced';
-  const cost=role==='completion'||role==='urban'?3000:role==='highway'?3500:role==='poi'?4000:2500;
+  const cost=2500;
   const explorerCapacity=explorerDepotCapacity(upgradesFor(fleet,'main'),Research.level(research,'explorerExpansion'));
   const explorerCount=fleet.taxis.filter(t=>t.kind==='explorer'&&(t.depotId??'main')==='main').length;
   if(explorerCount>=explorerCapacity)throw Error(`Headquarters explorer parking is full (${explorerCount}/${explorerCapacity}). Expand explorer parking or move an idle explorer to another depot.`);
@@ -1159,9 +1159,9 @@ export default function App(){
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
   const now=Date.now();
-  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:`${role==='completion'?'Road Completion':role==='highway'?'Highway':role==='urban'?'Urban':role==='poi'?'POI':'General'} Explorer ${fleet.taxis.filter(t=>t.kind==='explorer').length+1}`,driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:role==='completion'?'Road Completion Explorer':role==='highway'?'Highway Explorer':role==='urban'?'Urban Explorer':role==='poi'?'POI Explorer':'Road Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
+  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:'Universal Explorer',driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:'Universal Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
   const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cost)*100)/100};
-  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:(role==='completion'?'Road Completion':role==='highway'?'Highway':role==='urban'?'Urban':role==='poi'?'POI':'General')+' Explorer purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:'Universal Explorer purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
  }catch(e){setSimError(String(e))}};
  const bankTransfer=(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>{
   const current=companyRef.current;if(!current)return;
