@@ -19,6 +19,7 @@ export function resolvePurpleExplorerStart(
  graph:RoadGraph,position:Point,discovered:Set<string>,
  endpoints?:Map<string,[string,string]>,
  maxOffsetMeters=20,
+ nearbyIds?:Iterable<string>,
 ):PurpleStart|null{
  if(!discovered.size)return null;
  const closestNode=nearest(graph,position);
@@ -50,11 +51,18 @@ export function resolvePurpleExplorerStart(
   bestScore=score;
  };
  if(endpoints){
-  for(const id of discovered){
-   const pair=endpoints.get(id);if(!pair)continue;
-   const [a,b]=pair;
-   inspect(a,b,id);inspect(b,a,id);
-  }
+  const inspectIds=(ids:Iterable<string>)=>{
+   for(const id of ids){
+    if(!discovered.has(id))continue;
+    const pair=endpoints.get(id);if(!pair)continue;
+    const [a,b]=pair;
+    inspect(a,b,id);inspect(b,a,id);
+   }
+  };
+  // Most roads are close to the vehicle; reserve the global fallback for
+  // rare long segments whose endpoints lie outside the nearby grid.
+  if(nearbyIds)inspectIds(nearbyIds);
+  if(!best)inspectIds(discovered);
  }else{
   for(const [from,edges] of graph.edges)for(const e of edges){
    if(!discovered.has(e.id))continue;
