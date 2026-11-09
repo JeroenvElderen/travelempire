@@ -672,9 +672,9 @@ export async function dispatchScout(
  if(!start)return taxi;
  // An explorer may depart only from a revealed (already discovered) junction.
  // It can discover an adjacent eligible edge, not jump across red transit roads.
- if(taxi.kind==='explorer'&&!sharedRevealed?.has(start))return taxi;
  incomingNode??=taxi.lastRoadTo===start?taxi.lastRoadFrom:undefined;
  const revealed=sharedRevealed??new Set(exploredRoadNodes(graph,explored,hq));
+ if(taxi.kind==='explorer'&&!revealed.has(start))return taxi;
  // Independent road discovery: choose nearby unvisited roads without zones or AI priorities.
  const dist=new Map<string,number>([[start,0]]);
  const previous=new Map<string,{from:string;id:string}>();
