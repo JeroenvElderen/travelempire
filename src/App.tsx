@@ -1146,6 +1146,10 @@ export default function App(){
   if(!company||!graph||!graph.nodes.size)return;
   setFleet(old=>{
    if(!old.taxis.length)return old; // Starter-fleet effect owns new companies.
+   // A published Greece road graph may contain hundreds of thousands of
+   // nodes. Once all specialists exist, never rescan it on graph revisions.
+   const requiredRoles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
+   if(requiredRoles.every(role=>old.taxis.some(t=>t.kind==='explorer'&&t.explorerRole===role)))return old;
    const discovered=new Set([...(discoveredCacheRef.current?.ids??[]),...(old.exploredEdgeIds??[])]);
    const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
    let node:string|undefined,best=Infinity;
