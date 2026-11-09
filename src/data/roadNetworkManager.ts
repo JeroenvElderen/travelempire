@@ -104,6 +104,18 @@ export class RoadNetworkManager {
   if(selected.length){diagnostic('roads:viewport',`requested=${selected.length} candidates=${choices.length}`);
    this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));this.pump();}
  }
+ /** Load only the exact harbour-access tile, not a large speculative region.
+  * This lets POI explorers find nearby ferry terminals without undoing the
+  * bounded road-loader backpressure needed by iPhone Safari.
+  */
+ considerHarbour(p:Point){
+  if(this.disposed||!this.available.size||this.queue.length>=MAX_PENDING_TILES)return;
+  const id=tileId(p[0],p[1],this.tileSize);
+  if(!this.available.has(id)||this.loaded.has(id)||this.queued.has(id)||(this.failedUntil.get(id)??0)>Date.now())return;
+  this.queued.add(id);this.queue.push(id);this.priority.set(id,5);
+  this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
+  this.pump();
+ }
  considerPoint(p:Point){this.consider([p]);}
  considerRoute(path:Point[]){if(!path.length)return;const points:Point[]=[path[0]];
   for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i];const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),dy=(b[1]-a[1])*111320;
