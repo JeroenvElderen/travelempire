@@ -1,4 +1,4 @@
-import type {FerryNetwork,FerryRoute} from './ferries';
+import type {FerryNetwork} from './ferries';
 import type {Point,RoadGraph,Taxi} from '../simulation/taxi';
 import {meters,nearest} from '../simulation/taxi';
 
