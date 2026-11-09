@@ -49,6 +49,7 @@ import "./aurora-glass.css";
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
+import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
 import {useRef} from 'react';
 import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
@@ -246,6 +247,9 @@ export default function App(){
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
+ const ferryReadinessRef=useRef(new Map<string,{ready:boolean;idleMs:number}>());
+ const ferryBookingRef=useRef(new Set<string>());
+ const ferryAttemptRef=useRef(new Map<string,number>());
  const graphRevisionRef=useRef(0);
  const workerReadyRef=useRef(false);
  const roadSyncPendingRef=useRef(0);
@@ -542,6 +546,8 @@ export default function App(){
    if(message.type==='roadsAdded'){roadSyncPendingRef.current=Math.max(0,roadSyncPendingRef.current-1);workerRoadCountRef.current=message.roadCount??workerRoadCountRef.current;workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;roadSyncAcksRef.current.shift()?.();if(roadSyncPendingRef.current===0)diagnostic('dispatch:roads-ready',`workerRoads=${workerRoadCountRef.current}`);return;}
    dispatchBusyRef.current=false;
    if(message.type==='result'){
+    const ferryPerf=(message as typeof message & {perf?:{explorationMissions?:{vehicles:Array<{id:string;ferryReady?:boolean;idleMs:number}>}}}).perf?.explorationMissions?.vehicles;
+    if(ferryPerf)for(const item of ferryPerf)ferryReadinessRef.current.set(item.id,{ready:!!item.ferryReady,idleMs:item.idleMs});
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
     const missionPerf=(message as typeof message & {perf?:{explorationMissions?:{active:number;idlePlans:number;vehicles:Array<{id:string;role:string;status:string;missionId:number|null;remainingEdges:number;retryInMs:number;lastPlannedAt:number|null}>};scoutTimings?:Array<{vehicleId:string;role:string;ms:number;phase:string;result?:string}>}}).perf;
     if(missionPerf?.explorationMissions&&(perf?.workerMs??0)>100){const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} queue=${JSON.stringify((missionPerf as typeof missionPerf & {planningQueue?:{phase:string;searches:number;queued:number;cursor:number}}).planningQueue??{})} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
@@ -805,6 +811,27 @@ export default function App(){
      try{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
+     // A ferry voyage is controlled by game time, never by road exploration.
+     if(delivered.ferryTrip){
+      const crossing=delivered.ferryTrip;
+      if(crossing.stage==='boarding'){
+       const boarding=delivered.path.length>=2?tickTaxi(delivered,graph,elapsedSeconds).taxi:delivered;
+       if(boarding.status==='PAUSED'||boarding.path.length<2){
+        return {...boarding,status:'PAUSED' as const,position:ferryPosition(crossing.geometry,0),
+         path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,pauseAtHome:false,
+         ferryTrip:{...crossing,stage:'sailing' as const,startedGameMs:gameNow}};
+       }
+       return boarding;
+      }
+      const progress=Math.max(0,(gameNow-(crossing.startedGameMs??gameNow))/crossing.durationGameMs);
+      if(progress>=1){
+       return {...delivered,status:'IDLE' as const,position:crossing.destination,
+        ferryTrip:undefined,ferryVisitedPorts:[...(delivered.ferryVisitedPorts??[]),crossing.fromPortId,crossing.toPortId].slice(-40),
+        path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:false,pauseAtHome:false,journeyEdges:[]};
+      }
+      return {...delivered,status:'PAUSED' as const,position:ferryPosition(crossing.geometry,progress),
+       speedKph:0,shiftParked:false,pauseAtHome:false};
+     }
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
       if(passengerTaxi||delivered.kind==='explorer'){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
