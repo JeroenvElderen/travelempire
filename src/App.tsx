@@ -798,6 +798,10 @@ export default function App(){
     const cache=discoveredCacheRef.current;
     const discovered=cache&&cache.ids===savedIds?cache.set:new Set<string>(savedIds);
     const initialDiscoveryCount=discovered.size;
+    const canDepartPurple=(vehicle:Taxi)=>{
+     const node=nearest(graph,vehicle.position);
+     return !!node&&(graph.edges.get(node)??[]).some(edge=>discovered.has(edge.id));
+    };
     
     
     let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,serviceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
@@ -851,6 +855,7 @@ export default function App(){
         return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:delivered.restStopId?.startsWith('hotel:')?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
        }
        if(delivered.status==='IDLE'&&(drivingMs>=(passengerTaxi?3600000:4*3600000)||hotelDrivingMs>=9*3600000)&&!delivered.refillRequested){
+        if(delivered.kind==='explorer'&&!canDepartPurple(delivered))return delivered;
         const overnight=hotelDrivingMs>=9*3600000;
         const stops=[...restStopsRef.current.values()].filter(p=>overnight?p.kind==='hotel':p.kind!=='hotel')
          .sort((a,b)=>meters(delivered.position,a.position)-meters(delivered.position,b.position)).slice(0,10);
@@ -894,6 +899,7 @@ export default function App(){
      const serviceDue=(delivered.vehicleCondition??100)<=(delivered.serviceThreshold??40)
       ||(delivered.operatingKm??0)-(delivered.lastServiceKm??0)>=250;
      if(delivered.status==='IDLE'&&serviceDue&&energyPercent(delivered)>10&&!delivered.refillRequested){
+      if(delivered.kind==='explorer'&&!canDepartPurple(delivered))return delivered;
       const nearby=[...restStopsRef.current.values()].filter(p=>p.kind==='parking'||p.kind==='services'||p.kind==='rest_area').sort((a,b)=>meters(a.position,delivered.position)-meters(b.position,delivered.position)).slice(0,8);
       if(!nearby.length)return delivered;
       const home:[number,number]=nearby[0].position;
@@ -960,7 +966,8 @@ export default function App(){
      // Passenger taxis finish their current fare; explorers turn back before they strand themselves.
      const stopExploring=needsEnergy&&delivered.status==='EXPLORING';
      let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:delivered;
-     if(working.status==='IDLE'&&needsEnergy&&fuelTarget&&fuelTarget.roadKm<=remainingKm*0.95){
+     if(working.status==='IDLE'&&needsEnergy&&fuelTarget&&fuelTarget.roadKm<=remainingKm*0.95&&
+       (working.kind!=='explorer'||canDepartPurple(working))){
       const target=fuelTarget;
       if(target.path&&target.path.path.length<2)working={...working,status:'REFUELLING',refillDestination:target.point,refillAtDepot:target.depot,refillRequested:false};
       else if(target.path)working={...working,status:'RETURNING',path:target.path.path,edgeIds:target.path.edgeIds,leg:0,distanceIntoLeg:0,
