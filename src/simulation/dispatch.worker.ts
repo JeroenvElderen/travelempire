@@ -613,15 +613,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
-    // The universal scout may discover any road class; priorities are applied
-    // in dispatchScout, not as hard exclusions from the connected network.
     if(role==='balanced'||!role)return allRoads;
     if(role==='poi')return poiRoads;
     if(role==='completion')return completionRoads;
-    if(role==='highway'||role==='urban'){
+    // Each specialist discovers ONLY its own road classes, while all may
+    // travel along already-purple roads to reach their next target.
+    if(role==='highway'||role==='urban'||role==='primary'||role==='secondary'||role==='residential'){
      const cached=roadClassCache.get(role);if(cached)return cached;
-     const roles=role==='highway'?['motorway','trunk','primary','secondary']:['tertiary','residential','rural','service'];
-     const combined=new Set<string>();for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
+     const roles=role==='highway'?['motorway','trunk']:
+      role==='primary'?['primary']:
+      role==='secondary'?['secondary','tertiary']:
+      role==='residential'?['residential','rural','service']:
+      ['tertiary','residential','rural','service'];
+     const combined=new Set<string>();
+     for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
      roadClassCache.set(role,combined);return combined;
     }
     return byClass.get(role??'')??new Set<string>();
