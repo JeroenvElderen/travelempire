@@ -418,26 +418,17 @@ export default function App(){
  // request destination roads through the existing on-demand route prefetcher.
  const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<1)throw Error('Requires 5,000 discovered roads and the universal explorer.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
  const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
- // Apply completed fleet expansion exactly once, including after an offline research completion.
- // Fleet and its idempotency marker are saved in the same snapshot.
+ // Apply legacy research without creating additional scout vehicles.
+ // Existing completion progress is kept; the universal explorer remains unique.
  useEffect(()=>{
   if(!company||Research.level(research,'explorerExpansion')<1)return;
   const current=fleetSaveRef.current;
   if(current.explorerExpansionApplied)return;
-  const originals=current.taxis.filter(t=>t.kind==='explorer');
-  if(!originals.length)return;
-  const now=Date.now();
-  const copies:Taxi[]=originals.map((original,index)=>{
-   const depot=(company.depots??[]).find(d=>d.id===(original.depotId??'main'));
-   const depotPosition:[number,number]=depot?[depot.lng,depot.lat]:[company.headquarters.lng,company.headquarters.lat];
-   const node=graph?nearest(graph,depotPosition):undefined;
-   const position: [number,number]=node&&graph?.nodes.get(node)?[...graph.nodes.get(node)!]:[...depotPosition];
-   return {...original,id:crypto.randomUUID(),name:original.name+' · Expansion '+(index+1),driver:'Explorer Operator '+(index+1),position,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,journeyEdges:[],discoveryEdgeIds:[],lastRoadFrom:undefined,lastRoadTo:undefined,scoutingRuns:0,discoveredKm:0,uniqueDiscoveredKm:0,explorationSection:undefined,explorationSectionCompleted:undefined,explorationSectionTotal:undefined,shiftParked:false,pauseAtHome:false,recoveryPending:false,refillUntil:undefined,serviceUntil:undefined,deliveryStartedAt:undefined,deliveryUntil:undefined,deliveryPath:undefined,vehicleMileage:0,operatingKm:0,vehicleCondition:100,energyRemaining:energySpec({vehicleFuel:original.vehicleFuel??'Petrol'}).capacity,ownership:'owned' as const,purchasePrice:0};
-  });
-  const updated:FleetState={...current,explorerExpansionApplied:true,taxis:[...current.taxis,...copies],transactions:[{id:crypto.randomUUID(),time:now,description:'Explorer Fleet Expansion I · '+copies.length+' explorers and doubled depot parking',amount:0},...(current.transactions??[])].slice(0,100)};
+  const updated:FleetState={...current,explorerExpansionApplied:true,
+   transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Universal Explorer optimisation research applied',amount:0},...(current.transactions??[])].slice(0,100)};
   saveFleet(company.id,{...updated,exploredEdgeIds:[]});
   fleetSaveRef.current=updated;setFleet(updated);
- },[company?.id,research,graph]);
+ },[company?.id,research]);
 
  useEffect(()=>{
   let active=true;
