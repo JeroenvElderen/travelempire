@@ -22,6 +22,22 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const dividends=holdings.reduce((sum,h)=>sum+h.dividendsCents,0);
  const gameHour=Math.floor(gameNow/3600000);
  const expectedHourly=holdings.reduce((sum,h)=>sum+Math.round(propertyOperations(h,gameHour).netCents*ownership(h)),0);
+ const forecast=(p:InvestablePOI,valuationCents:number,ownedCents:number,additionalCents:number)=>{
+  const existingShare=Math.min(1,ownedCents/valuationCents);
+  const newShare=Math.min(1,(ownedCents+additionalCents)/valuationCents);
+  const hourEarnings=Array.from({length:24},(_,offset)=>{
+   const result=propertyOperations({id:p.id,kind:p.kind,valuationCents},gameHour+offset);
+   return result.netCents;
+  });
+  const dailyNet=hourEarnings.reduce((sum,value)=>sum+value,0);
+  return {
+   existingShare,newShare,additionalShare:newShare-existingShare,
+   hourBefore:Math.round(hourEarnings[0]*existingShare),
+   hourAfter:Math.round(hourEarnings[0]*newShare),
+   dayAfter:Math.round(dailyNet*newShare),
+   monthAfter:Math.round(dailyNet*newShare*30)
+  };
+ };
  const invest=(p:InvestablePOI,remainingCents:number)=>{
   const euros=Math.min(amount,Math.round(remainingCents/100));
   if(euros<=0)return;
@@ -33,7 +49,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
   <div className="investment-metrics">
    <article><span>OWNED PROPERTIES</span><strong>{holdings.length}</strong></article>
    <article><span>TOTAL INVESTED</span><strong>{euro(invested)}</strong></article>
-   <article><span>HOURLY INCOME EST.</span><strong>{euro(expectedHourly)}</strong></article>
+   <article><span>PROJECTED HOURLY INCOME</span><strong>{euro(expectedHourly)}</strong></article>
    <article><span>DIVIDENDS EARNED</span><strong>{euro(dividends)}</strong></article>
   </div>
   <div className="investment-toolbar">
@@ -42,7 +58,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
    </div>
    <label className="investment-search"><Search size={17}/><input placeholder="Search loaded properties" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
   </div>
-  <div className="investment-amount"><span>Investment amount</span><div>{[5000,15000,50000,100000].map(value=><button key={value} type="button" onClick={()=>setAmount(value)} className={amount===value?'active':''}>{euro(value*100)}</button>)}</div><small>The final purchase is automatically limited to the remaining ownership. Income is simulated each game hour and changes with hotel occupancy, parking utilisation and operating costs.</small></div>
+  <div className="investment-amount"><span>Investment amount</span><div>{[5000,15000,50000,100000].map(value=><button key={value} type="button" onClick={()=>setAmount(value)} className={amount===value?'active':''}>{euro(value*100)}</button>)}</div><small>Choose an amount to preview the additional shares and potential income on every property. Only actual purchases deduct cash; all projections use in-game demand and operating-cost assumptions.</small></div>
   {(message||error)&&<p className="investment-feedback" role="status">{error||message}</p>}
   <div className="investment-properties">
    {entries.map(p=>{
@@ -52,13 +68,26 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     const percent=ownership(owned)*100;
     const performance=propertyOperations({id:p.id,kind:p.kind,valuationCents:value},gameHour);
     const charge=Math.min(amount*100,remaining);
+    const projection=forecast(p,value,owned?.investedCents??0,charge);
     const canBuy=charge>0&&charge<=Math.max(0,Math.round(companyCash*100));
     return <article className="investment-property" key={p.id}>
      <div className="investment-property-top"><span className="investment-property-icon">{p.kind==='hotel'?<Hotel size={23}/>:<CarFront size={23}/>}</span><div className="investment-property-name"><strong>{p.name|| (p.kind==='hotel'?'Unnamed hotel':'Parking facility')}</strong><span><MapPin size={12}/>{p.kind==='hotel'?'Hotel':'Parking'} · {p.position[1].toFixed(3)}°, {p.position[0].toFixed(3)}°</span></div><span className="investment-tag">{percent===100?'Fully owned':percent>0?'Part owned':'Available'}</span></div>
      <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>YOUR HOURLY INCOME</small><strong>{euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
      <div className="investment-property-performance"><span>{p.kind==='hotel'?'Room occupancy':'Parking utilisation'} <strong>{performance.activityPercent}%</strong></span><span>Gross <strong>{euro(performance.grossCents)}/h</strong></span><span>Costs <strong>{euro(performance.costCents)}/h</strong></span><span>Net <strong>{euro(performance.netCents)}/h</strong></span></div>
+     <div className="investment-preview">
+      <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {euro(charge)} · simulated forecast</small></div>
+      <div className="investment-preview-metrics">
+       <div><span>ADDITIONAL STAKE</span><strong>+{(projection.additionalShare*100).toFixed(2)}%</strong></div>
+       <div><span>OWNERSHIP AFTER</span><strong>{(projection.newShare*100).toFixed(2)}%</strong></div>
+       <div><span>HOURLY INCOME AFTER</span><strong>{euro(projection.hourAfter)}</strong></div>
+       <div><span>24-HOUR FORECAST</span><strong>{euro(projection.dayAfter)}</strong></div>
+       <div><span>30-DAY FORECAST</span><strong>{euro(projection.monthAfter)}</strong></div>
+       <div><span>EXTRA PER HOUR</span><strong>+{euro(Math.max(0,projection.hourAfter-projection.hourBefore))}</strong></div>
+      </div>
+      <small>Projections are not guaranteed. Forecast assumes the displayed ownership stays constant and uses current simulated seasonal demand.</small>
+     </div>
      <div className="investment-track"><span style={{width:`${percent}%`}}/></div>
-     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,remaining)}>{remaining<=0?'100% Owned':charge>companyCash*100?'Insufficient cash':`Invest ${euro(charge)}`}</button></div>
+     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,remaining)}>{remaining<=0?'100% Owned':charge>companyCash*100?'Insufficient cash':`Invest ${euro(charge)}`}</button></div>
     </article>;
    })}
   </div>
