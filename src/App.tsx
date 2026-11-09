@@ -826,6 +826,9 @@ export default function App(){
       }
       const progress=Math.max(0,(gameNow-(crossing.startedGameMs??gameNow))/crossing.durationGameMs);
       if(progress>=1){
+       // An arriving priority scout unlocks just the real harbour access
+       // road, not arbitrary roads on the other island.
+       if(crossing.seedRoadId)discovered.add(crossing.seedRoadId);
        return {...delivered,status:'IDLE' as const,position:crossing.destination,
         ferryTrip:undefined,ferryVisitedPorts:[...(delivered.ferryVisitedPorts??[]),crossing.fromPortId,crossing.toPortId].slice(-40),
         path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:false,pauseAtHome:false,journeyEdges:[]};
@@ -1586,13 +1589,13 @@ export default function App(){
         ferryTrip:{stage:'boarding' as const,routeId:offer.routeId,
          fromPortId:offer.fromPortId,toPortId:offer.toPortId,
          geometry:offer.geometry,destination:offer.destination,
-         durationGameMs:Math.max(1,offer.durationMinutes)*60000,ticketEuros:fare}
+         durationGameMs:Math.max(1,offer.durationMinutes)*60000,ticketEuros:fare,seedRoadId:offer.seedRoadId}
        })
       }));
       networkRef.current?.considerHarbour(offer.destination);
       diagnostic('explorers:ferry-booked',`vehicle=${scout.id} route=${offer.routeId} fare=${fare} durationMin=${offer.durationMinutes}`);
      }});
-    worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,requestId,from:scout.position,to:offer.boarding});
+    worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,requestId,from:scout.position,to:offer.boarding,discoveredOnly:true});
     break; // At most one passenger ticket route search per scan.
    }
   },12000);
