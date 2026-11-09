@@ -1534,7 +1534,7 @@ export default function App(){
   setInvestmentError('');
   return null;
  };
- // Fractional-property dividends settle at most once per simulated day.
+ // Fractional-property dividends settle once per completed simulated hour.
  useEffect(()=>{
   if(!company?.id)return;
   const companyId=company.id;
@@ -1557,10 +1557,10 @@ export default function App(){
      return {...old,
       accounting:bookAccounting(old.accounting,periodMonth(now),income,0,0,0),
       financeHistory:history.slice(-365),
-      transactions:[{id:crypto.randomUUID(),time:now,description:'Property investment dividends',amount:income},...(old.transactions??[])].slice(0,100)
+      transactions:[{id:crypto.randomUUID(),time:now,description:`Property income · ${result.hours} simulated hour(s)`,amount:income},...(old.transactions??[])].slice(0,100)
      };
     });
-    diagnostic('investments:dividends',`amount=${income.toFixed(2)} days=${result.days}`);
+    diagnostic('investments:dividends',`amount=${income.toFixed(2)} hours=${result.hours}`);
    }
   };
   const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
@@ -1587,7 +1587,7 @@ export default function App(){
  {page==='Dealership'&&company&&<DealershipPage cash={company.cash} ready={Boolean(graph)} onOrder={buyTaxiBatch}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours}/>}
- {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
+ {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Dealership'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&page!=='Investments'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
