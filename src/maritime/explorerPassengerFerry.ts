@@ -31,7 +31,7 @@ function hasDestinationWork(graph:RoadGraph,start:string,role:Taxi['explorerRole
   if(!point||meters(point,anchor)>2200)continue;
   for(const edge of graph.edges.get(node)??[]){
    if(!discovered.has(edge.id)&&candidateRoadRole(role,edge.highway))return true;
-   if(visited.size<950&&!visited.has(edge.to)){
+   if((discovered.has(edge.id)||node===start)&&visited.size<950&&!visited.has(edge.to)){
     visited.add(edge.to);queue.push(edge.to);
    }
   }
@@ -106,7 +106,7 @@ export function choosePassengerFerry(
     const gate=destinationPriority(graph,destination.id,discovered);
     if(!gate.seedRoadId||gate.highest>=roadPriority.length)continue;
     const role=explorer.explorerRole;
-    const rank=role==='highway'?0:role==='urban'?5:role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
+    const rank=role==='highway'?0:role==='urban'?5:role==='rural'?roadPriority.indexOf('unclassified'):role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
     // A fresh island opens with its highest available road class. All other
     // vehicle classes wait until a highest-class edge has been discovered.
     if(!gate.highestDiscovered&&rank!==gate.highest)continue;
