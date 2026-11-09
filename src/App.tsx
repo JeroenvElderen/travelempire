@@ -212,7 +212,7 @@ export default function App(){
  const [portfolio,setPortfolio]=useState(()=>loadPortfolio(company?.id));
  const portfolioRef=useRef(portfolio);portfolioRef.current=portfolio;
  const [investmentError,setInvestmentError]=useState('');
- useEffect(()=>{const next=loadPortfolio(company?.id);portfolioRef.current=next;setPortfolio(next);setInvestmentPois([]);setInvestmentError('');},[company?.id]);
+ useEffect(()=>{const next=loadPortfolio(company?.id);portfolioRef.current=next;setPortfolio(next);setInvestmentPois([]);restStopsRef.current.clear();restLoadedRef.current.clear();setInvestmentError('');},[company?.id]);
  const restLoadedRef=useRef<Set<string>>(new Set());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const stationLoadedRef=useRef<Set<string>>(new Set());
