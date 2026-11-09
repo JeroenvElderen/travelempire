@@ -260,17 +260,8 @@ export default function App(){
  const simulationPerfRef=useRef({samples:0,totalMs:0,maxMs:0,lastReport:0});
  const fuelPlanCacheRef=useRef(new Map<string,{at:number;position:[number,number];graph:RoadGraph|null;stationCount:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null}>());
  const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
- // Migrate specialist fleets without resetting progress, paid upgrades, taxi data,
- // discovery, ferry tickets, vehicle condition or the selected scout's itinerary.
- const universalFleet=(loaded:FleetState):FleetState=>{
-  const scouts=loaded.taxis.filter(t=>t.kind==='explorer');
-  if(!scouts.length)return loaded;
-  const keeper=[...scouts].sort((a,b)=>
-   (b.ferryTrip?100:0)+(b.status==='EXPLORING'?20:0)+(b.status==='RETURNING'?10:0)-
-   ((a.ferryTrip?100:0)+(a.status==='EXPLORING'?20:0)+(a.status==='RETURNING'?10:0)))[0];
-  return {...loaded,taxis:loaded.taxis.filter(t=>t.kind!=='explorer'||t.id===keeper.id)
-   .map(t=>t.id===keeper.id?{...t,explorerRole:'balanced' as const,name:'Universal Explorer',vehicleModel:'Universal Explorer'}:t)};
- };
+ // Preserve existing specialists, progress and discovered roads.
+ const universalFleet=(loaded:FleetState):FleetState=>loaded;
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
  const pendingCashRef=useRef(0);
@@ -1139,30 +1130,43 @@ export default function App(){
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)return;
   const position=graph.nodes.get(node);if(!position)return;
-  const roles:NonNullable<Taxi['explorerRole']>[]=['balanced'];
+  const roles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
   const now=Date.now();
-  const explorers:Taxi[]=roles.map(role=>({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:'Universal Explorer',driver:'Autonomous',position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:'Universal Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'}));
+  const explorers:Taxi[]=roles.map(role=>({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:role==='highway'?'Highway Explorer':role==='primary'?'Primary Explorer':role==='secondary'?'Secondary Explorer':role==='residential'?'Local Street Explorer':'POI Explorer',driver:'Autonomous',position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:role==='highway'?'Highway Explorer':role==='primary'?'Primary Explorer':role==='secondary'?'Secondary Explorer':role==='residential'?'Local Street Explorer':'POI Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'}));
   const driver={id:crypto.randomUUID(),name:'Alex Morgan',hiredAt:now};
   const taxi:Taxi={id:crypto.randomUUID(),kind:'taxi',name:'Taxi 1',driver:driver.name,position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:'Starter Taxi',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'};
   const current=loadFleet(company.id);
   if(current.taxis.length===0){const updated={...current,taxis:[taxi,...explorers],drivers:[...(current.drivers??[]),driver]};saveFleet(company.id,updated);fleetSaveRef.current=updated;setFleet(updated);}
   localStorage.setItem(key,'done');
  },[company?.id,graph]);
- const buyRoadExplorer=(_role?:Taxi['explorerRole'])=>{if(!company||!graph)return;try{
-  if(fleet.taxis.some(t=>t.kind==='explorer'))throw Error('The universal explorer is already owned. Only one explorer is allowed.');
-  const role:Taxi['explorerRole']='balanced';
-  const cost=2500;
-  const explorerCapacity=explorerDepotCapacity(upgradesFor(fleet,'main'),Research.level(research,'explorerExpansion'));
-  const explorerCount=fleet.taxis.filter(t=>t.kind==='explorer'&&(t.depotId??'main')==='main').length;
-  if(explorerCount>=explorerCapacity)throw Error(`Headquarters explorer parking is full (${explorerCount}/${explorerCapacity}). Expand explorer parking or move an idle explorer to another depot.`);
-  if(company.cash+pendingCashRef.current<cost)throw Error(`Insufficient company funds for an Explorer (€${cost.toLocaleString('en-IE')}).`);
+ // Five specialists are free and always start at a purple-discovered node.
+ const buyRoadExplorer=(requested?:Taxi['explorerRole'])=>{
+  if(!company||!graph)return;
+  const roles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
+  const role=(roles.includes(requested as NonNullable<Taxi['explorerRole']>)?requested:
+   roles.find(r=>!fleet.taxis.some(t=>t.kind==='explorer'&&t.explorerRole===r))) as NonNullable<Taxi['explorerRole']>|undefined;
+  if(!role||fleet.taxis.some(t=>t.kind==='explorer'&&t.explorerRole===role))return;
+  const discovered=new Set([...(discoveredCacheRef.current?.ids??[]),...(fleet.exploredEdgeIds??[])]);
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
-  const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
-  const now=Date.now();
-  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:'Universal Explorer',driver:'Autonomous',position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,vehicleModel:'Universal Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,deliveryStartedAt:now,deliveryUntil:now+90000,deliveryPath:deliveryRoute(graph,hq)};
-  const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cost)*100)/100};
-  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,taxis:[...old.taxis,explorer],transactions:[{id:crypto.randomUUID(),time:now,description:'Universal Explorer purchase',amount:-cost},...(old.transactions??[])].slice(0,100)}));setSimError('');
- }catch(e){setSimError(String(e))}};
+  let node:string|undefined,best=Infinity;
+  for(const [candidate,edges] of graph.edges){
+   if(!edges.some(e=>discovered.has(e.id)))continue;
+   const p=graph.nodes.get(candidate);if(!p)continue;
+   const d=meters(p,hq);if(d<best){best=d;node=candidate;}
+  }
+  if(!node){setSimError('The first purple headquarters road must be discovered before an explorer can start.');return;}
+  const name=role==='highway'?'Highway Explorer':role==='primary'?'Primary Explorer':
+   role==='secondary'?'Secondary Explorer':role==='residential'?'Local Street Explorer':'POI Explorer';
+  const explorer:Taxi={id:crypto.randomUUID(),kind:'explorer',explorerRole:role,
+   name,driver:'Autonomous',position:[...graph.nodes.get(node)!],status:'IDLE',
+   path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
+   ownership:'owned',purchasePrice:0,vehicleModel:name,vehicleYear:2026,
+   vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,
+   vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'};
+  setFleet(old=>old.taxis.some(t=>t.kind==='explorer'&&t.explorerRole===role)?old:
+   {...old,taxis:[...old.taxis,explorer]});
+  setSimError('');
+ };
  const bankTransfer=(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>{
   const current=companyRef.current;if(!current)return;
   try{const result=transferBank(bankOf(fleet.bank),from,to,amount,current.cash+pendingCashRef.current);
