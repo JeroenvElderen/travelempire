@@ -1017,35 +1017,48 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const end=vehicle.path.at(-1);
     if(end){const node=nearest(graph,end);if(node)reservedTargets.add(node);}
    }
-   // Apply completed proposals. Results may be stale: validation uses CURRENT
-   // discovered roads, road graph and other explorers' reservations.
+   // Apply finished routes only after checking the latest purple network,
+   // mission endpoint, role reservations and the vehicle's current status.
    for(let index=0;index<taxis.length;index++){
     const current=taxis[index];
-    if(current.kind!=='explorer'||current.status!=='IDLE')continue;
+    if(current.kind!=='explorer')continue;
     const proposal=planningResults.get(current.id);
     if(!proposal)continue;
     planningResults.delete(current.id);
     if(proposal.outcome!=='planned'||!proposal.taxi)continue;
     const route=proposal.taxi;
-    const startNode=nearest(graph,current.position);
-    if(!startNode||!(graph.edges.get(startNode)??[]).some(edge=>explored.has(edge.id))||
-       !route.path.length||meters(current.position,route.path[0])>20||
+    const append=proposal.mode==='successor'&&current.status==='EXPLORING'&&
+     !!proposal.baseEdgeIds&&proposal.baseEdgeIds.length===current.edgeIds.length&&
+     proposal.baseEdgeIds.every((id,i)=>current.edgeIds[i]===id);
+    if(current.status!=='IDLE'&&!append)continue;
+    const origin=append?current.path.at(-1):current.position;
+    if(!origin||!route.path.length||meters(origin,route.path[0])>20||
        route.edgeIds.length!==route.path.length-1)continue;
+    const projected=append?new Set([...explored,...current.discoveryEdgeIds??[]]):explored;
+    const startNode=nearest(graph,origin);
+    if(!startNode||!(graph.edges.get(startNode)??[]).some(e=>projected.has(e.id)))continue;
     const selected=new Set(route.discoveryEdgeIds??[]);
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
-      (explored.has(id)||selected.has(id)));
-    if(!valid||![...selected].every(id=>!explored.has(id)&&!reservedEdges.has(id)))continue;
+     (projected.has(id)||selected.has(id)));
+    if(!valid||![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id)))continue;
     const end=nearest(graph,route.path.at(-1)!);
-    if(end&&reservedTargets.has(end))continue;
-    const next={...route,position:current.position,driver:current.driver,
-     deliveryUntil:current.deliveryUntil,vehicleCondition:current.vehicleCondition,
-     energyRemaining:current.energyRemaining};
+    if(end&&reservedTargets.has(end)&&
+       (!append||end!==nearest(graph,current.path.at(-1)!)))continue;
+    const next:Taxi=append?{...current,
+     path:[...current.path,...route.path.slice(1)],
+     edgeIds:[...current.edgeIds,...route.edgeIds],
+     discoveryEdgeIds:[...(current.discoveryEdgeIds??[]),...(route.discoveryEdgeIds??[])],
+     scoutingRuns:route.scoutingRuns}:
+     {...route,position:current.position,driver:current.driver,
+      deliveryUntil:current.deliveryUntil,vehicleCondition:current.vehicleCondition,
+      energyRemaining:current.energyRemaining};
     taxis[index]=next;
     for(const id of selected)reservedEdges.add(id);
     if(end)reservedTargets.add(end);
     recordExplorerMission(next,now);
     missionSequence.set(current.id,(missionSequence.get(current.id)??0)+1);
     missionPlannedAt.set(current.id,now);
+    if(append)successorPlansThisDispatch++;
     assignedCount++;
    }
    // At most two concurrent tasks. Independent search state remains bound to
