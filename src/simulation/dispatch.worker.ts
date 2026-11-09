@@ -139,7 +139,7 @@ function preferConnectedCandidates(g:RoadGraph,position:Point,candidates:Set<str
  const touching=new Set<string>(),nearby=new Set<string>();
  for(const id of candidates){
   const ends=roadEndpoints.get(id);if(!ends)continue;
-  if(ends[0]===start||ends[1]===start){touching.add(id);continue;}
+  if((ends[0]===start||ends[1]===start)&&(g.edges.get(start)??[]).some(e=>e.id===id)){touching.add(id);continue;}
   if(!revealedNodesIndex.has(ends[0])&&!revealedNodesIndex.has(ends[1]))continue;
   const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
   if((a&&meters(a,position)<1800)||(b&&meters(b,position)<1800))nearby.add(id);
