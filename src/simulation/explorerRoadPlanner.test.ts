@@ -95,4 +95,42 @@ describe('purple-connected explorer routes',()=>{
   expect(route.route).toBeNull();
   expect(route.diagnostic.reason).toBe('one-way-no-legal-exit');
  });
+ it('escapes a one-way local street via a different road class without discovering it',()=>{
+  const graph=makeGraph();
+  // C -> D is local discovery; D -> E is an undiscovered primary
+  // transit-only exit; E -> B rejoins the purple network.
+  graph.edges.set('D',[{to:'E',id:'primary-exit',meters:100,
+   highway:'primary',speedKph:50}]);
+  graph.edges.set('E',[{to:'B',id:'purple-return',meters:100,
+   highway:'service',speedKph:30}]);
+  const explored=new Set(['bc','purple-return']);
+  const result=planReachableExplorerRoad(graph,'C',explored,
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(result.route?.edgeIds).toEqual(['cd','primary-exit','purple-return']);
+  expect(result.route?.discoveryEdgeIds).toEqual(['cd']);
+  expect(result.route?.escapeTransitEdgeIds).toEqual(['primary-exit']);
+  expect(result.diagnostic.reason).toBe('planned');
+ });
+ it('never treats a cross-class one-way escape as a legal exit without purple return',()=>{
+  const graph=makeGraph();
+  graph.edges.set('D',[{to:'E',id:'primary-exit',meters:100,
+   highway:'primary',speedKph:50}]);
+  graph.edges.set('E',[]);
+  const result=planReachableExplorerRoad(graph,'C',new Set(['bc']),
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(result.route).toBeNull();
+  expect(result.diagnostic.reason).toBe('one-way-no-legal-exit');
+ });
+ it('will not use another explorer reserved road for its cross-class escape',()=>{
+  const graph=makeGraph();
+  graph.edges.set('D',[{to:'E',id:'primary-exit',meters:100,
+   highway:'primary',speedKph:50}]);
+  graph.edges.set('E',[{to:'B',id:'purple-return',meters:100,
+   highway:'service',speedKph:30}]);
+  const result=planReachableExplorerRoad(graph,'C',
+   new Set(['bc','purple-return']),new Set(['cd']),
+   new Set(['primary-exit']),new Set(),'residential');
+  expect(result.route).toBeNull();
+  expect(result.diagnostic.reason).toBe('one-way-no-legal-exit');
+ });
 });
