@@ -1,4 +1,5 @@
 import {energyPercent} from './energy';
+import {resolvePurpleExplorerStart} from './explorerStart';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -1059,8 +1060,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!origin||!route.path.length||meters(origin,route.path[0])>20||
        route.edgeIds.length!==route.path.length-1){reject('route-start-or-shape');continue;}
     const projected=append?new Set([...explored,...current.discoveryEdgeIds??[]]):explored;
-    const startNode=nearest(graph,origin);
-    if(!startNode||!(graph.edges.get(startNode)??[]).some(e=>projected.has(e.id))){reject('no-purple-departure');continue;}
+    const startNode=resolvePurpleExplorerStart(graph,origin,projected,roadEndpoints);
+    if(!startNode){reject('no-purple-segment-at-departure');continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
      (projected.has(id)||selected.has(id)));
@@ -1112,8 +1113,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!slot.ready||slot.busy||slot.roads===0)continue;
     const vehicle=explorers.shift();
     if(!vehicle)break;
-    const start=nearest(graph,vehicle.position);
-    if(!start||!(graph.edges.get(start)??[]).some(edge=>explored.has(edge.id))){
+    const start=resolvePurpleExplorerStart(graph,vehicle.position,explored,roadEndpoints);
+    if(!start){
      explorerPlanSkipReason.set(vehicle.id,'no-purple-start');continue;
     }
     slot.busy=true;
@@ -1152,7 +1153,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(!destination)continue;
      const projected=new Set([...explored,...vehicle.discoveryEdgeIds??[]]);
      const endNode=nearest(graph,destination);
-     if(!endNode||!(graph.edges.get(endNode)??[]).some(e=>projected.has(e.id)))continue;
+     if(!resolvePurpleExplorerStart(graph,destination,projected,roadEndpoints)||!endNode)continue;
      const requestId=++nextPlanningRequest;
      slot.busy=true;slot.requestId=requestId;
      planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
