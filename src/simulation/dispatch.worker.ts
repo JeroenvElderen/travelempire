@@ -2,6 +2,55 @@ import {energyPercent} from './energy';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
+// Two independent exploration planners run outside passenger dispatch.
+// Their results are committed by this coordinator only after validating the
+// shared discovered network and current route reservations.
+type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
+ outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string};
+type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
+const planningPool:PoolSlot[]=[];
+const planningRequests=new Map<number,{id:string;at:number;position:Point}>();
+const planningResults=new Map<string,PoolResult>();
+const planningLastSent=new Map<string,number>();
+const planningStats=new Map<string,{result:string;ms:number;queueMs:number;at:number}>();
+let nextPlanningRequest=0;
+let planningPoolRound=0;
+let plannerPoolRevision=0;
+function stopPlanningPool():void{
+ for(const slot of planningPool)slot.worker.terminate();
+ planningPool.length=0;planningRequests.clear();planningResults.clear();
+ planningLastSent.clear();planningStats.clear();nextPlanningRequest=0;planningPoolRound=0;
+}
+function startPlanningPool(revision:number):void{
+ stopPlanningPool();plannerPoolRevision=revision;
+ try{
+  for(let i=0;i<2;i++){
+   const worker=new Worker(new URL('./explorationPlanner.worker.ts',import.meta.url),{type:'module'});
+   const slot:PoolSlot={worker,busy:false,requestId:0,ready:false,roads:0};
+   worker.onmessage=(event:MessageEvent<{type:string;revision:number;requestId?:number;roadCount?:number}&Partial<PoolResult>>)=>{
+    const msg=event.data;
+    if(msg.revision!==plannerPoolRevision)return;
+    if(msg.type==='ready'){slot.ready=true;return;}
+    if(msg.type==='roadsAdded'){slot.roads=msg.roadCount??slot.roads;return;}
+    if(msg.type!=='planResult'||msg.requestId!==slot.requestId)return;
+    slot.busy=false;
+    const request=planningRequests.get(msg.requestId);
+    if(!request)return;
+    planningRequests.delete(msg.requestId);
+    planningResults.set(request.id,msg as PoolResult);
+    planningStats.set(request.id,{result:msg.outcome??'unknown',ms:msg.ms??0,
+     queueMs:performance.now()-request.at,at:performance.now()});
+   };
+   worker.onerror=()=>{
+    // Disable the pool and let the existing dispatcher take over rather
+    // than silently leaving specialists idle after a worker crash.
+    stopPlanningPool();
+   };
+   planningPool.push(slot);
+   worker.postMessage({type:'init',revision});
+  }
+ }catch{stopPlanningPool();}
+}
 const idleSince=new Map<string,number>();
 let passengerRequestsCreated=0,passengerRequestsRejected=0,passengerAssignments=0,passengerRouteFailures=0;
 const passengerCompletedByTaxi=new Map<string,number>();
