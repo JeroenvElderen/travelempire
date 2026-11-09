@@ -16,6 +16,16 @@ let graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
 const known=new Set<string>();
 const roadClasses=new Map<string,Set<string>>();
 const roadEndpoints=new Map<string,[string,string]>();
+const ROAD_CELL=0.02;
+const localRoads=new Map<string,Set<string>>();
+const roadCell=(lat:number,lon:number)=>lat+':'+lon;
+function nearbyRoads(point:Point):Set<string>{
+ const lat=Math.floor(point[1]/ROAD_CELL),lon=Math.floor(point[0]/ROAD_CELL);
+ const nearby=new Set<string>();
+ for(let y=lat-1;y<=lat+1;y++)for(let x=lon-1;x<=lon+1;x++)
+  for(const id of localRoads.get(roadCell(y,x))??[])nearby.add(id);
+ return nearby;
+}
 let roadCount=0;
 const roleAllowed=(role:Taxi['explorerRole'],poiRoadIds:string[]):Set<string>=>{
  if(role==='poi')return new Set(poiRoadIds);
@@ -32,6 +42,14 @@ function addRoads(roads:RoadSegment[]):void{
   if(known.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
   known.add(road.id);roadCount++;
   roadEndpoints.set(road.id,[String(road.a),String(road.b)]);
+  const [fromPoint,toPoint]=road.coordinates;
+  for(const p of [fromPoint,toPoint,
+   [(fromPoint[0]+toPoint[0])/2,(fromPoint[1]+toPoint[1])/2] as Point]){
+   const cell=roadCell(Math.floor(p[1]/ROAD_CELL),Math.floor(p[0]/ROAD_CELL));
+   let bucket=localRoads.get(cell);
+   if(!bucket){bucket=new Set();localRoads.set(cell,bucket);}
+   bucket.add(road.id);
+  }
   const a=String(road.a),b=String(road.b);
   if(!graph.nodes.has(a)){graph.nodes.set(a,road.coordinates[0]);graph.nodeKeys.push(a);}
   if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
@@ -55,7 +73,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  if(msg.type==='init'){
   revision=msg.revision;
   graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
-  known.clear();roadClasses.clear();roadEndpoints.clear();roadCount=0;
+  known.clear();roadClasses.clear();roadEndpoints.clear();localRoads.clear();roadCount=0;
   self.postMessage({type:'ready',revision,roadCount});return;
  }
  if(msg.revision!==revision)return;
@@ -65,7 +83,8 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  }
  const started=performance.now();
  const explored=new Set(msg.explored);
- const origin=resolvePurpleExplorerStart(graph,msg.vehicle.position,explored,roadEndpoints);
+ const origin=resolvePurpleExplorerStart(graph,msg.vehicle.position,explored,roadEndpoints,20,
+  nearbyRoads(msg.vehicle.position));
  // The nearest graph node can belong to a red road, even if the vehicle is
  // parked on a purple segment. Select a legal endpoint of that segment.
  if(!origin){
