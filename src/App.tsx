@@ -613,7 +613,12 @@ export default function App(){
      return {...t,explorationSection:assigned.explorationSection,
       explorationSectionCompleted:assigned.explorationSectionCompleted,
       explorationSectionTotal:assigned.explorationSectionTotal};
-    return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
+    // A worker result may arrive after an Explorer has already finished its
+     // previous leg. Never reapply a mission planned from an obsolete position:
+     // that would rewind the marker and trigger EXPLORING/IDLE oscillation.
+     if(t.kind==='explorer'&&t.status==='IDLE'&&assigned?.status==='EXPLORING'&&
+        (!assigned.path.length||meters(t.position,assigned.path[0])>15))return t;
+     return t.status==='IDLE'&&!t.deliveryUntil&&assigned&&assigned.status!=='IDLE'?assigned:t;
    })}));
    const queue=message.queue.filter(q=>q.expiresAt>Date.now());
    queueRef.current=queue;
