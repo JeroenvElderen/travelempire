@@ -47,4 +47,52 @@ describe('purple-connected explorer routes',()=>{
    new Set(['xd']),new Set(),new Set(),'residential');
   expect(result.route).toBeNull();
  });
+ it('explores a two-way dead end because reversing is legal',()=>{
+  const graph=makeGraph();
+  const route=planReachableExplorerRoad(graph,'C',new Set(['bc']),
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(route.route?.discoveryEdgeIds).toEqual(['cd']);
+  expect(route.diagnostic.unsafeOneWaySkipped).toBe(0);
+ });
+ it('skips a one-way street that has no legal exit and tries another road',()=>{
+  const graph=makeGraph();
+  // C -> D is a one-way cul-de-sac: its endpoint has no exit at all.
+  graph.edges.set('D',[]);
+  const route=planReachableExplorerRoad(graph,'C',new Set(['bc']),
+   new Set(['cd','ce']),new Set(),new Set(),'residential');
+  expect(route.route?.discoveryEdgeIds).toEqual(['ce']);
+  expect(route.diagnostic.unsafeOneWaySkipped).toBeGreaterThan(0);
+ });
+ it('reports no legal exit if every candidate ends at a one-way dead end',()=>{
+  const graph=makeGraph();
+  graph.edges.set('D',[]);
+  const route=planReachableExplorerRoad(graph,'C',new Set(['bc']),
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(route.route).toBeNull();
+  expect(route.diagnostic.reason).toBe('one-way-no-legal-exit');
+ });
+ it('permits a one-way road with a directed exit returning to purple',()=>{
+  const graph=makeGraph();
+  // C->D one way, D->E eligible one way, E->B already purple.
+  graph.edges.set('D',[{to:'E',id:'de',meters:100,
+   highway:'residential',speedKph:30}]);
+  graph.edges.set('E',[{to:'B',id:'eb',meters:100,
+   highway:'residential',speedKph:30}]);
+  const route=planReachableExplorerRoad(graph,'C',new Set(['bc','eb']),
+   new Set(['cd','de']),new Set(),new Set(),'residential');
+  expect(route.route?.edgeIds).toEqual(['cd','de','eb']);
+  expect(route.route?.discoveryEdgeIds).toEqual(['cd','de']);
+  expect(route.diagnostic.reason).toBe('planned');
+ });
+ it('respects one-way direction when evaluating an apparent exit',()=>{
+  const graph=makeGraph();
+  // E->D enters the dead-end, not D->E: it is not a valid escape.
+  graph.edges.set('D',[]);
+  graph.edges.set('E',[{to:'D',id:'ed',meters:100,
+   highway:'residential',speedKph:30}]);
+  const route=planReachableExplorerRoad(graph,'C',new Set(['bc']),
+   new Set(['cd','ed']),new Set(),new Set(),'residential');
+  expect(route.route).toBeNull();
+  expect(route.diagnostic.reason).toBe('one-way-no-legal-exit');
+ });
 });
