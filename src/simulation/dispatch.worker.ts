@@ -1040,25 +1040,34 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const proposal=planningResults.get(current.id);
     if(!proposal)continue;
     planningResults.delete(current.id);
+    // Make rejected suggestions actionable in the downloadable diagnostics.
+    // A rejected result must never leave a planner stuck with a stale route.
+    const reject=(reason:string)=>{
+     const old=planningStats.get(current.id);
+     planningStats.set(current.id,{result:'rejected:'+reason,
+      ms:old?.ms??0,queueMs:old?.queueMs??0,at:performance.now()});
+     explorerPlanSkipReason.set(current.id,'pool-rejected:'+reason);
+     planningBackoff.delete(current.id);
+    };
     if(proposal.outcome!=='planned'||!proposal.taxi)continue;
     const route=proposal.taxi;
     const append=proposal.mode==='successor'&&current.status==='EXPLORING'&&
      !!proposal.baseEdgeIds&&proposal.baseEdgeIds.length===current.edgeIds.length&&
      proposal.baseEdgeIds.every((id,i)=>current.edgeIds[i]===id);
-    if(current.status!=='IDLE'&&!append)continue;
+    if(current.status!=='IDLE'&&!append){reject('vehicle-no-longer-idle');continue;}
     const origin=append?current.path.at(-1):current.position;
     if(!origin||!route.path.length||meters(origin,route.path[0])>20||
-       route.edgeIds.length!==route.path.length-1)continue;
+       route.edgeIds.length!==route.path.length-1){reject('route-start-or-shape');continue;}
     const projected=append?new Set([...explored,...current.discoveryEdgeIds??[]]):explored;
     const startNode=nearest(graph,origin);
-    if(!startNode||!(graph.edges.get(startNode)??[]).some(e=>projected.has(e.id)))continue;
+    if(!startNode||!(graph.edges.get(startNode)??[]).some(e=>projected.has(e.id))){reject('no-purple-departure');continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
      (projected.has(id)||selected.has(id)));
-    if(!valid||![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id)))continue;
+    if(!valid||![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id))){reject('reservation-or-unrevealed-transit');continue;}
     const end=nearest(graph,route.path.at(-1)!);
     if(end&&reservedTargets.has(end)&&
-       (!append||end!==nearest(graph,current.path.at(-1)!)))continue;
+       (!append||end!==nearest(graph,current.path.at(-1)!))){reject('reserved-destination');continue;}
     const next:Taxi=append?{...current,
      path:[...current.path,...route.path.slice(1)],
      edgeIds:[...current.edgeIds,...route.edgeIds],
