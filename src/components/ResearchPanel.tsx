@@ -19,14 +19,14 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  const available=projects.filter(p=>level(state,p.id)<maxLevel(p.id)).length;
  const projectCard=(p:typeof projects[number])=>{
   const current=level(state,p.id),next=current+1,cost=price(p.id,next);
-  const maxed=current>=maxLevel(p.id),prerequisiteMissing=p.id==='explorerExpansion'&&(discoveredRoads<5000||explorerSpecializations<3),locked=!!state.active||!company||company.cash<cost||prerequisiteMissing;
+  const maxed=current>=maxLevel(p.id),prerequisiteMissing=p.id==='explorerExpansion'&&(discoveredRoads<5000||explorerSpecializations<1),locked=!!state.active||!company||company.cash<cost||prerequisiteMissing;
   const Icon=icons[p.id];
   return <article className="research-project" key={p.id}>
    <div className="research-project-top"><span className="research-project-icon"><Icon size={22}/></span><span className={maxed?'research-level-badge complete':'research-level-badge'}>{maxed?'MAX LEVEL':`LEVEL ${current} / ${maxLevel(p.id)}`}</span></div>
    <h3>{p.name}</h3><p>{p.effect}</p>
    <div className="research-level-track" aria-label={`${current} of ${maxLevel(p.id)} levels completed`}>{Array.from({length:maxLevel(p.id)},(_,i)=><span key={i} className={i<current?'filled':''}/>)}</div>
    <div className="research-project-details"><div><small>Next level</small><strong>{maxed?'Completed':`Level ${next}`}</strong></div><div><small>Research cost</small><strong>{maxed?'—':euro(cost)}</strong></div><div><small>Research time</small><strong>{maxed?'—':formatDuration(duration(state,next,p.id))}</strong></div></div>
-   {p.id==='explorerExpansion'&&!maxed&&<p>Progress: {discoveredRoads.toLocaleString('en-IE')} / 5,000 roads · {explorerSpecializations} / 3 explorer types</p>}
+   {p.id==='explorerExpansion'&&!maxed&&<p>Progress: {discoveredRoads.toLocaleString('en-IE')} / 5,000 roads · {explorerSpecializations} / 1 universal explorer</p>}
    {maxed?<div className="research-maxed"><CheckCircle2 size={16}/> Fully researched</div>:<button type="button" disabled={locked} onClick={()=>onStart(p.id)}>{state.active?'Research in progress':!company?'Create company first':company.cash<cost?'Insufficient funds':prerequisiteMissing?'Unlock exploration milestones':<>Start research <ArrowUpRight size={15}/></>}</button>}
   </article>;
  };
