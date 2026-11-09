@@ -1140,6 +1140,45 @@ export default function App(){
   localStorage.setItem(key,'done');
  },[company?.id,graph]);
  // Five specialists are free and always start at a purple-discovered node.
+ // Existing companies receive the same five free specialists without
+ // losing their saved vehicles, discovered roads, ferries or finances.
+ useEffect(()=>{
+  if(!company||!graph||!graph.nodes.size)return;
+  setFleet(old=>{
+   if(!old.taxis.length)return old; // Starter-fleet effect owns new companies.
+   const discovered=new Set([...(discoveredCacheRef.current?.ids??[]),...(old.exploredEdgeIds??[])]);
+   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+   let node:string|undefined,best=Infinity;
+   for(const [candidate,edges] of graph.edges){
+    if(!edges.some(e=>discovered.has(e.id)))continue;
+    const point=graph.nodes.get(candidate);if(!point)continue;
+    const distance=meters(point,hq);
+    if(distance<best){best=distance;node=candidate;}
+   }
+   if(!node)return old; // Never spawn onto an undiscovered road.
+   const roles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
+   const names=['Highway Explorer','Primary Explorer','Secondary Explorer','Local Street Explorer','POI Explorer'];
+   const existing=new Set(old.taxis.filter(t=>t.kind==='explorer').map(t=>t.explorerRole));
+   const oldUniversal=old.taxis.find(t=>t.kind==='explorer'&&(!t.explorerRole||t.explorerRole==='balanced'));
+   const taxis=oldUniversal&&!existing.has('highway')?old.taxis.map(t=>
+    t.id===oldUniversal.id?{...t,explorerRole:'highway' as const,name:names[0],
+     vehicleModel:names[0]}:t):[...old.taxis];
+   if(oldUniversal&&!existing.has('highway'))existing.add('highway');
+   const missing=roles.filter(role=>!existing.has(role));
+   if(!missing.length&&taxis.length===old.taxis.length&&taxis.every((t,i)=>t===old.taxis[i]))return old;
+   for(const role of missing){
+    const name=names[roles.indexOf(role)];
+    taxis.push({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,
+     name,driver:'Autonomous',position:[...graph.nodes.get(node)!],status:'IDLE',
+     path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
+     ownership:'owned',purchasePrice:0,vehicleModel:name,vehicleYear:2026,
+     vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,
+     vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'});
+   }
+   return {...old,taxis};
+  });
+ },[company?.id,graph,roadGraphVersion,fleet.taxis.length,fleet.exploredEdgeIds?.length]);
+
  const buyRoadExplorer=(requested?:Taxi['explorerRole'])=>{
   if(!company||!graph)return;
   const roles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
