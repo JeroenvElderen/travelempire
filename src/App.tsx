@@ -7,10 +7,12 @@ import {readExploration,writeExploration,clearExploration} from './data/explorat
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
 import {loadStationTile,type Station} from './data/stations';
 import {loadRestStopTile} from './data/restStops';
+import InvestmentsPanel from './components/InvestmentsPanel';
+import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useState, startTransition } from "react";
-import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, CalendarClock, Layers3, ScrollText } from "lucide-react";
+import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, Hotel, X, PanelLeftClose, PanelLeftOpen, LockKeyhole, CircleDollarSign, CalendarClock, Layers3, ScrollText } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import DriversPanel from "./components/DriversPanel";
 import FleetPanel from "./components/FleetPanel";
@@ -50,7 +52,7 @@ import {useRef} from 'react';
 import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
 
 
-const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Dealership",icon:Building2},{name:"Drivers",icon:CalendarClock},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Empire",icon:BarChart3},{name:"Research",icon:FlaskConical}] as const;
+const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Dealership",icon:Building2},{name:"Drivers",icon:CalendarClock},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Investments",icon:Hotel},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Empire",icon:BarChart3},{name:"Research",icon:FlaskConical}] as const;
 type Page=(typeof navigation)[number]['name'];
 type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
 
@@ -206,6 +208,11 @@ export default function App(){
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
  const restStopsRef=useRef<Map<string,RestStop>>(new Map());
+ const [investmentPois,setInvestmentPois]=useState<InvestablePOI[]>([]);
+ const [portfolio,setPortfolio]=useState(()=>loadPortfolio(company?.id));
+ const portfolioRef=useRef(portfolio);portfolioRef.current=portfolio;
+ const [investmentError,setInvestmentError]=useState('');
+ useEffect(()=>{const next=loadPortfolio(company?.id);portfolioRef.current=next;setPortfolio(next);setInvestmentPois([]);setInvestmentError('');},[company?.id]);
  const restLoadedRef=useRef<Set<string>>(new Set());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const stationLoadedRef=useRef<Set<string>>(new Set());
@@ -243,7 +250,15 @@ export default function App(){
     const tile=`${Math.floor(lng*10)}_${Math.floor(lat*10)}`;
     if(!restLoadedRef.current.has(tile)){
      restLoadedRef.current.add(tile);
-     void loadRestStopTile(lng,lat).then(stops=>{for(const stop of stops)restStopsRef.current.set(stop.id,stop)}).catch(()=>restLoadedRef.current.delete(tile));
+     void loadRestStopTile(lng,lat).then(stops=>{
+       for(const stop of stops)restStopsRef.current.set(stop.id,stop);
+       const investable=stops.filter((p):p is InvestablePOI=>p.kind==='hotel'||p.kind==='parking');
+       if(investable.length)setInvestmentPois(old=>{
+        const seen=new Map(old.map(p=>[p.id,p]));
+        for(const p of investable)seen.set(p.id,p);
+        return [...seen.values()].slice(0,1200);
+       });
+      }).catch(()=>restLoadedRef.current.delete(tile));
     }
     if(stationLoadedRef.current.has(tile))continue;
     stationLoadedRef.current.add(tile);
@@ -1497,6 +1512,59 @@ export default function App(){
  },[company?.id,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
  const setFerryTicketPrice=(routeId:string,fare:number)=>{const current=companyRef.current;if(!current||!(current.purchasedFerryRouteIds??[]).includes(routeId)||!Number.isFinite(fare))return;const value=Math.max(1,Math.min(100,Math.round(fare*2)/2));const updated={...current,ferryTicketPrices:{...(current.ferryTicketPrices??{}),[routeId]:value}};companyRef.current=updated;saveCompany(updated);setCompany(updated);};
  const purchaseFerryRoute=(routeId:string,_displayedPrice:number)=>{const current=companyRef.current;const price=ferryRoutePrice(routeId);if(!current||!Number.isFinite(price)||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId]};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
+ const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current;
+  if(!current||!clock)return 'Create a company before buying property shares.';
+  if(!Number.isSafeInteger(amountEuros)||amountEuros<=0)return 'Invalid investment amount.';
+  const available=Math.round((current.cash+pendingCashRef.current)*100),cost=amountEuros*100;
+  if(cost>available)return 'Insufficient company cash.';
+  let next;
+  try{
+   next=buyPropertyShare(portfolioRef.current,poi,cost,clock.epochMs);
+   savePortfolio(current.id,next);
+  }catch(error){return error instanceof Error?error.message:'Investment could not be saved.';}
+  portfolioRef.current=next;setPortfolio(next);
+  const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-amountEuros)*100)/100};
+  pendingCashRef.current=0;
+  companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(old=>({...old,transactions:[{
+   id:crypto.randomUUID(),time:clock.epochMs,
+   description:`Property shares · ${poi.name||poi.kind}`,amount:-amountEuros
+  },...(old.transactions??[])].slice(0,100)}));
+  setInvestmentError('');
+  return null;
+ };
+ // Fractional-property dividends settle at most once per simulated day.
+ useEffect(()=>{
+  if(!company?.id)return;
+  const companyId=company.id;
+  const settle=()=>{
+   if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
+   const now=gameClockRef.current?.epochMs;if(now===undefined)return;
+   const result=settlePropertyDividends(portfolioRef.current,now);
+   if(result.portfolio===portfolioRef.current)return;
+   try{savePortfolio(companyId,result.portfolio)}catch(error){diagnostic('investments:save-error',String(error));return;}
+   portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
+   if(result.incomeCents>0){
+    const income=Math.round(result.incomeCents)/100;
+    pendingCashRef.current=Math.round((pendingCashRef.current+income)*100)/100;
+    setFleet(old=>{
+     const date=new Date(now).toISOString().slice(0,10);
+     const history=[...(old.financeHistory??[])];
+     const previous=history[history.length-1];
+     if(previous?.day===date)history[history.length-1]={...previous,revenue:previous.revenue+income};
+     else history.push({day:date,revenue:income,expenses:0,trips:0});
+     return {...old,
+      accounting:bookAccounting(old.accounting,periodMonth(now),income,0,0,0),
+      financeHistory:history.slice(-365),
+      transactions:[{id:crypto.randomUUID(),time:now,description:'Property investment dividends',amount:income},...(old.transactions??[])].slice(0,100)
+     };
+    });
+    diagnostic('investments:dividends',`amount=${income.toFixed(2)} days=${result.days}`);
+   }
+  };
+  const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
+ },[company?.id]);
  const go=(name:Page)=>{setPage(name);setConsoleOpen(false);setDrawerOpen(false);};
  const onLocation=(value:Headquarters)=>{if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  const activeResearch=research.active;
@@ -1505,7 +1573,7 @@ export default function App(){
  const researchProgress=activeResearch?Math.max(0,Math.min(100,100*(researchGameNow-activeResearch.startedAt)/Math.max(1,activeResearch.endsAt-activeResearch.startedAt))):0;
  const researchRemaining=activeResearch?Math.max(0,activeResearch.endsAt-researchGameNow):0;
  const researchRemainingLabel=researchRemaining>=3600000?`${Math.ceil(researchRemaining/3600000)}h remaining`:`${Math.ceil(researchRemaining/60000)}m remaining`;
- return <div className={`shell nav-v216 ${sidebarCollapsed?'nav-collapsed':''} ${page==='World'&&!consoleOpen?'nav-map-mode':''}`}><aside className={`sidebar ${drawerOpen?'open':''}`}><header className="brand"><div className="brand-mark"><CarFront size={23}/></div><div className="nav-brand-copy"><strong>TravelEmpire</strong><small>v2.1.6 · MANAGEMENT</small></div><button className="nav-collapse-button" title={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} aria-label={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="close-menu" aria-label="Close menu" onClick={()=>setDrawerOpen(false)}><X size={19}/></button></header><nav className="navigation" aria-label="Main navigation"><div className="nav-group-label">OPERATIONS</div>{navigation.filter(n=>['World','Fleet','Dealership','Drivers','Operations','Ferries'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name==='World'?'World Map':name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'World Map':name}</span></button>)}<div className="nav-group-label">MANAGEMENT</div>{navigation.filter(n=>['Company','Finance','Research','Explorer AI'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}<div className="nav-group-label">DIAGNOSTICS</div><button type="button" className={consoleOpen?"selected":""} onClick={()=>{setPage('World');setConsoleOpen(true);setDrawerOpen(false)}}><ScrollText size={19}/><span>Frontend console</span></button><div className="nav-group-label">FUTURE</div><button type="button" disabled title="Empire is not available yet" className="nav-locked"><BarChart3 size={19}/><span>Empire</span><LockKeyhole size={14} className="nav-lock-icon"/></button></nav><button className="sidebar-bottom nav-company-shortcut" title={company?.name??'Company'} onClick={()=>go('Company')}><span className="nav-company-avatar"><CarFront size={20}/></span><span className="nav-company-copy"><strong>{company?.name??'Create company'}</strong><small>{company?'Company workspace':'Set up your company'}</small></span></button></aside>
+ return <div className={`shell nav-v216 ${sidebarCollapsed?'nav-collapsed':''} ${page==='World'&&!consoleOpen?'nav-map-mode':''}`}><aside className={`sidebar ${drawerOpen?'open':''}`}><header className="brand"><div className="brand-mark"><CarFront size={23}/></div><div className="nav-brand-copy"><strong>TravelEmpire</strong><small>v2.1.6 · MANAGEMENT</small></div><button className="nav-collapse-button" title={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} aria-label={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="close-menu" aria-label="Close menu" onClick={()=>setDrawerOpen(false)}><X size={19}/></button></header><nav className="navigation" aria-label="Main navigation"><div className="nav-group-label">OPERATIONS</div>{navigation.filter(n=>['World','Fleet','Dealership','Drivers','Operations','Ferries'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name==='World'?'World Map':name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'World Map':name}</span></button>)}<div className="nav-group-label">MANAGEMENT</div>{navigation.filter(n=>['Company','Finance','Investments','Research','Explorer AI'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}<div className="nav-group-label">DIAGNOSTICS</div><button type="button" className={consoleOpen?"selected":""} onClick={()=>{setPage('World');setConsoleOpen(true);setDrawerOpen(false)}}><ScrollText size={19}/><span>Frontend console</span></button><div className="nav-group-label">FUTURE</div><button type="button" disabled title="Empire is not available yet" className="nav-locked"><BarChart3 size={19}/><span>Empire</span><LockKeyhole size={14} className="nav-lock-icon"/></button></nav><button className="sidebar-bottom nav-company-shortcut" title={company?.name??'Company'} onClick={()=>go('Company')}><span className="nav-company-avatar"><CarFront size={20}/></span><span className="nav-company-copy"><strong>{company?.name??'Create company'}</strong><small>{company?'Company workspace':'Set up your company'}</small></span></button></aside>
  {drawerOpen&&<button className="backdrop" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/>}<main className="main"><header className={`topbar ${page==='World'&&!consoleOpen?'world-topbar world-minimal-topbar':''}`}>{page==='World'&&!consoleOpen?<><span className="world-minimal-date" title="In-game date and time"><CalendarClock size={16}/>{gameClock?formatGameClock(gameClock):'Simulation paused'}</span><span className="world-minimal-money" title="Available company funds"><CircleDollarSign size={17}/>{company?new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(company.cash):'€0'}</span><button type="button" className="world-minimal-layers" aria-label="Toggle map layers" title="Map layers" aria-controls="map-layer-options" onClick={()=>setLayersToggleToken(v=>v+1)}><Layers3 size={19}/></button></>:<><button className="menu-toggle" aria-label="Open navigation" onClick={()=>setDrawerOpen(true)}><Menu size={21}/></button><div className="nav-page-identity"><strong>{consoleOpen?'Frontend console':page}</strong><small>TravelEmpire</small></div><div className="nav-top-stats">{company&&<span className="nav-top-stat"><CircleDollarSign size={16}/><strong>{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(company.cash)}</strong></span>}</div></>}</header>
  {company&&<button type="button" className="research-header-progress" onClick={()=>go('Research')} aria-label={activeResearchProject?`Research: ${activeResearchProject.name}, ${Math.round(researchProgress)} percent complete`:'Open research projects'}>
   <span className="research-header-progress-info"><span className="research-header-progress-title">{activeResearchProject?`RESEARCH · ${activeResearchProject.name} · LVL ${activeResearch?.level}`:'RESEARCH · NO ACTIVE PROJECT'}</span><span className="research-header-progress-time">{activeResearchProject?`${Math.floor(researchProgress)}% · ${researchRemainingLabel}`:'Select a project'}</span></span>
@@ -1519,9 +1587,10 @@ export default function App(){
  {page==='Dealership'&&company&&<DealershipPage cash={company.cash} ready={Boolean(graph)} onOrder={buyTaxiBatch}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours}/>}
+ {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
- {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Dealership'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
+ {page!=='Research'&&page!=='World'&&page!=='Company'&&page!=='Fleet'&&page!=='Dealership'&&page!=='Drivers'&&page!=='Operations'&&page!=='Ferries'&&page!=='Finance'&&page!=='Investments'&&<section className="placeholder"><span className="eyebrow">MANAGEMENT CENTER</span><h1>{page}</h1><p>This module is reserved for an upcoming milestone. No simulated figures are shown until the authoritative backend is implemented.</p><div className="placeholder-card"><span>MODULE STATUS</span><strong>Planned</strong><small>Foundation preview · no live company data</small></div></section>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
  </main><nav className="mobile-tabs" aria-label="Mobile navigation">{navigation.filter(n=>['World','Fleet','Dealership','Company'].includes(n.name)).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'Map':name==='Dealership'?'Dealer':name==='Operations'?'Ops':name}</span></button>)}<button onClick={()=>setDrawerOpen(true)}><Menu size={19}/><span>More</span></button></nav></div>;
 }
