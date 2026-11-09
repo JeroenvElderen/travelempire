@@ -1113,6 +1113,21 @@ export default function App(){
   return()=>window.clearInterval(timer);
  },[company?.id,graph,fleet.taxis.length,research]);
 
+ // An untouched company needs one real HQ road before any specialist can
+ // start. This is the ONLY bootstrap exception to connected discovery.
+ useEffect(()=>{
+  if(!company||!graph||fleet.taxis.length===0||(fleet.exploredEdgeIds?.length??0)>0)return;
+  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+  const node=nearest(graph,hq),position=graph.nodes.get(node);
+  if(!position||meters(position,hq)>500)return;
+  const first=(graph.edges.get(node)??[]).find(e=>e.meters>0);
+  if(!first)return;
+  setFleet(old=>{
+   if((old.exploredEdgeIds?.length??0)>0||old.taxis.length===0)return old;
+   diagnostic('explorers:hq-seed',`road=${first.id}`);
+   return {...old,exploredEdgeIds:[first.id]};
+  });
+ },[company?.id,graph,fleet.taxis.length,fleet.exploredEdgeIds?.length]);
  // Grant the initial fleet exactly once, after the headquarters road graph is ready.
  // Existing companies are untouched. Starter vehicles have no delivery timer or purchase charge.
  useEffect(()=>{
