@@ -19,7 +19,7 @@ function classOf(highway:string|undefined):string{
 }
 function candidateRoadRole(role:Taxi['explorerRole'],highway:string|undefined):boolean{
  const type=classOf(highway);
- if(role==='completion'||role==='poi')return hierarchy.includes(type as typeof hierarchy[number]);
+ if(role==='balanced'||!role||role==='completion'||role==='poi')return hierarchy.includes(type as typeof hierarchy[number]);
  if(role==='highway')return ['motorway','trunk','primary','secondary'].includes(type);
  if(role==='urban')return ['tertiary','residential','rural','service'].includes(type);
  return role==='rural'?type==='rural':role===type;
@@ -107,7 +107,7 @@ export function choosePassengerFerry(
     const gate=destinationPriority(graph,destination.id,discovered);
     if(!gate.seedRoadId||gate.highest>=roadPriority.length)continue;
     const role=explorer.explorerRole;
-    const rank=role==='highway'?0:role==='urban'?5:role==='rural'?roadPriority.indexOf('rural'):role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
+    const rank=role==='balanced'||!role?gate.highest:role==='highway'?0:role==='urban'?5:role==='rural'?roadPriority.indexOf('rural'):role==='completion'||role==='poi'?roadPriority.length:roadPriority.indexOf(role??'');
     // A fresh island opens with its highest available road class. All other
     // vehicle classes wait until a highest-class edge has been discovered.
     if(!gate.highestDiscovered&&rank!==gate.highest)continue;
