@@ -1525,6 +1525,10 @@ export default function App(){
    if(document.visibilityState==='hidden'||!workerReadyRef.current||!dispatchWorkerRef.current)return;
    if(companyRef.current?.id!==companyId)return;
    const now=Date.now();
+   // A discarded worker request must not permanently block a stranded scout.
+   for(const id of ferryBookingRef.current){
+    if(now-(ferryAttemptRef.current.get(id)??now)>45000)ferryBookingRef.current.delete(id);
+   }
    const discovered=discoveredCacheRef.current?.set??new Set(fleetSaveRef.current.exploredEdgeIds??[]);
    const candidates=taxisRef.current.filter(t=>{
     const signal=ferryReadinessRef.current.get(t.id);
