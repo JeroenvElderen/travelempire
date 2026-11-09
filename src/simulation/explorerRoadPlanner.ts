@@ -46,11 +46,11 @@ export function planReachableExplorerRoad(
  // become purple. A safe escape must terminate back on a purple road.
  type EscapeStep={from:string;to:string;id:string};
  const escapes=new Map<string,EscapeStep[]|null>();
- const safeExit=(from:string,to:string,id:string):EscapeStep[]|null=>{
-  const cacheKey=from+'|'+to+'|'+id;
+ const safeExit=(from:string,to:string,id:string,requirePurple=false):EscapeStep[]|null=>{
+  const cacheKey=from+'|'+to+'|'+id+'|'+requirePurple;
   if(escapes.has(cacheKey))return escapes.get(cacheKey)!;
   const reverse=(graph.edges.get(to)??[]).some(e=>e.to===from&&e.id===id&&e.meters>0);
-  if(reverse){escapes.set(cacheKey,[]);return [];}
+  if(reverse&&!requirePurple){escapes.set(cacheKey,[]);return [];}
   // Already at a purple road junction, hence an existing connected exit.
   if((graph.edges.get(to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
    escapes.set(cacheKey,[]);return [];
@@ -165,7 +165,12 @@ export function planReachableExplorerRoad(
  // the middle of an unsafe one-way corridor.
  const lastFrom=keys[keys.length-2],lastTo=keys[keys.length-1],
   lastId=ids[ids.length-1];
- const exit=lastFrom&&lastTo&&lastId?safeExit(lastFrom,lastTo,lastId):[];
+ // Reversing the final two-way segment is insufficient if a one-way edge
+ // earlier in the corridor prevents returning to purple.
+ const irreversibleDiscovery=ids.some((id,i)=>!explored.has(id)&&
+  !(graph.edges.get(keys[i+1])??[]).some(e=>e.id===id&&e.to===keys[i]&&e.meters>0));
+ const exit=lastFrom&&lastTo&&lastId?
+  safeExit(lastFrom,lastTo,lastId,irreversibleDiscovery):[];
  if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
  const escapeTransitEdgeIds:string[]=[];
  for(const step of exit??[]){
