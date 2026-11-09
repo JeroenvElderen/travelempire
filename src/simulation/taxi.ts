@@ -1,5 +1,6 @@
 import {hardcodedRoadSpeedKph} from '../data/hardcodedSpeedLimits';
 import {fareForDistance} from './demand';
+import {explorerClassEligible} from './explorerRoles';
 import type {Company} from '../company';
 export type Point=[number,number];
 export type Taxi = {
@@ -716,7 +717,7 @@ export async function dispatchScout(
  let balancedBestScore=Infinity;
  // POI candidate edges are already indexed near harbours by the worker.
  const poiPoints=specialist==='poi'?(poiTargets??[]):[];
- const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):specialist==='motorway'?['motorway','motorway_link'].includes(h):specialist==='trunk'?['trunk','trunk_link'].includes(h):specialist==='primary'?['primary','primary_link'].includes(h):specialist==='secondary'?['secondary','secondary_link'].includes(h):specialist==='tertiary'?['tertiary','tertiary_link'].includes(h):specialist==='residential'?['residential','living_street'].includes(h):specialist==='rural'?h==='unclassified':specialist==='service'?h==='service':false;
+ const specialistMatch=(h:string)=>explorerClassEligible(specialist,h);
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
  // Major-road specialists search the entire connected discovered-road network,
