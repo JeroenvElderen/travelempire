@@ -94,7 +94,7 @@ export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:numb
   const from=Math.max(last,hour-MAX_CATCHUP_HOURS);
   let payment=0;
   for(let t=from+1;t<=hour;t++){
-   const operations=propertyOperations(h,t);
+   const operations=propertyOperations(h,t-1);
    payment+=Math.round(operations.netCents*ownership(h));
   }
   incomeCents+=payment;hours=Math.max(hours,hour-from);changed=true;
