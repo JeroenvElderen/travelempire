@@ -69,6 +69,24 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  }
  try{
   const valid=new Set(roleAllowed(msg.vehicle.explorerRole,msg.poiRoadIds));
+  // Fast path: use an eligible road attached to the actual purple departure
+  // junction. This avoids a large Dijkstra search for immediate work.
+  const local=(graph.edges.get(currentNode)??[]).filter(e=>
+   e.meters>0&&valid.has(e.id)&&!explored.has(e.id)&&
+   !msg.reservedRoads.includes(e.id)&&!msg.reservedDestinations.includes(e.to));
+  if(local.length){
+   local.sort((a,b)=>a.meters-b.meters);
+   const first=local[0];
+   const start=graph.nodes.get(currentNode),end=graph.nodes.get(first.to);
+   if(start&&end){
+    self.postMessage({type:'planResult',revision,requestId:msg.requestId,
+     vehicleId:msg.vehicle.id,outcome:'planned',roadCount,ms:performance.now()-started,
+     taxi:{...msg.vehicle,status:'EXPLORING',path:[start,end],
+      edgeIds:[first.id],discoveryEdgeIds:[first.id],journeyEdges:[],
+      leg:0,distanceIntoLeg:0,scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}});
+    return;
+   }
+  }
   const planned=await dispatchScout({...msg.vehicle,status:'IDLE'},
    graph,explored,msg.hq,new Set(msg.reservedDestinations),new Set(msg.reservedRoads),
    undefined,known,valid,undefined,undefined,undefined,msg.poiTargets,undefined,undefined,
