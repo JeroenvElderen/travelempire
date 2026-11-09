@@ -695,7 +695,8 @@ export async function dispatchScout(
  let specialistBest:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
  let specialistScore=Infinity;
  const specialist=taxi.explorerRole;
- const poiPoints=specialist==='poi'?(poiTargets??[]).filter(p=>meters(p,taxi.position)<8000).slice(0,24):[];
+ // POI candidate edges are already indexed near harbours by the worker.
+ const poiPoints=specialist==='poi'?(poiTargets??[]):[];
  const specialistMatch=(h:string)=>specialist==='highway'?['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(h):specialist==='urban'?['residential','living_street','service','tertiary','unclassified'].includes(h):specialist==='motorway'?['motorway','motorway_link'].includes(h):specialist==='trunk'?['trunk','trunk_link'].includes(h):specialist==='primary'?['primary','primary_link'].includes(h):specialist==='secondary'?['secondary','secondary_link'].includes(h):specialist==='tertiary'?['tertiary','tertiary_link'].includes(h):specialist==='residential'?['residential','living_street'].includes(h):specialist==='rural'?h==='unclassified':specialist==='service'?h==='service':false;
  let visits=0;
  const fullRetry=taxi.kind==='explorer'&&taxi.shiftParked&&taxi.explorationMode==='frontier';
@@ -745,10 +746,9 @@ export async function dispatchScout(
      if(specialist&&specialist!=='poi'&&specialist!=='completion'){
       if((!discoveryAllowed||discoveryAllowed.has(edge.id))&&specialistMatch(edge.highway??'')&&distance<specialistScore){specialistBest=candidate;specialistScore=distance;}
      }else if(specialist==='poi'&&poiPoints.length){
-      const point=graph.nodes.get(edge.to);
-      if(point){let proximity=Infinity;for(const poi of poiPoints)proximity=Math.min(proximity,meters(point,poi));
-       if((!discoveryAllowed||discoveryAllowed.has(edge.id))&&proximity<600){const score=distance+proximity*1.5;if(score<specialistScore){specialistBest=candidate;specialistScore=score;}}
-      }
+      // Select the nearest harbour-access road by actual travel distance.
+      // Never discard a distant harbour solely because it is >8km away.
+      if(distance<specialistScore){specialistBest=candidate;specialistScore=distance;}
      }
    }
    // Transit may use any loaded road class. Only discoveryAllowed roads
