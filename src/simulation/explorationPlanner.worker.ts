@@ -1,4 +1,5 @@
-import {dispatchScout,nearest,type Taxi,type RoadGraph,type Point} from './taxi';
+import {nearest,type Taxi,type RoadGraph,type Point} from './taxi';
+import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import type {RoadSegment} from '../data/roadTiles';
 import {explorerClassEligible} from './explorerRoles';
 
@@ -69,32 +70,16 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  }
  try{
   const valid=new Set(roleAllowed(msg.vehicle.explorerRole,msg.poiRoadIds));
-  // Fast path: use an eligible road attached to the actual purple departure
-  // junction. This avoids a large Dijkstra search for immediate work.
-  const local=(graph.edges.get(currentNode)??[]).filter(e=>
-   e.meters>0&&valid.has(e.id)&&!explored.has(e.id)&&
-   !msg.reservedRoads.includes(e.id)&&!msg.reservedDestinations.includes(e.to));
-  if(local.length){
-   local.sort((a,b)=>a.meters-b.meters);
-   const first=local[0];
-   const start=graph.nodes.get(currentNode),end=graph.nodes.get(first.to);
-   if(start&&end){
-    self.postMessage({type:'planResult',revision,requestId:msg.requestId,
-     vehicleId:msg.vehicle.id,outcome:'planned',roadCount,ms:performance.now()-started,
-     taxi:{...msg.vehicle,status:'EXPLORING',path:[start,end],
-      edgeIds:[first.id],discoveryEdgeIds:[first.id],journeyEdges:[],
-      leg:0,distanceIntoLeg:0,scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}});
-    return;
-   }
-  }
-  const planned=await dispatchScout({...msg.vehicle,status:'IDLE'},
-   graph,explored,msg.hq,new Set(msg.reservedDestinations),new Set(msg.reservedRoads),
-   undefined,known,valid,undefined,undefined,undefined,msg.poiTargets,undefined,undefined,
-   ()=>revision===msg.revision);
-  const assigned=planned.status==='EXPLORING'&&planned.path.length>=2;
-  self.postMessage({type:'planResult',revision,requestId:msg.requestId,vehicleId:msg.vehicle.id,
-   outcome:assigned?'planned':'no-reachable-target',taxi:assigned?planned:undefined,
-   roadCount,ms:performance.now()-started});
+  const planned=planReachableExplorerRoad(graph,currentNode,explored,valid,
+   new Set(msg.reservedRoads),new Set(msg.reservedDestinations),
+   msg.vehicle.explorerRole);
+  self.postMessage({type:'planResult',revision,requestId:msg.requestId,
+   vehicleId:msg.vehicle.id,outcome:planned.route?'planned':planned.diagnostic.reason,
+   taxi:planned.route?{...msg.vehicle,status:'EXPLORING',path:planned.route.path,
+    edgeIds:planned.route.edgeIds,discoveryEdgeIds:planned.route.discoveryEdgeIds,
+    journeyEdges:[],leg:0,distanceIntoLeg:0,
+    scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}:undefined,
+   diagnostic:planned.diagnostic,roadCount,ms:performance.now()-started});
  }catch(error){
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,vehicleId:msg.vehicle.id,
    outcome:'error',error:String(error),roadCount,ms:performance.now()-started});
