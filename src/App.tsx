@@ -260,7 +260,18 @@ export default function App(){
  const simulationPerfRef=useRef({samples:0,totalMs:0,maxMs:0,lastReport:0});
  const fuelPlanCacheRef=useRef(new Map<string,{at:number;position:[number,number];graph:RoadGraph|null;stationCount:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null}>());
  const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
- const [fleet,setFleet]=useState<FleetState>(()=>company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});
+ // Migrate specialist fleets without resetting progress, paid upgrades, taxi data,
+ // discovery, ferry tickets, vehicle condition or the selected scout's itinerary.
+ const universalFleet=(loaded:FleetState):FleetState=>{
+  const scouts=loaded.taxis.filter(t=>t.kind==='explorer');
+  if(!scouts.length)return loaded;
+  const keeper=[...scouts].sort((a,b)=>
+   (b.ferryTrip?100:0)+(b.status==='EXPLORING'?20:0)+(b.status==='RETURNING'?10:0)-
+   ((a.ferryTrip?100:0)+(a.status==='EXPLORING'?20:0)+(a.status==='RETURNING'?10:0)))[0];
+  return {...loaded,taxis:loaded.taxis.filter(t=>t.kind!=='explorer'||t.id===keeper.id)
+   .map(t=>t.id===keeper.id?{...t,explorerRole:'balanced' as const,name:'Universal Explorer',vehicleModel:'Universal Explorer'}:t)};
+ };
+ const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
  const companyRef=useRef(company);companyRef.current=company;
  const pendingCashRef=useRef(0);
  useEffect(()=>{
@@ -405,7 +416,7 @@ export default function App(){
  useEffect(()=>{if(!company||!gameClock)return;setResearch(old=>Research.settle(old,gameClock.epochMs))},[company?.id,gameClock?.epochMs]);
  // Ferry purchases must not enqueue distant road tiles. Active vehicle journeys
  // request destination roads through the existing on-demand route prefetcher.
- const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<3)throw Error('Requires 5,000 discovered roads and 3 explorer specializations.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
+ const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<1)throw Error('Requires 5,000 discovered roads and the universal explorer.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
  const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
  // Apply completed fleet expansion exactly once, including after an offline research completion.
  // Fleet and its idempotency marker are saved in the same snapshot.
@@ -683,7 +694,7 @@ export default function App(){
    networkRef.current?.consider(positions);
    // Request one harbour-access tile near an active POI explorer each cycle.
    // Avoid bulk ferry-port downloads that could exhaust mobile Safari memory.
-   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi'&&!t.ferryTrip);
+   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&!t.ferryTrip);
    if(poiExplorers.length&&harbourPoiRef.current.length){
     let closest:[number,number]|null=null,closestMeters=20000;
     for(const harbour of harbourPoiRef.current)for(const explorer of poiExplorers){
@@ -698,7 +709,7 @@ export default function App(){
   check();const timer=window.setInterval(check,12000);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
- useEffect(()=>{setFleet(company?loadFleet(company.id):{taxis:[],revenue:0,completed:0});queueRef.current=[];discoveredCacheRef.current=null;setMissionQueue([]);lastMissionAt.current=0},[company?.id]);
+ useEffect(()=>{setFleet(company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});queueRef.current=[];discoveredCacheRef.current=null;setMissionQueue([]);lastMissionAt.current=0},[company?.id]);
  // Restore historical discoveries from IndexedDB and merge with any progress made
  // while the database was opening. Legacy localStorage discoveries are migrated.
  useEffect(()=>{if(!company)return;const id=company.id;let cancelled=false;
@@ -1137,16 +1148,18 @@ export default function App(){
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)return;
   const position=graph.nodes.get(node);if(!position)return;
-  const roles:NonNullable<Taxi['explorerRole']>[]=['motorway','trunk','primary','secondary','tertiary','residential','rural','service','poi','completion'];
+  const roles:NonNullable<Taxi['explorerRole']>[]=['balanced'];
   const now=Date.now();
-  const explorers:Taxi[]=roles.map(role=>({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:role.charAt(0).toUpperCase()+role.slice(1)+' Explorer',driver:'Autonomous',position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:role+' Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'}));
+  const explorers:Taxi[]=roles.map(role=>({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:'Universal Explorer',driver:'Autonomous',position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:'Universal Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'}));
   const driver={id:crypto.randomUUID(),name:'Alex Morgan',hiredAt:now};
   const taxi:Taxi={id:crypto.randomUUID(),kind:'taxi',name:'Taxi 1',driver:driver.name,position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:'Starter Taxi',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'};
   const current=loadFleet(company.id);
   if(current.taxis.length===0){const updated={...current,taxis:[taxi,...explorers],drivers:[...(current.drivers??[]),driver]};saveFleet(company.id,updated);fleetSaveRef.current=updated;setFleet(updated);}
   localStorage.setItem(key,'done');
  },[company?.id,graph]);
- const buyRoadExplorer=(role?:Taxi['explorerRole'])=>{if(!company||!graph)return;try{
+ const buyRoadExplorer=(_role?:Taxi['explorerRole'])=>{if(!company||!graph)return;try{
+  if(fleet.taxis.some(t=>t.kind==='explorer'))throw Error('The universal explorer is already owned. Only one explorer is allowed.');
+  const role:Taxi['explorerRole']='balanced';
   const cost=role==='completion'||role==='urban'?3000:role==='highway'?3500:role==='poi'?4000:2500;
   const explorerCapacity=explorerDepotCapacity(upgradesFor(fleet,'main'),Research.level(research,'explorerExpansion'));
   const explorerCount=fleet.taxis.filter(t=>t.kind==='explorer'&&(t.depotId??'main')==='main').length;
