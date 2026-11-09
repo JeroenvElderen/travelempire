@@ -1535,7 +1535,7 @@ export default function App(){
     const signal=ferryReadinessRef.current.get(t.id);
     return t.kind==='explorer'&&t.status==='IDLE'&&!t.ferryTrip&&!t.refillRequested&&
      !t.recoveryPending&&!t.deliveryUntil&&energyPercent(t)>15&&
-     !!signal?.ready&&signal.idleMs>=90000&&!ferryBookingRef.current.has(t.id)&&
+     !!signal&&signal.ready&&signal.idleMs>=90000&&!ferryBookingRef.current.has(t.id)&&
      now-(ferryAttemptRef.current.get(t.id)??0)>25000;
    }).slice(0,2);
    for(const scout of candidates){
