@@ -217,7 +217,7 @@ function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,exp
  const stats={role:taxi.explorerRole??'',outcome:'searching',eligible:eligibleCount,candidates:candidates.size,entries:0,visits:0,attempts:(previous?.attempts??0)+1,at:performance.now()};
  majorRoadSearchDiagnostics.set(taxi.id,stats);
  const start=nearest(g,taxi.position);
- if(!start||!revealedNodesIndex.has(start)||(!candidates.size&&!majorSearches.has(taxi.id))){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
+ if(!start||!(g.edges.get(start)??[]).some(e=>explored.has(e.id))||!revealedNodesIndex.has(start)||(!candidates.size&&!majorSearches.has(taxi.id))){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
  let search=majorSearches.get(taxi.id);
  // New tiles add graph edges; old searches remain valid for a short bounded
  // lifetime and are refreshed to discover newly reachable components.
