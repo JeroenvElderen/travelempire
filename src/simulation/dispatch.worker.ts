@@ -613,6 +613,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
+    // The universal scout may discover any road class; priorities are applied
+    // in dispatchScout, not as hard exclusions from the connected network.
+    if(role==='balanced'||!role)return allRoads;
     if(role==='poi')return poiRoads;
     if(role==='completion')return completionRoads;
     if(role==='highway'||role==='urban'){
@@ -790,7 +793,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(ends){projectedRevealed.add(ends[0]);projectedRevealed.add(ends[1]);}
     }
     const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,projectedExplored,hq,reservedTargets,successorReservations,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,undefined,poiTargets,undefined,projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
+     graph,projectedExplored,hq,reservedTargets,successorReservations,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,undefined,taxi.path.length>1?(nearest(graph,taxi.path[taxi.path.length-2])??undefined):undefined,undefined,poiTargets,undefined,projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-extensionRouteStarted;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
