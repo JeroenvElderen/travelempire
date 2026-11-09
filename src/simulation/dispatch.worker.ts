@@ -20,13 +20,14 @@ const planningStats=new Map<string,{result:string;ms:number;queueMs:number;at:nu
 let nextPlanningRequest=0;
 
 let plannerPoolRevision=0;
+let plannerPoolStartedAt=0;
 function stopPlanningPool():void{
  for(const slot of planningPool)slot.worker.terminate();
  planningPool.length=0;planningRequests.clear();planningResults.clear();
  planningLastSent.clear();planningStats.clear();planningBackoff.clear();nextPlanningRequest=0;
 }
 function startPlanningPool(revision:number):void{
- stopPlanningPool();plannerPoolRevision=revision;
+ stopPlanningPool();plannerPoolRevision=revision;plannerPoolStartedAt=performance.now();
  try{
   for(let i=0;i<2;i++){
    const worker=new Worker(new URL('./explorationPlanner.worker.ts',import.meta.url),{type:'module'});
@@ -567,6 +568,19 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const planned=from&&to?(msg.discoveredOnly?routeDiscovered(graph,from,to,indexedExplored):route(graph,from,to)):null;
    self.postMessage({type:'routeResult',revision:activeRevision,requestId:msg.requestId,from:msg.from,to:msg.to,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
    return;
+  }
+  // On slow/mobile browsers, a planner may hang during a nationwide graph
+  // search or never finish loading its road clone. Fall back to the previous
+  // worker-local dispatcher instead of leaving five explorers idle forever.
+  if(planningPool.length===2){
+   const stalled=[...planningRequests.values()].some(r=>performance.now()-r.at>20000);
+   const neverReady=performance.now()-plannerPoolStartedAt>25000&&
+    planningPool.some(slot=>!slot.ready||slot.roads===0);
+   if(stalled||neverReady){
+    for(const request of planningRequests.values())
+     explorerPlanSkipReason.set(request.id,stalled?'pool-search-timeout':'pool-not-ready');
+    stopPlanningPool();
+   }
   }
   const dispatchStarted=performance.now();
   const {now,hq}=msg;
