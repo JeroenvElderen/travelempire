@@ -194,6 +194,8 @@ function resumeMajorSearch(search:MajorSearch,g:RoadGraph,explored:Set<string>,r
    return {path:keys.map(k=>g.nodes.get(k)!),edgeIds,target:entry};
   }
   for(const edge of g.edges.get(state.node)??[]){
+   // Travel between discovery targets exclusively on discovered roads.
+   if(!explored.has(edge.id))continue;
    // Do not reverse direction at a junction unless it is a dead-end.
    if(state.incoming===edge.to&&(g.edges.get(state.node)??[]).some(e=>e.to!==state.incoming))continue;
    const cost=state.cost+edge.meters;
@@ -215,7 +217,7 @@ function targetMajorRoadMission(taxi:Taxi,g:RoadGraph,candidates:Set<string>,exp
  const stats={role:taxi.explorerRole??'',outcome:'searching',eligible:eligibleCount,candidates:candidates.size,entries:0,visits:0,attempts:(previous?.attempts??0)+1,at:performance.now()};
  majorRoadSearchDiagnostics.set(taxi.id,stats);
  const start=nearest(g,taxi.position);
- if(!start||(!candidates.size&&!majorSearches.has(taxi.id))){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
+ if(!start||!revealedNodesIndex.has(start)||(!candidates.size&&!majorSearches.has(taxi.id))){stats.outcome='no-start-or-candidates';majorSearches.delete(taxi.id);return null;}
  let search=majorSearches.get(taxi.id);
  // New tiles add graph edges; old searches remain valid for a short bounded
  // lifetime and are refreshed to discover newly reachable components.
