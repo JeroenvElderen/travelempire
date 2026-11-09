@@ -133,4 +133,19 @@ describe('purple-connected explorer routes',()=>{
   expect(result.route).toBeNull();
   expect(result.diagnostic.reason).toBe('one-way-no-legal-exit');
  });
+ it('escapes back to purple after a one-way road followed by a two-way segment',()=>{
+  const graph=makeGraph();
+  graph.nodes.set('F',[0.004,0]);graph.nodeKeys.push('F');
+  graph.edges.set('D',[{to:'F',id:'df',meters:110,
+   highway:'residential',speedKph:30}]);
+  graph.edges.set('F',[
+   {to:'D',id:'df',meters:110,highway:'residential',speedKph:30},
+   {to:'B',id:'fb',meters:300,highway:'primary',speedKph:50}
+  ]);
+  const result=planReachableExplorerRoad(graph,'C',new Set(['bc','fb']),
+   new Set(['cd','df']),new Set(),new Set(),'residential');
+  expect(result.route?.edgeIds).toEqual(['cd','df','fb']);
+  expect(result.route?.discoveryEdgeIds).toEqual(['cd','df']);
+  expect(result.diagnostic.reason).toBe('planned');
+ });
 });
