@@ -579,7 +579,14 @@ export default function App(){
     // Keep the current simulated position instead of reverting to the worker snapshot.
     if((t.kind==='explorer')&&t.status==='EXPLORING'&&assigned&&
        (assigned.status==='IDLE'||assigned.edgeIds.length<t.edgeIds.length)){
-     if(assigned.status==='IDLE')return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+     if(assigned.status==='IDLE'){
+       // Worker road sync can temporarily lag the main map. If the current
+       // road is still present locally, never stop a moving explorer merely
+       // because a worker snapshot temporarily lacks that road ID.
+       const activeRoadId=t.edgeIds[t.leg];
+       if(activeRoadId&&roadLengthByIdRef.current.has(activeRoadId))return t;
+       return {...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+      }
      if(assigned.edgeIds.length>t.leg&&
         assigned.edgeIds.every((id,i)=>t.edgeIds[i]===id))
       return {...t,path:assigned.path,edgeIds:assigned.edgeIds,discoveryEdgeIds:assigned.discoveryEdgeIds};
