@@ -965,13 +965,21 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     planningCalls++;
     const scoutRouteStarted=performance.now();
     const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk'||idleVehicle.explorerRole==='poi';
-    const targeted=majorRoad?targetMajorRoadMission(idleVehicle,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
+    const purpleOrigin=resolvePurpleExplorerStart(graph,idleVehicle.position,explored,roadEndpoints);
+    if(!purpleOrigin){explorerPlanSkipReason.set(idleVehicle.id,'no-purple-segment-near-vehicle');continue;}
+    const anchoredTaxi={...idleVehicle,position:graph.nodes.get(purpleOrigin.node)!};
+    const targeted=majorRoad?targetMajorRoadMission(anchoredTaxi,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
     // Search-budget exhaustion is inconclusive. Do not immediately repeat
     // another large graph search with dispatchScout in the same dispatch.
     const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
-    const scout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
+    const plannedScout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
      ?idleVehicle
-     :await dispatchScout(taxis[index],graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
+     :await dispatchScout(anchoredTaxi,graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
+    const scout=plannedScout.status==='EXPLORING'?
+     {...plannedScout,position:idleVehicle.position,
+      path:purpleOrigin.connector?[idleVehicle.position,...plannedScout.path]:plannedScout.path,
+      edgeIds:purpleOrigin.connector?[purpleOrigin.connector.edgeId,...plannedScout.edgeIds]:plannedScout.edgeIds}:
+     plannedScout;
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-scoutRouteStarted;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
