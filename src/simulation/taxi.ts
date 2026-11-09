@@ -727,7 +727,7 @@ export async function dispatchScout(
  // Major-road specialists search the entire connected discovered-road network,
  // rather than an arbitrary radius or node count. Only an undiscovered road
  // of their own class can be selected as a discovery target.
- const majorRoadScout=specialist==='motorway'||specialist==='trunk'||specialist==='primary';
+ const majorRoadScout=specialist==='motorway'||specialist==='trunk'||specialist==='primary'||specialist==='highway'||specialist==='poi';
  const maxSearchMeters=majorRoadScout?Infinity:balanced?15000:taxi.kind==='explorer'&&specialist?15000:fullRetry?Infinity:taxi.kind==='explorer'&&taxi.shiftParked?5000:taxi.explorationMode==='frontier'?5000:3500;
  // Every role, including motorway and recovery searches, must have a finite work limit.
  // The scheduler retries later as more road tiles and discoveries become available.
