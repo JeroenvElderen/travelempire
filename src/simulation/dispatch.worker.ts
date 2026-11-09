@@ -659,7 +659,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(firstForbidden<=taxi.leg){
      // A vehicle already traversing an invalid edge is held at its current
      // position rather than permitted to complete that edge.
-     taxis[index]={...taxi,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+     taxis[index]={...taxi,status:'IDLE',routeInvalid:true,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     }else{
      taxis[index]={...taxi,path:taxi.path.slice(0,firstForbidden+1),
       edgeIds:taxi.edgeIds.slice(0,firstForbidden)};
