@@ -280,6 +280,7 @@ let discoveryIndexUpdates=0;
 let discoveryIndexRebuilds=0;
 let discoveryIndexLastMs=0;
 let poiRoadsIndex=new Set<string>();
+const nearestHarbourRoads=new Map<number,{id:string;distance:number}>();
 let poiTargetsSignature='';
 let poiIndexedRoads=0;
 const pendingLoadedExplored=new Set<string>();
@@ -351,19 +352,31 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
 function updatePoiIndex(g:RoadGraph,targets:Point[]){
  const signature=JSON.stringify(targets);
  if(signature!==poiTargetsSignature){
-  poiTargetsSignature=signature;poiRoadsIndex=new Set();poiIndexedRoads=0;poiRoadCursor=0;
+  poiTargetsSignature=signature;poiRoadsIndex=new Set();nearestHarbourRoads.clear();poiIndexedRoads=0;poiRoadCursor=0;
  }
  if(!targets.length)return;
  if(poiIndexedRoads===seenRoadIds.size)return;
- // A new road tile should not cause repeated nationwide POI scans.
+ // Track the actual nearest access segment for each harbour as road tiles
+ // arrive. Discovering an unrelated road 500m away must not unlock a port.
+ // Distances use a point-to-segment projection, not just endpoint proximity.
  let cursor=poiRoadCursor;
  for(;cursor<roadInsertionOrder.length;cursor++){
   const id=roadInsertionOrder[cursor],ends=roadEndpoints.get(id);
   if(!ends)continue;
-  // Harbour access roads may belong to any road class.
-  const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);
-  if((a&&targets.some(p=>meters(a,p)<600))||(b&&targets.some(p=>meters(b,p)<600)))poiRoadsIndex.add(id);
+  const a=g.nodes.get(ends[0]),b=g.nodes.get(ends[1]);if(!a||!b)continue;
+  for(let i=0;i<targets.length;i++){
+   const p=targets[i],margin=0.005;
+   if(p[0]<Math.min(a[0],b[0])-margin||p[0]>Math.max(a[0],b[0])+margin||
+      p[1]<Math.min(a[1],b[1])-margin||p[1]>Math.max(a[1],b[1])+margin)continue;
+   const cos=Math.cos(p[1]*Math.PI/180),ax=(a[0]-p[0])*111320*cos,ay=(a[1]-p[1])*111320;
+   const vx=(b[0]-a[0])*111320*cos,vy=(b[1]-a[1])*111320;
+   const fraction=Math.max(0,Math.min(1,-(ax*vx+ay*vy)/(vx*vx+vy*vy||1)));
+   const distance=Math.hypot(ax+fraction*vx,ay+fraction*vy);
+   const previous=nearestHarbourRoads.get(i);
+   if(distance<=300&&(!previous||distance<previous.distance))nearestHarbourRoads.set(i,{id,distance});
+  }
  }
+ poiRoadsIndex=new Set([...nearestHarbourRoads.values()].map(v=>v.id));
  poiRoadCursor=cursor;
  poiIndexedRoads=seenRoadIds.size;
 }
@@ -425,7 +438,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;nextPlanningPhase='idle';regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    self.postMessage({type:'ready',revision:activeRevision});return;
   }
@@ -593,7 +606,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const poiTargets=(msg.harbourTargets??[]).slice(0,150);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
-   const connectedFrontier=connectedFrontierIndex;
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
@@ -833,7 +845,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     idleMissionPlans++;
     planningCalls++;
     const scoutRouteStarted=performance.now();
-    const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk';
+    const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk'||idleVehicle.explorerRole==='poi';
     const targeted=majorRoad?targetMajorRoadMission(idleVehicle,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
     // Search-budget exhaustion is inconclusive. Do not immediately repeat
     // another large graph search with dispatchScout in the same dispatch.
