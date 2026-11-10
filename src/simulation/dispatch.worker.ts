@@ -940,7 +940,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const origin=purpleStartNear(idleVehicle.position,explored);
      if(origin){
       const allowed=discoveryRoads(idleVehicle);
-      const planned=planReachableExplorerRoad(graph,origin.node,explored,allowed,
+      const planned=planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
        reservedEdges,reservedTargets,role);
       singleWorkerScanResult.set(idleVehicle.id,planned.diagnostic.reason+
        ':visited='+planned.diagnostic.visitedPurpleNodes+
@@ -948,7 +948,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const route=planned.route;
       if(route){
        const completed=prependPurpleStart(route,origin);
-       const destination=nearest(graph,completed.path.at(-1)!);
+       const destination=nearest(activeGraph,completed.path.at(-1)!);
        const newEdges=new Set(route.discoveryEdgeIds);
        const escapeOnly=new Set(route.escapeTransitEdgeIds);
        const routeValid=completed.edgeIds.length===completed.path.length-1&&
@@ -961,14 +961,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
          if(i===0&&origin.connector){
           const pair=roadEndpoints.get(id);
           const endpoint=origin.node;
-          return id===origin.connector.edgeId&&
-           !!pair&&pair.includes(endpoint)&&
-           (graph.edges.get(pair[0])??[]).some(e=>e.id===id&&e.to===endpoint)||
-           id===origin.connector.edgeId&&!!pair&&
-           (graph.edges.get(pair[1])??[]).some(e=>e.id===id&&e.to===endpoint);
+          if(!pair||id!==origin.connector.edgeId)return false;
+          return (activeGraph.edges.get(pair[0])??[]).some(e=>e.id===id&&e.to===endpoint)||
+           (activeGraph.edges.get(pair[1])??[]).some(e=>e.id===id&&e.to===endpoint);
          }
-         const a=nearest(graph,completed.path[i]),b=nearest(graph,completed.path[i+1]);
-         return !!a&&!!b&&(graph.edges.get(a)??[]).some(e=>e.id===id&&e.to===b);
+         const a=nearest(activeGraph,completed.path[i]),b=nearest(activeGraph,completed.path[i+1]);
+         return !!a&&!!b&&(activeGraph.edges.get(a)??[]).some(e=>e.id===id&&e.to===b);
         })&&
         (!destination||!reservedTargets.has(destination));
        if(routeValid){
