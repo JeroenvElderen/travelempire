@@ -110,7 +110,7 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 }
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
-type IndexedRoad={id:string;a:[number,number];b:[number,number];highway?:string};
+type IndexedRoad={id:string;a:[number,number];b:[number,number];highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number};
 type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
@@ -130,7 +130,7 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
    const b=graph.nodes.get(edge.to);
    if(!b)continue;
    index.ids.add(edge.id);
-   const road:IndexedRoad={id:edge.id,a,b,highway:edge.highway};
+   const road:IndexedRoad={id:edge.id,a,b,highway:edge.highway,layer:edge.layer,bridge:edge.bridge,tunnel:edge.tunnel,level:edge.level};
    // Keep geometry addressable by ID when viewport indexing misses a cell.
    index.byId.set(edge.id,road);
    const minX=Math.floor(Math.min(a[0],b[0])/ROAD_GRID_DEGREES);
@@ -688,12 +688,18 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const sourceId='active-road-network';
   const purpleSourceId='explored-road-network-source';
   const exploredLayerId='explored-road-network';
+  const tunnelLayerId='underground-road-network';
+  const exploredTunnelLayerId='explored-underground-road-network';
+  const elevatedLayerId='elevated-road-network';
   const parkedSourceId='static-parked-cars';
   const parkedLayerId='static-parked-cars-layer';
   const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   const remove=()=>{
    if(instance.getLayer(parkedLayerId))instance.removeLayer(parkedLayerId);
    if(instance.getSource(parkedSourceId))instance.removeSource(parkedSourceId);
+   if(instance.getLayer(exploredTunnelLayerId))instance.removeLayer(exploredTunnelLayerId);
+   if(instance.getLayer(elevatedLayerId))instance.removeLayer(elevatedLayerId);
+   if(instance.getLayer(tunnelLayerId))instance.removeLayer(tunnelLayerId);
    if(instance.getLayer(exploredLayerId))instance.removeLayer(exploredLayerId);
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
@@ -748,7 +754,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
      if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
-     const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[a,b]}};
+     const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}};
      if(explored)exploredFeatures.push(feature);
      if(features.length<MAX_VISIBLE)features.push(feature);
     }
@@ -772,7 +778,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const road=spatial.byId.get(id);
      if(road&&!(Math.max(road.a[0],road.b[0])<west||Math.min(road.a[0],road.b[0])>east||
       Math.min(road.a[1],road.b[1])>north||Math.max(road.a[1],road.b[1])<south)){
-      feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[road.a,road.b]}};
+      feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[road.a,road.b]}};
       index.set(id,feature);
       recoveredPurple++;
      }
@@ -813,6 +819,39 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    }
    if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#f04452','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.78:0}});
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#c026ff','line-width':['interpolate',['linear'],['zoom'],8,1.2,13,2,17,3],'line-opacity':1}});
+   // Ground and elevated roads remain solid; tunnels are drawn dashed.
+   // OSM 'layer' is relative stacking, not an underground flag on its own.
+   if(instance.getLayer(sourceId))instance.setFilter(sourceId,['!=',['get','tunnel'],true]);
+   if(instance.getLayer(exploredLayerId))instance.setFilter(exploredLayerId,['!=',['get','tunnel'],true]);
+   if(!instance.getLayer(tunnelLayerId))instance.addLayer({
+    id:tunnelLayerId,type:'line',source:sourceId,
+    filter:['==',['get','tunnel'],true],
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#db5967','line-dasharray':[2,3],
+     'line-width':['interpolate',['linear'],['zoom'],10,0.9,17,2.2],
+     'line-opacity':roadsVisible?0.56:0}
+   });
+   if(!instance.getLayer(exploredTunnelLayerId))instance.addLayer({
+    id:exploredTunnelLayerId,type:'line',source:purpleSourceId,
+    filter:['==',['get','tunnel'],true],
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#c026ff','line-dasharray':[2,2],
+     'line-width':['interpolate',['linear'],['zoom'],10,1.4,17,3.2],
+     'line-opacity':0.8}
+   });
+   if(!instance.getLayer(elevatedLayerId))instance.addLayer({
+    id:elevatedLayerId,type:'line',source:purpleSourceId,
+    filter:['all',['!=',['get','tunnel'],true],['==',['get','bridge'],true]],
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#e0a7ff',
+     'line-width':['interpolate',['linear'],['zoom'],10,1.5,17,4.2],
+     'line-opacity':0.65}
+   });
+   // Draw bridges and tunnel traces above the flat roads, but preserve
+   // vehicle markers as independent overlays.
+   if(instance.getLayer(tunnelLayerId))instance.moveLayer(tunnelLayerId);
+   if(instance.getLayer(elevatedLayerId))instance.moveLayer(elevatedLayerId);
+   if(instance.getLayer(exploredTunnelLayerId))instance.moveLayer(exploredTunnelLayerId);
    // Style changes and other overlays can insert layers above discovered roads.
    // Always keep the purple network above the red road network and basemap.
    // This changes rendering only; vehicle simulation and discovery stay intact.
