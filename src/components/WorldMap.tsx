@@ -265,6 +265,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const taxiPaintCache=useRef<Map<string,string>>(new Map());
  const taxiPaintRequests=useRef<Set<string>>(new Set());
  const taxiMarkers=useRef(new Map<string,maplibregl.Marker>());
+ // Only visible tunnel road IDs are retained; no nationwide per-edge clone.
+ const visibleTunnelIds=useRef(new Set<string>());
  const activityMarkers=useRef(new Map<string,maplibregl.Marker>());
  const explorerCommandRef=useRef(onExplorerCommand);explorerCommandRef.current=onExplorerCommand;
  const recoveryCommandRef=useRef(onRequestRecovery);recoveryCommandRef.current=onRequestRecovery;
@@ -541,6 +543,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    for(const [id,snapshot] of taxiSnapshots.current){
     const marker=taxiMarkers.current.get(id);if(!marker)continue;
     const taxi=snapshot.to;
+    const tunnelLeg=taxi.edgeIds[Math.max(0,Math.min(taxi.leg,taxi.edgeIds.length-1))];
+    // A road-level tunnel obscures the vehicle visually; simulation continues.
+    const underground=!!tunnelLeg&&visibleTunnelIds.current.has(tunnelLeg);
+    marker.getElement().style.opacity=underground?'0':'1';
+    const activity=activityMarkers.current.get(id);
+    if(activity)activity.getElement().style.opacity=underground?'0':'1';
     if(snapshot.from.position[0]===snapshot.to.position[0]&&snapshot.from.position[1]===snapshot.to.position[1]&&snapshot.to.position[0]===snapshot.forecast.position[0]&&snapshot.to.position[1]===snapshot.forecast.position[1]&&renderedPosition.current.has(id))continue;
     const elapsed=Math.max(0,(now-snapshot.at)/1000);
     // Continue a short distance along the actual road after a late simulation tick.
@@ -704,7 +712,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();viewportSourceSignature.current='';
+   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();visibleTunnelIds.current.clear();viewportSourceSignature.current='';
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -728,6 +736,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
    const parkingRoads:ParkingRoad[]=[];
+   const scannedTunnels=new Set<string>();
    const showParkedCars=instance.getZoom()>=16.8;
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
@@ -751,6 +760,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(seen.has(id))continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
      seen.add(id);
+     if(road.tunnel===true)scannedTunnels.add(id);
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
      if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
@@ -797,6 +807,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     }
    }
    visibleRoadFeatures.current=features;
+   visibleTunnelIds.current=scannedTunnels;
    visibleRoadIndex.current=index;
    visibleExploredFeatures.current=purpleById;
    const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
