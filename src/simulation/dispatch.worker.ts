@@ -791,6 +791,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(recovery){
      taxis[index]={...taxi,status:'RETURNING',path:recovery.path,
       edgeIds:recovery.edgeIds,discoveryEdgeIds:[],escapeTransitEdgeIds:[],
+      // A stale restStopId must not turn this recovery trip into an
+      // operational discovery trip that paints other specialists' roads.
+      restStopId:undefined,
       leg:0,distanceIntoLeg:0,journeyEdges:[],routeInvalid:false};
      singleWorkerScanResult.set(taxi.id,'returning-to-purple:edges='+recovery.edgeIds.length);
      explorerPlanSkipReason.set(taxi.id,'recovery-to-purple');
