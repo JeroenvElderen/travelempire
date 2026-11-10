@@ -3,8 +3,9 @@ import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} f
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
-const PREFETCH_METERS=6000;
-const BACKGROUND_TILE_DELAY_MS=350;
+const IOS_REDUCED_MEMORY=typeof navigator!=='undefined'&&/iPhone|iPad|iPod/i.test(navigator.userAgent);
+const PREFETCH_METERS=IOS_REDUCED_MEMORY?1800:6000;
+const BACKGROUND_TILE_DELAY_MS=IOS_REDUCED_MEMORY?1400:350;
 // Safari needs an actual rendering frame between expensive graph batches.
 const MERGE_BUDGET_MS=3;
 const yieldToRenderer=()=>new Promise<void>(resolve=>{
@@ -18,7 +19,7 @@ const MAX_CONCURRENT=1;
 const GRAPH_PUBLISH_INTERVAL_MS=15000;
 type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
-const MAX_PENDING_TILES=32; // Bound speculative prefetch work for large fleets.
+const MAX_PENDING_TILES=IOS_REDUCED_MEMORY?6:32; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
@@ -95,7 +96,7 @@ export class RoadNetworkManager {
   }
   choices.sort((a,b)=>a.distance-b.distance);
   const capacity=Math.max(0,MAX_PENDING_TILES-this.queue.length);
-  const selected=choices.slice(0,Math.min(8,capacity));
+  const selected=choices.slice(0,Math.min(IOS_REDUCED_MEMORY?2:8,capacity));
   for(const {id,distance} of selected){this.queued.add(id);this.queue.push(id);
    // Viewer geometry is requested on demand, without displacing routes
    // needed by actively moving vehicles.
