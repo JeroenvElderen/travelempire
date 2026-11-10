@@ -1,6 +1,7 @@
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
+import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -500,6 +501,7 @@ const explorerPlanSkipReason=new Map<string,string>();
 // into two planning workers. Throttle deterministic frontier scans per explorer.
 const singleWorkerScanAt=new Map<string,number>();
 const singleWorkerScanResult=new Map<string,string>();
+const strandedRecoveryRetryAt=new Map<string,number>();
 
 let poiRoadCursor=0;
 // A failed scout permits the next road class to bootstrap without motorway access.
@@ -512,7 +514,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -767,23 +769,34 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       edgeIds:taxi.edgeIds.slice(0,firstForbidden)};
     }
    }
-   // Stranded idle Explorers return to the nearest reachable permitted road.
-   // Returning never discovers roads or reveals territory.
-   // All indexed graph edges are permitted transit roads.
-   const permittedNodes=graph.nodes;
+   // A stale/operational save can leave an explorer on a red road.
+   // The old recovery compared nearest() to graph.nodes, which is always
+   // true for a nonempty graph: it never recovered a stranded explorer.
+   // Drive over legal directed edges back to a real purple junction.
+   // This is transit only; no red road becomes purple.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
-    const start=nearest(graph,taxi.position);
-    if(!start||permittedNodes.has(start))continue;
-    const candidates=[...permittedNodes.keys()].map(k=>({k,d:meters(taxi.position,graph!.nodes.get(k)!)}))
-     .sort((a,b)=>a.d-b.d).slice(0,12);
-    for(const candidate of candidates){
-     const home=route(graph,start,candidate.k);
-     if(!home||home.path.length<2)continue;
-     taxis[index]={...taxi,status:'RETURNING',path:home.path,edgeIds:home.edgeIds,
-      leg:0,distanceIntoLeg:0,journeyEdges:[]};
-     break;
+    if(taxi.kind!=='explorer'||taxi.status!=='IDLE'||taxi.deliveryUntil||
+       taxi.refillRequested||taxi.serviceDestination||taxi.refillDestination||
+       energyPercent(taxi)<=10||purpleStartNear(taxi.position,explored))continue;
+    if(performance.now()<(strandedRecoveryRetryAt.get(taxi.id)??0))continue;
+    strandedRecoveryRetryAt.set(taxi.id,performance.now()+15000);
+    const gx=Math.floor(taxi.position[0]/REGION_DEGREES);
+    const gy=Math.floor(taxi.position[1]/REGION_DEGREES);
+    const nearby=new Set<string>();
+    for(let y=gy-1;y<=gy+1;y++)for(let x=gx-1;x<=gx+1;x++)
+     for(const id of regionalRoads.get(regionKey(y,x))??[])nearby.add(id);
+    const recovery=routeStrandedExplorerToPurple(activeGraph,taxi.position,
+     explored,roadEndpoints,nearby);
+    if(recovery){
+     taxis[index]={...taxi,status:'RETURNING',path:recovery.path,
+      edgeIds:recovery.edgeIds,discoveryEdgeIds:[],escapeTransitEdgeIds:[],
+      leg:0,distanceIntoLeg:0,journeyEdges:[],routeInvalid:false};
+     singleWorkerScanResult.set(taxi.id,'returning-to-purple:edges='+recovery.edgeIds.length);
+     explorerPlanSkipReason.set(taxi.id,'recovery-to-purple');
+    }else{
+     singleWorkerScanResult.set(taxi.id,'no-directed-purple-return');
+     explorerPlanSkipReason.set(taxi.id,'stranded-no-purple-route');
     }
    }
    const reservedTargets=new Set<string>();
