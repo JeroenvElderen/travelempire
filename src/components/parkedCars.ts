@@ -5,7 +5,6 @@
 export type ParkingRoad={id:string;a:[number,number];b:[number,number];highway?:string};
 export type ParkedCar={position:[number,number];bearing:number;sprite:string;id:string};
 const RAD=Math.PI/180;
-const GRID=0.0015;
 const COLORS=['parked-white','parked-silver','parked-dark','parked-blue','parked-red'];
 function hash(value:string):number{
  let h=2166136261;
@@ -84,7 +83,6 @@ export function buildParkedCars(roads:ParkingRoad[],maxCars=320):ParkedCar[]{
    if(emittedPairs.has(pairId))continue;
    emittedPairs.add(pairId);
    paired.add(i);paired.add(match.index);
-   const mx=(a.cx+b.cx)/2,my=(a.cy+b.cy)/2;
    const perp=(-a.uy),side=(a.ux);
    const dx=b.cx-a.cx,dy=b.cy-a.cy;
    const lateral=dx*perp+dy*side;
