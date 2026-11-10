@@ -12,6 +12,7 @@ import {syncFerryMapLayer} from './FerryMapLayer';
 import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
+import {buildParkedCars,parkedCarSprites,type ParkingRoad} from './parkedCars';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
@@ -109,7 +110,7 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 }
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
-type IndexedRoad={id:string;a:[number,number];b:[number,number]};
+type IndexedRoad={id:string;a:[number,number];b:[number,number];highway?:string};
 type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
@@ -129,7 +130,7 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
    const b=graph.nodes.get(edge.to);
    if(!b)continue;
    index.ids.add(edge.id);
-   const road:IndexedRoad={id:edge.id,a,b};
+   const road:IndexedRoad={id:edge.id,a,b,highway:edge.highway};
    // Keep geometry addressable by ID when viewport indexing misses a cell.
    index.byId.set(edge.id,road);
    const minX=Math.floor(Math.min(a[0],b[0])/ROAD_GRID_DEGREES);
@@ -687,8 +688,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const sourceId='active-road-network';
   const purpleSourceId='explored-road-network-source';
   const exploredLayerId='explored-road-network';
+  const parkedSourceId='static-parked-cars';
+  const parkedLayerId='static-parked-cars-layer';
   const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   const remove=()=>{
+   if(instance.getLayer(parkedLayerId))instance.removeLayer(parkedLayerId);
+   if(instance.getSource(parkedSourceId))instance.removeSource(parkedSourceId);
    if(instance.getLayer(exploredLayerId))instance.removeLayer(exploredLayerId);
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
@@ -716,6 +721,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${graphChanged} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
    const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
+   const parkingRoads:ParkingRoad[]=[];
+   const showParkedCars=instance.getZoom()>=17.5;
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
    // Continue scanning for explored roads even after the ordinary road cap.
@@ -739,6 +746,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(seen.has(id))continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
      seen.add(id);
+     if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
+      parkingRoads.push(road);
      const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[a,b]}};
      if(explored)exploredFeatures.push(feature);
      if(features.length<MAX_VISIBLE)features.push(feature);
@@ -808,6 +817,30 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Always keep the purple network above the red road network and basemap.
    // This changes rendering only; vehicle simulation and discovery stay intact.
    if(instance.getLayer(exploredLayerId))instance.moveLayer(exploredLayerId);
+   // Decorative cars appear only in dense parallel service aisles at close zoom.
+   // Reuse GPU symbols: no DOM markers, simulation ticks, timers or saved state.
+   const parked=showParkedCars?buildParkedCars(parkingRoads,
+    /iPhone|iPad|iPod/i.test(navigator.userAgent)?260:520):[];
+   const carsData:GeoJSON.FeatureCollection={type:'FeatureCollection',
+    features:parked.map(car=>({type:'Feature' as const,
+     properties:{sprite:car.sprite,bearing:car.bearing},
+     geometry:{type:'Point' as const,coordinates:car.position}}))};
+   const carSource=instance.getSource(parkedSourceId) as maplibregl.GeoJSONSource|undefined;
+   if(carSource)carSource.setData(carsData);
+   else instance.addSource(parkedSourceId,{type:'geojson',data:carsData});
+   for(const sprite of parkedCarSprites()){
+    if(!instance.hasImage(sprite.name))
+     instance.addImage(sprite.name,{width:sprite.width,height:sprite.height,data:sprite.data});
+   }
+   if(!instance.getLayer(parkedLayerId))instance.addLayer({
+    id:parkedLayerId,type:'symbol',source:parkedSourceId,minzoom:17.5,
+    layout:{'icon-image':['get','sprite'],'icon-rotate':['get','bearing'],
+     'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
+     'icon-allow-overlap':true,'icon-ignore-placement':true,
+     'icon-size':['interpolate',['linear'],['zoom'],17.5,0.17,18,0.34,19,0.68]},
+    paint:{'icon-opacity':0.93}
+   });
+   diagnostic('map:parked-cars',`cars=${parked.length} candidateAisles=${parkingRoads.length} zoom=${instance.getZoom().toFixed(1)}`);
    if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
