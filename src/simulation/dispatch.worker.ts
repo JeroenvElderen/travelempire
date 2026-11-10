@@ -1091,11 +1091,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      route.edgeIds.every((id,i)=>{
       if(!escapeOnly.has(id))return true;
       if(i<=firstDiscovery)return false;
-      const from=nearest(graph,route.path[i]),to=nearest(graph,route.path[i+1]);
-      return !!from&&!!to&&(graph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to);
+      const from=nearest(activeGraph,route.path[i]),to=nearest(activeGraph,route.path[i+1]);
+      return !!from&&!!to&&(activeGraph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to);
      })&&
-     (()=>{const last=nearest(graph,route.path.at(-1)!);
-      return (!!last&&(graph.edges.get(last)??[]).some(e=>projected.has(e.id)))||
+     (()=>{const last=nearest(activeGraph,route.path.at(-1)!);
+      return (!!last&&(activeGraph.edges.get(last)??[]).some(e=>projected.has(e.id)))||
        projected.has(route.edgeIds.at(-1)??'');})()
     );
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
