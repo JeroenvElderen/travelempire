@@ -540,7 +540,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const add=(from:string,to:string)=>{
      let list=graph!.edges.get(from);
      if(!list){list=[];graph!.edges.set(from,list);}
-     list.push({to,meters:road.length,id:road.id,speedKph:road.speed,highway:road.highway});
+     list.push({to,meters:road.length,id:road.id,speedKph:road.speed,highway:road.highway,layer:road.layer,bridge:road.bridge,tunnel:road.tunnel,level:road.level});
     };
     if(road.oneway!==-1)add(a,b);
     if(road.oneway!==1)add(b,a);
