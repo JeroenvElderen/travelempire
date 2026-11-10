@@ -65,10 +65,12 @@ class VerticalWays(osmium.SimpleHandler):
         super().__init__()
         self.wanted = wanted
         self.metadata = {}
+        self.found = 0
 
     def way(self, way):
         if way.id not in self.wanted:
             return
+        self.found += 1
         tags = parse_vertical_tags(way.tags)
         if tags:
             self.metadata[way.id] = tags
@@ -119,6 +121,8 @@ def main():
     print(f"Scanning PBF for {len(wanted):,} unique OSM way IDs", flush=True)
     handler = VerticalWays(wanted)
     handler.apply_file(str(args.pbf), locations=False)
+    if handler.found < len(wanted) * 0.90:
+        raise SystemExit(f'Only {handler.found:,}/{len(wanted):,} OSM way IDs matched the PBF. Check the ID regex and PBF version; no tiles written.')
     args.output.mkdir(parents=True, exist_ok=True)
     new_tiles = {}
     matches = 0
@@ -142,7 +146,7 @@ def main():
                 dest.write(json.dumps(road, separators=(",", ":")) + "\n")
                 count += 1
         new_tiles[tile_id] = {"file": target, "edges": count}
-    print(f"Segments: {total:,}; parseable IDs: {matches:,}; metadata-enriched: {with_metadata:,}", flush=True)
+    print(f"Segments: {total:,}; parseable IDs: {matches:,}; OSM ways found: {handler.found:,}; metadata-enriched: {with_metadata:,}", flush=True)
     if unrecognized:
         print("Unrecognized ID examples:", ", ".join(unrecognized), flush=True)
     if matches < total * 0.95:
