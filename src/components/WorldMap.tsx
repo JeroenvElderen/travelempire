@@ -722,7 +722,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
    const parkingRoads:ParkingRoad[]=[];
-   const showParkedCars=instance.getZoom()>=17.5;
+   const showParkedCars=instance.getZoom()>=16.8;
    const seen=new Set<string>();
    const MAX_VISIBLE=12000;
    // Continue scanning for explored roads even after the ordinary road cap.
@@ -742,12 +742,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      examined++;
      const {a,b,id}=road;
      const explored=currentExploredRoads.current.has(id);
-     if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
      if(seen.has(id))continue;
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
      seen.add(id);
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
+     if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
      const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id},geometry:{type:'LineString',coordinates:[a,b]}};
      if(explored)exploredFeatures.push(feature);
      if(features.length<MAX_VISIBLE)features.push(feature);
@@ -833,11 +833,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      instance.addImage(sprite.name,{width:sprite.width,height:sprite.height,data:sprite.data});
    }
    if(!instance.getLayer(parkedLayerId))instance.addLayer({
-    id:parkedLayerId,type:'symbol',source:parkedSourceId,minzoom:17.5,
+    id:parkedLayerId,type:'symbol',source:parkedSourceId,minzoom:16.8,
     layout:{'icon-image':['get','sprite'],'icon-rotate':['get','bearing'],
      'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
      'icon-allow-overlap':true,'icon-ignore-placement':true,
-     'icon-size':['interpolate',['linear'],['zoom'],17.5,0.17,18,0.34,19,0.68]},
+     'icon-size':['interpolate',['linear'],['zoom'],16.8,0.34,17.5,0.56,18,0.72,19,0.95]},
     paint:{'icon-opacity':0.93}
    });
    diagnostic('map:parked-cars',`cars=${parked.length} candidateAisles=${parkingRoads.length} zoom=${instance.getZoom().toFixed(1)}`);
@@ -849,9 +849,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   };
   refreshRoadLines.current=update;
   instance.on('moveend',update);
+  instance.on('zoomend',update);
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
-  return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('style.load',update);};
+  return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('zoomend',update);instance.off('style.load',update);};
  },[roadsVisible,graph,roadGraphVersion,ready,basemap]);
 
  // Ferries remain operational; sea routes no longer generate territory fog.
