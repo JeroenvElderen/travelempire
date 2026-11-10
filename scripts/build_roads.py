@@ -114,6 +114,10 @@ def main():
                         'segmentId': segment_id, 'regionId': rid, 'osmWayId': str(w.id),
                         'highway': highway, 'roadType': highway, 'lengthMeters': round(length, 2),
                         'explored': False, 'oneway': w.tags.get('oneway', 'no'),
+                        'layer': int(w.tags.get('layer', '0')) if w.tags.get('layer', '0').lstrip('+-').isdigit() else 0,
+                        'bridge': w.tags.get('bridge') not in {None, 'no', 'false', '0'},
+                        'tunnel': w.tags.get('tunnel') not in {None, 'no', 'false', '0'},
+                        'level': float(w.tags.get('level')) if w.tags.get('level') and w.tags.get('level').replace('.', '', 1).lstrip('+-').isdigit() else None,
                         'name': w.tags.get('name', '')
                     }, 'geometry': mapping(part)})
                     stats['segments'] += 1
