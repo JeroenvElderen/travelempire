@@ -17,7 +17,7 @@ const MAX_CONCURRENT=1;
 // Publishing a graph snapshot invalidates expensive map and simulation consumers.
 // Keep the first usable graph immediate; coalesce later tile updates on mobile.
 const GRAPH_PUBLISH_INTERVAL_MS=15000;
-type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string};
+type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
 const MAX_PENDING_TILES=IOS_REDUCED_MEMORY?6:32; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
