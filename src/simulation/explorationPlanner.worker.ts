@@ -55,7 +55,7 @@ function addRoads(roads:RoadSegment[]):void{
   if(!graph.nodes.has(b)){graph.nodes.set(b,road.coordinates[1]);graph.nodeKeys.push(b);}
   const add=(from:string,to:string)=>{
    const edges=graph.edges.get(from)??[];
-   edges.push({id:road.id,to,meters:road.length,speedKph:road.speed,highway:road.highway});
+   edges.push({id:road.id,to,meters:road.length,speedKph:road.speed,highway:road.highway,layer:road.layer,bridge:road.bridge,tunnel:road.tunnel,level:road.level});
    graph.edges.set(from,edges);
   };
   if(road.oneway!==-1)add(a,b);
