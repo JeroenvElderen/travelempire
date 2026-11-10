@@ -628,7 +628,11 @@ export default function App(){
    setMissionQueue(old=>old.length===queue.length&&old.every((q,i)=>q.id===queue[i].id)?old:queue);
   };
   worker.onerror=(event)=>{dispatchBusyRef.current=false;dispatchStartedRef.current=0;workerReadyRef.current=false;diagnostic('dispatch:worker-error',String(event.message));for(const ack of roadSyncAcksRef.current.splice(0))ack();console.warn('[TravelEmpire] Dispatch worker error',event.message)};
-  worker.postMessage({type:'init',revision});
+  // iPhone Safari is memory-constrained: keep only the existing dispatcher
+  // road graph. Two additional full-graph planner workers triple copies.
+  const reducedMemory=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  diagnostic('dispatch:memory-mode',reducedMemory?'iOS reduced-memory: planner pool disabled':'standard planner pool');
+  worker.postMessage({type:'init',revision,plannerPoolEnabled:!reducedMemory});
   return()=>{pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();worker.terminate();for(const ack of roadSyncAcksRef.current.splice(0))ack();if(dispatchWorkerRef.current===worker)dispatchWorkerRef.current=null;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;workerRoadCountRef.current=0;};
  },[company?.id]);
  useEffect(()=>{
