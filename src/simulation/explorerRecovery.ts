@@ -1,4 +1,4 @@
-import {meters,nearest,type Point,type RoadGraph} from './taxi';
+import {meters,type Point,type RoadGraph} from './taxi';
 import {resolvePurpleExplorerStart} from './explorerStart';
 
 export type ExplorerRecovery={
