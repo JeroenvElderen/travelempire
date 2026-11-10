@@ -15,7 +15,6 @@ import argparse
 import gzip
 import json
 import re
-from collections import Counter
 from pathlib import Path
 
 try:
@@ -80,7 +79,7 @@ def main():
     parser.add_argument("--input", type=Path, required=True, help="Directory with current tiles and tiles-manifest.json")
     parser.add_argument("--pbf", type=Path, required=True, help="Original Greece .osm.pbf file")
     parser.add_argument("--output", type=Path, required=True, help="New directory (must not already contain tiles)")
-    parser.add_argument("--way-id-pattern", default=r"^(?:[^:]+:)?(\\d+):\\d+:\\d+(?::\\d+)?$",
+    parser.add_argument("--way-id-pattern", default=r"^(?:[^:]+:)?(\d+):\d+:\d+(?::\d+)?$",
                         help="Regex for a stored road ID; capturing group 1 must be the OSM way ID")
     args = parser.parse_args()
     manifest_path = args.input / "tiles-manifest.json"
