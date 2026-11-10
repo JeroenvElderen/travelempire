@@ -1,5 +1,6 @@
 import {energyPercent} from './energy';
-import {resolvePurpleExplorerStart} from './explorerStart';
+import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
+import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -495,6 +496,10 @@ const explorerLastPlanAttempt=new Map<string,number>();
 const explorerLastConsidered=new Map<string,number>();
 let explorerConsiderationSequence=0;
 const explorerPlanSkipReason=new Map<string,string>();
+// The iPhone single-worker fallback shares this graph instead of cloning it
+// into two planning workers. Throttle deterministic frontier scans per explorer.
+const singleWorkerScanAt=new Map<string,number>();
+const singleWorkerScanResult=new Map<string,string>();
 
 let poiRoadCursor=0;
 // A failed scout permits the next road class to bootstrap without motorway access.
@@ -507,7 +512,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -744,13 +749,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING')continue;
     const permitted=taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads;
     const discoveryAssignment=new Set(taxi.discoveryEdgeIds??[]);
+     const validEscapeTransit=new Set(taxi.escapeTransitEdgeIds??[]);
      const startNode=taxi.path[0]?nearest(graph,taxi.path[0]):'';
      // Saved missions from older builds may start on isolated red roads.
      // Keep only routes that start from an actual discovered junction, and
      // never transit an undiscovered edge unless this mission discovers it.
      const invalidStart=!!startNode&&!revealedNodesIndex.has(startNode);
      const firstForbidden=invalidStart?taxi.leg:taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&
-      (!permitted.has(id)||(!explored.has(id)&&!discoveryAssignment.has(id))));
+      (!permitted.has(id)||(!explored.has(id)&&!discoveryAssignment.has(id)&&!validEscapeTransit.has(id))));
     if(firstForbidden<0)continue;
     if(firstForbidden<=taxi.leg){
      // A vehicle already traversing an invalid edge is held at its current
@@ -919,6 +925,64 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(idleMissionPlans>=MAX_IDLE_MISSION_PLANS_PER_DISPATCH||planningCalls>=planningBudget){
      // Leave remaining explorers unconsidered so each gets a fair next turn.
      break;
+    }
+    // On iOS the pooled planner workers are disabled for memory safety.
+    // Use the SAME class-aware, directed purple-frontier planner directly on
+    // the dispatcher's existing graph before old regional candidate filters.
+    // A bounded per-explorer cadence avoids repeatedly scanning 100k nodes.
+    const role=idleVehicle.explorerRole;
+    if((role==='highway'||role==='primary'||role==='secondary'||role==='residential'||role==='poi')&&
+      performance.now()-(singleWorkerScanAt.get(idleVehicle.id)??-100000)>=7000){
+     singleWorkerScanAt.set(idleVehicle.id,performance.now());
+     const origin=purpleStartNear(idleVehicle.position,explored);
+     if(origin){
+      const allowed=discoveryRoads(idleVehicle);
+      const planned=planReachableExplorerRoad(graph,origin.node,explored,allowed,
+       reservedEdges,reservedTargets,role);
+      singleWorkerScanResult.set(idleVehicle.id,planned.diagnostic.reason+
+       ':visited='+planned.diagnostic.visitedPurpleNodes+
+       ':classEdges='+planned.diagnostic.reachableClassEdges);
+      const route=planned.route;
+      if(route){
+       const completed=prependPurpleStart(route,origin);
+       const destination=nearest(graph,completed.path.at(-1)!);
+       const newEdges=new Set(route.discoveryEdgeIds);
+       const escapeOnly=new Set(route.escapeTransitEdgeIds);
+       const routeValid=completed.edgeIds.length===completed.path.length-1&&
+        [...newEdges].every(id=>allowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
+        [...escapeOnly].every(id=>!explored.has(id)&&!newEdges.has(id)&&!reservedEdges.has(id))&&
+        completed.edgeIds.every((id,i)=>{
+         if(!allRoads.has(id)||!(explored.has(id)||newEdges.has(id)||escapeOnly.has(id)))return false;
+         const a=nearest(graph,completed.path[i]),b=nearest(graph,completed.path[i+1]);
+         return !!a&&!!b&&(graph.edges.get(a)??[]).some(e=>e.id===id&&e.to===b);
+        })&&
+        (!destination||!reservedTargets.has(destination));
+       if(routeValid){
+        const assignment:Taxi={...idleVehicle,status:'EXPLORING',
+         path:completed.path,edgeIds:completed.edgeIds,
+         discoveryEdgeIds:route.discoveryEdgeIds,
+         escapeTransitEdgeIds:route.escapeTransitEdgeIds,
+         journeyEdges:[],leg:0,distanceIntoLeg:0,
+         scoutingRuns:(idleVehicle.scoutingRuns??0)+1};
+        taxis[index]=assignment;
+        for(const id of completed.edgeIds)reservedEdges.add(id);
+        if(destination)reservedTargets.add(destination);
+        majorSearches.delete(idleVehicle.id);
+        explorerSearchTier.set(idleVehicle.id,0);
+        idleRetryAt.delete(idleVehicle.id);
+        negativeScoutCache.delete(idleVehicle.id);
+        failedRouteCache.delete('idle|'+idleVehicle.id);
+        explorerPlanSkipReason.set(idleVehicle.id,'single-worker:planned');
+        explorerPlanningAttempts.set(idleVehicle.id,(explorerPlanningAttempts.get(idleVehicle.id)??0)+1);
+        missionPlannedAt.set(idleVehicle.id,now);
+        recordExplorerMission(assignment,now);
+        scoutTimings.push({vehicleId:idleVehicle.id,role:role??'',ms:0,phase:'idle',result:'single-worker-planned'});
+        assignedCount++;idleMissionPlans++;planningCalls++;
+        continue;
+       }
+       singleWorkerScanResult.set(idleVehicle.id,'route-rejected-by-directed-validation');
+      }
+     }else singleWorkerScanResult.set(idleVehicle.id,'no-purple-segment-near-vehicle');
     }
     if(idleVehicle.explorerRole==='poi'){const p=poiRetryWallClock.get(idleVehicle.id);if(p&&performance.now()<p.until&&p.roadCount===seenRoadIds.size&&p.poiSignature===poiTargetsSignature){poiCooldownSkips++;idleSkipped++;explorerPlanSkipReason.set(idleVehicle.id,'poi-cooldown');continue;}}
     const positionKey=idleVehicle.position.join(',');
