@@ -142,7 +142,7 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  <article><small>REMAINING CREDIT</small><strong>{money(quote?.available??0)}</strong></article>
  <article><small>TOTAL DEBT</small><strong>{money(quote?.outstanding??0)}</strong></article>
  </div>
- <section className="finance-loan" aria-label="Custom secured loan configurator">
+ <section className="finance-loan loan-configurator" aria-label="Custom secured loan configurator">
  <h3>Configure your loan</h3>
  <label htmlFor="secured-loan-amount">Loan amount</label>
  <input id="secured-loan-amount" type="number" min={MIN_SECURED_LOAN}
