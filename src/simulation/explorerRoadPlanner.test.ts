@@ -148,31 +148,23 @@ describe('purple-connected explorer routes',()=>{
   expect(result.route?.discoveryEdgeIds).toEqual(['cd','df']);
   expect(result.diagnostic.reason).toBe('planned');
  });
- it('crosses a different undiscovered road class to discover the next eligible road',()=>{
+ it('does not traverse a red primary road before discovering residential roads',()=>{
   const graph=makeGraph();
-  // A-B purple, B-C red primary, C-D red residential. The Local
-  // Explorer must cross B-C without turning that primary road purple.
   const bc=graph.edges.get('B')!.find(e=>e.id==='bc')!;
   bc.highway='primary';
   graph.edges.get('C')!.find(e=>e.id==='bc')!.highway='primary';
   const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
    new Set(['cd']),new Set(),new Set(),'residential');
-  expect(result.route?.edgeIds).toEqual(['ab','bc','cd']);
-  expect(result.route?.discoveryEdgeIds).toEqual(['cd']);
-  expect(result.route?.escapeTransitEdgeIds).toEqual(['bc']);
-  expect(result.diagnostic.reason).toBe('planned');
+  expect(result.route).toBeNull();
  });
- it('follows legally directed cross-class connectors without revealing them',()=>{
+ it('will not bypass the first discovered-road frontier via a one-way red connector',()=>{
   const graph=makeGraph();
   graph.edges.set('C',(graph.edges.get('C')??[]).filter(e=>e.id!=='bc'));
-  // A one-way transit segment requires an onward legal exit to purple.
   graph.edges.get('D')!.push({to:'B',id:'db-purple',meters:210,
    highway:'service',speedKph:30});
   const result=planReachableExplorerRoad(graph,'A',new Set(['ab','db-purple']),
    new Set(['cd']),new Set(),new Set(),'residential');
-  expect(result.route?.edgeIds).toEqual(['ab','bc','cd']);
-  expect(result.route?.escapeTransitEdgeIds).toEqual(['bc']);
-  expect(result.route?.discoveryEdgeIds).toEqual(['cd']);
+  expect(result.route).toBeNull();
  });
  it('does not cross an undiscovered road reserved by another explorer',()=>{
   const graph=makeGraph();
@@ -224,12 +216,10 @@ describe('purple-connected explorer routes',()=>{
   expect(result.route?.edgeIds.length).toBeLessThan(5);
   expect(result.route?.discoveryEdgeIds.length).toBeGreaterThan(0);
  });
- it('can cross several kilometres of red roads to reach a distant motorway without discovering transit',()=>{
+ it('refuses an eight kilometre undiscovered primary-road shortcut to a motorway',()=>{
   const graph=makeGraph();
   const explored=new Set(['ab']);
-  const eligible=new Set(['far-motorway']);
-  const from='B';
-  let previous=from;
+  let previous='B';
   for(let i=1;i<=8;i++){
    const node='R'+i,id='red-link-'+i;
    graph.nodes.set(node,[.001+i*.01,0]);graph.nodeKeys.push(node);
@@ -243,11 +233,9 @@ describe('purple-connected explorer routes',()=>{
    meters:1000,highway:'motorway',speedKph:100});
   graph.edges.set('M',[{to:previous,id:'far-motorway',
    meters:1000,highway:'motorway',speedKph:100}]);
-  const result=planReachableExplorerRoad(graph,'A',explored,eligible,
-   new Set(),new Set(),'highway');
-  expect(result.route?.discoveryEdgeIds).toEqual(['far-motorway']);
-  expect(result.route?.escapeTransitEdgeIds).toHaveLength(8);
-  expect(result.route?.edgeIds).toHaveLength(10);
+  const result=planReachableExplorerRoad(graph,'A',explored,
+   new Set(['far-motorway']),new Set(),new Set(),'highway');
+  expect(result.route).toBeNull();
  });
  it('still does not cross disconnected components on the extended search',()=>{
   const graph=makeGraph();
