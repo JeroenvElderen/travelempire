@@ -14,7 +14,7 @@ export const projects=[
  {id:'fleetAnalytics',category:2,name:"Fleet Analytics",effect:"+1% passenger revenue per level",base:2400},
  {id:'survey',category:3,name:"Efficient Surveying",effect:"-6% explorer travel charge per level",base:2500},
  {id:'navigation',category:3,name:"Advanced Navigation",effect:"-3% explorer travel charge per level",base:3000},
- {id:'explorerExpansion',category:3,name:"Universal Explorer Infrastructure",effect:"One-time: unlock expanded explorer depot infrastructure. Requires 5,000 discovered roads and one universal explorer.",base:15000},
+ {id:'explorerExpansion',category:3,name:"Universal Explorer Infrastructure",effect:"Level 1 grants 2 free Highway, Primary, Secondary, Local Street and POI explorers (10 total). Requires 5,000 discovered roads and an explorer fleet.",base:15000},
  {id:'patrol',category:3,name:"Extended Patrol Range",effect:"-2% explorer petrol use per level",base:3500},
  {id:'trainingResearch',category:4,name:"Driver Training",effect:"+2% passenger revenue per level",base:2800},
  {id:'ecoDriving',category:4,name:"Eco-Driving",effect:"-3% petrol use per level",base:2500},
