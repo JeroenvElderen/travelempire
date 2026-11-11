@@ -22,7 +22,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
    {taxis.map(t=>{
     const s=driverSchedule(t,roster,current);
     const driver=roster.find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
-    const state=t.status==='TO_PICKUP'||t.status==='TO_DROPOFF'?'With passenger':t.status==='RETURNING'&&t.shiftParked?'Travelling to break/rest':t.status==='PAUSED'&&t.shiftParked?'Parked':s.onBreak?'Break due':!s.onDuty?'Off duty':t.status==='REFUELLING'?'Refuelling':t.status==='SERVICING'?'Servicing':'On duty';
+    const state=t.status==='TO_PICKUP'||t.status==='TO_DROPOFF'?'With passenger':t.scheduledShiftParked&&t.status==='PAUSED'?(s.onBreak?'On scheduled break':'Off duty · parked'):t.status==='RETURNING'&&t.shiftParked?'Travelling to break/rest':t.status==='PAUSED'&&t.shiftParked?'Parked':s.onBreak?'Break due':!s.onDuty?'Off duty':t.status==='REFUELLING'?'Refuelling':t.status==='SERVICING'?'Servicing':'On duty';
     return <article key={t.id} style={{border:'1px solid #64748b55',borderRadius:12,padding:18}}>
      <div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><strong>{t.driver}</strong><div style={{fontSize:13,opacity:.7}}>{t.name} · {driverLevel(driver?.completedTrips??0)}</div></div><strong>{state}</strong></div>
      <div style={{fontSize:12,opacity:.75,marginTop:8}}>Automatic preference: <strong>{s.preference}</strong> · Game time: <strong>{time(s.current)}</strong></div>
