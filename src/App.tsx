@@ -27,7 +27,8 @@ import OperationsPanel from "./components/OperationsPanel";
 import FinancePanel from "./components/FinancePanel";
 import FrontendConsole from "./components/FrontendConsole";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
-import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,LOAN_OFFERS,UPGRADES} from "./economy";
+import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,UPGRADES} from "./economy";
+import {securedQuote,createSecuredLoan,advanceSecuredLoans} from './simulation/securedLoans';
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,explorerDepotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
@@ -1184,10 +1185,33 @@ export default function App(){
       if(entry){entry.revenue+=income;entry.vehicleExpenses+=vehicleExpenses;entry.facilityExpenses+=d.cost;entry.allocatedOverhead+=allocatedOverhead;entry.trips+=related.reduce((a,v)=>a+v.trips,0);entry.km+=related.reduce((a,v)=>a+v.km,0);}
       else depotHistory.push({day:historyDay,depotId:d.id,depotName:d.name,revenue:income,vehicleExpenses,facilityExpenses:d.cost,allocatedOverhead,trips:related.reduce((a,v)=>a+v.trips,0),km:related.reduce((a,v)=>a+v.km,0)});
     }
-    const loanTick=advanceLoans(old.loans??[],4);
     const leaseTick=advanceLeases(old.leases??[],4);
-    const repaymentCount=(old.loans??[]).reduce((n,l)=>n+Math.max(0,l.remainingDays-(loanTick.loans.find(x=>x.id===l.id)?.remainingDays??0)),0);
-    const net=revenue-fuelExpense-maintenanceExpense-serviceExpense-explorationExpense-driverWages-insuranceExpense-overhead-facilityCost-loanTick.payments-leaseTick.payments;
+    // Legacy vehicle finance keeps its existing repayment behaviour.
+    // Secured business loans may pay only from actual positive cash.
+    const legacyTick=advanceLoans((old.loans??[]).filter(l=>!l.secured),4);
+    const operatingNet=revenue-fuelExpense-maintenanceExpense-serviceExpense-
+     explorationExpense-driverWages-insuranceExpense-overhead-facilityCost-
+     legacyTick.payments-leaseTick.payments;
+    const availableForLoans=Math.max(0,(companyRef.current?.cash??0)+
+     pendingCashRef.current+operatingNet);
+    const securedTick=advanceSecuredLoans((old.loans??[]).filter(l=>l.secured),4,
+     availableForLoans,taxis);
+    const loanTick={loans:[...legacyTick.loans,...securedTick.loans],
+     payments:legacyTick.payments+securedTick.payments,
+     principal:legacyTick.principal+securedTick.principal,
+     interest:legacyTick.interest+securedTick.interest};
+    const repaymentCount=legacyTick.loans.reduce((n,l)=>{
+     const previous=(old.loans??[]).find(x=>x.id===l.id);
+     return n+Math.max(0,(l.paymentsMade??0)-(previous?.paymentsMade??0));
+    },0)+securedTick.paymentCount;
+    if(securedTick.missed>0)
+     diagnostic('bank:missed-instalment',`missed=${securedTick.missed} outstanding=${loanTick.loans.length}`);
+    for(const recovered of securedTick.repossessions){
+     transactions.push({id:crypto.randomUUID(),time:gameNow,
+      description:`Bank repossession · ${recovered.vehicleName} · loan recovery`,
+      taxiId:recovered.vehicleId,amount:-recovered.value});
+    }
+    const net=operatingNet-securedTick.payments;
     if(net!==0)pendingCashRef.current+=net;
     // Sweep a percentage of each passenger-income settlement immediately.
     // Loan proceeds, transfers and asset sales are not operating income.
@@ -1220,7 +1244,10 @@ export default function App(){
      console.warn('[TravelEmpire] Slow simulation tick',{durationMs:Math.round(tickMs),vehicles:old.taxis.length,exploredRoads:discovered.size,averageMs:Math.round(perf.totalMs/perf.samples),maxMs:Math.round(perf.maxMs)});
      perf.lastReport=now;perf.samples=0;perf.totalMs=0;perf.maxMs=0;
     }
-    return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,drivers,taxis:taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
+    return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,
+      creditMisses:(old.creditMisses??0)+securedTick.missed,
+      creditDefaults:(old.creditDefaults??0)+securedTick.repossessions.length,
+      drivers,taxis:securedTick.taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
@@ -1751,12 +1778,29 @@ export default function App(){
   setSimError('');
  };
  const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
- const takeLoan=(amount:number)=>{const offer=LOAN_OFFERS.find(l=>l.amount===amount);if(!offer||!companyRef.current)return;
-  if((fleet.loans??[]).length>=2){setSimError('Maximum two active loans.');return;}
-  const credit=corporateCreditCapacity(fleetSaveRef.current);
-  if(amount>credit){setSimError('Total borrowing limit is €75,000.');return;}
-  pendingCashRef.current+=amount;
-  setFleet(old=>({...old,bank:appendBankEntries(bankOf(old.bank),[bankEntry('Business loan disbursement',amount,'operating','loan')]),loans:[...(old.loans??[]),createLoan(offer.amount,offer.rate,offer.days)],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Business loan disbursement',amount},...(old.transactions??[])].slice(0,100)}));setSimError('');};
+ const takeLoan=(amount:number,days:number)=>{
+  const current=companyRef.current;
+  if(!current)return;
+  // The UI quote is informational: compute approval again at submission.
+  const loanAmount=Math.round(amount*100)/100;
+  const gameNow=gameClockRef.current?.epochMs??Date.now();
+  const quote=securedQuote({...current,cash:current.cash+pendingCashRef.current},
+   fleetSaveRef.current,gameNow,loanAmount,days);
+  if(!quote.approved){
+   setSimError('Loan declined: check your asset-backed limit, credit score, amount and term.');
+   return;
+  }
+  pendingCashRef.current+=loanAmount;
+  setFleet(old=>({...old,
+   bank:appendBankEntries(bankOf(old.bank),[
+    bankEntry('Secured business loan disbursement',loanAmount,'operating','loan')]),
+   loans:[...(old.loans??[]),createSecuredLoan(loanAmount,quote.rate,days)],
+   transactions:[{id:crypto.randomUUID(),time:gameNow,
+    description:`Secured loan approved · ${days} game days · ${(quote.rate*100).toFixed(1)}%`,
+    amount:loanAmount},...(old.transactions??[])].slice(0,100)
+  }));
+  setSimError('');
+ };
  const buyUpgrade=(id:EconomyUpgrade)=>{const offer=UPGRADES.find(u=>u.id===id);if(!offer||!companyRef.current)return;
   if((fleet.upgrades??[]).includes(id))return;
   if(companyRef.current.cash+pendingCashRef.current<offer.cost){setSimError('Insufficient cash for this upgrade.');return;}
