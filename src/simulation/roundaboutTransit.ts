@@ -33,7 +33,8 @@ export function roundaboutBridges(
   if(compactness<0.025)return false;
   const xs=xy.map(p=>p[0]),ys=xy.map(p=>p[1]);
   const dx=Math.max(...xs)-Math.min(...xs),dy=Math.max(...ys)-Math.min(...ys);
-  if(dx<8||dy<8||Math.min(dx,dy)/Math.max(dx,dy)<0.28)return false;
+  if(dx<8||dy<8||Math.max(dx,dy)>250||
+     Math.min(dx,dy)/Math.max(dx,dy)<0.28)return false;
   return true;
  };
  const traverse=(node:string,nodes:string[],ids:string[],distance:number,seen:Set<string>)=>{
@@ -41,6 +42,9 @@ export function roundaboutBridges(
   for(const e of graph.edges.get(node)??[]){
    if(++inspectedEdges>maxInspectedEdges)return;
    if(e.meters<=0||purple.has(e.id)||reserved.has(e.id)||distance+e.meters>maxMeters)continue;
+   // Roundabouts are one-way. A two-way residential block that happens
+   // to form a small loop must NEVER be mistaken for a roundabout.
+   if((graph.edges.get(e.to)??[]).some(back=>back.to===node&&back.id===e.id&&back.meters>0))continue;
    const nextDist=distance+e.meters;
    if(e.to===start){
     if(ids.length<2||!approvedShape([...nodes,start],nextDist))continue;
