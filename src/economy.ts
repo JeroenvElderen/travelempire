@@ -31,9 +31,13 @@ export function advanceLeases<T extends {accruedGameSeconds:number;remainingDays
  }).filter(l=>l.remainingDays>0);
  return {leases:updated,expired,payments};
 }
-export function creditScore(cash:number,loans:BusinessLoan[],leaseCount:number,paymentsMade=0){
- const debt=loans.reduce((a,l)=>a+l.balance,0);
+export function creditScore(cash:number,loans:BusinessLoan[],leaseCount:number,paymentsMade=0,missedHistory=0){
+ const debt=loans.reduce((a,l)=>a+Math.max(0,l.balance),0);
  const payments=paymentsMade;
- return Math.max(300,Math.min(850,Math.round(650+Math.min(80,cash/1000)+Math.min(60,payments*3)-debt/700-leaseCount*12)));
+ const misses=Math.max(0,missedHistory);
+ return Math.max(300,Math.min(850,Math.round(
+  650+Math.min(80,Math.max(0,cash)/1000)+Math.min(60,payments*3)
+  -debt/700-leaseCount*12-Math.min(320,misses*35)
+ )));
 }
 export function advanceLoans(loans:BusinessLoan[],gameSeconds:number){let principal=0,interest=0,payments=0;const updated=loans.map(loan=>{let next={...loan,accruedGameSeconds:loan.accruedGameSeconds+gameSeconds};while(next.accruedGameSeconds>=86400&&next.remainingDays>0){next.accruedGameSeconds-=86400;const charge=next.balance*next.annualRate/365;const paid=Math.min(next.balance+charge,next.remainingDays===1?next.balance+charge:next.dailyPayment);const principalPaid=Math.max(0,paid-charge);next.balance=Math.max(0,next.balance-principalPaid);next.remainingDays--;next.paymentsMade=(next.paymentsMade??0)+1;interest+=charge;principal+=principalPaid;payments+=paid;}return next;}).filter(l=>l.balance>0.005);return{loans:updated,principal,interest,payments};}
