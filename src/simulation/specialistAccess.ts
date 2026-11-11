@@ -1,5 +1,6 @@
 import type {RoadGraph,Taxi} from './taxi';
 import {explorerClassEligible} from './explorerRoles';
+import {roundaboutBridges} from './roundaboutTransit';
 
 export type RestrictedExplorerRole='highway'|'primary'|'secondary'|'residential'|'poi';
 const restricted:readonly RestrictedExplorerRole[]=['highway','primary','secondary','residential','poi'];
@@ -32,6 +33,27 @@ export function unlockedSpecialistRoles(
    }
   }
   if(unlocked.size===restricted.length)break;
+ }
+ // A compact, verified one-way roundabout is the ONLY permitted red
+ // connector before the first discovery. Its exit must itself touch a
+ // purple road. Limit graph checks to protect mobile frame performance.
+ if(unlocked.size<restricted.length){
+  let inspected=0;
+  for(const node of connectedPurpleNodes){
+   if(++inspected>1400||unlocked.size===restricted.length)break;
+   const links=graph.edges.get(node)??[];
+   if(!links.some(edge=>edge.meters>0&&!explored.has(edge.id)))continue;
+   for(const bridge of roundaboutBridges(graph,node,explored)){
+    for(const edge of graph.edges.get(bridge.to)??[]){
+     if(edge.meters<=0)continue;
+     if(poiRoadIds.has(edge.id))unlocked.add('poi');
+     for(const role of restricted){
+      if(role==='poi'||unlocked.has(role))continue;
+      if(explorerClassEligible(role,edge.highway))unlocked.add(role);
+     }
+    }
+   }
+  }
  }
  return unlocked;
 }
