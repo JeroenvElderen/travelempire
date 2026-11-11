@@ -54,6 +54,8 @@ export type Taxi = {
   drivingSinceHotelGameMs?: number;
   restStopId?: string;
   restStopName?: string;
+  /** Actual POI target used for routing; only park on its nearby road entrance. */
+  restStopPosition?:Point;
   restUntilGameMs?: number;
   restExpense?: number;
   recoveryPending?: boolean;
@@ -1041,7 +1043,19 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   }
  }
  if(t.status==='RETURNING'&&t.pauseAtHome){
-  t={...t,status:t.kind==='surveyor'?'IDLE':'PAUSED',pauseAtHome:false,shiftParked:t.kind==='surveyor'?false:t.shiftParked,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+  // A scheduled taxi may only display Zzz when its final road node is
+  // genuinely beside the hotel, parking lot or depot selected by routing.
+  // Legacy saves without a verified destination must replan their rest stop.
+  const scheduledTaxi=(t.kind==='taxi'||!t.kind)&&t.scheduledShiftParked;
+  const verified=!scheduledTaxi||!!t.restStopPosition&&
+   meters(t.position,t.restStopPosition)<=180;
+  t={...t,status:verified?'PAUSED':'IDLE',pauseAtHome:false,
+   shiftParked:verified?t.shiftParked:false,
+   scheduledShiftParked:verified?t.scheduledShiftParked:false,
+   restStopId:verified?t.restStopId:undefined,
+   restStopName:verified?t.restStopName:undefined,
+   restStopPosition:verified?t.restStopPosition:undefined,
+   path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
   return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  }
  if(t.status==='RETURNING'&&t.serviceDestination){
