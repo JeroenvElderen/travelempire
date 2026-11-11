@@ -555,21 +555,29 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   if(msg.type==='operationalRoute'){
    const started=performance.now();
    const from=nearest(graph,msg.from);
-   let planned:{path:Point[];edgeIds:string[]}|null=null;
-   // Preserve target order: break stations are preferred over the depot.
-   for(const target of msg.targets){
-    const to=nearest(graph,target);
-    if(!from||!to)continue;
-    // Hotels and parking POIs must have a genuinely nearby road entrance.
-    // Otherwise the taxi could show Zzz at an unrelated road junction.
-    if(msg.purpose==='shift'){
-     const entrance=graph.nodes.get(to);
-     if(!entrance||meters(entrance,target)>180)continue;
-    }
-    planned=route(graph,from,to);
-    if(planned)break;
-   }
-   self.postMessage({type:'operationalRouteResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,purpose:msg.purpose,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
+   // Find the actual nearest reachable stop on the directed road network.
+   // Return the exact chosen POI: the caller must never guess which hotel
+   // corresponds to the final road node.
+   const valid=msg.targets.map(target=>{
+    const node=nearest(graph,target);
+    const entrance=node?graph.nodes.get(node):undefined;
+    const offsetMeters=entrance?meters(entrance,target):Infinity;
+    return {node,offsetMeters};
+   }).map(({node,offsetMeters})=>({
+    node:node??'',offsetMeters:offsetMeters<=(msg.purpose==='shift'?180:500)
+     ?offsetMeters:Infinity
+   }));
+   const planned=from?routeToNearestTarget(graph,from,
+    valid.filter(t=>Number.isFinite(t.offsetMeters)), '',50000):null;
+   // The search's targetIndex indexes the filtered list. Map it back to
+   // the original request before returning the selected POI.
+   const validIndices=valid.flatMap((t,i)=>Number.isFinite(t.offsetMeters)?[i]:[]);
+   const targetIndex=planned?validIndices[planned.targetIndex]:-1;
+   const target=targetIndex>=0?msg.targets[targetIndex]:null;
+   self.postMessage({type:'operationalRouteResult',revision:activeRevision,
+    requestId:msg.requestId,vehicleId:msg.vehicleId,purpose:msg.purpose,
+    targetIndex,target,path:planned?.path??null,edgeIds:planned?.edgeIds??null,
+    durationMs:performance.now()-started});
    return;
   }
   if(msg.type==='fuelPlan'){
