@@ -245,6 +245,8 @@ export default function App(){
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
+ // Ignore dispatcher responses computed before a manual explorer teleport.
+ const teleportedExplorersRef=useRef(new Map<string,[number,number]>());
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
@@ -570,6 +572,11 @@ export default function App(){
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
+    const teleportTarget=teleportedExplorersRef.current.get(t.id);
+    if(teleportTarget&&t.kind==='explorer'){
+     if(!assigned||meters(assigned.position,teleportTarget)>15)return t;
+     teleportedExplorersRef.current.delete(t.id);
+    }
     // The main simulation owns rest travel, rest timers and wake-up.
     if(t.kind==='explorer'&&t.restStopId)return t;
     // Apply boundary enforcement from the worker to already-moving Explorers.
@@ -1483,6 +1490,7 @@ export default function App(){
     if(pending.vehicleId===id)pendingRoutesRef.current.delete(key);
    manualRecoveryRequestsRef.current.delete(id);
    manualRecoveryPurposeRef.current.delete(id);
+   teleportedExplorersRef.current.set(id,[...destination]);
    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:{
     ...t,position:[...destination] as [number,number],status:'IDLE' as const,
     path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
