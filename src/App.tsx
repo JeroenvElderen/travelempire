@@ -274,7 +274,7 @@ export default function App(){
  // Ignore dispatcher responses computed before a manual explorer teleport.
  const teleportedExplorersRef=useRef(new Map<string,[number,number]>());
  const shiftRestRetryRef=useRef(new Map<string,number>());
- const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;ready:boolean}>());
+ const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;target?:[number,number]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
  const ferryReadinessRef=useRef(new Map<string,{ready:boolean;idleMs:number}>());
@@ -560,12 +560,12 @@ export default function App(){
    const message=event.data;
    if(message.revision!==graphRevisionRef.current)return;
    if(message.type==='operationalRouteResult'){
-    const result=message as typeof message & {vehicleId:string;requestId:number;purpose:'shift'|'service';path:[number,number][]|null;edgeIds:string[]|null;durationMs:number};
+    const result=message as typeof message & {vehicleId:string;requestId:number;purpose:'shift'|'service';path:[number,number][]|null;edgeIds:string[]|null;target:[number,number]|null;durationMs:number};
     const pending=operationalRoutesRef.current.get(result.vehicleId);
     if(!pending||pending.requestId!==result.requestId||pending.purpose!==result.purpose)return;
     const current=taxisRef.current.find(t=>t.id===result.vehicleId);
     if(!current||current.status!==pending.status||meters(current.position,pending.position)>15){operationalRoutesRef.current.delete(result.vehicleId);return;}
-    operationalRoutesRef.current.set(result.vehicleId,{...pending,path:result.path,edgeIds:result.edgeIds,ready:true,at:Date.now()});
+    operationalRoutesRef.current.set(result.vehicleId,{...pending,path:result.path,edgeIds:result.edgeIds,target:result.target,ready:true,at:Date.now()});
     if(result.durationMs>100)console.warn('[TravelEmpire] Slow operational routing',{purpose:result.purpose,durationMs:Math.round(result.durationMs)});
     return;
    }
@@ -922,19 +922,20 @@ export default function App(){
       // Old saves may contain a roadside roster pause with no rest stop:
       // clear those and find a proper destination.
       if(delivered.scheduledShiftParked&&delivered.status==='PAUSED'){
-       if(!canWork&&delivered.restStopId)return delivered;
-       if(!canWork&&!delivered.restStopId)
-        return {...delivered,status:'IDLE' as const,shiftParked:false,
-         scheduledShiftParked:false,pauseAtHome:false};
+       const parkedAtActualStop=!!delivered.restStopId&&!!delivered.restStopPosition&&
+        meters(delivered.position,delivered.restStopPosition)<=180;
+       if(!canWork&&parkedAtActualStop)return delivered;
+       // Repair older saves that incorrectly parked a taxi on an arbitrary
+       // road or have no verified rest-location metadata.
        return {...delivered,status:'IDLE' as const,shiftParked:false,
         scheduledShiftParked:false,pauseAtHome:false,restStopId:undefined,
-        restStopName:undefined,restUntilGameMs:undefined};
+        restStopName:undefined,restStopPosition:undefined,restUntilGameMs:undefined};
       }
       if(delivered.scheduledShiftParked&&delivered.status==='RETURNING'){
        if(!canWork)return delivered; // Finish the transfer, not the sleep, only while off duty.
        return {...delivered,status:'IDLE' as const,shiftParked:false,
         scheduledShiftParked:false,pauseAtHome:false,path:[],edgeIds:[],
-        leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,restStopName:undefined};
+        leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,restStopName:undefined,restStopPosition:undefined};
       }
       if(delivered.status==='IDLE'&&!canWork){
        const overnight=!schedule.onDuty;
@@ -949,13 +950,15 @@ export default function App(){
          operationalRoutesRef.current.delete(delivered.id);
          if(cached.path&&cached.edgeIds){
           const last=cached.path.at(-1)??delivered.position;
-          const destination=[...stops].sort((a,b)=>
-           meters(a.position,last)-meters(b.position,last))[0];
-          // The road junction must be genuinely beside the destination.
+          // Use the exact POI selected by the worker's directed-road search.
+          // Never infer a hotel from a nearby (possibly unrelated) road node.
+          const destination=cached.target?stops.find(s=>
+           meters(s.position,cached.target!)<1):undefined;
           if(destination&&meters(last,destination.position)<=180){
            const atStop=cached.path.length<2&&isAtShiftRestStop(delivered,destination,180);
            const extra={scheduledShiftParked:true,shiftParked:true,
             restStopId:destination.id,restStopName:destination.name,
+            restStopPosition:destination.position,
             restUntilGameMs:undefined};
            if(atStop)return {...delivered,...extra,status:'PAUSED' as const,
             pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
