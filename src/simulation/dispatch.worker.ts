@@ -613,12 +613,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   // Resting explorers remain parked until the main simulation releases them.
   const taxis=msg.taxis.map(t=>{
    if(t.ferryTrip)return t; // Main thread owns paid ferry travel.
-   // Legacy automatic depot returns carry pauseAtHome. Preserve operational trips.
+   // Preserve legitimate saved RETURNING journeys after a browser refresh.
+   // pauseAtHome is set for active hotel, parking and depot journeys, not
+   // only legacy automatic returns. A route with remaining directed legs
+   // must never be erased just because dispatch worker state was recreated.
    if(t.kind==='explorer'&&t.status==='RETURNING'&&t.pauseAtHome&&
-      !t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
+      (!t.path||t.path.length<2||!t.edgeIds?.length||t.leg>=t.edgeIds.length)&&
+      !t.serviceDestination&&!t.refillDestination&&!t.restStopId&&
+      !t.recoveryPending&&!t.refillRequested&&
       !(t.deliveryUntil&&t.deliveryUntil>now)){
-    // Stale rest-stop references and expired rest timers can survive older saves.
-    // Only a currently active rest timer should block legacy return recovery.
     obsoleteReturnRecoveries++;
     return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,
      path:[],edgeIds:[],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
