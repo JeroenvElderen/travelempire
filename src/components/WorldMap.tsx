@@ -3,7 +3,7 @@ import './vehicle-sheet.css';
 import {diagnostic} from '../frontendDiagnostics';
 import {enablePerformanceMonitor,performanceMonitorEnabled,recordPerformance,incrementPerformance,readPerformance,recordActiveFrame,markMonitorSuspended,recordActivity,recordLongTask,type PerformanceSnapshot} from '../performanceMonitor';
 import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
-import {gameHour} from '../simulation/gameClock';
+import {gameHour,GAME_TIME_SCALE} from '../simulation/gameClock';
 import type {GameClock} from '../simulation/gameClock';
 import './station-markers.css';
 import {useEffect,useRef,useState} from 'react';
@@ -166,10 +166,10 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onViewportChange,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onViewportChange,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
  const viewportCallbackRef=useRef(onViewportChange);viewportCallbackRef.current=onViewportChange;
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
@@ -275,6 +275,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const stationMarkers=useRef(new Map<string,maplibregl.Marker>());
  const restMarkers=useRef(new Map<string,maplibregl.Marker>());
  const ferryPositionsRef=useRef<Array<{id:string;point:[number,number]}>>([]);
+ const gameClockNowRef=useRef(gameClock);gameClockNowRef.current=gameClock;
+ const ferryServiceStartsRef=useRef(ferryServiceStartedAt);ferryServiceStartsRef.current=ferryServiceStartedAt;
  const offscreenLayer=useRef<HTMLDivElement>(null);
  const depotMarkers=useRef(new Map<string,maplibregl.Marker>());
  const [stationsVisible,setStationsVisible]=useState(true);
@@ -927,7 +929,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  // Ferries remain operational; sea routes no longer generate territory fog.
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId,positions=>{ferryPositionsRef.current=positions;});
+  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId,positions=>{ferryPositionsRef.current=positions;},()=>{const clock=gameClockNowRef.current;return clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();},()=>ferryServiceStartsRef.current);
  },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
 
  // Off-screen pointers: bounded, clustered and refreshed at most once per second.
