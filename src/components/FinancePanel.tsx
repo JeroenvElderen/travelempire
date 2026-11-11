@@ -2,7 +2,8 @@ import {useEffect,useState} from 'react';
 import {BarChart3,Receipt,Wallet,CreditCard,History} from 'lucide-react';
 import type {Company} from '../company';
 import type {FleetState,EconomyUpgrade} from '../simulation/taxi';
-import {LOAN_OFFERS,UPGRADES,creditScore} from '../economy';
+import {UPGRADES} from '../economy';
+import {securedQuote,LOAN_TERMS,MIN_SECURED_LOAN} from '../simulation/securedLoans';
 import {bankOf} from '../banking';
 import DepotFinancePanel from './DepotFinancePanel';
 import AccountingPanel from './AccountingPanel';
@@ -16,13 +17,15 @@ type Budgets=Record<BudgetCategory,number>;
 const defaultBudgets:Budgets={fuel:1000,maintenance:1000,exploration:2000,payroll:2500,insurance:750,overhead:1500};
 const budgetLabels:Record<BudgetCategory,string>={fuel:'Petrol',maintenance:'Maintenance and servicing',exploration:'Exploration',payroll:'Driver payroll',insurance:'Insurance',overhead:'Office and depot overhead'};
 const budgetCategories=Object.keys(defaultBudgets) as BudgetCategory[];
-type Props={company:Company|null;fleet:FleetState;gameEpochMs:number;onAcquire:(id:string,discount:number,loanPercent:number)=>void;onFoundSubsidiary:(name:string,city:string,capital:number)=>void;onCorporateTransfer:(id:string,amount:number,direction:'to'|'from')=>void;onCorporateMerge:(sourceId:string,targetId:string)=>void;onCorporateRestructure:(id:string,vehicles:number,depots:number)=>void;onCorporateAssetTransfer:(sourceId:string,targetId:string,vehicles:number,depots:number)=>void;onFoundForeign:(name:string,city:string,code:string,capital:number)=>void;onAcquireForeign:(id:string,loanPercent:number)=>void;onTransferForeign:(id:string,amount:number,direction:'to'|'from')=>void;onInvest:(investorId:string)=>void;onIssueShares:(investorId:string,amount:number)=>void;onDividend:(amount:number)=>void;onBuyback:(investorId:string,shares:number)=>void;onLoan:(amount:number)=>void;onEarlyRepayment:(loanId:string)=>void;onDepotUpgrade:(depotId:string,kind:DepotUpgradeKind)=>void;onAccountingSettings:(corporateRate:number,vatRate:number)=>void;onTransfer:(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>void;onBankSettings:(percent:number,minimum:number)=>void;onUpgrade:(id:EconomyUpgrade)=>void;onWageChange:(multiplier:number)=>void;error:string};
+type Props={company:Company|null;fleet:FleetState;gameEpochMs:number;onAcquire:(id:string,discount:number,loanPercent:number)=>void;onFoundSubsidiary:(name:string,city:string,capital:number)=>void;onCorporateTransfer:(id:string,amount:number,direction:'to'|'from')=>void;onCorporateMerge:(sourceId:string,targetId:string)=>void;onCorporateRestructure:(id:string,vehicles:number,depots:number)=>void;onCorporateAssetTransfer:(sourceId:string,targetId:string,vehicles:number,depots:number)=>void;onFoundForeign:(name:string,city:string,code:string,capital:number)=>void;onAcquireForeign:(id:string,loanPercent:number)=>void;onTransferForeign:(id:string,amount:number,direction:'to'|'from')=>void;onInvest:(investorId:string)=>void;onIssueShares:(investorId:string,amount:number)=>void;onDividend:(amount:number)=>void;onBuyback:(investorId:string,shares:number)=>void;onLoan:(amount:number,days:number)=>void;onEarlyRepayment:(loanId:string)=>void;onDepotUpgrade:(depotId:string,kind:DepotUpgradeKind)=>void;onAccountingSettings:(corporateRate:number,vatRate:number)=>void;onTransfer:(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>void;onBankSettings:(percent:number,minimum:number)=>void;onUpgrade:(id:EconomyUpgrade)=>void;onWageChange:(multiplier:number)=>void;error:string};
 const money=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
 export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoundSubsidiary,onCorporateTransfer,onCorporateMerge,onCorporateRestructure,onCorporateAssetTransfer,onFoundForeign,onAcquireForeign,onTransferForeign,onInvest,onIssueShares,onDividend,onBuyback,onLoan,onEarlyRepayment,onDepotUpgrade,onAccountingSettings,onTransfer,onBankSettings,onUpgrade,onWageChange,error}:Props){
  const [tab,setTab]=useState<'overview'|'performance'|'costs'|'capital'|'activity'|'budgets'|'banking'|'reports'|'depots'|'accounting'|'forecast'|'equity'|'corporate'>('overview');
  const [transferFrom,setTransferFrom]=useState<'operating'|'savings'|'reserve'>('operating');
  const [transferTo,setTransferTo]=useState<'operating'|'savings'|'reserve'>('savings');
  const [transferAmount,setTransferAmount]=useState('');
+ const [loanAmount,setLoanAmount]=useState(250000);
+ const [loanDays,setLoanDays]=useState<number>(730);
  const [bankSearch,setBankSearch]=useState('');
  const [reportRange,setReportRange]=useState<7|30|90>(30);
  const [periodDays,setPeriodDays]=useState<7|30|90>(30);
@@ -48,7 +51,8 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  const bank=bankOf(fleet.bank);
  const cashAvailable=(company?.cash??0);
  const bankTotal=cashAvailable+bank.savings+bank.reserve;
- const score=creditScore(cashAvailable,fleet.loans??[],(fleet.leases??[]).length,fleet.financePaymentsMade??0);
+ const quote=company?securedQuote(company,fleet,gameEpochMs,loanAmount,loanDays):null;
+ const score=quote?.score??650;
  const debt=(fleet.loans??[]).reduce((a,l)=>a+l.balance,0);
  const expenses=(fleet.fuelExpense??0)+(fleet.maintenanceExpense??0)+(fleet.explorationExpense??0)+(fleet.driverWages??0)+(fleet.insuranceExpense??0)+(fleet.serviceExpense??0)+(fleet.overheadExpense??0)+(fleet.loanInterestExpense??0)+(fleet.leaseExpense??0);
  const profit=fleet.revenue-expenses;
@@ -130,11 +134,50 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  <h3>Daily profit trend · last {periodDays} days</h3><div style={{display:'flex',alignItems:'end',gap:3,height:100,overflowX:'auto',padding:'10px 0'}} aria-label="Daily profit bar chart">{history.slice(-periodDays).map(h=>{const net=h.revenue-h.expenses;const max=Math.max(1,...history.slice(-periodDays).map(x=>Math.abs(x.revenue-x.expenses)));return <div key={h.day} title={`${h.day}: ${money(net)}`} style={{height:`${Math.max(3,Math.abs(net)/max*90)}%`,background:net>=0?'#30b98b':'#df6d69',minWidth:9,borderRadius:2}}/>;})}{!history.length&&<span>No daily history recorded yet.</span>}</div>
  </div>}{tab==='costs'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Driver salary policy</h2><span>Applies to future wage accrual</span></div><p>Wage multiplier affects future wage accrual only; previously paid wages are unchanged. 100% is the existing baseline.</p><label>Wage level <select value={fleet.wageMultiplier??1} onChange={e=>onWageChange(Number(e.target.value))}>{[0.75,1,1.25,1.5,2].map(v=><option key={v} value={v}>{Math.round(v*100)}% of baseline</option>)}</select></label>
  <h2>Vehicle profitability & depreciation</h2><label>Historical vehicle period <select value={vehiclePeriod} onChange={e=>setVehiclePeriod(e.target.value)}><option value="all">All recorded periods</option>{[...new Set((fleet.vehicleFinanceHistory??[]).map(v=>v.day.slice(0,7)))].sort().reverse().map(m=><option key={m} value={m}>{m}</option>)}</select></label><p>Per-vehicle lifetime operating contribution excludes unallocated depot overhead, loan interest and purchase costs. Estimated resale value uses age, mileage and condition.</p><div className="finance-rows">{fleet.taxis.map(t=>{const cost=(t.fuelExpense??0)+(t.maintenanceExpense??0)+(t.explorationExpense??0)+(t.driverWages??0)+(t.insuranceExpense??0);return <div key={t.id}><span>{t.name} · {t.driver} · {Math.round(t.operatingKm??0)} km<br/>Revenue {money(t.tripRevenue??0)} · Costs {money(cost)} · Est. value {money(vehicleValue(t))} · Cost/km {money((t.operatingKm??0)>0?cost/(t.operatingKm??1):0)} · Revenue/km {money((t.operatingKm??0)>0?(t.tripRevenue??0)/(t.operatingKm??1):0)}{vehicleTotals.has(t.id)&&<> · Selected period: {money(vehicleTotals.get(t.id)!.revenue)} revenue / {money(vehicleTotals.get(t.id)!.expenses)} costs / {vehicleTotals.get(t.id)!.km.toFixed(1)} km</>}</span><strong>{money((t.tripRevenue??0)-cost)}</strong></div>;})}{!fleet.taxis.length&&<p>No vehicles purchased yet.</p>}</div>
- </div>}{tab==='capital'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Business loans</h2><span>Finance your company growth</span></div><p>Maximum two active loans and €75,000 outstanding, including financed vehicles. Repayments are made every simulated day; interest is charged on the remaining balance. Borrowing is not revenue and principal repayment is not an operating expense.</p><div className="finance-options">{LOAN_OFFERS.map(l=><article key={l.amount}><strong>{money(l.amount)}</strong><small>{(l.rate*100).toFixed(0)}% annual interest · {l.days} game days</small><button disabled={!company||(fleet.loans??[]).length>=2||debt+l.amount>75000} onClick={()=>onLoan(l.amount)}>Take loan</button></article>)}</div>
- {(fleet.loans??[]).map(l=><div className="finance-loan" key={l.id}><strong>{money(l.balance)} outstanding</strong><span>{l.remainingDays} game days remaining · {money(l.dailyPayment)} / game day</span></div>)}
+ </div>}{tab==='capital'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Secured business loans</h2><span>Custom lending based on company value and credit</span></div>
+ <p>The first loan can be up to your company's appraised value with strong credit. Approval also accounts for existing debt, payment history, and outstanding loans. Loan proceeds are not business revenue.</p>
+ <div className="company-metrics">
+ <article><small>COMPANY VALUATION</small><strong>{money(quote?.companyValue??0)}</strong></article>
+ <article><small>CREDIT SCORE</small><strong>{score} / 850</strong></article>
+ <article><small>REMAINING CREDIT</small><strong>{money(quote?.available??0)}</strong></article>
+ <article><small>TOTAL DEBT</small><strong>{money(quote?.outstanding??0)}</strong></article>
+ </div>
+ <section className="finance-loan" aria-label="Custom secured loan configurator">
+ <h3>Configure your loan</h3>
+ <label htmlFor="secured-loan-amount">Loan amount</label>
+ <input id="secured-loan-amount" type="number" min={MIN_SECURED_LOAN}
+  max={Math.max(MIN_SECURED_LOAN,Math.floor(quote?.available??MIN_SECURED_LOAN))}
+  step="1000" value={loanAmount} onChange={e=>setLoanAmount(Number(e.target.value)||0)}/>
+ <input aria-label="Adjust secured loan amount" type="range" min={MIN_SECURED_LOAN}
+  max={Math.max(MIN_SECURED_LOAN,Math.floor(quote?.available??MIN_SECURED_LOAN))}
+  step="1000" value={Math.max(MIN_SECURED_LOAN,Math.min(loanAmount,Math.floor(quote?.available??MIN_SECURED_LOAN)))}
+  onChange={e=>setLoanAmount(Number(e.target.value))}
+  disabled={!quote||quote.available<MIN_SECURED_LOAN}/>
+ <label htmlFor="secured-loan-term">Repayment period</label>
+ <select id="secured-loan-term" value={loanDays} onChange={e=>setLoanDays(Number(e.target.value))}>
+ {LOAN_TERMS.map(days=><option key={days} value={days}>{days} game days{days===365?' (1 year)':days===730?' (2 years)':days===1825?' (5 years)':''}</option>)}
+ </select>
+ <div className="company-metrics">
+ <article><small>ANNUAL INTEREST RATE</small><strong>{((quote?.rate??0)*100).toFixed(2)}%</strong></article>
+ <article><small>DAILY REPAYMENT</small><strong>{money(quote?.instalment??0)}</strong></article>
+ <article><small>TOTAL INTEREST</small><strong>{money(Math.max(0,quote?.totalInterest??0))}</strong></article>
+ <article><small>TOTAL REPAYMENT</small><strong>{money(Math.max(0,quote?.totalPaid??0))}</strong></article>
+ </div>
+ <p>Secured loan: missed instalments incur interest and late fees. After 3 consecutive missed game-day repayments, the bank may repossess eligible owned passenger vehicles to offset the debt. Leased vehicles and free explorers are excluded; remaining unpaid debt stays outstanding.</p>
+ <button disabled={!company||!quote?.approved} onClick={()=>onLoan(loanAmount,loanDays)}>
+ {quote?.approved?'Apply for secured loan':'Not eligible for selected loan'}
+ </button>
+ {!quote?.canBorrow&&company&&<small>Credit approval requires a score of at least 500 and fewer than three active secured loans.</small>}
+ </section>
+ {(fleet.loans??[]).filter(l=>l.secured).map(l=><div className="finance-loan" key={l.id}>
+ <strong>{money(l.balance)} outstanding</strong>
+ <span>{l.remainingDays} instalments remaining · {money(l.dailyPayment)} / game day · {(l.annualRate*100).toFixed(2)}% annual</span>
+ <small>{(l.missedPayments??0)>0?`Missed ${l.missedPayments} consecutive payment(s) · repossession possible from 3`:'Repayments current'} · Total missed: {l.totalMissedPayments??0} · Collateral recovered: {money(l.collateralRecovered??0)}</small>
+ </div>)}
+ {(fleet.loans??[]).filter(l=>!l.secured&&l.purpose!=='vehicle').map(l=><div className="finance-loan" key={l.id}><strong>Legacy loan · {money(l.balance)} outstanding</strong><span>{l.remainingDays} game days · {money(l.dailyPayment)} / game day</span></div>)}
  <div className="finance-section-heading"><h2>Fleet financing and credit</h2><span>Simulated lender assessment</span></div>
  <div className="company-metrics"><article><small>CREDIT SCORE</small><strong>{score} / 850</strong></article><article><small>FINANCED VEHICLES</small><strong>{(fleet.loans??[]).filter(l=>l.purpose==='vehicle').length}</strong></article><article><small>ACTIVE LEASES</small><strong>{(fleet.leases??[]).length}</strong></article><article><small>LEASE PAYMENTS TO DATE</small><strong>{money(fleet.leaseExpense??0)}</strong></article></div>
- <p>Credit score is a gameplay estimate based on available cash, debt, leases and recorded repayments. It does not represent a real credit rating.</p>
+ <p>Credit score is a fictional gameplay estimate based on cash, existing loans, leases, on-time repayments and missed payments. It is not a real credit rating. Missed payments recorded: {fleet.creditMisses??0}; repossessions: {fleet.creditDefaults??0}.</p>
  {(fleet.loans??[]).filter(l=>l.purpose==='vehicle').map(l=><div className="finance-loan" key={l.id}><strong>Vehicle finance · {fleet.taxis.find(t=>t.id===l.vehicleId)?.name??'Vehicle'}</strong><span>{money(l.balance)} outstanding · {l.remainingDays} game days · {money(l.dailyPayment)} / game day</span><button disabled={!company||company.cash<l.balance} onClick={()=>onEarlyRepayment(l.id)}>Repay remaining balance</button></div>)}
  {(fleet.leases??[]).map(l=><div className="finance-loan" key={l.id}><strong>Lease · {l.vehicleName}</strong><span>{l.remainingDays} game days remaining · {money(l.dailyPayment)} / game day · {money(l.totalPaid)} paid</span><small>Vehicle is returned automatically when the term ends. No ownership or resale rights.</small></div>)}
  <h2>Company upgrades</h2><div className="finance-options">{UPGRADES.map(u=><article key={u.id}><strong>{u.name}</strong><small>{u.detail}</small><span>{money(u.cost)}</span><button disabled={!company||(fleet.upgrades??[]).includes(u.id)||(company.cash<u.cost)} onClick={()=>onUpgrade(u.id)}>{(fleet.upgrades??[]).includes(u.id)?'Purchased':'Purchase upgrade'}</button></article>)}</div>
