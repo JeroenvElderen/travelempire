@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {shiftRestTargets,isAtShiftRestStop} from './shiftRest';
 import type {Company} from '../company';
-import type {Taxi} from './taxi';
+import {tickTaxi,type Taxi,type RoadGraph} from './taxi';
 import type {RestStop} from './driverRest';
 
 const company={
@@ -34,5 +34,25 @@ describe('scheduled taxi rest destinations',()=>{
   const result=shiftRestTargets({...taxi,depotId:'missing'},[],company,true);
   expect(result).toHaveLength(1);
   expect(result[0].name).toBe('Headquarters');
+ });
+ it('waits until a returning taxi reaches the hotel before switching to PAUSED',()=>{
+  const nodes=new Map([
+   ['A',[23.9,37.9] as [number,number]],
+   ['B',[23.9005,37.9] as [number,number]]
+  ]);
+  const graph:RoadGraph={nodes,nodeKeys:['A','B'],edges:new Map([
+   ['A',[{id:'ab',to:'B',meters:45,speedKph:30,highway:'service'}]],
+   ['B',[{id:'ab',to:'A',meters:45,speedKph:30,highway:'service'}]]
+  ])};
+  const travelling={...taxi,kind:'taxi' as const,status:'RETURNING' as const,
+   position:[23.9,37.9] as [number,number],path:[nodes.get('A')!,nodes.get('B')!],
+   edgeIds:['ab'],leg:0,distanceIntoLeg:0,pauseAtHome:true,shiftParked:true,
+   scheduledShiftParked:true,restStopId:'h1',restStopName:'Hotel',
+   fare:0,completed:0,driver:'Test',name:'Taxi 1'};
+  expect(tickTaxi(travelling,graph,0.1).taxi.status).toBe('RETURNING');
+  const arrived=tickTaxi(travelling,graph,60).taxi;
+  expect(arrived.status).toBe('PAUSED');
+  expect(arrived.position).toEqual(nodes.get('B'));
+  expect(arrived.restStopId).toBe('h1');
  });
 });
