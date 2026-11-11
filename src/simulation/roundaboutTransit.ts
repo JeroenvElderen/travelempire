@@ -15,6 +15,9 @@ export function roundaboutBridges(
  if(!junction.some(e=>purple.has(e.id)))return [];
  const found:RoundaboutBridge[]=[];
  const maxEdges=14,maxMeters=450;
+ // Dense urban junctions must not cause exponential loop enumeration.
+ let inspectedEdges=0;
+ const maxInspectedEdges=600;
  const mapPoint=(node:string)=>graph.nodes.get(node);
  const isPurpleJunction=(node:string)=>(graph.edges.get(node)??[]).some(e=>purple.has(e.id));
  const approvedShape=(nodes:readonly string[],length:number)=>{
@@ -34,8 +37,9 @@ export function roundaboutBridges(
   return true;
  };
  const traverse=(node:string,nodes:string[],ids:string[],distance:number,seen:Set<string>)=>{
-  if(ids.length>=maxEdges)return;
+  if(ids.length>=maxEdges||inspectedEdges>=maxInspectedEdges)return;
   for(const e of graph.edges.get(node)??[]){
+   if(++inspectedEdges>maxInspectedEdges)return;
    if(e.meters<=0||purple.has(e.id)||reserved.has(e.id)||distance+e.meters>maxMeters)continue;
    const nextDist=distance+e.meters;
    if(e.to===start){
