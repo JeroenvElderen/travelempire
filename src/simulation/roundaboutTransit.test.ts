@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {roundaboutBridges,hasInvalidRedApproach} from './roundaboutTransit';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
+import {unlockedSpecialistRoles} from './specialistAccess';
 import type {Point,RoadGraph} from './taxi';
 
 function testNetwork(closeRing=true):RoadGraph{
@@ -34,6 +35,13 @@ describe('strict roundabout and one-way return exceptions',()=>{
   expect(bridges).toContainEqual({
    to:'C',nodes:['A','B','C'],ids:['ring-ab','ring-bc'],meters:66
   });
+ });
+ it('unlocks a road specialist through a verified roundabout but not an open red street',()=>{
+  const purpleNodes=new Set(['P','A']);
+  const permitted=unlockedSpecialistRoles(testNetwork(),purpleNodes,purple,new Set());
+  expect(permitted.has('secondary')).toBe(true);
+  const blocked=unlockedSpecialistRoles(testNetwork(false),purpleNodes,purple,new Set());
+  expect(blocked.has('secondary')).toBe(false);
  });
  it('permits the short closed ring but never marks the wrong class purple',()=>{
   const result=planReachableExplorerRoad(testNetwork(),'P',purple,
