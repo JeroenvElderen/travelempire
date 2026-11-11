@@ -166,7 +166,7 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onViewportChange,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
@@ -493,7 +493,24 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const heading=document.createElement('strong');heading.className='te-sheet-section';heading.textContent='ROADSIDE ASSISTANCE';details.appendChild(heading);
      const addAction=(text:string,purpose:'fuel'|'depot')=>{const button=document.createElement('button');button.type='button';button.textContent=text;button.disabled=pending||Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());button.addEventListener('click',()=>{if(window.confirm('Request recovery for '+current.name+'?')){recoveryCommandRef.current?.(current.id,purpose);sheet.remove();}});actions.appendChild(button);};
      addAction('⛽ Fuel / charging station','fuel');addAction('⌂ Nearest depot','depot');
-     if(current.kind==='explorer'){const button=document.createElement('button');button.type='button';const paused=current.status==='PAUSED';button.textContent=paused?'Resume exploration':'Send home & pause';button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');sheet.remove();});actions.appendChild(button);}
+     if(current.kind==='explorer'){
+      const button=document.createElement('button');button.type='button';
+      const paused=current.status==='PAUSED';
+      button.textContent=paused?'Resume exploration':'Send home & pause';
+      button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));
+      button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');sheet.remove();});
+      actions.appendChild(button);
+      const teleport=document.createElement('button');teleport.type='button';
+      teleport.textContent='↪ Teleport to depot';
+      teleport.disabled=pending||Boolean(current.ferryTrip)||Boolean(current.recoveryPending)||
+       Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());
+      teleport.title='Instantly return this explorer to its assigned depot road, clearing the current route';
+      teleport.addEventListener('click',()=>{
+       if(!window.confirm('Teleport '+current.name+' to its assigned depot? This cancels its current trip.'))return;
+       explorerCommandRef.current?.(current.id,'teleport');sheet.remove();
+      });
+      actions.appendChild(teleport);
+     }
      if(pending){const notice=document.createElement('small');notice.textContent='Recovery already requested or in progress';details.appendChild(notice);}
      details.appendChild(actions);
      const setExpanded=(value:boolean)=>{sheet.classList.toggle('expanded',value);details.hidden=!value;toggle.textContent=value?'Less details ↓':'More details ↑';};
