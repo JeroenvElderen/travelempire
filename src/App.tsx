@@ -16,6 +16,7 @@ import {demandAt} from './simulation/demand';
 import { useEffect, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, Hotel, X, PanelLeftClose, PanelLeftOpen, CircleDollarSign, CalendarClock, Layers3, ScrollText, Plane, Truck, BusFront, Car, Anchor, Zap, ChartNoAxesCombined, HardHat, Palmtree, BriefcaseBusiness, GraduationCap } from "lucide-react";
 import WorldMap from "./components/WorldMap";
+import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import DriversPanel from "./components/DriversPanel";
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
@@ -1455,7 +1456,49 @@ export default function App(){
  const hireDriver=(name:string)=>{const cleaned=name.trim();if(!cleaned){setSimError('Enter a driver name.');return;}if((fleet.drivers??[]).some(d=>d.name.toLowerCase()===cleaned.toLowerCase())){setSimError('This driver is already employed.');return;}if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<DRIVER_COST){setSimError('Insufficient funds to hire a driver.');return;}pendingCashRef.current-=DRIVER_COST;setFleet(old=>({...old,drivers:[...(old.drivers??[]),{id:crypto.randomUUID(),name:cleaned,hiredAt:Date.now()}],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`Driver onboarding · ${cleaned}`,amount:-DRIVER_COST},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
- const controlExplorer=(id:string,action:'home'|'resume')=>{
+ const controlExplorer=(id:string,action:'home'|'resume'|'teleport')=>{
+  if(action==='teleport'){
+   const current=fleet.taxis.find(t=>t.id===id&&t.kind==='explorer');
+   if(!current||!company||!graph){setSimError('Explorer or road network unavailable.');return;}
+   if(current.ferryTrip||current.recoveryPending||
+      (current.deliveryUntil&&current.deliveryUntil>Date.now())||
+      recoveriesRef.current.some(job=>job.targetId===id)){
+    setSimError('Finish the ferry, delivery or active recovery before teleporting.');return;
+   }
+   const assigned=(company.depots??[]).find(d=>d.id===current.depotId);
+   const depotPoint:[number,number]=assigned?
+    [assigned.lng,assigned.lat]:[company.headquarters.lng,company.headquarters.lat];
+   // Snap onto the actual purple road at the depot, not the closest red
+   // graph node. This gives the explorer a valid starting road immediately.
+   const purple=resolvePurpleExplorerStart(graph,depotPoint,
+    new Set(fleet.exploredEdgeIds??[]),undefined,80);
+   if(!purple){
+    setSimError('No discovered road is loaded at this depot. Explore or load its road tile first.');
+    return;
+   }
+   const destination=graph.nodes.get(purple.node);
+   if(!destination){setSimError('The depot road junction is not loaded.');return;}
+   // Discard any late worker-generated return route for this explorer.
+   for(const [key,pending] of pendingRoutesRef.current)
+    if(pending.vehicleId===id)pendingRoutesRef.current.delete(key);
+   manualRecoveryRequestsRef.current.delete(id);
+   manualRecoveryPurposeRef.current.delete(id);
+   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:{
+    ...t,position:[...destination] as [number,number],status:'IDLE' as const,
+    path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
+    leg:0,distanceIntoLeg:0,speedKph:0,
+    pickup:undefined,dropoff:undefined,journeyEdges:[],
+    pauseAtHome:false,shiftParked:false,routeInvalid:false,
+    recoveryPending:false,restStopId:undefined,restStopName:undefined,
+    restUntilGameMs:undefined,scheduledBreakUntil:undefined,
+    scheduledBreakPending:false,scheduledRestPending:false,
+    refillDestination:undefined,refillRequested:false,refillAtDepot:undefined,
+    serviceDestination:undefined,lastRoadFrom:undefined,lastRoadTo:undefined
+   })}));
+   diagnostic('explorer:teleport',`returned ${current.name} to assigned depot purple road`);
+   setSimError('');
+   return;
+  }
   const explorer=fleet.taxis.find(t=>t.id===id&&t.kind==='explorer');
   if(!explorer||!graph||!company)return;
   if(action==='resume'){
