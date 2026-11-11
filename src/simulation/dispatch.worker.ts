@@ -1175,9 +1175,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!startNode){reject('no-purple-segment-at-departure');continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
     const escapeOnly=new Set(route.escapeTransitEdgeIds??[]);
-    // Escape-only roads are explicitly identified by the planner. They can
-    // never be discovered here, and must be a legal directed path that exits
-    // back to the already-purple network.
+    // Red cross-class transit is legal both BEFORE reaching the specialist's
+    // first eligible road and AFTER it as a one-way escape. It never becomes
+    // purple; every transit leg must be a real, directed graph connection.
     const firstDiscovery=route.edgeIds.findIndex(id=>selected.has(id));
     const validEscape=escapeOnly.size===0||(
      firstDiscovery>=0&&
@@ -1185,13 +1185,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       !reservedEdges.has(id)&&route.edgeIds.includes(id))&&
      route.edgeIds.every((id,i)=>{
       if(!escapeOnly.has(id))return true;
-      if(i<=firstDiscovery)return false;
       const from=nearest(activeGraph,route.path[i]),to=nearest(activeGraph,route.path[i+1]);
       return !!from&&!!to&&(activeGraph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to);
-     })&&
-     (()=>{const last=nearest(activeGraph,route.path.at(-1)!);
-      return (!!last&&(activeGraph.edges.get(last)??[]).some(e=>projected.has(e.id)))||
-       projected.has(route.edgeIds.at(-1)??'');})()
+     })
     );
     const valid=route.edgeIds.every(id=>allRoads.has(id)&&
      (projected.has(id)||selected.has(id)||escapeOnly.has(id)));
