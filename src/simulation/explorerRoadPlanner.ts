@@ -1,4 +1,5 @@
 import type {RoadGraph,Point,Taxi} from './taxi';
+import {roundaboutBridges} from './roundaboutTransit';
 
 export type ExplorerRouteDiagnostic={
  visitedPurpleNodes:number;reachableClassEdges:number;
@@ -11,21 +12,22 @@ export type ExplorerRoutePlan={
  diagnostic:ExplorerRouteDiagnostic;
 };
 
-/** Find the nearest eligible undiscovered road via the existing directed
- * purple network. An undiscovered cross-class road cannot be a connector
- * BEFORE the specialist starts discovering its own road class. The only
- * exception is a verified one-way escape AFTER discovery. */
+/** Discover specialist roads through the connected purple network.
+ * Only a compact, verified roundabout loop between two purple entrances
+ * can be crossed before discovery. Other red transit is limited to legal
+ * one-way escapes AFTER discovery. */
 export function planReachableExplorerRoad(
  graph:RoadGraph,start:string,explored:Set<string>,eligible:Set<string>,
  reservedRoads:Set<string>,reservedTargets:Set<string>,
  role:Taxi['explorerRole'],
  searchRange:'local'|'extended'='local',
+ allowRoundabout=false,
 ):{route:ExplorerRoutePlan|null;diagnostic:ExplorerRouteDiagnostic}{
  const diag:ExplorerRouteDiagnostic={visitedPurpleNodes:0,reachableClassEdges:0,
   eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
  if(!graph.nodes.has(start))return {route:null,diagnostic:{...diag,reason:'no-start-node'}};
  const distances=new Map<string,number>([[start,0]]);
- const parent=new Map<string,{from:string;id:string}>();
+ const parent=new Map<string,{from:string;nodes:string[];ids:string[]}>();
  const heap:Array<{node:string;distance:number}>=[{node:start,distance:0}];
  const push=(item:{node:string;distance:number})=>{
   let i=heap.length;heap.push(item);
@@ -131,28 +133,47 @@ export function planReachableExplorerRoad(
    const next=current.distance+edge.meters;
    if(next>maxTravel||next>=(distances.get(edge.to)??Infinity))continue;
    distances.set(edge.to,next);
-   parent.set(edge.to,{from:current.node,id:edge.id});
+   parent.set(edge.to,{from:current.node,nodes:[current.node,edge.to],ids:[edge.id]});
    push({node:edge.to,distance:next});
+  }
+  // Roundabouts are a strictly bounded exception. They are inferred from
+  // a CLOSED directed ring with two purple entrances, never from a red
+  // street that simply leads to another undiscovered road.
+  if(allowRoundabout)for(const bridge of roundaboutBridges(
+   graph,current.node,explored,reservedRoads)){
+   const next=current.distance+bridge.meters;
+   if(next>maxTravel||next>=(distances.get(bridge.to)??Infinity))continue;
+   distances.set(bridge.to,next);
+   parent.set(bridge.to,{from:current.node,nodes:bridge.nodes,ids:bridge.ids});
+   push({node:bridge.to,distance:next});
   }
  }
  if(!winner){
   if(!extended&&eligible.size>0)
    return planReachableExplorerRoad(graph,start,explored,eligible,
-    reservedRoads,reservedTargets,role,'extended');
+    reservedRoads,reservedTargets,role,'extended',allowRoundabout);
+  if(!allowRoundabout&&eligible.size>0)
+   return planReachableExplorerRoad(graph,start,explored,eligible,
+    reservedRoads,reservedTargets,role,'local',true);
   if(diag.unsafeOneWaySkipped>0&&diag.reason==='no-connected-class-road')diag.reason='one-way-no-legal-exit';
   if(diag.reason==='no-connected-class-road'&&diag.visitedPurpleNodes>=maxVisits)
    diag.reason='search-node-budget';
   return {route:null,diagnostic:diag};
  }
  const selected=winner as {from:string;to:string;id:string};
- const keys:string[]=[selected.from],ids:string[]=[];
+ const segments:Array<{nodes:string[];ids:string[]}>=[],ringTransit:string[]=[];
  let at=selected.from;
  while(at!==start){
   const step=parent.get(at);if(!step)return {route:null,diagnostic:{...diag,reason:'broken-parent-route'}};
-  ids.push(step.id);keys.push(step.from);at=step.from;
-  if(keys.length>maxVisits)return {route:null,diagnostic:{...diag,reason:'route-too-long'}};
+  segments.push(step);at=step.from;
+  if(segments.length>maxVisits)return {route:null,diagnostic:{...diag,reason:'route-too-long'}};
  }
- keys.reverse();ids.reverse();
+ segments.reverse();
+ const keys=[start],ids:string[]=[];
+ for(const step of segments){
+  keys.push(...step.nodes.slice(1));ids.push(...step.ids);
+  if(step.ids.length>1)for(const id of step.ids)if(!ringTransit.includes(id))ringTransit.push(id);
+ }
  keys.push(selected.to);ids.push(selected.id);
  // Follow connected straight road segments, rather than stop at every OSM
  // micro-edge. A turn is postponed to the next physical junction.
@@ -190,7 +211,7 @@ export function planReachableExplorerRoad(
  const exit=lastFrom&&lastTo&&lastId?
   safeExit(lastFrom,lastTo,lastId,irreversibleDiscovery):[];
  if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
- const escapeTransitEdgeIds:string[]=[];
+ const escapeTransitEdgeIds:string[]=[...ringTransit];
  for(const step of exit??[]){
   keys.push(step.to);ids.push(step.id);
   // Cross-class escape roads remain red, even though the explorer drives on them.
