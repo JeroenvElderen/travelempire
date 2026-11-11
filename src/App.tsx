@@ -55,6 +55,7 @@ import "./aurora-glass.css";
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
+import {settleFerryCrossings} from './maritime/ferryRevenue';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
 import {useRef} from 'react';
@@ -114,41 +115,35 @@ export default function App(){
    if(!current||current.id!==company.id||!clock)return;
    const owned=current.purchasedFerryRouteIds??[];
    if(!owned.length)return;
-   const hourMs=3600000;
-   const currentHour=Math.floor(clock.epochMs/hourMs)*hourMs;
-   // First ownership check starts at the current hour; no retroactive windfall.
-   const last=current.lastFerrySettlementAt??currentHour;
-   const hours=Math.min(24,Math.max(0,Math.floor((currentHour-last)/hourMs)));
-   if(!hours){
-    if(current.lastFerrySettlementAt===undefined){
-     const updated={...current,lastFerrySettlementAt:currentHour};
-     companyRef.current=updated;saveCompany(updated);setCompany(updated);
-    }
-    return;
+   const nowGame=clock.epochMs;
+   const routes=owned.flatMap(id=>{
+    const route=ferryRoutes.get(id);
+    return route?[{id,durationMinutes:route.durationMinutes}]:[];
+   });
+   const settlement=settleFerryCrossings(routes,current.ferryRevenueDepartures??{},nowGame);
+   // Persist settlement markers on first observation, even before the boat
+   // finishes its first crossing, so a reload cannot create backdated fares.
+   if(settlement.changed){
+    const updated={...current,ferryRevenueDepartures:settlement.departures};
+    companyRef.current=updated;saveCompany(updated);setCompany(updated);
    }
+   if(!settlement.crossings.length)return;
    busy=true;
    let gross=0,costs=0;
-   for(let h=0;h<hours;h++){
-    const hour=new Date(currentHour-(hours-1-h)*hourMs).getUTCHours();
+   for(const crossing of settlement.crossings){
+    const duration=crossing.durationMinutes;
+    const hour=new Date(crossing.completedAt).getUTCHours();
     const demand=hour>=7&&hour<10||hour>=16&&hour<20?1.45:hour>=22||hour<6?0.35:1;
-    for(const id of owned){
-     const route=ferryRoutes.get(id);
-     if(!route)continue;
-     const duration=Math.max(10,Math.min(240,route.durationMinutes));
-     const crossings=Math.max(1,Math.floor(60/Math.max(30,duration)));
-     const passengers=Math.round((12+Math.min(55,duration*0.22))*demand);
-     const standardFare=4+duration*0.16;
-     const configuredFare=current.ferryTicketPrices?.[id];
-     const ticket=typeof configuredFare==='number'&&Number.isFinite(configuredFare)&&configuredFare>=1&&configuredFare<=100?configuredFare:standardFare;
-     const priceMultiplier=Math.max(0.2,Math.min(1.8,Math.pow(ticket/standardFare,-0.75)));
-     const adjustedPassengers=Math.min(90,Math.max(0,Math.round(passengers*priceMultiplier)));
-     gross+=crossings*adjustedPassengers*ticket;
-     costs+=crossings*(24+duration*0.9);
-    }
+    const passengers=Math.round((12+Math.min(55,duration*0.22))*demand);
+    const standardFare=4+duration*0.16;
+    const configuredFare=current.ferryTicketPrices?.[crossing.routeId];
+    const ticket=typeof configuredFare==='number'&&Number.isFinite(configuredFare)&&configuredFare>=1&&configuredFare<=100?configuredFare:standardFare;
+    const priceMultiplier=Math.max(0.2,Math.min(1.8,Math.pow(ticket/standardFare,-0.75)));
+    const adjustedPassengers=Math.min(90,Math.max(0,Math.round(passengers*priceMultiplier)));
+    gross+=adjustedPassengers*ticket;
+    costs+=24+duration*0.9;
    }
    const net=Math.round((gross-costs)*100)/100;
-   const updated={...current,lastFerrySettlementAt:currentHour};
-   companyRef.current=updated;saveCompany(updated);setCompany(updated);
    if(net!==0){
     pendingCashRef.current+=net;
     setFleet(old=>{
@@ -160,16 +155,16 @@ export default function App(){
       bankEntry('Automatic savings · ferry income',-savingsAmount,'operating','transfer'),
       bankEntry('Automatic savings · ferry income',savingsAmount,'savings','transfer')
      ]):old.bank;
-     const day=new Date(currentHour).toISOString().slice(0,10);
+     const day=new Date(settlement.crossings.at(-1)?.completedAt??nowGame).toISOString().slice(0,10);
      const history=[...(old.financeHistory??[])];
      const lastDay=history[history.length-1];
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
-     const ferryAccounting=bookAccounting(old.accounting,periodMonth(currentHour),gross,costs,costs,0);
+     const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
      return {...old,accounting:ferryAccounting,bank:updatedBank,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       financeHistory:history.slice(-365),
       transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),
-       description:'Ferry ticket revenue · '+owned.length+' route(s)',amount:Math.round(gross*100)/100},
+       description:'Ferry ticket revenue · '+settlement.crossings.length+' completed crossing(s)',amount:Math.round(gross*100)/100},
        {id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry operating costs',amount:-Math.round(costs*100)/100},
        ...(old.transactions??[])].slice(0,100)};
     });
