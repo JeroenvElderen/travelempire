@@ -1053,7 +1053,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  }
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
- const discovered=[...new Set(t.journeyEdges??[])];
+ const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
