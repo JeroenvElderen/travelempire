@@ -148,4 +148,44 @@ describe('purple-connected explorer routes',()=>{
   expect(result.route?.discoveryEdgeIds).toEqual(['cd','df']);
   expect(result.diagnostic.reason).toBe('planned');
  });
+ it('crosses a different undiscovered road class to discover the next eligible road',()=>{
+  const graph=makeGraph();
+  // A-B purple, B-C red primary, C-D red residential. The Local
+  // Explorer must cross B-C without turning that primary road purple.
+  const bc=graph.edges.get('B')!.find(e=>e.id==='bc')!;
+  bc.highway='primary';
+  graph.edges.get('C')!.find(e=>e.id==='bc')!.highway='primary';
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(result.route?.edgeIds).toEqual(['ab','bc','cd']);
+  expect(result.route?.discoveryEdgeIds).toEqual(['cd']);
+  expect(result.route?.escapeTransitEdgeIds).toEqual(['bc']);
+  expect(result.diagnostic.reason).toBe('planned');
+ });
+ it('follows legally directed cross-class connectors without revealing them',()=>{
+  const graph=makeGraph();
+  graph.edges.set('C',(graph.edges.get('C')??[]).filter(e=>e.id!=='bc'));
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+   new Set(['cd']),new Set(),new Set(),'residential');
+  expect(result.route?.edgeIds).toEqual(['ab','bc','cd']);
+  expect(result.route?.escapeTransitEdgeIds).toEqual(['bc']);
+  expect(result.route?.discoveryEdgeIds).toEqual(['cd']);
+ });
+ it('does not cross an undiscovered road reserved by another explorer',()=>{
+  const graph=makeGraph();
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+   new Set(['cd']),new Set(['bc']),new Set(),'residential');
+  expect(result.route).toBeNull();
+ });
+ it('does not jump between roads crossing geometrically without an OSM junction',()=>{
+  const graph=makeGraph();
+  graph.nodes.set('Y',[0.0015,-0.0005]);
+  graph.nodes.set('Z',[0.0015,0.0005]);
+  graph.nodeKeys.push('Y','Z');
+  graph.edges.set('Y',[{to:'Z',id:'yz',meters:111,highway:'residential',speedKph:30}]);
+  graph.edges.set('Z',[{to:'Y',id:'yz',meters:111,highway:'residential',speedKph:30}]);
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+   new Set(['yz']),new Set(),new Set(),'residential');
+  expect(result.route).toBeNull();
+ });
 });
