@@ -43,6 +43,8 @@ export type Taxi = {
   autoDepotService?: boolean;
   pauseAtHome?: boolean;
   shiftParked?: boolean;
+  /** Parked specifically by the 12-hour driver roster or 30-minute break. */
+  scheduledShiftParked?:boolean;
   scheduledBreakUntil?: number;
   scheduledBreakPending?: boolean;
   scheduledRestPending?: boolean;
