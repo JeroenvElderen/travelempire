@@ -42,7 +42,8 @@ export function securedQuote(company:Company,fleet:FleetState,gameNow:number,amo
  const valid=Number.isFinite(amount)&&amount>=MIN_SECURED_LOAN&&
   amount<=assessment.available+.001&&LOAN_TERMS.includes(days as typeof LOAN_TERMS[number])&&assessment.canBorrow;
  const rate=securedRate(assessment.score,days);
- const instalment=valid?dailyPayment(amount,rate,days):0;
+ const instalment=Number.isFinite(amount)&&amount>0&&Number.isFinite(days)&&days>0?
+  dailyPayment(amount,rate,days):0;
  return {...assessment,amount,days,rate,instalment,
   totalPaid:instalment*days,totalInterest:instalment*days-amount,approved:valid};
 }
