@@ -18,6 +18,7 @@ import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as
 import WorldMap from "./components/WorldMap";
 import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import DriversPanel from "./components/DriversPanel";
+import {canAcceptPassengerJob} from './simulation/driverSchedule';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
@@ -656,7 +657,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
-    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourPoiRef.current.slice(0,150),poiTargets:[...harbourPoiRef.current,...[...stationsRef.current.values()].filter(s=>s.access!=='private').slice(0,80).map(s=>[s.lng,s.lat] as [number,number])].slice(0,150),stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&!t.shiftParked&&!t.restStopId).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourPoiRef.current.slice(0,150),poiTargets:[...harbourPoiRef.current,...[...stationsRef.current.values()].filter(s=>s.access!=='private').slice(0,80).map(s=>[s.lng,s.lat] as [number,number])].slice(0,150),stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.shiftParked&&!t.restStopId&&canAcceptPassengerJob(t,fleetSaveRef.current.drivers??[],gameClockRef.current?.epochMs??now)).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     // iOS suspends background tabs; avoid expensive route planning while hidden.
     allowScout:document.visibilityState==='visible'});
    // Do not suppress retries merely because a dispatch message was sent.
@@ -861,6 +862,22 @@ export default function App(){
        speedKph:0,shiftParked:false,pauseAtHome:false};
      }
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
+     if(passengerTaxi){
+      const canWork=canAcceptPassengerJob(delivered,old.drivers??[],gameNow);
+      // Do not interrupt a passenger trip. At completion the taxi becomes
+      // IDLE and parks on the next simulation tick if outside its duty window.
+      if(delivered.scheduledShiftParked&&delivered.status==='PAUSED'){
+       if(!canWork)return delivered;
+       return {...delivered,status:'IDLE' as const,shiftParked:false,
+        scheduledShiftParked:false,pauseAtHome:false,restStopId:undefined,
+        restStopName:undefined,restUntilGameMs:undefined};
+      }
+      if(delivered.status==='IDLE'&&!canWork){
+       return {...delivered,status:'PAUSED' as const,shiftParked:true,
+        scheduledShiftParked:true,pauseAtHome:false,
+        path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+      }
+     }
       if(passengerTaxi||delivered.kind==='explorer'){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
        const hotelDrivingMs=delivered.drivingSinceHotelGameMs??0;
@@ -869,7 +886,10 @@ export default function App(){
         if(gameNow<until)return {...delivered,restUntilGameMs:until};
         return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:delivered.restStopId?.startsWith('hotel:')?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
        }
-       if(delivered.status==='IDLE'&&(drivingMs>=(passengerTaxi?3600000:4*3600000)||hotelDrivingMs>=9*3600000)&&!delivered.refillRequested){
+       // Passenger taxis use the roster's 12-hour shift and 30-minute
+       // scheduled break, not an independent one-hour-driving rest timer.
+       if(delivered.kind==='explorer'&&delivered.status==='IDLE'&&
+         (drivingMs>=4*3600000||hotelDrivingMs>=9*3600000)&&!delivered.refillRequested){
         if(delivered.kind==='explorer'&&!canDepartPurple(delivered))return delivered;
         const overnight=hotelDrivingMs>=9*3600000;
         const stops=[...restStopsRef.current.values()].filter(p=>overnight?p.kind==='hotel':p.kind!=='hotel')
