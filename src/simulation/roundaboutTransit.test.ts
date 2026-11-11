@@ -54,6 +54,19 @@ describe('strict roundabout and one-way return exceptions',()=>{
   expect(hasInvalidRedApproach(testNetwork(),result.route!.path,
    result.route!.edgeIds,purple,new Set(result.route!.discoveryEdgeIds))).toBe(false);
  });
+ it('rejects an ordinary two-way residential block loop',()=>{
+  const graph=testNetwork();
+  for(const [from,to,id] of [
+   ['B','A','ring-ab'],['C','B','ring-bc'],
+   ['D','C','ring-cd'],['A','D','ring-da']
+  ]){
+   graph.edges.set(from,[...(graph.edges.get(from)??[]),
+    {to,id,meters:33,speedKph:30,highway:'residential'}]);
+  }
+  expect(roundaboutBridges(graph,'A',purple)).toEqual([]);
+  expect(planReachableExplorerRoad(graph,'P',purple,discovered,
+   new Set(),new Set(),'secondary').route).toBeNull();
+ });
  it('does not accept a similar red path when the directed loop is broken',()=>{
   const graph=testNetwork(false);
   expect(roundaboutBridges(graph,'A',purple)).toEqual([]);
