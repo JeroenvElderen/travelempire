@@ -18,6 +18,8 @@ export function dayFinance(history:readonly FinancePeriod[],gameNow:number):DayF
 }
 export function classifyActivity(transaction:FinancialTransaction):ActivityType{
  const description=transaction.description.toLowerCase();
+ if(/vat settlement|corporate tax settlement|tax expense|tax payment/.test(description))
+  return 'expense';
  // The ledger's transaction sign alone is not sufficient. Borrowing money
  // isn't revenue; buying a vehicle isn't an operating expense; and loan
  // principal repayment isn't an operating cost.
