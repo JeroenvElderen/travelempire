@@ -920,6 +920,15 @@ export default function App(){
       // drive it to a real rest facility instead of spawning Zzz on the road.
       // Old saves may contain a roadside roster pause with no rest stop:
       // clear those and find a proper destination.
+      // Legacy saves may retain a roadside PAUSED flag from the pre-roster
+      // implementation, without any facility destination to validate.
+      if(delivered.status==='PAUSED'&&delivered.shiftParked&&
+         !delivered.scheduledShiftParked&&!delivered.recoveryPending&&
+         !delivered.restStopPosition){
+       return {...delivered,status:'IDLE' as const,shiftParked:false,
+        pauseAtHome:false,restStopId:undefined,restStopName:undefined,
+        restUntilGameMs:undefined};
+      }
       if(delivered.scheduledShiftParked&&delivered.status==='PAUSED'){
        const parkedAtActualStop=!!delivered.restStopId&&!!delivered.restStopPosition&&
         meters(delivered.position,delivered.restStopPosition)<=180;
@@ -994,7 +1003,7 @@ export default function App(){
        if(delivered.status==='PAUSED'&&delivered.shiftParked){
         const until=delivered.restUntilGameMs??(gameNow+((delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?9*3600000:30*60000));
         if(gameNow<until)return {...delivered,restUntilGameMs:until};
-        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:(delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
+        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:(delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined,restStopPosition:undefined};
        }
        // Passenger taxis use the roster's 12-hour shift and 30-minute
        // scheduled break, not an independent one-hour-driving rest timer.
