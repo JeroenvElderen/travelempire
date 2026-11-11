@@ -26,7 +26,7 @@ describe('passenger taxis never reveal roads',()=>{
   expect(result.discovered).toEqual([]);
  });
  it('does not reveal roads after completing a passenger journey',()=>{
-  const result=tickTaxi(taxi({status:'TO_DROPOFF',fare:20}),graph,120);
+  const result=tickTaxi(taxi({status:'TO_DROPOFF',fare:20,journeyEdges:['legacy-undiscovered-road']}),graph,120);
   expect(result.discovered).toEqual([]);
  });
 });
