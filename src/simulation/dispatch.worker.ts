@@ -559,8 +559,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Return the exact chosen POI: the caller must never guess which hotel
    // corresponds to the final road node.
    const valid=msg.targets.map(target=>{
-    const node=nearest(graph,target);
-    const entrance=node?graph.nodes.get(node):undefined;
+    const node=nearest(graph!,target);
+    const entrance=node?graph!.nodes.get(node):undefined;
     const offsetMeters=entrance?meters(entrance,target):Infinity;
     return {node,offsetMeters};
    }).map(({node,offsetMeters})=>({
