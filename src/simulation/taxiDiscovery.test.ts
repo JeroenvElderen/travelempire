@@ -1,0 +1,32 @@
+import {describe,expect,it} from 'vitest';
+import {tickTaxi,type Taxi,type RoadGraph,type Point} from './taxi';
+
+const a:Point=[0,0],b:Point=[0.001,0];
+const ka='0.000000,0.000000',kb='0.001000,0.000000';
+const graph:RoadGraph={
+ nodes:new Map([[ka,a],[kb,b]]),nodeKeys:[ka,kb],
+ edges:new Map([
+  [ka,[{to:kb,id:'red-road',meters:111,speedKph:30,highway:'residential'}]],
+  [kb,[{to:ka,id:'red-road',meters:111,speedKph:30,highway:'residential'}]]
+ ])
+};
+const taxi=(overrides:Partial<Taxi>={}):Taxi=>({
+ id:'taxi-1',kind:'taxi',name:'Taxi 1',driver:'Driver',
+ position:a,status:'RETURNING',path:[a,b],edgeIds:['red-road'],
+ leg:0,distanceIntoLeg:0,pauseAtHome:true,fare:0,completed:0,
+ ...overrides
+});
+describe('passenger taxis never reveal roads',()=>{
+ it('does not reveal a traversed road while returning to a depot',()=>{
+  const result=tickTaxi(taxi(),graph,120);
+  expect(result.discovered).toEqual([]);
+ });
+ it('does not reveal pickup-route roads, even when a new leg starts',()=>{
+  const result=tickTaxi(taxi({status:'TO_PICKUP',dropoff:b}),graph,120);
+  expect(result.discovered).toEqual([]);
+ });
+ it('does not reveal roads after completing a passenger journey',()=>{
+  const result=tickTaxi(taxi({status:'TO_DROPOFF',fare:20}),graph,120);
+  expect(result.discovered).toEqual([]);
+ });
+});
