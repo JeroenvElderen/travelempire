@@ -18,6 +18,7 @@ export function planReachableExplorerRoad(
  graph:RoadGraph,start:string,explored:Set<string>,eligible:Set<string>,
  reservedRoads:Set<string>,reservedTargets:Set<string>,
  role:Taxi['explorerRole'],
+ searchRange:'local'|'extended'='local',
 ):{route:ExplorerRoutePlan|null;diagnostic:ExplorerRouteDiagnostic}{
  const diag:ExplorerRouteDiagnostic={visitedPurpleNodes:0,reachableClassEdges:0,
   eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
@@ -95,15 +96,16 @@ export function planReachableExplorerRoad(
   diag.unsafeOneWaySkipped++;
   return false;
  };
- const maxVisits=role==='highway'||role==='poi'?30000:12000;
- // Keep specialists in an efficient work area. Long cross-city transfers
- // just to paint a tiny isolated road waste fuel and time; another explorer
- // should uncover nearer connectors first.
- const maxTravel=role==='highway'||role==='poi'?24000:14000;
- // Prefer known purple roads; cross-class red roads are legal to drive on
- // but expensive for search scoring, so they are used only when useful.
+ // First scan a compact area. Only if NOTHING reachable of the specialist's
+ // class exists nearby do we allow a longer transfer to the next region.
+ // Both passes use weighted Dijkstra, so purple roads are preferred.
+ const extended=searchRange==='extended';
+ const maxVisits=extended?50000:role==='highway'||role==='poi'?30000:12000;
+ const maxTravel=extended?role==='highway'||role==='poi'?85000:60000:
+  role==='highway'||role==='poi'?24000:14000;
  const crossClassPenalty=7;
- const maxRedTransitMeters=role==='highway'||role==='poi'?5000:3500;
+ const maxRedTransitMeters=extended?role==='highway'||role==='poi'?18000:12000:
+  role==='highway'||role==='poi'?5000:3500;
  let winner:{from:string;to:string;id:string}|null=null;
  while(heap.length&&diag.visitedPurpleNodes<maxVisits){
   const current=pop();
@@ -138,6 +140,9 @@ export function planReachableExplorerRoad(
   }
  }
  if(!winner){
+  if(!extended&&eligible.size>0)
+   return planReachableExplorerRoad(graph,start,explored,eligible,
+    reservedRoads,reservedTargets,role,'extended');
   if(diag.unsafeOneWaySkipped>0&&diag.reason==='no-connected-class-road')diag.reason='one-way-no-legal-exit';
   if(diag.reason==='no-connected-class-road'&&diag.visitedPurpleNodes>=maxVisits)
    diag.reason='search-node-budget';
