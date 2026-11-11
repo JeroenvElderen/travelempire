@@ -8,7 +8,7 @@ const company:Company={
  id:'test',name:'Test Taxi',createdAt:'2026-11-11T00:00:00.000Z',
  startingCapital:250000,cash:250000,currency:'EUR',
  regionClaimStatus:'pending',depotStatus:'not_placed',
- headquarters:{lng:23.9,lat:37.9},depots:[]
+ headquarters:{lng:23.9,lat:37.9,label:'Test Headquarters',region:'Attica',country:'Greece',countryCode:'GRC'},depots:[]
 };
 const emptyFleet=():FleetState=>({taxis:[],revenue:0,completed:0,loans:[]});
 const vehicle=(id:string,price:number,kind:'taxi'|'explorer'='taxi'):Taxi=>({
