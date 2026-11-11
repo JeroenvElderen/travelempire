@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {Activity,ChevronDown,ChevronUp,ArrowDownLeft,ArrowUpRight,Landmark} from 'lucide-react';
 import type {FinancePeriod,FinancialTransaction} from '../simulation/taxi';
-import {dayFinance,recentActivity,type ActivityType} from '../simulation/liveFinance';
+import {dayFinance,dayExpenseBreakdown,recentActivity,type ActivityType} from '../simulation/liveFinance';
 import './live-finance-ticker.css';
 
 const euros=(value:number)=>new Intl.NumberFormat('en-IE',{
@@ -17,6 +17,7 @@ export default function LiveFinanceTicker({history,transactions,gameNow}:{
  const [filter,setFilter]=useState<Filter>('all');
  const entries=recentActivity(transactions,20);
  const totals=dayFinance(history,gameNow);
+ const expenses=expanded?dayExpenseBreakdown(history,gameNow):[];
  useEffect(()=>{
   if(expanded||entries.length<2)return;
   const timer=window.setInterval(()=>setIndex(i=>(i+1)%entries.length),4000);
@@ -63,6 +64,12 @@ export default function LiveFinanceTicker({history,transactions,gameNow}:{
       <strong className={entry.type==='income'?'income':entry.type==='expense'?'expense':'neutral'}>{renderAmount(entry.amount)}</strong>
      </div>)}
    </div>
+   {expenses.length>0&&<div className="live-finance-breakdown">
+    <strong>Today's expenses by category</strong>
+    {expenses.map(expense=><div key={expense.category}>
+     <span>{expense.label}</span><span className="expense">−{euros(expense.value)}</span>
+    </div>)}
+   </div>}
    <p className="live-finance-disclaimer">Today's totals use booked operating finance history. Loan proceeds, equity and capital transfers are not earnings.</p>
   </div>}
  </div>;
