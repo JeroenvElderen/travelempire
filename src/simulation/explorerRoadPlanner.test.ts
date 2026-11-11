@@ -224,6 +224,31 @@ describe('purple-connected explorer routes',()=>{
   expect(result.route?.edgeIds.length).toBeLessThan(5);
   expect(result.route?.discoveryEdgeIds.length).toBeGreaterThan(0);
  });
+ it('can cross several kilometres of red roads to reach a distant motorway without discovering transit',()=>{
+  const graph=makeGraph();
+  const explored=new Set(['ab']);
+  const eligible=new Set(['far-motorway']);
+  const from='B';
+  let previous=from;
+  for(let i=1;i<=8;i++){
+   const node='R'+i,id='red-link-'+i;
+   graph.nodes.set(node,[.001+i*.01,0]);graph.nodeKeys.push(node);
+   graph.edges.set(previous,[...(graph.edges.get(previous)??[]),
+    {to:node,id,meters:1000,highway:'primary',speedKph:70}]);
+   graph.edges.set(node,[{to:previous,id,meters:1000,highway:'primary',speedKph:70}]);
+   previous=node;
+  }
+  graph.nodes.set('M',[.09,0]);graph.nodeKeys.push('M');
+  graph.edges.get(previous)!.push({to:'M',id:'far-motorway',
+   meters:1000,highway:'motorway',speedKph:100});
+  graph.edges.set('M',[{to:previous,id:'far-motorway',
+   meters:1000,highway:'motorway',speedKph:100}]);
+  const result=planReachableExplorerRoad(graph,'A',explored,eligible,
+   new Set(),new Set(),'highway');
+  expect(result.route?.discoveryEdgeIds).toEqual(['far-motorway']);
+  expect(result.route?.escapeTransitEdgeIds).toHaveLength(8);
+  expect(result.route?.edgeIds).toHaveLength(10);
+ });
  it('still does not cross disconnected components on the extended search',()=>{
   const graph=makeGraph();
   const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
