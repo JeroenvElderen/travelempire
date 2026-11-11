@@ -114,7 +114,7 @@ export default function App(){
     const homePoint:[number,number]=home?[home.lng,home.lat]:[0,0];
     const reverse=!!home&&!!a&&!!b&&meters(homePoint,b)<meters(homePoint,a);
     return [route.id,{durationMinutes:route.durationMinutes,name:route.name??route.id,
-     from:reverse?route.to:route.from,to:reverse?route.from:route.to}];
+     from:reverse?route.to:route.from,to:reverse?route.from:route.to}] as const;
    }));
   }).catch(error=>console.warn('[TravelEmpire] Ferry revenue data unavailable',error));
   const settle=()=>{
