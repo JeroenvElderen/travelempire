@@ -191,4 +191,44 @@ describe('purple-connected explorer routes',()=>{
    new Set(['yz']),new Set(),new Set(),'residential');
   expect(result.route).toBeNull();
  });
+ it('allows a long connected purple-road transfer when no local specialist road exists',()=>{
+  const graph=makeGraph();
+  const explored=new Set<string>();
+  // 35 km on previously discovered roads before another motorway.
+  for(let i=0;i<=35;i++){
+   const node='P'+i;
+   graph.nodes.set(node,[i*.01,0]);graph.nodeKeys.push(node);
+   if(i===0)continue;
+   const previous='P'+(i-1),id='long-purple-'+i;
+   explored.add(id);
+   graph.edges.set(previous,[{to:node,id,meters:1000,
+    highway:'primary',speedKph:70}]);
+   graph.edges.set(node,[{to:previous,id,meters:1000,
+    highway:'primary',speedKph:70}]);
+  }
+  graph.nodes.set('TARGET',[.36,0]);graph.nodeKeys.push('TARGET');
+  graph.edges.get('P35')!.push({to:'TARGET',id:'motorway-target',
+   meters:1000,highway:'motorway',speedKph:100});
+  graph.edges.set('TARGET',[{to:'P35',id:'motorway-target',
+   meters:1000,highway:'motorway',speedKph:100}]);
+  const result=planReachableExplorerRoad(graph,'P0',explored,
+   new Set(['motorway-target']),new Set(),new Set(),'highway');
+  expect(result.route?.discoveryEdgeIds).toEqual(['motorway-target']);
+  expect(result.route?.edgeIds).toHaveLength(36);
+  expect(result.diagnostic.reason).toBe('planned');
+ });
+ it('prefers local eligible roads over a distant road even if a far pass is possible',()=>{
+  const graph=makeGraph();
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab','bc']),
+   new Set(['cd','ce']),new Set(),new Set(),'residential');
+  expect(result.route?.edgeIds.length).toBeLessThan(5);
+  expect(result.route?.discoveryEdgeIds.length).toBeGreaterThan(0);
+ });
+ it('still does not cross disconnected components on the extended search',()=>{
+  const graph=makeGraph();
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+   new Set(['xd']),new Set(),new Set(),'highway');
+  expect(result.route).toBeNull();
+ });
+
 });
