@@ -18,7 +18,8 @@ import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as
 import WorldMap from "./components/WorldMap";
 import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import DriversPanel from "./components/DriversPanel";
-import {canAcceptPassengerJob} from './simulation/driverSchedule';
+import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
+import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
@@ -248,6 +249,7 @@ export default function App(){
  const routeSequenceRef=useRef(0);
  // Ignore dispatcher responses computed before a manual explorer teleport.
  const teleportedExplorersRef=useRef(new Map<string,[number,number]>());
+ const shiftRestRetryRef=useRef(new Map<string,number>());
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
  const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
@@ -863,19 +865,75 @@ export default function App(){
      }
      const passengerTaxi=!delivered.kind||delivered.kind==='taxi';
      if(passengerTaxi){
+      const schedule=driverSchedule(delivered,old.drivers??[],gameNow);
       const canWork=canAcceptPassengerJob(delivered,old.drivers??[],gameNow);
-      // Do not interrupt a passenger trip. At completion the taxi becomes
-      // IDLE and parks on the next simulation tick if outside its duty window.
+      // Passenger trips are never interrupted. Once a taxi becomes IDLE,
+      // drive it to a real rest facility instead of spawning Zzz on the road.
+      // Old saves may contain a roadside roster pause with no rest stop:
+      // clear those and find a proper destination.
       if(delivered.scheduledShiftParked&&delivered.status==='PAUSED'){
-       if(!canWork)return delivered;
+       if(!canWork&&delivered.restStopId)return delivered;
+       if(!canWork&&!delivered.restStopId)
+        return {...delivered,status:'IDLE' as const,shiftParked:false,
+         scheduledShiftParked:false,pauseAtHome:false};
        return {...delivered,status:'IDLE' as const,shiftParked:false,
         scheduledShiftParked:false,pauseAtHome:false,restStopId:undefined,
         restStopName:undefined,restUntilGameMs:undefined};
       }
+      if(delivered.scheduledShiftParked&&delivered.status==='RETURNING'){
+       if(!canWork)return delivered; // Finish the transfer, not the sleep, only while off duty.
+       return {...delivered,status:'IDLE' as const,shiftParked:false,
+        scheduledShiftParked:false,pauseAtHome:false,path:[],edgeIds:[],
+        leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,restStopName:undefined};
+      }
       if(delivered.status==='IDLE'&&!canWork){
-       return {...delivered,status:'PAUSED' as const,shiftParked:true,
-        scheduledShiftParked:true,pauseAtHome:false,
-        path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+       const overnight=!schedule.onDuty;
+       const companyNow=companyRef.current;
+       if(!companyNow)return delivered;
+       const stops=shiftRestTargets(delivered,[...restStopsRef.current.values()],
+        companyNow,overnight);
+       const cached=operationalRoutesRef.current.get(delivered.id);
+       if(cached?.purpose==='shift'&&cached.graph===graph&&
+          cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
+        if(cached.ready){
+         operationalRoutesRef.current.delete(delivered.id);
+         if(cached.path&&cached.edgeIds){
+          const last=cached.path.at(-1)??delivered.position;
+          const destination=[...stops].sort((a,b)=>
+           meters(a.position,last)-meters(b.position,last))[0];
+          // The road junction must be genuinely beside the destination.
+          if(destination&&meters(last,destination.position)<=180){
+           const atStop=cached.path.length<2&&isAtShiftRestStop(delivered,destination,180);
+           const extra={scheduledShiftParked:true,shiftParked:true,
+            restStopId:destination.id,restStopName:destination.name,
+            restUntilGameMs:undefined};
+           if(atStop)return {...delivered,...extra,status:'PAUSED' as const,
+            pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
+           if(cached.path.length>=2)return {...delivered,...extra,
+            status:'RETURNING' as const,pauseAtHome:true,path:cached.path,
+            edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,
+            journeyEdges:[]};
+          }
+         }
+        }else if(now-cached.at<12000)return delivered;
+       }
+       if(cached&&!cached.ready&&now-cached.at<12000)return delivered;
+       // Do not spam route requests on iPhone when no stop is reachable yet.
+       if(now-(shiftRestRetryRef.current.get(delivered.id)??0)<8000)return delivered;
+       const worker=dispatchWorkerRef.current;
+       if(worker&&workerReadyRef.current&&stops.length){
+        shiftRestRetryRef.current.set(delivered.id,now);
+        const requestId=++routeSequenceRef.current;
+        operationalRoutesRef.current.set(delivered.id,{requestId,purpose:'shift',
+         position:[...delivered.position],status:delivered.status,at:now,
+         graph,path:null,edgeIds:null,ready:false});
+        worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,
+         requestId,vehicleId:delivered.id,purpose:'shift',from:delivered.position,
+         targets:stops.map(p=>p.position)});
+       }
+       // IDLE means waiting for a route, not sleeping. Dispatcher eligibility
+       // still excludes taxis outside their rostered on-duty window.
+       return delivered;
       }
      }
       if(passengerTaxi||delivered.kind==='explorer'){
