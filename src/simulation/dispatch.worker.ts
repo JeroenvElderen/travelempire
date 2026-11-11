@@ -2,6 +2,7 @@ import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
+import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -617,11 +618,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // pauseAtHome is set for active hotel, parking and depot journeys, not
    // only legacy automatic returns. A route with remaining directed legs
    // must never be erased just because dispatch worker state was recreated.
-   if(t.kind==='explorer'&&t.status==='RETURNING'&&t.pauseAtHome&&
-      (!t.path||t.path.length<2||!t.edgeIds?.length||t.leg>=t.edgeIds.length)&&
-      !t.serviceDestination&&!t.refillDestination&&!t.restStopId&&
-      !t.recoveryPending&&!t.refillRequested&&
-      !(t.deliveryUntil&&t.deliveryUntil>now)){
+   if(isObsoleteExplorerReturn(t,now)){
     obsoleteReturnRecoveries++;
     return {...t,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,
      path:[],edgeIds:[],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
