@@ -21,6 +21,7 @@ import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/research
 import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
+import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/explorerRestPolicy';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
@@ -974,21 +975,34 @@ export default function App(){
          (drivingMs>=4*3600000||hotelDrivingMs>=9*3600000)&&!delivered.refillRequested){
         if(delivered.kind==='explorer'&&!canDepartPurple(delivered))return delivered;
         const overnight=hotelDrivingMs>=9*3600000;
-        const stops=[...restStopsRef.current.values()].filter(p=>overnight?p.kind==='hotel':p.kind!=='hotel')
-         .sort((a,b)=>meters(delivered.position,a.position)-meters(delivered.position,b.position)).slice(0,10);
+        const stops=nearbyExplorerRestStops(delivered.position,
+         [...restStopsRef.current.values()],overnight);
         if(stops.length){
          const key=delivered.id;
          const cached=operationalRoutesRef.current.get(key);
          if(cached?.purpose==='shift'&&cached.graph===graph&&cached.status===delivered.status&&meters(cached.position,delivered.position)<15){
-          if(cached.ready&&cached.path&&cached.edgeIds){
+          if(cached.ready){
+           if(cached.path&&cached.edgeIds&&
+              reasonableExplorerRestRoute(cached.path,overnight)){
+            operationalRoutesRef.current.delete(key);
+            const last=cached.path[cached.path.length-1];
+            const destination=[...stops].sort((x,y)=>meters(x.position,last)-meters(y.position,last))[0];
+            if(destination){
+             const hotel=destination.kind==='hotel';
+             const extra={shiftParked:true,restUntilGameMs:undefined,
+              restStopId:(hotel?'hotel:':'parking:')+destination.id,
+              restStopName:destination.name};
+             if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,
+              pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
+             return {...delivered,...extra,status:'RETURNING' as const,
+              pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,
+              distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+            }
+           }
+           // The route is missing or too long. Try again later, not every tick.
+           if(now-cached.at<30000)return delivered;
            operationalRoutesRef.current.delete(key);
-           const last=cached.path[cached.path.length-1];
-           const destination=[...stops].sort((x,y)=>meters(x.position,last)-meters(y.position,last))[0];
-           const extra={shiftParked:true,restUntilGameMs:undefined,restStopId:(overnight?'hotel:':'parking:')+destination.id,restStopName:destination.name};
-           if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
-           return {...delivered,...extra,status:'RETURNING' as const,pauseAtHome:true,path:cached.path,edgeIds:cached.edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
-          }
-          if(now-cached.at<12000)return delivered;
+          }else if(now-cached.at<12000)return delivered;
          }
          const worker=dispatchWorkerRef.current;
          if(worker&&workerReadyRef.current){
