@@ -559,6 +559,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(const target of msg.targets){
     const to=nearest(graph,target);
     if(!from||!to)continue;
+    // Hotels and parking POIs must have a genuinely nearby road entrance.
+    // Otherwise the taxi could show Zzz at an unrelated road junction.
+    if(msg.purpose==='shift'){
+     const entrance=graph.nodes.get(to);
+     if(!entrance||meters(entrance,target)>180)continue;
+    }
     planned=route(graph,from,to);
     if(planned)break;
    }
