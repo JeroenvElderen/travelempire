@@ -1005,10 +1005,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  // Only completed graph edges are discovered. advanceTaxi reports an edge
  // when the vehicle reaches its destination node, never partway through.
  // Discovery is not the same as driving: transit on another category never reveals it.
-  // The assignment's discoveryEdgeIds are the sole authority for explorer discoveries.
-  // Operational journeys to hotels, parking and fuel/service facilities
-  // also discover roads physically traversed, regardless of specialist class.
-  // Other returning journeys (including depot travel) remain transit-only.
+  // ONLY dedicated explorers may discover roads. Passenger taxis always
+  // drive on the discovered network and never convert a traversed edge to
+  // purple, including on pickup, drop-off and operational return trips.
+  // Explorer assignments are the sole authority for new discoveries.
   const operationalDiscovery=taxi.kind==='explorer'&&taxi.status==='RETURNING'&&
    Boolean(taxi.restStopId||taxi.refillDestination||taxi.serviceDestination);
   const eligible=taxi.kind==='explorer'?new Set(
@@ -1029,7 +1029,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
     if(edge?.highway==='motorway'||edge?.highway==='motorway_link')return true;
    }
    return false;
-  }):advanced.crossed;
+  }):[];
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
@@ -1037,7 +1037,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,t.lastRoadTo===from?t.lastRoadFrom??'':''):route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
-   return{taxi:t,earned:0,finished:false,discovered:advanced.crossed,distanceMeters:advanced.distanceMeters};
+   return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
   }
  }
  if(t.status==='RETURNING'&&t.pauseAtHome){
