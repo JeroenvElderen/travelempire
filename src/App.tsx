@@ -17,6 +17,7 @@ import { useEffect, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, Hotel, X, PanelLeftClose, PanelLeftOpen, CircleDollarSign, CalendarClock, Layers3, ScrollText, Plane, Truck, BusFront, Car, Anchor, Zap, ChartNoAxesCombined, HardHat, Palmtree, BriefcaseBusiness, GraduationCap } from "lucide-react";
 import WorldMap from "./components/WorldMap";
 import {resolvePurpleExplorerStart} from './simulation/explorerStart';
+import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/researchExplorerGrant';
 import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
@@ -415,17 +416,43 @@ export default function App(){
  // request destination roads through the existing on-demand route prefetcher.
  const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<1)throw Error('Requires 5,000 discovered roads and the universal explorer.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
  const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
- // Apply legacy research without creating additional scout vehicles.
- // Existing completion progress is kept; the universal explorer remains unique.
+ // Grant two additional vehicles of EVERY explorer role when level 1
+ // finishes. A legacy research completion only set explorerExpansionApplied
+ // without spawning anything; the separate marker grants those saves too.
+ // Wait for actual purple roads so new vehicles never spawn on red segments.
  useEffect(()=>{
-  if(!company||Research.level(research,'explorerExpansion')<1)return;
+  if(!company||!graph||!graph.nodes.size||
+     Research.level(research,'explorerExpansion')<1)return;
   const current=fleetSaveRef.current;
-  if(current.explorerExpansionApplied)return;
-  const updated:FleetState={...current,explorerExpansionApplied:true,
-   transactions:[{id:crypto.randomUUID(),time:Date.now(),description:'Universal Explorer optimisation research applied',amount:0},...(current.transactions??[])].slice(0,100)};
-  saveFleet(company.id,{...updated,exploredEdgeIds:[]});
-  fleetSaveRef.current=updated;setFleet(updated);
- },[company?.id,research]);
+  if(current.explorerExpansionVehiclesGranted||!current.taxis.length)return;
+  if(!EXPANSION_ROLES.every(role=>current.taxis.some(t=>
+   t.kind==='explorer'&&t.explorerRole===role)))return;
+  const discovered=new Set([...(discoveredCacheRef.current?.ids??[]),
+   ...(current.exploredEdgeIds??[])]);
+  if(!discovered.size)return;
+  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
+  let location:[number,number]|undefined;
+  let best=Infinity;
+  for(const [node,links] of graph.edges){
+   if(!links.some(link=>discovered.has(link.id)))continue;
+   const point=graph.nodes.get(node);
+   if(!point)continue;
+   const distance=meters(point,hq);
+   if(distance<best){best=distance;location=[...point];}
+  }
+  if(!location)return; // A future road-tile update can retry this.
+  const updated=grantExplorerInfrastructure(current,location);
+  if(updated===current)return;
+  const newCount=updated.taxis.length-current.taxis.length;
+  const rewarded:FleetState={...updated,transactions:[
+   {id:crypto.randomUUID(),time:Date.now(),
+    description:`Universal Explorer Infrastructure: ${newCount} explorers granted`,amount:0},
+   ...(current.transactions??[])].slice(0,100)};
+  fleetSaveRef.current=rewarded;
+  setFleet(rewarded);
+  saveFleet(company.id,{...rewarded,exploredEdgeIds:[]});
+  diagnostic('research:explorer-expansion',`granted=${newCount} total=${rewarded.taxis.length}`);
+ },[company?.id,graph,research,fleet.taxis.length]);
 
  useEffect(()=>{
   let active=true;
