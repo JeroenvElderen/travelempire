@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {classifyActivity,dayFinance,recentActivity} from './liveFinance';
+import {classifyActivity,dayFinance,dayExpenseBreakdown,recentActivity} from './liveFinance';
 import type {FinancePeriod,FinancialTransaction} from './taxi';
 
 const time=Date.UTC(2026,11,17,8,50);
@@ -28,6 +28,16 @@ describe('live finance header',()=>{
   expect(classifyActivity(entry('Vehicle purchase',-20000))).toBe('financing');
   expect(classifyActivity(entry('Scheduled loan repayment',-150))).toBe('financing');
   expect(classifyActivity(entry('Property income',120))).toBe('income');
+ });
+ it('shows real expense categories and residual costs from posted daily history',()=>{
+  const history:FinancePeriod[]=[{
+   day:'2026-12-17',revenue:100,expenses:45,trips:1,
+   categories:{fuel:10,maintenance:5,exploration:0,payroll:15,insurance:2,overhead:3,interest:0}
+  }];
+  const breakdown=dayExpenseBreakdown(history,time);
+  expect(breakdown.find(e=>e.category==='payroll')?.value).toBe(15);
+  expect(breakdown.find(e=>e.category==='other')?.value).toBe(10);
+  expect(breakdown.every(e=>e.value>0)).toBe(true);
  });
  it('limits the expandable activity list to the newest 20 records',()=>{
   const entries=Array.from({length:25},(_,i)=>entry('Taxi fare '+i,12));
