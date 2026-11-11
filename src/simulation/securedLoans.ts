@@ -21,7 +21,8 @@ export function lendingAssessment(company:Company,fleet:FleetState,gameNow:numbe
  const outstanding=(fleet.loans??[]).reduce((sum,l)=>sum+Math.max(0,l.balance),0)+
   (fleet.corporate?.loans??[]).reduce((sum,l)=>sum+Math.max(0,l.balance),0);
  const score=creditScore(company.cash,fleet.loans??[],(fleet.leases??[]).length,
-  fleet.financePaymentsMade??0,(fleet.creditMisses??0)+(fleet.creditDefaults??0)*3);
+  fleet.financePaymentsMade??0,(fleet.creditMisses??0)+(fleet.creditDefaults??0)*3,
+  valuation.value);
  // The FIRST secured loan can borrow up to the full appraised company value
  // at strong credit, less other existing liabilities. Loans never create
  // unlimited additional borrowing capacity simply by adding cash.
