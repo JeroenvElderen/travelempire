@@ -18,7 +18,7 @@ describe('scheduled taxi rest destinations',()=>{
  it('uses nearby hotels for overnight rest and keeps assigned depot as fallback',()=>{
   const choices=shiftRestTargets(taxi,stops,company,true);
   expect(choices[0].id).toBe('h1');
-  expect(choices.map(c=>c.kind)).toEqual(['hotel','depot']);
+  expect(choices.map(c=>c.kind)).toEqual(['hotel','parking','parking','depot']);
  });
  it('prefers nearby parking for short breaks and excludes hotels',()=>{
   const choices=shiftRestTargets(taxi,stops,company,false);
@@ -48,11 +48,31 @@ describe('scheduled taxi rest destinations',()=>{
    position:[23.9,37.9] as [number,number],path:[nodes.get('A')!,nodes.get('B')!],
    edgeIds:['ab'],leg:0,distanceIntoLeg:0,pauseAtHome:true,shiftParked:true,
    scheduledShiftParked:true,restStopId:'h1',restStopName:'Hotel',
+   restStopPosition:[23.9005,37.9] as [number,number],
    fare:0,completed:0,driver:'Test',name:'Taxi 1'};
   expect(tickTaxi(travelling,graph,0.1).taxi.status).toBe('RETURNING');
   const arrived=tickTaxi(travelling,graph,60).taxi;
   expect(arrived.status).toBe('PAUSED');
   expect(arrived.position).toEqual(nodes.get('B'));
   expect(arrived.restStopId).toBe('h1');
+ });
+ it('does not show Zzz on the wrong road when saved destination metadata is missing',()=>{
+  const nodes=new Map([
+   ['A',[23.9,37.9] as [number,number]],
+   ['B',[23.9005,37.9] as [number,number]]
+  ]);
+  const graph:RoadGraph={nodes,nodeKeys:['A','B'],edges:new Map([
+   ['A',[{id:'ab',to:'B',meters:45,speedKph:30,highway:'service'}]],
+   ['B',[]]
+  ])};
+  const vehicle:Taxi={id:'t1',kind:'taxi',name:'Taxi 1',driver:'Driver',
+   position:[23.9,37.9],status:'RETURNING',path:[nodes.get('A')!,nodes.get('B')!],
+   edgeIds:['ab'],leg:0,distanceIntoLeg:0,pauseAtHome:true,shiftParked:true,
+   scheduledShiftParked:true,restStopId:'h1',restStopName:'Hotel',
+   restStopPosition:[23.95,37.9],fare:0,completed:0};
+  const arrived=tickTaxi(vehicle,graph,60).taxi;
+  expect(arrived.status).toBe('IDLE');
+  expect(arrived.restStopId).toBeUndefined();
+  expect(arrived.scheduledShiftParked).toBe(false);
  });
 });
