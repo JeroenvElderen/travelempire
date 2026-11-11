@@ -29,3 +29,29 @@ export function recentActivity(transactions:readonly FinancialTransaction[],limi
  return transactions.filter(t=>Number.isFinite(t.amount)).slice(0,limit)
   .map(t=>({...t,type:classifyActivity(t)}));
 }
+
+export const EXPENSE_LABELS:Record<keyof NonNullable<FinancePeriod['categories']>,string>={
+ fuel:'Petrol / refuelling',maintenance:'Maintenance / servicing',
+ exploration:'Exploration',payroll:'Driver wages',
+ insurance:'Insurance',overhead:'Overhead / depots',interest:'Loan interest'
+};
+export function dayExpenseBreakdown(history:readonly FinancePeriod[],gameNow:number){
+ const day=new Date(gameNow).toISOString().slice(0,10);
+ const sums=new Map<string,number>();
+ let recorded=0;
+ for(const period of history){
+  if(period.day!==day||!period.categories)continue;
+  for(const [category,value] of Object.entries(period.categories)){
+   if(!Number.isFinite(value)||value<=0)continue;
+   sums.set(category,(sums.get(category)??0)+value);
+   recorded+=value;
+  }
+ }
+ const other=Math.max(0,dayFinance(history,gameNow).expenses-recorded);
+ if(other>.01)sums.set('other',other);
+ return [...sums].filter(([,value])=>value>.005)
+  .sort((a,b)=>b[1]-a[1])
+  .map(([category,value])=>({category,
+   label:EXPENSE_LABELS[category as keyof typeof EXPENSE_LABELS]??'Other operating costs',
+   value}));
+}
