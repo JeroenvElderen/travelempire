@@ -965,9 +965,9 @@ export default function App(){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
        const hotelDrivingMs=delivered.drivingSinceHotelGameMs??0;
        if(delivered.status==='PAUSED'&&delivered.shiftParked){
-        const until=delivered.restUntilGameMs??(gameNow+(delivered.restStopId?.startsWith('hotel:')?9*3600000:30*60000));
+        const until=delivered.restUntilGameMs??(gameNow+((delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?9*3600000:30*60000));
         if(gameNow<until)return {...delivered,restUntilGameMs:until};
-        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:delivered.restStopId?.startsWith('hotel:')?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
+        return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:(delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined};
        }
        // Passenger taxis use the roster's 12-hour shift and 30-minute
        // scheduled break, not an independent one-hour-driving rest timer.
@@ -990,7 +990,7 @@ export default function App(){
             if(destination){
              const hotel=destination.kind==='hotel';
              const extra={shiftParked:true,restUntilGameMs:undefined,
-              restStopId:(hotel?'hotel:':'parking:')+destination.id,
+              restStopId:(hotel?'hotel:':overnight?'overnight:parking:':'parking:')+destination.id,
               restStopName:destination.name};
              if(cached.path.length<2)return {...delivered,...extra,status:'PAUSED' as const,
               pauseAtHome:false,path:[],edgeIds:[],speedKph:0};
