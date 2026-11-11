@@ -4,6 +4,7 @@ import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
+import {hasPrematureRedTransit} from './explorerRouteRules';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -786,7 +787,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      // Keep only routes that start from an actual discovered junction, and
      // never transit an undiscovered edge unless this mission discovers it.
      const invalidStart=!!startNode&&!purpleStartNear(taxi.path[0],explored);
-     const firstForbidden=invalidStart?taxi.leg:taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&
+     const invalidRedApproach=hasPrematureRedTransit(taxi.edgeIds,explored,
+      new Set(taxi.discoveryEdgeIds??[]));
+     const firstForbidden=invalidStart||invalidRedApproach?taxi.leg:taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&
       (!permitted.has(id)||(!explored.has(id)&&!discoveryAssignment.has(id)&&!validEscapeTransit.has(id))));
     if(firstForbidden<0)continue;
     if(firstForbidden<=taxi.leg){
@@ -942,7 +945,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(msg.revision!==activeRevision)return;
     scoutRoutingMs+=performance.now()-extensionRouteStarted;
    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
-    if(extension.status!=='EXPLORING'||extension.path.length<2){failedRouteSearches++;failedRouteCache.set('successor|'+taxi.id,{signature:failureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});successorNegativeCache.set(taxi.id,{signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));continue;}
+    if(extension.status!=='EXPLORING'||extension.path.length<2||
+       hasPrematureRedTransit(extension.edgeIds,projectedExplored,
+        new Set(extension.discoveryEdgeIds??[]))){failedRouteSearches++;failedRouteCache.set('successor|'+taxi.id,{signature:failureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});successorNegativeCache.set(taxi.id,{signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));continue;}
     explorerSearchTier.set(taxi.id,0);
     successorNegativeCache.delete(taxi.id);failedRouteCache.delete('successor|'+taxi.id);
     // The nearest node at the destination must match the new route's start.
@@ -1004,6 +1009,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        const newEdges=new Set(route.discoveryEdgeIds);
        const escapeOnly=new Set(route.escapeTransitEdgeIds);
        const routeValid=completed.edgeIds.length===completed.path.length-1&&
+        !hasPrematureRedTransit(completed.edgeIds,explored,newEdges)&&
         [...newEdges].every(id=>allowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
         [...escapeOnly].every(id=>!explored.has(id)&&!newEdges.has(id)&&!reservedEdges.has(id))&&
         completed.edgeIds.every((id,i)=>{
@@ -1123,6 +1129,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     scoutRoutingMs+=performance.now()-scoutRouteStarted;
    scoutTimings.push({vehicleId:taxis[index].id,role:taxis[index].explorerRole??'',ms:Math.round(performance.now()-idleStarted),phase:'idle',result:scout.status});
     let assignment=scout;
+    if(assignment.status==='EXPLORING'&&
+       hasPrematureRedTransit(assignment.edgeIds,explored,
+        new Set(assignment.discoveryEdgeIds??[]))){
+     explorerPlanSkipReason.set(idleVehicle.id,'red-transit-before-discovery');
+     assignment=idleVehicle;
+    }
     // No immediate second expensive search: retry in a later planning turn.
     if(assignment.status!=='IDLE'){
      explorerSearchTier.set(idleVehicle.id,0);
@@ -1233,6 +1245,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // first eligible road and AFTER it as a one-way escape. It never becomes
     // purple; every transit leg must be a real, directed graph connection.
     const firstDiscovery=route.edgeIds.findIndex(id=>selected.has(id));
+    if(hasPrematureRedTransit(route.edgeIds,projected,selected)){
+     reject('cross-class-red-before-first-discovery');continue;
+    }
     const validEscape=escapeOnly.size===0||(
      firstDiscovery>=0&&
      [...escapeOnly].every(id=>!selected.has(id)&&!projected.has(id)&&
