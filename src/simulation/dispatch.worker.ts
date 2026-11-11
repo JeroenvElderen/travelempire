@@ -3,6 +3,7 @@ import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {isObsoleteExplorerReturn} from './savedReturnJourney';
+import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
 import {demandAt} from './demand';
 import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
@@ -718,6 +719,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const poiTargets=(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]).slice(0,150);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
+   const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
+    explored,poiRoads);
+   // An initial purple service/parking segment must not give the motorway
+   // specialist permission to cross red streets toward a distant motorway.
+   for(let i=0;i<taxis.length;i++){
+    const t=taxis[i];
+    if(t.kind==='explorer'&&t.status==='EXPLORING'&&
+       !specialistCanDepart(t,unlockedRoles)){
+     taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],
+      discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
+      leg:0,distanceIntoLeg:0,speedKph:0,routeInvalid:true};
+     explorerPlanSkipReason.set(t.id,'waiting-for-connected-'+(t.explorerRole??'road')+'-frontier');
+    }
+   }
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
@@ -861,7 +876,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    if(explorerOrder.length)nextExplorerIndex=(nextExplorerIndex+1)%explorerOrder.length;
    for(const index of orderedExplorerIndices){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil)continue;
+    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil||
+       !specialistCanDepart(taxi,unlockedRoles))continue;
 
     const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
@@ -947,6 +963,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(const index of idleOrder){
     const idleVehicle=taxis[index];
     if(idleVehicle.kind!=='explorer'||idleVehicle.ferryTrip||idleVehicle.status!=='IDLE')continue;
+    if(!specialistCanDepart(idleVehicle,unlockedRoles)){
+     explorerPlanSkipReason.set(idleVehicle.id,
+      'waiting-for-connected-'+(idleVehicle.explorerRole??'road')+'-frontier');
+     continue;
+    }
     // A skipped candidate counts as considered, ensuring every idle explorer
     // eventually moves to the front regardless of retry or mission status.
     explorerLastConsidered.set(idleVehicle.id,++explorerConsiderationSequence);
@@ -1140,6 +1161,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updateDiscoveryIndex(graph,explored,hqNode);
    const poiTargets=(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]).slice(0,150);
    updatePoiIndex(graph,poiTargets);
+   const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
+    explored,poiRoadsIndex);
+   for(let i=0;i<taxis.length;i++){
+    const t=taxis[i];
+    if(t.kind==='explorer'&&t.status==='EXPLORING'&&
+       !specialistCanDepart(t,unlockedRoles)){
+     taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],
+      discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
+      leg:0,distanceIntoLeg:0,speedKph:0,routeInvalid:true};
+     explorerPlanSkipReason.set(t.id,'waiting-for-connected-'+(t.explorerRole??'road')+'-frontier');
+    }
+   }
    // Preserve operational holds and recover only genuinely idle scouts.
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i];
@@ -1164,6 +1197,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const current=taxis[index];
     if(current.kind!=='explorer')continue;
     const proposal=planningResults.get(current.id);
+    if(!specialistCanDepart(current,unlockedRoles)){
+     planningResults.delete(current.id);
+     explorerPlanSkipReason.set(current.id,
+      'waiting-for-connected-'+(current.explorerRole??'road')+'-frontier');
+     continue;
+    }
     if(!proposal)continue;
     planningResults.delete(current.id);
     // Make rejected suggestions actionable in the downloadable diagnostics.
@@ -1234,6 +1273,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // the explorer ID; failed POI searches do not block other specialists.
    const inFlight=new Set([...planningRequests.values()].map(r=>r.id));
    const explorers=taxis.filter(t=>t.kind==='explorer'&&t.status==='IDLE'&&
+    specialistCanDepart(t,unlockedRoles)&&
     !t.ferryTrip&&!t.deliveryUntil&&!t.serviceDestination&&
     !t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
     energyPercent(t)>10&&!inFlight.has(t.id)&&
@@ -1283,6 +1323,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // specialists always take precedence over moving explorers' lookahead.
    if(explorers.length===0){
     const moving=taxis.filter(t=>t.kind==='explorer'&&t.status==='EXPLORING'&&
+     specialistCanDepart(t,unlockedRoles)&&
      !t.ferryTrip&&!t.deliveryUntil&&t.path.length>=2&&
      t.edgeIds.length-t.leg<=10&&!inFlight.has(t.id)&&
      (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
