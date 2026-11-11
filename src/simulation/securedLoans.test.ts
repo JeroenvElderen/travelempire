@@ -4,8 +4,12 @@ import type {FleetState,Taxi,BusinessLoan} from './taxi';
 import {advanceSecuredLoans,appraisedVehicleValue,createSecuredLoan,lendingAssessment,
  securedQuote,LOAN_TERMS} from './securedLoans';
 
-const company={id:'test',name:'Test Taxi',cash:250000,
- headquarters:{lng:23.9,lat:37.9},depots:[]} as Company;
+const company:Company={
+ id:'test',name:'Test Taxi',createdAt:'2026-11-11T00:00:00.000Z',
+ startingCapital:250000,cash:250000,currency:'EUR',
+ regionClaimStatus:'pending',depotStatus:'not_placed',
+ headquarters:{lng:23.9,lat:37.9},depots:[]
+};
 const emptyFleet=():FleetState=>({taxis:[],revenue:0,completed:0,loans:[]});
 const vehicle=(id:string,price:number,kind:'taxi'|'explorer'='taxi'):Taxi=>({
  id,kind,name:id,driver:'Driver',position:[23.9,37.9],
