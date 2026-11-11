@@ -806,6 +806,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if(taxi.kind!=='explorer'||taxi.status!=='IDLE'||taxi.deliveryUntil||
+       !specialistCanDepart(taxi,unlockedRoles)||
        taxi.refillRequested||taxi.serviceDestination||taxi.refillDestination||
        energyPercent(taxi)<=10||purpleStartNear(taxi.position,explored))continue;
     if(performance.now()<(strandedRecoveryRetryAt.get(taxi.id)??0))continue;
