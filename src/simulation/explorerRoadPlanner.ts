@@ -23,6 +23,7 @@ export function planReachableExplorerRoad(
   eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
  if(!graph.nodes.has(start))return {route:null,diagnostic:{...diag,reason:'no-start-node'}};
  const distances=new Map<string,number>([[start,0]]);
+ const redDistances=new Map<string,number>([[start,0]]);
  const parent=new Map<string,{from:string;id:string}>();
  const heap:Array<{node:string;distance:number}>=[{node:start,distance:0}];
  const push=(item:{node:string;distance:number})=>{
@@ -124,9 +125,12 @@ export function planReachableExplorerRoad(
    // Those roads are discovery targets, not ordinary red connectors.
    if(!purple&&(eligible.has(edge.id)||reservedRoads.has(edge.id)||
       reservedTargets.has(edge.to)))continue;
+   const redDistance=(redDistances.get(current.node)??0)+(purple?0:edge.meters);
+   if(redDistance>maxRedTransitMeters)continue;
    const next=current.distance+edge.meters*(purple?1:crossClassPenalty);
    if(next>maxTravel||next>=(distances.get(edge.to)??Infinity))continue;
-   distances.set(edge.to,next);parent.set(edge.to,{from:current.node,id:edge.id});
+   distances.set(edge.to,next);redDistances.set(edge.to,redDistance);
+   parent.set(edge.to,{from:current.node,id:edge.id});
    push({node:edge.to,distance:next});
   }
  }
@@ -148,16 +152,9 @@ export function planReachableExplorerRoad(
  // Red access roads used to reach our target are transit-only and remain
  // undiscovered. Bound these crossings so a specialist cannot traverse
  // arbitrary distances through the network before doing useful exploration.
- let redTransitMeters=0;
  const preDiscoveryTransit:string[]=[];
- for(let i=0;i<ids.length;i++){
-  if(explored.has(ids[i]))continue;
-  const edge=(graph.edges.get(keys[i])??[]).find(e=>e.id===ids[i]&&e.to===keys[i+1]);
-  redTransitMeters+=edge?.meters??0;
-  if(!preDiscoveryTransit.includes(ids[i]))preDiscoveryTransit.push(ids[i]);
- }
- if(redTransitMeters>maxRedTransitMeters)
-  return {route:null,diagnostic:{...diag,reason:'cross-class-transit-too-long'}};
+ for(const id of ids)
+  if(!explored.has(id)&&!preDiscoveryTransit.includes(id))preDiscoveryTransit.push(id);
  keys.push(selected.to);ids.push(selected.id);
  // Follow connected straight road segments, rather than stop at every OSM
  // micro-edge. A turn is postponed to the next physical junction.
