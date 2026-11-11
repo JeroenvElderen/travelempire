@@ -96,11 +96,14 @@ export function planReachableExplorerRoad(
   return false;
  };
  const maxVisits=role==='highway'||role==='poi'?30000:12000;
- const maxTravel=role==='highway'||role==='poi'?85000:26000;
+ // Keep specialists in an efficient work area. Long cross-city transfers
+ // just to paint a tiny isolated road waste fuel and time; another explorer
+ // should uncover nearer connectors first.
+ const maxTravel=role==='highway'||role==='poi'?24000:14000;
  // Prefer known purple roads; cross-class red roads are legal to drive on
  // but expensive for search scoring, so they are used only when useful.
  const crossClassPenalty=7;
- const maxRedTransitMeters=role==='highway'||role==='poi'?18000:6500;
+ const maxRedTransitMeters=role==='highway'||role==='poi'?5000:3500;
  let winner:{from:string;to:string;id:string}|null=null;
  while(heap.length&&diag.visitedPurpleNodes<maxVisits){
   const current=pop();
