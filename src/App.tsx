@@ -398,7 +398,7 @@ export default function App(){
     const stranded=shouldAutomaticallyRecover(t,stalledMs);
     if(!manual&&(!stranded||meters(t.position,depot)<75))continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
-    const purpose:RecoveryJob['purpose']=manual?(manualRecoveryPurposeRef.current.get(t.id)??'depot'):serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
+    const purpose:RecoveryJob['purpose']=manual?(manualRecoveryPurposeRef.current.get(t.id)??'depot'):serviceDue?'service':energyPercent(t)<=0||t.refillDestination?'fuel':'depot';
     const pickup=buildRoute(depot,t.position);
     if(!pickup)continue;
     const parking=[...restStopsRef.current.values()].filter(p=>p.kind==='parking'||p.kind==='services'||p.kind==='rest_area')
