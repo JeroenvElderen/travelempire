@@ -1,9 +1,10 @@
 import maplibregl from 'maplibre-gl';
 import type {FerryNetwork,Coordinate} from '../maritime/ferries';
+import {ferryPhase} from './ferryService';
 
 // Visual timetable only: ferries move automatically even without a vehicle aboard.
 // No simulation state, purchases, or taxi routes are modified.
-type Sailing={id:string;geometry:Coordinate[];cumulative:number[];length:number;durationMs:number};
+type Sailing={id:string;geometry:Coordinate[];cumulative:number[];length:number;durationMinutes:number};
 function distance(a:Coordinate,b:Coordinate):number{
  const lat=(a[1]+b[1])*Math.PI/360;
  return Math.hypot((b[0]-a[0])*111320*Math.cos(lat),(b[1]-a[1])*111320);
@@ -18,7 +19,7 @@ function position(s:Sailing,progress:number):{point:Coordinate;bearing:number}{
  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
  return {point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
 }
-export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void,companyId?:string,onPositions?:(positions:Array<{id:string;point:Coordinate}>)=>void):()=>void{
+export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwork,owned:ReadonlySet<string>,home:Coordinate|undefined,onSailed?:(routeId:string,segments:Array<[Coordinate,Coordinate]>)=>void,_companyId?:string,onPositions?:(positions:Array<{id:string;point:Coordinate}>)=>void,getGameNow:()=>number=()=>Date.now(),getServiceStarts:()=>Readonly<Record<string,number>>=()=>({})):()=>void{
  const ports=new Map(network.ports.map(p=>[p.id,p.position]));
  const sailings:Sailing[]=network.routes.flatMap(r=>{
   if(!owned.has(r.id)||r.geometry.length<2||r.durationMinutes<=0)return [];
@@ -34,25 +35,9 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
   const cumulative=[0];
   for(let i=1;i<geometry.length;i++)cumulative.push(cumulative[i-1]+distance(geometry[i-1],geometry[i]));
   const length=cumulative[cumulative.length-1];
-  return length>1?[{id:r.id,geometry,cumulative,length,durationMs:Math.max(60000,r.durationMinutes*60000/4)}]:[];
+  return length>1?[{id:r.id,geometry,cumulative,length,durationMinutes:r.durationMinutes}]:[];
  });
  const markers=new Map<string,maplibregl.Marker>();
- // Wall-clock epochs survive refreshes and component remounts. Each purchased
- // route has its own departure time, scoped to the company and browser.
- const epochs=new Map<string,number>();
- const nowAtStart=Date.now();
- for(const sailing of sailings){
-  const key=companyId?`travelempire.ferry.departure.${companyId}.${sailing.id}`:undefined;
-  let epoch=nowAtStart;
-  if(key){
-   try{
-    const saved=Number(localStorage.getItem(key));
-    if(Number.isFinite(saved)&&saved>0&&saved<=nowAtStart)epoch=saved;
-    else localStorage.setItem(key,String(epoch));
-   }catch{ /* Private browsing may disallow storage; keep session fallback. */ }
-  }
-  epochs.set(sailing.id,epoch);
- }
  const lastSailed=new Map<string,{progress:number;cycle:number;at:number}>();
  let stopped=false;
  const refresh=()=>{
@@ -64,16 +49,17 @@ export function startAutomaticFerryMarkers(map:maplibregl.Map,network:FerryNetwo
   // Cap DOM markers and work per update. Do not bind to map move/render events.
   for(const sailing of sailings){
    if(active.size>=35)break;
-   const elapsed=Math.max(0,now-(epochs.get(sailing.id)??now));
-   const cycle=(elapsed/sailing.durationMs)%2;
-   const forward=cycle<1;
-   const progress=forward?cycle:2-cycle;
+   const started=getServiceStarts()[sailing.id];
+   if(!Number.isFinite(started))continue;
+   const phase=ferryPhase(started,sailing.durationMinutes,getGameNow());
+   const forward=phase.direction==='outbound';
+   const progress=forward?phase.progress:1-phase.progress;
    const {point,bearing}=position(sailing,progress);
    const prior=lastSailed.get(sailing.id);
-   const cycleIndex=Math.floor(elapsed/sailing.durationMs);
+   const cycleIndex=phase.voyageIndex;
    if(!prior||prior.cycle!==cycleIndex){
     lastSailed.set(sailing.id,{progress,cycle:cycleIndex,at:now});
-   }else if(now-prior.at>=2000&&Math.abs(progress-prior.progress)>0.000001){
+   }else if(phase.phase==='sailing'&&now-prior.at>=2000&&Math.abs(progress-prior.progress)>0.000001){
     // Trace each imported route vertex rather than drawing a shortcut
     // between two sampled boat positions around bends.
     const lo=Math.min(prior.progress,progress)*sailing.length;
