@@ -181,3 +181,17 @@
 .finance-v214 button:disabled{opacity:.45;box-shadow:none}
 @media(max-width:650px){.finance-heading{padding:15px;gap:10px;border-radius:18px}.finance-v214 .company-metrics article{border-radius:14px}}
 @media(prefers-reduced-motion:reduce){.finance-v214 *{scroll-behavior:auto}}
+
+/* Asset-backed business lending configurator */
+.finance-v214 .loan-configurator{display:flex;flex-direction:column;align-items:stretch;gap:13px;padding:20px;border:1px solid #3b596a;background:linear-gradient(135deg,#172b3d,#132331);border-radius:16px}
+.finance-v214 .loan-configurator h3{margin:0 0 4px;font-size:18px}
+.finance-v214 .loan-configurator label{color:#b9d0dd;font-size:12px;font-weight:650}
+.finance-v214 .loan-configurator input[type="number"],.finance-v214 .loan-configurator select{width:100%;min-width:0;padding:12px 13px;background:#102333;border:1px solid #426074;color:#f4fbff;border-radius:10px;font:inherit}
+.finance-v214 .loan-configurator input[type="range"]{width:100%;accent-color:#68dbc5;cursor:pointer}
+.finance-v214 .loan-configurator input[type="range"]:disabled{opacity:.35;cursor:not-allowed}
+.finance-v214 .loan-configurator .company-metrics{grid-template-columns:repeat(2,minmax(0,1fr));margin:7px 0}
+.finance-v214 .loan-configurator .company-metrics article{padding:15px}
+.finance-v214 .loan-configurator p{color:#abc3cf;font-size:12px;line-height:1.6;margin:2px 0}
+.finance-v214 .loan-configurator>button{align-self:flex-start;padding:12px 20px;background:#164a42;color:#d5fff4;border:1px solid #56bea9;border-radius:10px;font-weight:750;cursor:pointer}
+.finance-v214 .loan-configurator>button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:550px){.finance-v214 .loan-configurator{padding:15px}.finance-v214 .loan-configurator>button{width:100%}.finance-v214 .loan-configurator .company-metrics article{padding:12px}}
