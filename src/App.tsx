@@ -21,6 +21,7 @@ import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/research
 import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
+import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
 import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/explorerRestPolicy';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
@@ -390,13 +391,11 @@ export default function App(){
     const manual=manualRecoveryRequestsRef.current.has(t.id);
     if(updated.some(job=>job.targetId===t.id)||t.recoveryPending||(!manual&&(t.status==='PAUSED'||t.status==='REFUELLING'||t.status==='SERVICING'))||(t.deliveryUntil??0)>now)continue;
     const watch=idleWatch.current.get(t.id);
-    const stalled=!!watch&&now-watch.since>=30000;
-    const empty=energyPercent(t)<=0;
-    // Explorers may wait for an eligible section or worker reroute.
-    // A 30-second movement timeout is not a breakdown: never tow them
-    // unless their battery/fuel is actually depleted.
-    const stranded=empty||((t.kind!=='explorer')&&
-     (t.status==='RETURNING'||t.status==='EXPLORING')&&stalled);
+    const stalledMs=watch?now-watch.since:0;
+    // A normal hotel/parking transfer must never call a heavy truck simply
+    // because its route waits for a tile or worker update. Manual calls and
+    // genuinely depleted fuel still work as before.
+    const stranded=shouldAutomaticallyRecover(t,stalledMs);
     if(!manual&&(!stranded||meters(t.position,depot)<75))continue;
     const serviceDue=(t.vehicleCondition??100)<=(t.serviceThreshold??40)||(t.operatingKm??0)-(t.lastServiceKm??0)>=250;
     const purpose:RecoveryJob['purpose']=manual?(manualRecoveryPurposeRef.current.get(t.id)??'depot'):serviceDue?'service':empty||t.refillDestination?'fuel':'depot';
