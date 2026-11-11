@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {specialistCanDepart,unlockedSpecialistRoles} from './specialistAccess';
-import type {RoadGraph,Taxi,Point} from './taxi';
+import type {RoadGraph,Point} from './taxi';
 
 const nodes=new Map<string,Point>([
  ['A',[0,0]],['B',[0.001,0]],['C',[0.002,0]],['D',[0.003,0]],
