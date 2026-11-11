@@ -11,8 +11,9 @@ export type ExplorerRoutePlan={
  diagnostic:ExplorerRouteDiagnostic;
 };
 
-/** Find the nearest unclaimed class road by traveling exclusively over
- * physically discovered, legally directed roads. No off-network jumps. */
+/** Find the nearest eligible undiscovered road by driving along real directed
+ * graph connections. Cross-class red roads are allowed only as transit: they
+ * never become discoveries for the wrong specialist. No off-network jumps. */
 export function planReachableExplorerRoad(
  graph:RoadGraph,start:string,explored:Set<string>,eligible:Set<string>,
  reservedRoads:Set<string>,reservedTargets:Set<string>,
@@ -95,6 +96,10 @@ export function planReachableExplorerRoad(
  };
  const maxVisits=role==='highway'||role==='poi'?30000:12000;
  const maxTravel=role==='highway'||role==='poi'?85000:26000;
+ // Prefer known purple roads; cross-class red roads are legal to drive on
+ // but expensive for search scoring, so they are used only when useful.
+ const crossClassPenalty=7;
+ const maxRedTransitMeters=role==='highway'||role==='poi'?18000:6500;
  let winner:{from:string;to:string;id:string}|null=null;
  while(heap.length&&diag.visitedPurpleNodes<maxVisits){
   const current=pop();
@@ -113,8 +118,13 @@ export function planReachableExplorerRoad(
   }
   if(winner)break;
   for(const edge of links){
-   if(edge.meters<=0||!explored.has(edge.id))continue;
-   const next=current.distance+edge.meters;
+   if(edge.meters<=0)continue;
+   const purple=explored.has(edge.id);
+   // Never transit through undiscovered roads this specialist should reveal.
+   // Those roads are discovery targets, not ordinary red connectors.
+   if(!purple&&(eligible.has(edge.id)||reservedRoads.has(edge.id)||
+      reservedTargets.has(edge.to)))continue;
+   const next=current.distance+edge.meters*(purple?1:crossClassPenalty);
    if(next>maxTravel||next>=(distances.get(edge.to)??Infinity))continue;
    distances.set(edge.to,next);parent.set(edge.to,{from:current.node,id:edge.id});
    push({node:edge.to,distance:next});
@@ -135,6 +145,19 @@ export function planReachableExplorerRoad(
   if(keys.length>maxVisits)return {route:null,diagnostic:{...diag,reason:'route-too-long'}};
  }
  keys.reverse();ids.reverse();
+ // Red access roads used to reach our target are transit-only and remain
+ // undiscovered. Bound these crossings so a specialist cannot traverse
+ // arbitrary distances through the network before doing useful exploration.
+ let redTransitMeters=0;
+ const preDiscoveryTransit:string[]=[];
+ for(let i=0;i<ids.length;i++){
+  if(explored.has(ids[i]))continue;
+  const edge=(graph.edges.get(keys[i])??[]).find(e=>e.id===ids[i]&&e.to===keys[i+1]);
+  redTransitMeters+=edge?.meters??0;
+  if(!preDiscoveryTransit.includes(ids[i]))preDiscoveryTransit.push(ids[i]);
+ }
+ if(redTransitMeters>maxRedTransitMeters)
+  return {route:null,diagnostic:{...diag,reason:'cross-class-transit-too-long'}};
  keys.push(selected.to);ids.push(selected.id);
  // Follow connected straight road segments, rather than stop at every OSM
  // micro-edge. A turn is postponed to the next physical junction.
@@ -172,13 +195,13 @@ export function planReachableExplorerRoad(
  const exit=lastFrom&&lastTo&&lastId?
   safeExit(lastFrom,lastTo,lastId,irreversibleDiscovery):[];
  if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
- const escapeTransitEdgeIds:string[]=[];
+ const escapeTransitEdgeIds:string[]=[...preDiscoveryTransit];
  for(const step of exit??[]){
   keys.push(step.to);ids.push(step.id);
   // Cross-class escape roads remain red, even though the explorer drives on them.
   if(!explored.has(step.id)){
    if(eligible.has(step.id)){if(!discovery.includes(step.id))discovery.push(step.id);}
-   else escapeTransitEdgeIds.push(step.id);
+   else if(!escapeTransitEdgeIds.includes(step.id))escapeTransitEdgeIds.push(step.id);
   }
  }
  const path=keys.map(id=>graph.nodes.get(id)!).filter(Boolean);
