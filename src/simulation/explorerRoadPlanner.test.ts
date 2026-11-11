@@ -165,7 +165,10 @@ describe('purple-connected explorer routes',()=>{
  it('follows legally directed cross-class connectors without revealing them',()=>{
   const graph=makeGraph();
   graph.edges.set('C',(graph.edges.get('C')??[]).filter(e=>e.id!=='bc'));
-  const result=planReachableExplorerRoad(graph,'A',new Set(['ab']),
+  // A one-way transit segment requires an onward legal exit to purple.
+  graph.edges.get('D')!.push({to:'B',id:'db-purple',meters:210,
+   highway:'service',speedKph:30});
+  const result=planReachableExplorerRoad(graph,'A',new Set(['ab','db-purple']),
    new Set(['cd']),new Set(),new Set(),'residential');
   expect(result.route?.edgeIds).toEqual(['ab','bc','cd']);
   expect(result.route?.escapeTransitEdgeIds).toEqual(['bc']);
