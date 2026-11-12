@@ -64,7 +64,8 @@ export function specialistCanDepart(
 ):boolean{
  if(vehicle.kind!=='explorer')return true;
  const role=vehicle.explorerRole;
+ if(role==='poi')return true; // Harbour specialists discover connecting roads of any class.
  if(role==='highway'||role==='primary'||role==='secondary'||
-    role==='residential'||role==='poi')return unlocked.has(role);
+    role==='residential')return unlocked.has(role);
  return true;
 }
