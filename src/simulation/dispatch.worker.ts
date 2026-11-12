@@ -4,6 +4,7 @@ import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {planConnectedFrontier} from './connectedFrontier';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
+import {routeIsolatedExplorerToMainNetwork} from './explorerComponentRecovery';
 import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
@@ -907,10 +908,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Recovery is transport only and must not require the specialist role
     // to be unlocked at this location.
     const purpleOrigin=purpleStartNear(taxi.position,explored);
+    const component=explorerComponents.get(taxi.id);
+    // A local exit is not enough: the explorer may be circling an isolated
+    // discovered component with no directed route to the HQ network.
+    const isolated=!!purpleOrigin&&!connectedFrontierIndex.has(purpleOrigin.node)&&
+      !!component&&component.complete&&!component.hqReachable&&component.visited<=120;
     const hasDrivablePurpleExit=!!purpleOrigin&&
      (activeGraph.edges.get(purpleOrigin.node)??[]).some(edge=>
       edge.meters>0&&explored.has(edge.id));
-    if(hasDrivablePurpleExit)continue;
+    if(hasDrivablePurpleExit&&!isolated)continue;
     if(performance.now()<(strandedRecoveryRetryAt.get(taxi.id)??0))continue;
     strandedRecoveryRetryAt.set(taxi.id,performance.now()+15000);
     const gx=Math.floor(taxi.position[0]/REGION_DEGREES);
@@ -918,20 +924,36 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const nearby=new Set<string>();
     for(let y=gy-1;y<=gy+1;y++)for(let x=gx-1;x<=gx+1;x++)
      for(const id of regionalRoads.get(regionKey(y,x))??[])nearby.add(id);
-    const recovery=routeStrandedExplorerToPurple(activeGraph,taxi.position,
-     explored,roadEndpoints,nearby);
+    const mainRecovery=purpleOrigin?
+     routeIsolatedExplorerToMainNetwork(activeGraph,purpleOrigin.node,
+      connectedFrontierIndex,explored):null;
+    const legacyRecovery=mainRecovery?null:
+     !hasDrivablePurpleExit?routeStrandedExplorerToPurple(activeGraph,
+      taxi.position,explored,roadEndpoints,nearby):null;
+    const recovery=mainRecovery?{
+     ...mainRecovery,
+     path:purpleOrigin?.connector?
+      [taxi.position,...mainRecovery.path]:mainRecovery.path,
+     edgeIds:purpleOrigin?.connector?
+      [purpleOrigin.connector.edgeId,...mainRecovery.edgeIds]:mainRecovery.edgeIds
+    }:legacyRecovery;
     if(recovery){
      taxis[index]={...taxi,status:'RETURNING',path:recovery.path,
       edgeIds:recovery.edgeIds,discoveryEdgeIds:[],escapeTransitEdgeIds:[],
-      // A stale restStopId must not turn this recovery trip into an
-      // operational discovery trip that paints other specialists' roads.
-      restStopId:undefined,
+      // Emergency transit may cross red roads but must never reveal them,
+      // including on a POI specialist's RETURNING trip.
+      recoveryTransitOnly:true,
+      restStopId:undefined,refillDestination:undefined,serviceDestination:undefined,
       leg:0,distanceIntoLeg:0,journeyEdges:[],routeInvalid:false};
-     singleWorkerScanResult.set(taxi.id,'returning-to-purple:edges='+recovery.edgeIds.length);
-     explorerPlanSkipReason.set(taxi.id,'recovery-to-purple');
+     explorerComponents.delete(taxi.id);
+     singleWorkerScanResult.set(taxi.id,
+      (mainRecovery?'returning-to-hq-purple':'returning-to-purple')+
+      ':edges='+recovery.edgeIds.length);
+     explorerPlanSkipReason.set(taxi.id,'directed-component-recovery');
     }else{
-     singleWorkerScanResult.set(taxi.id,'no-directed-purple-return');
-     explorerPlanSkipReason.set(taxi.id,'stranded-no-purple-route');
+     singleWorkerScanResult.set(taxi.id,isolated?
+      'isolated-component-no-legal-hq-route':'no-directed-purple-return');
+     explorerPlanSkipReason.set(taxi.id,'stranded-no-legal-directed-route');
     }
    }
    const reservedTargets=new Set<string>();
