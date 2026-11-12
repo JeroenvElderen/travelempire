@@ -8,7 +8,7 @@ export const SPECIALIST_EXPLORERS:ReadonlyArray<{
  {role:'primary',name:'Primary Explorer',description:'Primary roads and primary links'},
  {role:'secondary',name:'Secondary Explorer',description:'Secondary and tertiary roads'},
  {role:'residential',name:'Local Street Explorer',description:'Residential, service roads and local lanes'},
- {role:'poi',name:'POI Explorer',description:'Airport, harbour and facility access roads'},
+ {role:'poi',name:'POI Explorer',description:'Shortest routes to harbours · discovers all road types'},
 ];
 
 export const explorerClassEligible=(role:Taxi['explorerRole'],highway?:string):boolean=>{
