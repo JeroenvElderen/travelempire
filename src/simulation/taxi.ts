@@ -24,6 +24,9 @@ export type Taxi = {
   dropoff?: Point;
 
   fare: number;
+  /** Stable identity and surge rate for one-time passenger settlement. */
+  activeJobId?:string;
+  jobSurgeMultiplier?:number;
   /** Current passenger job's routed distance, excluding driving to pickup. */
   jobDistanceMeters?:number;
   /** Actual passenger-carrying distance travelled on the current job. */
@@ -138,7 +141,7 @@ export type CorporateSubsidiary={id:string;name:string;city:string;createdDay:st
 export type CorporateLoan={id:string;principal:number;balance:number;annualRate:number;dailyPayment:number;remainingDays:number;targetId:string};
 export type CorporateEvent={id:string;gameTime:number;kind:'acquisition'|'formation'|'loan'|'repayment'|'transfer'|'merger'|'restructure'|'asset-transfer';subsidiaryId:string;description:string;parentCashDelta:number;subsidiaryCashDelta:number;amount:number};
 export type CorporateState={subsidiaries:CorporateSubsidiary[];loans:CorporateLoan[];events:CorporateEvent[];lastProcessedDay?:string;totalAcquisitionSpend:number;totalInterest:number;totalRevenue:number;totalExpenses:number;totalTaxes:number};
-export type FleetState={creditDefaults?:number;creditMisses?:number;explorerExpansionApplied?:boolean;explorerExpansionVehiclesGranted?:boolean;corporate?:CorporateState;equity?:EquityState;accounting?:AccountingState;depotFinanceHistory?:DepotFinanceRecord[];depotUpgrades?:Record<string,DepotUpgradeState>;depotFacilityExpense?:number;financePaymentsMade?:number;leases?:LeaseContract[];leaseExpense?:number;bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
+export type FleetState={paidPassengerJobIds?:string[];creditDefaults?:number;creditMisses?:number;explorerExpansionApplied?:boolean;explorerExpansionVehiclesGranted?:boolean;corporate?:CorporateState;equity?:EquityState;accounting?:AccountingState;depotFinanceHistory?:DepotFinanceRecord[];depotUpgrades?:Record<string,DepotUpgradeState>;depotFacilityExpense?:number;financePaymentsMade?:number;leases?:LeaseContract[];leaseExpense?:number;bank?:BankSettings;wageMultiplier?:number;financeHistory?:FinancePeriod[];vehicleFinanceHistory?:VehicleFinancePeriod[];loans?:BusinessLoan[];upgrades?:EconomyUpgrade[];overheadExpense?:number;loanInterestExpense?:number;loanPrincipalPaid?:number;drivers?:DriverRecord[];taxis:Taxi[];revenue:number;completed:number;exploredEdgeIds?:string[];territoryEdgeIds?:string[];missionHistory?:MissionRecord[];fuelExpense?:number;maintenanceExpense?:number;distanceKm?:number;driverWages?:number;insuranceExpense?:number;serviceExpense?:number;explorationExpense?:number;transactions?:FinancialTransaction[]};
 export type FinancialTransaction={id:string;time:number;taxiId?:string;description:string;amount:number};
 export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meters:number;id:string;speedKph:number;highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number}[]>;nodeKeys:string[]};
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
@@ -499,7 +502,12 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 }
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
-export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;createdAt:number;expiresAt:number};
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number};
+export const passengerPairKey=(pickup:Point,dropoff:Point)=>key(pickup)+'>'+key(dropoff);
+/** The actual passenger route is authoritative, not an outdated quote. */
+export function pricedPassengerFare(distanceMeters:number,surgeMultiplier=1):number{
+ return fareForDistance(distanceMeters,Math.max(1,Math.min(1.5,surgeMultiplier)));
+}
 // A passenger stop is valid only at a node touching an Explorer-discovered edge.
 export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<string>{
  const eligible=new Set<string>();
@@ -508,7 +516,7 @@ export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<s
  }
  return eligible;
 }
-export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1,eligibleStops?:Set<string>):PassengerRequest|null{
+export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1,eligibleStops?:Set<string>,recentPairs:ReadonlySet<string>=new Set()):PassengerRequest|null{
  const allEligible=[...(eligibleStops??passengerRoadNodes(graph,explored))];
  if(allEligible.length<2)return null;
  const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
@@ -517,11 +525,12 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=200&&d<=4000;});
   if(!near.length)continue;
   const to=near[Math.floor(Math.random()*near.length)];
+  if(recentPairs.has(passengerPairKey(graph.nodes.get(from)!,graph.nodes.get(to)!)))continue;
   // Pickup and drop-off are on Explorer-discovered roads within the revealed area.
   // Travel between those stops may use undiscovered roads without revealing them.
   const trip=routeDiscovered(graph,from,to,explored);
   if(!trip||trip.length<150||trip.length>5000)continue;
-  return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
+  return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(trip.length,fareMultiplier),fareMultiplier,createdAt:now,expiresAt:now+120000};
  }
  // Fallback: find a reachable pair of discovered-road stops without relying
  // on random sampling, so sparse explored networks can still produce jobs.
@@ -529,12 +538,12 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   const from=eligible[i];
   const origin=graph.nodes.get(from)!;
   for(const to of eligible){
-   if(to===from)continue;
+   if(to===from||recentPairs.has(passengerPairKey(origin,graph.nodes.get(to)!)))continue;
    const direct=meters(origin,graph.nodes.get(to)!);
    if(direct<150||direct>4000)continue;
    const trip=route(graph,from,to);
    if(!trip||trip.length<150||trip.length>5000)continue;
-   return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:fareForDistance(trip.length,fareMultiplier),createdAt:now,expiresAt:now+120000};
+   return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(trip.length,fareMultiplier),fareMultiplier,createdAt:now,expiresAt:now+120000};
   }
  }
  return null;
@@ -558,7 +567,8 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  // remain restricted to discovered roads in the TO_PICKUP -> TO_DROPOFF transition.
  const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
- return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
+ return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,activeJobId:mission.id,jobSurgeMultiplier:mission.fareMultiplier??1,
+  jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
@@ -1046,8 +1056,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
   const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,t.lastRoadTo===from?t.lastRoadFrom??'':''):route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
+   const actualMeters=next.path.slice(1).reduce((sum,p,i)=>sum+meters(next.path[i],p),0);
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0,
-    jobDistanceMeters:next.length,jobDrivenMeters:0,jobFareTotal:undefined};
+    fare:pricedPassengerFare(actualMeters,t.jobSurgeMultiplier??1),
+    jobDistanceMeters:actualMeters,jobDrivenMeters:0,jobFareTotal:undefined};
    return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
   }
  }
@@ -1078,7 +1090,8 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,jobDistanceMeters:undefined,
+  pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,jobSurgeMultiplier:undefined,
+  jobDistanceMeters:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
  return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
