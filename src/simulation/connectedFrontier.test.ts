@@ -31,6 +31,18 @@ describe('shared connected-frontier explorer routing',()=>{
   expect(result.route?.discoveryEdgeIds).toEqual(['m1']);
   expect(result.diagnostic.reason).toBe('planned-connected-frontier');
  });
+ it('guides POI discovery toward a distant harbour rather than an unrelated closer street',()=>{
+  const graph=network();
+  graph.nodes.set('S',[24.005,38.009]);
+  graph.nodeKeys.push('S');
+  graph.edges.get('HQ')!.push({to:'S',id:'near-red',meters:900,speedKph:30,highway:'service'});
+  graph.edges.set('S',[{to:'HQ',id:'near-red',meters:900,speedKph:30,highway:'service'}]);
+  const discovered=new Set(['p1','p2','p3','p4']);
+  const eligible=new Set(['near-red','m1']);
+  const result=planConnectedFrontier(graph,'HQ',discovered,eligible,
+   new Set(),new Set(),'poi',1000,[24.05,38]);
+  expect(result.route?.discoveryEdgeIds).toEqual(['m1']);
+ });
  it('does not jump to an isolated road despite matching class and proximity',()=>{
   const graph=network();
   const result=planConnectedFrontier(graph,'HQ',new Set(['p1','p2']),
