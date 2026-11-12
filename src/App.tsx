@@ -763,8 +763,18 @@ export default function App(){
    // been loaded yet. Advance streaming requests at most ~3 km per scan and
    // keep the existing iPhone tile queue/backpressure intact.
    const missions=harbourMissionsRef.current;
+   const allCandidates=harbourCandidatesRef.current;
+   const prefetchSlot=harbourPrefetchCursorRef.current++;
+   // Stream alternative candidate harbour tiles as well as the assigned
+   // destination. Otherwise only the unreachable assigned port is loaded,
+   // and the shortest-reachable route planner has no other road endpoints.
+   if(allCandidates.length){
+    const alternative=allCandidates[prefetchSlot%allCandidates.length];
+    if(networkRef.current&&networkRef.current.queuedCount<4)
+     networkRef.current.considerHarbour(alternative.point);
+   }
    if(missions.length){
-    const mission=missions[harbourPrefetchCursorRef.current++%missions.length];
+    const mission=missions[prefetchSlot%missions.length];
     const explorer=taxisRef.current.find(t=>t.id===mission.vehicleId);
     if(explorer&&!explorer.ferryTrip){
      const manager=networkRef.current;
