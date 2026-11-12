@@ -12,6 +12,7 @@ import {syncFerryMapLayer} from './FerryMapLayer';
 import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
+import {diffVisibleRoads,withRoadFeatureId,type RoadFeature} from './purpleRoadDiff';
 import {buildParkedCars,parkedCarSprites,type ParkingRoad} from './parkedCars';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
@@ -731,8 +732,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
 
 
  const currentExploredRoads=useRef<Set<string>>(new Set());
- const visibleExploredFeatures=useRef<Map<string,GeoJSON.Feature>>(new Map());
- const visibleRoadIndex=useRef<Map<string,GeoJSON.Feature>>(new Map());
+ const visibleExploredFeatures=useRef<Map<string,RoadFeature>>(new Map());
+ // Tracks only the features last enqueued to MapLibre, not the entire road graph.
+ const purpleSentFeatures=useRef<Map<string,RoadFeature>>(new Map());
+ const purpleSentSource=useRef<maplibregl.GeoJSONSource|null>(null);
+ const visibleRoadIndex=useRef<Map<string,RoadFeature>>(new Map());
  // Retain only the spatial index reference and viewport for live blue-road
  // updates. Do not pre-create red GeoJSON features for undiscovered roads.
  const currentRoadSpatialRef=useRef<RoadSpatialIndex|null>(null);
@@ -745,23 +749,64 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const viewportSourceSignature=useRef('');
  const viewportGraphRef=useRef<typeof graph>(null);
  const purpleSourceId='explored-road-network-source';
- const refreshPurpleRoads=()=>{
+ const syncPurpleSource=()=>{
   const instance=map.current;
   if(!instance||!instance.isStyleLoaded())return;
   const source=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
   if(!source)return;
-  if(flushedPurpleRevision.current===purpleRevision.current)return;
+  // A style reload replaces its GeoJSON source even when its name is unchanged.
+  if(purpleSentSource.current!==source){
+   purpleSentSource.current=source;
+   purpleSentFeatures.current=new Map();
+  }
+  const current=visibleExploredFeatures.current;
+  const previous=purpleSentFeatures.current;
+  const diff=diffVisibleRoads(previous,current);
+  const additions=diff.add.length,removals=diff.remove.length;
+  if(!additions&&!removals){
+   flushedPurpleRevision.current=purpleRevision.current;
+   return;
+  }
   const started=performance.now();
-  const features=[...visibleExploredFeatures.current.values()];
-  source.setData({type:'FeatureCollection',features});
+  const fullReplace=(additions+removals)>Math.max(6000,previous.size*0.85);
+  // updateData is asynchronous and coalesces pending edits in MapLibre.
+  // Both initial and fallback setData calls carry stable GeoJSON feature IDs.
+  const operation=fullReplace||typeof source.updateData!=='function'
+   ?source.setData({type:'FeatureCollection',features:[...current.values()]})
+   :source.updateData(diff);
+  purpleSentFeatures.current=new Map(current);
   flushedPurpleRevision.current=purpleRevision.current;
+  void operation.catch(error=>{
+   if(purpleSentSource.current!==source)return;
+   diagnostic('map:purple-diff-error',String(error));
+   // Restore source contents from the latest visible state, not a stale
+   // queued diff. This also recovers from an invalid incremental update.
+   const latest=visibleExploredFeatures.current;
+   purpleSentFeatures.current=new Map(latest);
+   void source.setData({type:'FeatureCollection',features:[...latest.values()]}).catch(e=>
+    diagnostic('map:purple-recovery-error',String(e)));
+  });
   if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-started);
   lastPurpleSourceUpdate.current=started;
-  const stats=purpleRenderStats.current;const duration=performance.now()-started;
-  if(performanceMonitorEnabled()){incrementPerformance('sourceUpdates');recordPerformance({sourceMs:duration,visibleExplored:features.length});}
-  stats.updates++;if(duration>12)stats.slow++;stats.maxMs=Math.max(stats.maxMs,duration);
-  if(started-stats.lastReport>30000){if(stats.slow)console.warn('[TravelEmpire] Explored road source updates',{updates:stats.updates,slow:stats.slow,maxMs:Math.round(stats.maxMs),features:features.length});stats.updates=0;stats.slow=0;stats.maxMs=0;stats.lastReport=started;}
-  setRoadStatus(`${features.length.toLocaleString()} visible discovered roads`);
+  const stats=purpleRenderStats.current,duration=performance.now()-started;
+  if(performanceMonitorEnabled()){
+   incrementPerformance('sourceUpdates');
+   recordPerformance({sourceMs:duration,visibleExplored:current.size});
+  }
+  stats.updates++;if(duration>12)stats.slow++;
+  stats.maxMs=Math.max(stats.maxMs,duration);
+  diagnostic('map:purple-diff',`add=${additions} remove=${removals} visible=${current.size} mode=${fullReplace?'full':'incremental'}`);
+  if(started-stats.lastReport>30000){
+   if(stats.slow)console.warn('[TravelEmpire] Purple-road source updates',{
+    updates:stats.updates,slow:stats.slow,maxMs:Math.round(stats.maxMs),visible:current.size});
+   stats.updates=0;stats.slow=0;stats.maxMs=0;stats.lastReport=started;
+  }
+  setRoadStatus(`${current.size.toLocaleString()} visible discovered roads`);
+ };
+ const refreshPurpleRoads=()=>{
+  if(flushedPurpleRevision.current===purpleRevision.current&&
+   purpleSentSource.current===map.current?.getSource(purpleSourceId))return;
+  syncPurpleSource();
  };
  useEffect(()=>{
   const previous=currentExploredRoads.current;
@@ -784,9 +829,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      Math.min(road.a[0],road.b[0])<=bounds.east&&
      Math.max(road.a[1],road.b[1])>=bounds.south&&
      Math.min(road.a[1],road.b[1])<=bounds.north){
-     feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,
+     feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,
       bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},
-      geometry:{type:'LineString',coordinates:[road.a,road.b]}};
+      geometry:{type:'LineString',coordinates:[road.a,road.b]}});
      visible.set(id,feature);
     }
    }
@@ -828,6 +873,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(exploredLayerId))instance.removeLayer(exploredLayerId);
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
+   purpleSentSource.current=null;purpleSentFeatures.current.clear();flushedPurpleRevision.current=-1;
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
    visibleRoadIndex.current.clear();currentRoadSpatialRef.current=null;currentRoadBoundsRef.current=null;visibleTunnelIds.current.clear();viewportSourceSignature.current='';
   };
@@ -849,7 +895,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    viewportGraphRef.current=graph;
    const geometryStarted=performance.now();
    diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${graphChanged} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
-   const exploredFeatures:GeoJSON.Feature[]=[];
+   const exploredFeatures:RoadFeature[]=[];
    const parkingRoads:ParkingRoad[]=[];
    const scannedTunnels=new Set<string>();
    const showParkedCars=instance.getZoom()>=16.8;
@@ -880,7 +926,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
      if(!explored)continue;
-     const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}};
+     const feature:RoadFeature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}});
      exploredFeatures.push(feature);
     }
     if(!done){scanTimer=window.setTimeout(scan,0);return;}
@@ -893,7 +939,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Otherwise newly explored roads can vanish when an older asynchronous scan finishes.
    const index=new Map(exploredFeatures.map(f=>[String(f.properties?.roadId??''),f] as const));
    const latestExplored=currentExploredRoads.current;
-   const purpleById=new Map<string,GeoJSON.Feature>();
+   const purpleById=new Map<string,RoadFeature>();
    // The saved discovery IDs, not the ordinary viewport scan, determine
    // which segments belong in the purple overlay.
    let recoveredPurple=0;
@@ -903,7 +949,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const road=spatial.byId.get(id);
      if(road&&!(Math.max(road.a[0],road.b[0])<west||Math.min(road.a[0],road.b[0])>east||
       Math.min(road.a[1],road.b[1])>north||Math.max(road.a[1],road.b[1])<south)){
-      feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[road.a,road.b]}};
+      feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[road.a,road.b]}});
       index.set(id,feature);
       recoveredPurple++;
      }
@@ -924,24 +970,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    visibleTunnelIds.current=scannedTunnels;
    visibleRoadIndex.current=index;
    visibleExploredFeatures.current=purpleById;
-   const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...purpleById.values()]};
-   const sourceUpdateStarted=performance.now();
+   // Build a new empty updateable source only on first use or style reload.
+   // Existing sources receive only added/removed/changed visible features.
    // Remove the legacy red overlay, if present after hot reload.
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getLayer(tunnelLayerId))instance.removeLayer(tunnelLayerId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   const purpleSource=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
-   const purpleStarted=performance.now();
-   if(purpleSource)purpleSource.setData(purple);
-   else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
-   diagnostic('map:source-setdata',`ms=${Math.round(performance.now()-sourceUpdateStarted)} purple=${purple.features.length}`);
-   startupTrace('Visible road sources ready','purple='+purple.features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
-   flushedPurpleRevision.current=purpleRevision.current;
-   if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
-   if(performanceMonitorEnabled()){
-    incrementPerformance('sourceUpdates');
-    recordPerformance({sourceMs:performance.now()-purpleStarted,visibleExplored:purple.features.length});
-   }
+   if(!instance.getSource(purpleSourceId))instance.addSource(purpleSourceId,{
+    type:'geojson',data:{type:'FeatureCollection',features:[]}});
+   syncPurpleSource();
+   startupTrace('Visible road sources ready','purple='+purpleById.size+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#2563EB','line-width':['interpolate',['linear'],['zoom'],8,0.95,13,1.75,17,2.75],'line-opacity':1}});
    // Ground and elevated roads remain solid; tunnels are drawn dashed.
    // OSM 'layer' is relative stacking, not an underground flag on its own.
@@ -994,7 +1032,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     paint:{'icon-opacity':0.93}
    });
    diagnostic('map:parked-cars',`cars=${parked.length} candidateAisles=${parkingRoads.length} zoom=${instance.getZoom().toFixed(1)}`);
-   setRoadStatus(`${purple.features.length.toLocaleString()} visible discovered roads · ${graph.nodeKeys.length.toLocaleString()} loaded road nodes`);
+   setRoadStatus(`${purpleById.size.toLocaleString()} visible discovered roads · ${graph.nodeKeys.length.toLocaleString()} loaded road nodes`);
    instance.triggerRepaint();
    };
    scanTimer=window.setTimeout(scan,0);
