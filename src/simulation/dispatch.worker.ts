@@ -1076,8 +1076,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       // Shared directed frontier search spans every connected loaded tile.
       // The original specialist planner is retained for legal one-way exits
       // and verified roundabout links that need its specialised handling.
+      const harbourGoal=role==='poi'?
+       msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
       const connected=planConnectedFrontier(activeGraph,origin.node,explored,allowed,
-       reservedEdges,reservedTargets,role,role==='poi'?65000:95000);
+       reservedEdges,reservedTargets,role,role==='poi'?65000:95000,harbourGoal);
       const planned=role==='poi'?null:connected.route?connected:
        planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
         reservedEdges,reservedTargets,role);
