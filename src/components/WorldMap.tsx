@@ -296,7 +296,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{startupTrace('WorldMap mounted');},[]);
  useEffect(()=>{startupTrace('Road graph changed',graph?('nodes='+graph.nodeKeys.length):'not ready');},[graph]);
  useEffect(()=>{startupTrace('Exploration changed','roads='+exploredEdgeIds.length);},[exploredEdgeIds.length]);
- const [roadsVisible,setRoadsVisible]=useState(true);
  const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
  const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;startupTrace('MapLibre constructor started');const instance=new maplibregl.Map({container:container.current,style,center:initialHeadquarters.current?[initialHeadquarters.current.lng,initialHeadquarters.current.lat]:[-6.1,53.2],zoom:initialHeadquarters.current?11:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
@@ -689,7 +688,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  },[]);
  // Keep visible road geometry separate from the fast-changing purple overlay.
  // Discovery updates must not depend on the map moving or on a full graph scan.
- const visibleRoadFeatures=useRef<GeoJSON.Feature[]>([]);
  const refreshRoadLines=useRef<(()=>void)|null>(null);
  const lastExplorerTelemetry=useRef<Map<string,{leg:number;edge:string;status:string}>>(new Map());
  useEffect(()=>{
@@ -739,7 +737,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   if(performanceMonitorEnabled()){incrementPerformance('sourceUpdates');recordPerformance({sourceMs:duration,visibleExplored:features.length});}
   stats.updates++;if(duration>12)stats.slow++;stats.maxMs=Math.max(stats.maxMs,duration);
   if(started-stats.lastReport>30000){if(stats.slow)console.warn('[TravelEmpire] Explored road source updates',{updates:stats.updates,slow:stats.slow,maxMs:Math.round(stats.maxMs),features:features.length});stats.updates=0;stats.slow=0;stats.maxMs=0;stats.lastReport=started;}
-  setRoadStatus(`${features.length.toLocaleString()} explored / ${visibleRoadFeatures.current.length.toLocaleString()} visible regional road segments`);
+  setRoadStatus(`${features.length.toLocaleString()} visible discovered roads`);
  };
  useEffect(()=>{
   const previous=currentExploredRoads.current;
@@ -795,7 +793,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   visibleRoadFeatures.current=[];visibleRoadIndex.current.clear();visibleTunnelIds.current.clear();viewportSourceSignature.current='';
+   visibleRoadIndex.current.clear();visibleTunnelIds.current.clear();viewportSourceSignature.current='';
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -809,21 +807,19 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    viewportCallbackRef.current?.({west,east,south,north});
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
    // Source existence is checked to support map-style reloads.
-   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadsVisible+'|'+roadGraphVersion;
-   if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(sourceId)&&instance.getSource(purpleSourceId))return;
+   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadGraphVersion;
+   if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(purpleSourceId))return;
    const graphChanged=viewportGraphRef.current!==graph;
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
    const geometryStarted=performance.now();
    diagnostic('map:scan-start',`nodes=${graph.nodeKeys.length} graphChanged=${graphChanged} zoom=${instance.getZoom().toFixed(1)} explored=${currentExploredRoads.current.size}`);
-   const features:GeoJSON.Feature[]=[];
    const exploredFeatures:GeoJSON.Feature[]=[];
    const parkingRoads:ParkingRoad[]=[];
    const scannedTunnels=new Set<string>();
    const showParkedCars=instance.getZoom()>=16.8;
    const seen=new Set<string>();
-   const MAX_VISIBLE=12000;
-   // Continue scanning for explored roads even after the ordinary road cap.
+   // Undiscovered roads remain in the graph, not a map GeoJSON source.
    const scanId=++scanRevision;
    const spatial=indexRoadGraph(graph,roadGraphVersion);
    const candidates=viewportRoadCandidates(spatial,west,east,south,north);
@@ -846,20 +842,19 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(road.tunnel===true)scannedTunnels.add(id);
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
-     if(!explored&&(!roadsVisible||features.length>=MAX_VISIBLE))continue;
+     if(!explored)continue;
      const feature:GeoJSON.Feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}};
-     if(explored)exploredFeatures.push(feature);
-     if(features.length<MAX_VISIBLE)features.push(feature);
+     exploredFeatures.push(feature);
     }
     if(!done){scanTimer=window.setTimeout(scan,0);return;}
-    startupTrace('Visible road scan complete','nodes='+examined+' visible='+features.length+' purple='+exploredFeatures.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
+    startupTrace('Visible road scan complete','nodes='+examined+' purple='+exploredFeatures.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
     finishScan();
    };
    const finishScan=()=>{
     if(cancelled||scanId!==scanRevision)return;
    // Reconcile discovery against the latest state, not the snapshot captured at scan start.
    // Otherwise newly explored roads can vanish when an older asynchronous scan finishes.
-   const index=new Map([...features,...exploredFeatures].map(f=>[String(f.properties?.roadId??''),f] as const));
+   const index=new Map(exploredFeatures.map(f=>[String(f.properties?.roadId??''),f] as const));
    const latestExplored=currentExploredRoads.current;
    const purpleById=new Map<string,GeoJSON.Feature>();
    // The saved discovery IDs, not the ordinary viewport scan, determine
@@ -889,42 +884,31 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      index.set(id,feature);
     }
    }
-   visibleRoadFeatures.current=features;
    visibleTunnelIds.current=scannedTunnels;
    visibleRoadIndex.current=index;
    visibleExploredFeatures.current=purpleById;
-   const data:GeoJSON.FeatureCollection=features.length?{type:'FeatureCollection',features}:empty;
    const purple:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[...purpleById.values()]};
    const sourceUpdateStarted=performance.now();
-   const existing=instance.getSource(sourceId) as maplibregl.GeoJSONSource|undefined;
-   if(existing)existing.setData(data);
-   else instance.addSource(sourceId,{type:'geojson',data});
+   // Remove the legacy red overlay, if present after hot reload.
+   if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
+   if(instance.getLayer(tunnelLayerId))instance.removeLayer(tunnelLayerId);
+   if(instance.getSource(sourceId))instance.removeSource(sourceId);
    const purpleSource=instance.getSource(purpleSourceId) as maplibregl.GeoJSONSource|undefined;
    const purpleStarted=performance.now();
    if(purpleSource)purpleSource.setData(purple);
    else instance.addSource(purpleSourceId,{type:'geojson',data:purple});
-   diagnostic('map:source-setdata',`ms=${Math.round(performance.now()-sourceUpdateStarted)} red=${features.length} purple=${purple.features.length}`);
-   startupTrace('Visible road sources ready','visible='+features.length+' purple='+purple.features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
+   diagnostic('map:source-setdata',`ms=${Math.round(performance.now()-sourceUpdateStarted)} purple=${purple.features.length}`);
+   startupTrace('Visible road sources ready','purple='+purple.features.length+' elapsed='+Math.round(performance.now()-geometryStarted)+'ms');
    flushedPurpleRevision.current=purpleRevision.current;
    if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-purpleStarted);
    if(performanceMonitorEnabled()){
     incrementPerformance('sourceUpdates');
     recordPerformance({sourceMs:performance.now()-purpleStarted,visibleExplored:purple.features.length});
    }
-   if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#B34B5A','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.58:0}});
    if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#2563EB','line-width':['interpolate',['linear'],['zoom'],8,0.95,13,1.75,17,2.75],'line-opacity':1}});
    // Ground and elevated roads remain solid; tunnels are drawn dashed.
    // OSM 'layer' is relative stacking, not an underground flag on its own.
-   if(instance.getLayer(sourceId))instance.setFilter(sourceId,['!=',['get','tunnel'],true]);
    if(instance.getLayer(exploredLayerId))instance.setFilter(exploredLayerId,['!=',['get','tunnel'],true]);
-   if(!instance.getLayer(tunnelLayerId))instance.addLayer({
-    id:tunnelLayerId,type:'line',source:sourceId,
-    filter:['==',['get','tunnel'],true],
-    layout:{'line-cap':'round','line-join':'round'},
-    paint:{'line-color':'#B34B5A','line-dasharray':[2,3],
-     'line-width':['interpolate',['linear'],['zoom'],10,0.9,17,2.2],
-     'line-opacity':roadsVisible?0.50:0}
-   });
    if(!instance.getLayer(exploredTunnelLayerId))instance.addLayer({
     id:exploredTunnelLayerId,type:'line',source:purpleSourceId,
     filter:['==',['get','tunnel'],true],
@@ -943,7 +927,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    });
    // Draw bridges and tunnel traces above the flat roads, but preserve
    // vehicle markers as independent overlays.
-   if(instance.getLayer(tunnelLayerId))instance.moveLayer(tunnelLayerId);
    if(instance.getLayer(elevatedLayerId))instance.moveLayer(elevatedLayerId);
    if(instance.getLayer(exploredTunnelLayerId))instance.moveLayer(exploredTunnelLayerId);
    // Style changes and other overlays can insert layers above discovered roads.
@@ -974,8 +957,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     paint:{'icon-opacity':0.93}
    });
    diagnostic('map:parked-cars',`cars=${parked.length} candidateAisles=${parkingRoads.length} zoom=${instance.getZoom().toFixed(1)}`);
-   if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.58:0);
-   setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
+   setRoadStatus(`${purple.features.length.toLocaleString()} visible discovered roads · ${graph.nodeKeys.length.toLocaleString()} loaded road nodes`);
    instance.triggerRepaint();
    };
    scanTimer=window.setTimeout(scan,0);
@@ -986,7 +968,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
   return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('zoomend',update);instance.off('style.load',update);};
- },[roadsVisible,graph,roadGraphVersion,ready,basemap]);
+ },[graph,roadGraphVersion,ready,basemap]);
 
  // Ferries remain operational; sea routes no longer generate territory fog.
  useEffect(()=>{
@@ -1086,5 +1068,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div><label className="territory-toggle"><input type="checkbox" checked={restStopsVisible} onChange={e=>setRestStopsVisible(e.target.checked)}/> Show parking, motorway rest areas and hotels</label><div>{restStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Muted red = undiscovered roads. Royal Blue = discovered roads. Tunnel segments are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div><label className="territory-toggle"><input type="checkbox" checked={restStopsVisible} onChange={e=>setRestStopsVisible(e.target.checked)}/> Show parking, motorway rest areas and hotels</label><div>{restStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
