@@ -2015,15 +2015,22 @@ export default function App(){
   if(!harbourNetwork||!graph)return;
   const controller=new AbortController();
   let indexing=false;
+  let lastIndexedNodes=-1;
+  let lastIndexedEdgeNodes=-1;
   // The road graph is expanded IN PLACE when new tiles arrive: 'graph' itself
   // does not change identity. Re-index periodically so newly loaded harbour
   // access roads can unlock ports without a full page refresh.
   const update=async()=>{
    if(indexing||controller.signal.aborted)return;
+   const nodes=graph.nodeKeys.length,edgeNodes=graph.edges.size;
+   if(nodes===lastIndexedNodes&&edgeNodes===lastIndexedEdgeNodes)return;
    indexing=true;
    try{
     const result=await harbourRoadEdges(harbourNetwork,graph,controller.signal);
-    if(!controller.signal.aborted)setHarbourEdges(result);
+    if(!controller.signal.aborted){
+     lastIndexedNodes=nodes;lastIndexedEdgeNodes=edgeNodes;
+     setHarbourEdges(result);
+    }
    }catch(error){
     if(!controller.signal.aborted)console.error('Harbour road indexing failed',error);
    }finally{indexing=false;}
