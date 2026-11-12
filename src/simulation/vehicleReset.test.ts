@@ -33,10 +33,12 @@ describe('reset vehicle to depot',()=>{
   expect(result.serviceDestination).toBeUndefined();
  });
  it('cancels an active passenger journey without awarding its unfinished fare',()=>{
-  const result=resetVehicleAtDepot(taxi({status:'TO_DROPOFF',fare:120}),[23.901,37.9]);
+  const result=resetVehicleAtDepot(taxi({status:'TO_DROPOFF',fare:120,activeJobId:'job-1',jobSurgeMultiplier:1.25}),[23.901,37.9]);
   expect(result.fare).toBe(0);
   expect(result.pickup).toBeUndefined();
   expect(result.dropoff).toBeUndefined();
+  expect(result.activeJobId).toBeUndefined();
+  expect(result.jobSurgeMultiplier).toBeUndefined();
   expect(result.completed).toBe(5);
  });
  it('also preserves explorer identity while clearing a stale discovery route',()=>{
