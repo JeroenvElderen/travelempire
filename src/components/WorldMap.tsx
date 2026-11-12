@@ -169,7 +169,7 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 type Basemap='standard'|'satellite';
 type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
-function styleFor(mode:Basemap):string|null{if(mode==='standard'&&customStyle)return customStyle;if(!key)return null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4-dark':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
+function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
 export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onViewportChange,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
  const viewportCallbackRef=useRef(onViewportChange);viewportCallbackRef.current=onViewportChange;
@@ -911,8 +911,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     incrementPerformance('sourceUpdates');
     recordPerformance({sourceMs:performance.now()-purpleStarted,visibleExplored:purple.features.length});
    }
-   if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#A04A54','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.53:0}});
-   if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#22D3EE','line-width':['interpolate',['linear'],['zoom'],8,0.95,13,1.75,17,2.75],'line-opacity':1}});
+   if(!instance.getLayer(sourceId))instance.addLayer({id:sourceId,type:'line',source:sourceId,paint:{'line-color':'#B34B5A','line-width':['interpolate',['linear'],['zoom'],8,0.55,13,1.15,17,1.9],'line-opacity':roadsVisible?0.58:0}});
+   if(!instance.getLayer(exploredLayerId))instance.addLayer({id:exploredLayerId,type:'line',source:purpleSourceId,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#007F9E','line-width':['interpolate',['linear'],['zoom'],8,0.95,13,1.75,17,2.75],'line-opacity':1}});
    // Ground and elevated roads remain solid; tunnels are drawn dashed.
    // OSM 'layer' is relative stacking, not an underground flag on its own.
    if(instance.getLayer(sourceId))instance.setFilter(sourceId,['!=',['get','tunnel'],true]);
@@ -921,25 +921,25 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     id:tunnelLayerId,type:'line',source:sourceId,
     filter:['==',['get','tunnel'],true],
     layout:{'line-cap':'round','line-join':'round'},
-    paint:{'line-color':'#A04A54','line-dasharray':[2,3],
+    paint:{'line-color':'#B34B5A','line-dasharray':[2,3],
      'line-width':['interpolate',['linear'],['zoom'],10,0.9,17,2.2],
-     'line-opacity':roadsVisible?0.45:0}
+     'line-opacity':roadsVisible?0.50:0}
    });
    if(!instance.getLayer(exploredTunnelLayerId))instance.addLayer({
     id:exploredTunnelLayerId,type:'line',source:purpleSourceId,
     filter:['==',['get','tunnel'],true],
     layout:{'line-cap':'round','line-join':'round'},
-    paint:{'line-color':'#22D3EE','line-dasharray':[2,2],
+    paint:{'line-color':'#007F9E','line-dasharray':[2,2],
      'line-width':['interpolate',['linear'],['zoom'],10,1.4,17,3.2],
-     'line-opacity':0.8}
+     'line-opacity':0.95}
    });
    if(!instance.getLayer(elevatedLayerId))instance.addLayer({
     id:elevatedLayerId,type:'line',source:purpleSourceId,
     filter:['all',['!=',['get','tunnel'],true],['==',['get','bridge'],true]],
     layout:{'line-cap':'round','line-join':'round'},
-    paint:{'line-color':'#67E8F9',
+    paint:{'line-color':'#006B8A',
      'line-width':['interpolate',['linear'],['zoom'],10,1.5,17,4.2],
-     'line-opacity':0.65}
+     'line-opacity':0.85}
    });
    // Draw bridges and tunnel traces above the flat roads, but preserve
    // vehicle markers as independent overlays.
@@ -974,7 +974,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     paint:{'icon-opacity':0.93}
    });
    diagnostic('map:parked-cars',`cars=${parked.length} candidateAisles=${parkingRoads.length} zoom=${instance.getZoom().toFixed(1)}`);
-   if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.78:0);
+   if(instance.getLayer(sourceId))instance.setPaintProperty(sourceId,'line-opacity',roadsVisible?0.58:0);
    setRoadStatus(`${purple.features.length.toLocaleString()} explored / ${features.length.toLocaleString()} visible regional road segments${features.length===MAX_VISIBLE?' (display limit)':''} · ${graph.nodeKeys.length.toLocaleString()} loaded nodes`);
    instance.triggerRepaint();
    };
@@ -1086,5 +1086,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Midnight Atlas · Navy Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div><label className="territory-toggle"><input type="checkbox" checked={restStopsVisible} onChange={e=>setRestStopsVisible(e.target.checked)}/> Show parking, motorway rest areas and hotels</label><div>{restStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Muted red = undiscovered roads. Electric cyan = discovered roads. Tunnel segments are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div><label className="territory-toggle"><input type="checkbox" checked={restStopsVisible} onChange={e=>setRestStopsVisible(e.target.checked)}/> Show parking, motorway rest areas and hotels</label><div>{restStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={roadsVisible} onChange={e=>setRoadsVisible(e.target.checked)}/> Show undiscovered roads (red)</label><label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Muted red = undiscovered roads. Deep teal-blue = discovered roads. Tunnel segments are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
