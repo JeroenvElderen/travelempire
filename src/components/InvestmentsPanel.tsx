@@ -4,6 +4,7 @@ import type {InvestablePOI,PropertyPortfolio} from '../investments';
 import {euro,ownership,propertyOperations,propertyValuationCents} from '../investments';
 import {investmentLimitCents,selectedInvestmentCents,defaultInvestmentEuros,asEuros} from '../investmentAmounts';
 import './InvestmentsPanel.css';
+const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 
 type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;error:string};
 export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,error}:Props){
@@ -42,7 +43,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const invest=(p:InvestablePOI,cents:number)=>{
   if(cents<=0)return;
   const problem=onInvest(p,cents/100);
-  setMessage(problem??`Invested ${euro(cents)} in ${p.name||p.kind}`);
+  setMessage(problem??`Invested ${exactEuro(cents)} in ${p.name||p.kind}`);
   // A successful purchase resets only this property's input to the
   // newly available amount; other POI sliders retain their selections.
   if(!problem)setAmounts(old=>{const next={...old};delete next[p.id];return next;});
@@ -82,14 +83,14 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
      <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>YOUR HOURLY INCOME</small><strong>{euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
      <div className="investment-property-performance"><span>{p.kind==='hotel'?'Room occupancy':'Parking utilisation'} <strong>{performance.activityPercent}%</strong></span><span>Gross <strong>{euro(performance.grossCents)}/h</strong></span><span>Costs <strong>{euro(performance.costCents)}/h</strong></span><span>Net <strong>{euro(performance.netCents)}/h</strong></span></div>
      <div className="investment-poi-amount">
-      <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{euro(charge)}</strong></div>
+      <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{exactEuro(charge)}</strong></div>
       <input className="investment-poi-slider" type="range"
        aria-label={`Choose investment for ${p.name||p.kind}`}
        min={limit>0?0.01:0} max={Math.max(0.01,limit/100)}
        step="any" value={canBuy?charge/100:Math.min(limit/100,0.01)}
        disabled={limit===0}
        onChange={e=>updateAmount(p.id,asEuros(Math.max(1,Math.min(limit,Math.round(Number(e.target.value)*100)))))}/>
-      <div className="investment-poi-range"><span>€0.01</span><span>Max {euro(limit)}</span></div>
+      <div className="investment-poi-range"><span>€0.01</span><span>Max {exactEuro(limit)}</span></div>
       <div className="investment-poi-entry">
        <span>Exact amount (€)</span>
        <input id={`invest-value-${p.id}`} type="number" inputMode="decimal"
@@ -105,7 +106,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        `${euro(remaining)} in shares available · ${euro(Math.round(companyCash*100))} company cash`}</small>
      </div>
      <div className="investment-preview">
-      <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {euro(charge)} · simulated forecast</small></div>
+      <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {exactEuro(charge)} · simulated forecast</small></div>
       <div className="investment-preview-metrics">
        <div><span>ADDITIONAL STAKE</span><strong>+{(projection.additionalShare*100).toFixed(2)}%</strong></div>
        <div><span>OWNERSHIP AFTER</span><strong>{(projection.newShare*100).toFixed(2)}%</strong></div>
@@ -117,7 +118,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
       <small>Projections are not guaranteed. Forecast assumes the displayed ownership stays constant and uses current simulated seasonal demand.</small>
      </div>
      <div className="investment-track"><span style={{width:`${percent}%`}}/></div>
-     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{remaining<=0?'100% Owned':limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${euro(charge)}`}</button></div>
+     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{remaining<=0?'100% Owned':limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${exactEuro(charge)}`}</button></div>
     </article>;
    })}
   </div>
