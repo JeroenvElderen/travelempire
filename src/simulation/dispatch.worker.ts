@@ -472,11 +472,11 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
 // Unlike road-class specialists, every previously red road on the chosen route
 // is a discovery edge. The route remains directed and stays on the road graph.
 function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
- reserved:Set<string>,targetIndex:number):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
+ reserved:Set<string>,candidateIndexes:ReadonlySet<number>):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[];portIndex:number}|null{
  const targets:Array<{node:string;offsetMeters:number}>=[];
- const legs:Array<{from:string;to:string;id:string}>=[];
+ const legs:Array<{from:string;to:string;id:string;portIndex:number}>=[];
  for(const [index,best] of nearestHarbourRoads){
-  if(index!==targetIndex)continue;
+  if(!candidateIndexes.has(index))continue;
   const local=[best.id,...(harbourAccessCandidates.get(index)??[])
    .filter(road=>road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))
    .map(road=>road.id)];
@@ -490,7 +490,7 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
    for(const edge of g.edges.get(from)??[]){
     if(edge.id!==id)continue;
     targets.push({node:from,offsetMeters:edge.meters});
-    legs.push({from,to:edge.to,id});
+    legs.push({from,to:edge.to,id,portIndex:index});
    }
   }
   }
@@ -504,7 +504,7 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
  const edgeIds=[...result.edgeIds,leg.id];
  return {path:[...result.path,destination],edgeIds,
   discoveryEdgeIds:[...new Set(edgeIds.filter(id=>!explored.has(id)))],
-  escapeTransitEdgeIds:[]};
+  escapeTransitEdgeIds:[],portIndex:leg.portIndex};
 }
 const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'||h==='track'||h==='road'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number;plannerPoolEnabled?:boolean};
@@ -1074,9 +1074,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const allowed=discoveryRoads(idleVehicle);
       const planned=role==='poi'?null:planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
        reservedEdges,reservedTargets,role);
-      const assignedIndex=role==='poi'?(msg.poiMissions?.findIndex(m=>m.vehicleId===idleVehicle.id)??-1):-1;
-      const route=role==='poi'&&assignedIndex>=0
-       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,assignedIndex)
+      const candidateIndexes=new Set<number>();
+      if(role==='poi')for(let i=0;i<(msg.poiMissions?.length??0);i++){
+       if(msg.poiMissions![i].vehicleId===idleVehicle.id)candidateIndexes.add(i);
+      }
+      // Route to the closest LEGALLY REACHABLE harbour by graph distance.
+      // Do not hold a scout idle because its first geographical assignment
+      // is missing a tile, on an island, or blocked by one-way restrictions.
+      const route=role==='poi'
+       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,candidateIndexes)
        :planned?.route??null;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
        ?route?'shortest-harbour-route':'no-reachable-undiscovered-harbour'
@@ -1108,7 +1114,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         })&&
         (!destination||!reservedTargets.has(destination));
        if(routeValid){
-        const assignment:Taxi={...idleVehicle,status:'EXPLORING',
+        const chosenPort=role==='poi'&&'portIndex' in route
+         ?msg.poiMissions?.[route.portIndex]:undefined;
+        const assignment:Taxi={...idleVehicle,
+         ...(chosenPort?{poiTargetId:chosenPort.portId,poiTargetName:undefined}:{}),
+         status:'EXPLORING',
          path:completed.path,edgeIds:completed.edgeIds,
          discoveryEdgeIds:route.discoveryEdgeIds,
          escapeTransitEdgeIds:route.escapeTransitEdgeIds,
