@@ -30,7 +30,7 @@ describe('strict connected specialist road-class activation',()=>{
   expect(specialistCanDepart({kind:'explorer',explorerRole:'highway'},roles)).toBe(false);
   expect(specialistCanDepart({kind:'explorer',explorerRole:'primary'},roles)).toBe(false);
   expect(specialistCanDepart({kind:'explorer',explorerRole:'secondary'},roles)).toBe(false);
-  expect(specialistCanDepart({kind:'explorer',explorerRole:'poi'},roles)).toBe(false);
+  expect(specialistCanDepart({kind:'explorer',explorerRole:'poi'},roles)).toBe(true);
   expect(specialistCanDepart({kind:'explorer',explorerRole:'residential'},roles)).toBe(true);
  });
  it('unlocks the highway once local discovery connects purple to a motorway junction',()=>{
@@ -41,7 +41,7 @@ describe('strict connected specialist road-class activation',()=>{
   const roles=access(['A','B'],['seed-service','distant-highway']);
   expect(roles.has('highway')).toBe(false);
  });
- it('unlocks POI only at an indexed access road adjoining connected purple',()=>{
+ it('tracks indexed harbour access while allowing the POI explorer to plan its own corridor',()=>{
   expect(access(['A','B'],['seed-service'],['distant-highway']).has('poi')).toBe(false);
   expect(access(['A','B'],['seed-service'],['local-next']).has('poi')).toBe(true);
  });
