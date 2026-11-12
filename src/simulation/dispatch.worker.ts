@@ -1102,9 +1102,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        const destination=nearest(activeGraph,completed.path.at(-1)!);
        const newEdges=new Set(route.discoveryEdgeIds);
        const escapeOnly=new Set(route.escapeTransitEdgeIds);
+       const allPurpleArrival=role==='poi'&&newEdges.size===0&&
+        completed.edgeIds.every(id=>explored.has(id));
        const routeValid=completed.edgeIds.length===completed.path.length-1&&
-        !hasInvalidRedApproach(activeGraph,completed.path,completed.edgeIds,
-         explored,newEdges)&&
+        (allPurpleArrival||!hasInvalidRedApproach(activeGraph,completed.path,completed.edgeIds,
+         explored,newEdges))&&
         [...newEdges].every(id=>allowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
         [...escapeOnly].every(id=>!explored.has(id)&&!newEdges.has(id)&&!reservedEdges.has(id))&&
         completed.edgeIds.every((id,i)=>{
