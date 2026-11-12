@@ -771,7 +771,7 @@ export default function App(){
      const distance=meters(explorer.position,mission.point);
      const progress=Math.min(distance,harbourPrefetchProgressRef.current.get(mission.vehicleId)??0);
      const next=Math.min(distance,progress+3000);
-     if(distance>0){
+     if(distance>0&&manager&&manager.queuedCount<4){
       const pointAt=(metersAlong:number):[number,number]=>{
        const ratio=metersAlong/distance;
        return [explorer.position[0]+(mission.point[0]-explorer.position[0])*ratio,
