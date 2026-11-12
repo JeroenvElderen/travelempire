@@ -6,6 +6,7 @@ import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
+import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
 import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 // Two independent exploration planners run outside passenger dispatch.
@@ -450,7 +451,7 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
    if(distance<=300&&(!previous||distance<previous.distance))nearestHarbourRoads.set(i,{id,distance});
    // A mapped terminal often spans several connected short road pieces.
    // Match the same entrance corridor used by the harbour-unlock index.
-   if(distance<=220){
+   if(distance<=HARBOUR_ACCESS_RADIUS_METERS){
     const list=harbourAccessCandidates.get(i)??[];
     list.push({id,distance});
     harbourAccessCandidates.set(i,list);
@@ -461,7 +462,7 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
  for(const [index,best] of nearestHarbourRoads){
   poiRoadsIndex.add(best.id);
   for(const road of harbourAccessCandidates.get(index)??[])
-   if(road.distance<=Math.min(120,best.distance+90))poiRoadsIndex.add(road.id);
+   if(road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))poiRoadsIndex.add(road.id);
  }
  poiRoadCursor=cursor;
  poiIndexedRoads=seenRoadIds.size;
@@ -476,7 +477,7 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
  const legs:Array<{from:string;to:string;id:string}>=[];
  for(const [index,best] of nearestHarbourRoads){
   const local=[best.id,...(harbourAccessCandidates.get(index)??[])
-   .filter(road=>road.distance<=Math.min(120,best.distance+90))
+   .filter(road=>road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))
    .map(road=>road.id)];
   // Once any real terminal-access segment is explored the harbour is done.
   // Do not keep targeting different sections of an already unlocked port.
