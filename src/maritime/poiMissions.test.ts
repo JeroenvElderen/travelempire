@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {assignPoiHarbours} from './poiMissions';
+import {assignPoiHarbours,poiRouteCandidates} from './poiMissions';
 import type {Taxi} from '../simulation/taxi';
 import type {FerryPort} from './ferries';
 const port=(id:string,x:number):FerryPort=>({id,name:id,position:[x,38]});
@@ -28,6 +28,20 @@ describe('nationwide harbour scout missions',()=>{
   const second=assignPoiHarbours(first.taxis,ports,new Set([first.missions[0].portId]));
   expect(second.missions[0].portId).not.toBe(first.missions[0].portId);
   expect(second.missions).toHaveLength(2);
+ });
+ it('offers alternate harbours beyond nearby unreachable island ports',()=>{
+  const ports=Array.from({length:130},(_,i)=>port('port-'+i,24+i*.01));
+  const result=poiRouteCandidates([scout('poi-1',24,'port-0')],ports,new Set(),14);
+  expect(result.length).toBe(14);
+  expect(result[0].portId).toBe('port-0');
+  expect(result.some(m=>m.portId==='port-23')).toBe(true);
+  expect(result.some(m=>m.portId==='port-100')).toBe(true);
+ });
+ it('does not offer harbours assigned to another explorer',()=>{
+  const ports=[port('a',24),port('b',24.1),port('c',24.2),port('d',24.3)];
+  const result=poiRouteCandidates([scout('one',24,'a'),scout('two',24.1,'b')],ports,new Set());
+  expect(result.filter(m=>m.vehicleId==='one').some(m=>m.portId==='b')).toBe(false);
+  expect(result.filter(m=>m.vehicleId==='two').some(m=>m.portId==='a')).toBe(false);
  });
  it('never gives passenger taxis a harbour assignment',()=>{
   const taxi={...scout('taxi'),kind:'taxi' as const,explorerRole:undefined};
