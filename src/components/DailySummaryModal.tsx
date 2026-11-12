@@ -47,7 +47,7 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
      <div className="te-day-hero-top"><span className="te-day-logo"><span className="te-day-logo-icon">✈</span> Travel<span>Empire</span></span>
       <button type="button" className="te-day-close" aria-label="Close daily report" onClick={onClose}><X size={21}/></button>
      </div>
-     <div className="te-day-hero-title"><CalendarCheck size={31}/><div><h2 id="te-day-title">Daily Empire Report</h2><p>{date} · Day complete</p></div></div>
+     <div className="te-day-hero-title"><CalendarCheck size={31}/><div><h2 id="te-day-title">Daily Empire Report</h2><p>{companyName} · {date}</p></div></div>
     </header>
     <section className="te-day-profit" aria-label="Daily profit">
      <div className="te-day-profit-symbol"><Coins size={39}/></div>
