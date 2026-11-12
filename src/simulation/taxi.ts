@@ -1027,9 +1027,15 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   // drive on the discovered network and never convert a traversed edge to
   // purple, including on pickup, drop-off and operational return trips.
   // Explorer assignments are the sole authority for new discoveries.
+  const poiRoadTravel=taxi.kind==='explorer'&&taxi.explorerRole==='poi'&&
+   !taxi.ferryTrip&&(taxi.status==='EXPLORING'||taxi.status==='RETURNING');
   const operationalDiscovery=taxi.kind==='explorer'&&taxi.status==='RETURNING'&&
    Boolean(taxi.restStopId||taxi.refillDestination||taxi.serviceDestination);
+  // POI explorers discover every *real completed road edge* they drive over,
+  // regardless of whether a worker included the ID in discoveryEdgeIds.
+  // Passenger taxis, ferry transfers and other specialist roles keep their rules.
   const eligible=taxi.kind==='explorer'?new Set(
+   poiRoadTravel?taxi.edgeIds:
    taxi.status==='EXPLORING'?(taxi.discoveryEdgeIds??[]):
    operationalDiscovery?taxi.edgeIds:[]):null;
   // The motorway explorer may transit undiscovered roads of any class, but
