@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {Anchor,ArrowRight,BarChart3,Building2,CalendarCheck,CarFront,CheckCircle2,ChevronRight,Coins,Compass,CreditCard,Flag,Landmark,Layers3,Ship,Target,TrendingUp,Wallet,X,Wrench} from 'lucide-react';
+import {ArrowRight,BarChart3,Building2,CalendarCheck,CarFront,CheckCircle2,ChevronRight,Coins,Compass,CreditCard,Flag,Landmark,Layers3,Ship,Target,TrendingUp,Wallet,X,Wrench} from 'lucide-react';
 import type {DailySummary} from '../simulation/dailySummary';
 import './daily-summary.css';
 
