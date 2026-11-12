@@ -17,6 +17,7 @@ import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
 import {vehicleActivity} from '../simulation/vehicleActivity';
+import {liveJobMeter} from '../simulation/liveJobMeter';
 import {deliveryPosition} from '../dealership';
 import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
@@ -478,10 +479,64 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const close=document.createElement('button');close.type='button';close.className='te-sheet-close';close.textContent='×';close.setAttribute('aria-label','Close vehicle details');close.addEventListener('click',()=>sheet.remove());
      header.append(icon,title,close);
      const stats=document.createElement('div');stats.className='te-sheet-stats';
-     const metric=(label:string,value:string)=>{const box=document.createElement('div');const number=document.createElement('strong');number.textContent=value;const caption=document.createElement('small');caption.textContent=label;box.append(number,caption);stats.appendChild(box);};
-     metric('Speed',Math.round(current.speedKph??0)+' km/h');
-     metric('Condition',Math.round(current.vehicleCondition??100)+'%');
-     metric('Energy',Math.round(energyPercent(current))+'%');
+     const metric=(label:string,value:string)=>{const box=document.createElement('div');const number=document.createElement('strong');number.textContent=value;const caption=document.createElement('small');caption.textContent=label;box.append(number,caption);stats.appendChild(box);return number;};
+     const speedValue=metric('Speed',Math.round(current.speedKph??0)+' km/h');
+     const conditionValue=metric('Condition',Math.round(current.vehicleCondition??100)+'%');
+     const energyValue=metric('Energy',Math.round(energyPercent(current))+'%');
+     // Passenger-only running fare meter: read the latest simulated vehicle
+     // each refresh, not the snapshot from when the bottom sheet opened.
+     // No extra React or MapLibre updates are needed on iPhone.
+     const jobPanel=document.createElement('div');
+     jobPanel.className='te-sheet-job-meter';
+     const jobHeading=document.createElement('div');
+     jobHeading.className='te-sheet-job-heading';
+     const jobLabel=document.createElement('strong');
+     const jobPhase=document.createElement('small');
+     jobHeading.append(jobLabel,jobPhase);
+     const jobStats=document.createElement('div');
+     jobStats.className='te-sheet-job-stats';
+     const jobMoney=document.createElement('strong');
+     const jobDistance=document.createElement('strong');
+     const jobFareCell=document.createElement('div');
+     const jobDistanceCell=document.createElement('div');
+     const jobFareText=document.createElement('small');
+     jobFareText.textContent='Live fare';
+     const jobDistanceText=document.createElement('small');
+     jobDistanceText.textContent='Distance driven';
+     jobFareCell.append(jobMoney,jobFareText);
+     jobDistanceCell.append(jobDistance,jobDistanceText);
+     jobStats.append(jobFareCell,jobDistanceCell);
+     const track=document.createElement('div');
+     track.className='te-sheet-job-track';
+     const fill=document.createElement('div');
+     fill.className='te-sheet-job-fill';
+     track.appendChild(fill);
+     const jobFoot=document.createElement('small');
+     jobFoot.className='te-sheet-job-foot';
+     jobPanel.append(jobHeading,jobStats,track,jobFoot);
+     const euro=(amount:number)=>'€'+amount.toFixed(2);
+     const refreshJobMeter=()=>{
+      if(!sheet.isConnected)return;
+      const vehicle=taxiStateRef.current.find(t=>t.id===current.id);
+      if(!vehicle){sheet.remove();return;}
+      speedValue.textContent=Math.round(vehicle.speedKph??0)+' km/h';
+      conditionValue.textContent=Math.round(vehicle.vehicleCondition??100)+'%';
+      energyValue.textContent=Math.round(energyPercent(vehicle))+'%';
+      const job=liveJobMeter(vehicle);
+      jobPanel.hidden=!job;
+      if(!job)return;
+      const pickup=job.phase==='pickup';
+      jobLabel.textContent=pickup?'Driving to passenger':'Passenger trip · live';
+      jobPhase.textContent=pickup?'Pickup':'On board';
+      jobMoney.textContent=euro(job.earnedSoFar);
+      jobDistance.textContent=job.drivenKm.toFixed(2)+' / '+job.totalKm.toFixed(2)+' km';
+      jobFareText.textContent=pickup?'Fare starts at pickup':'Fare accumulated';
+      jobDistanceText.textContent=pickup?'To pickup':'Job distance';
+      fill.style.width=(job.progress*100).toFixed(1)+'%';
+      jobFoot.textContent=pickup?
+       'Quoted fare '+euro(job.expectedFare)+' · pickup travel not charged':
+       'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off';
+     };
      const toggle=document.createElement('button');toggle.type='button';toggle.className='te-sheet-toggle';toggle.textContent='More details ↑';
      const details=document.createElement('div');details.className='te-sheet-details';details.hidden=true;
      const addRow=(label:string,value:string)=>{const row=document.createElement('div');row.className='te-sheet-row';const a=document.createElement('span');a.textContent=label;const b=document.createElement('strong');b.textContent=value;row.append(a,b);details.appendChild(row);};
@@ -520,7 +575,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const setExpanded=(value:boolean)=>{sheet.classList.toggle('expanded',value);details.hidden=!value;toggle.textContent=value?'Less details ↓':'More details ↑';};
      toggle.addEventListener('click',()=>setExpanded(details.hidden));grab.addEventListener('click',()=>setExpanded(details.hidden));
      let touchStartY=0;sheet.addEventListener('touchstart',e=>{touchStartY=e.touches[0]?.clientY??0},{passive:true});sheet.addEventListener('touchend',e=>{const delta=(e.changedTouches[0]?.clientY??touchStartY)-touchStartY;if(delta < -45)setExpanded(true);else if(delta>45&&(!sheet.classList.contains('expanded')||details.scrollTop===0))setExpanded(false);},{passive:true});
-     sheet.append(grab,header,stats,toggle,details);document.body.appendChild(sheet);
+     sheet.append(grab,header,stats,jobPanel,toggle,details);document.body.appendChild(sheet);
+     refreshJobMeter();
+     const jobRefresh=window.setInterval(()=>{
+      if(!sheet.isConnected){window.clearInterval(jobRefresh);return;}
+      refreshJobMeter();
+     },500);
     };
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
