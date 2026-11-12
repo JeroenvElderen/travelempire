@@ -4,7 +4,7 @@ import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {planConnectedFrontier} from './connectedFrontier';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {isObsoleteExplorerReturn} from './savedReturnJourney';
-import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
+import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
@@ -81,6 +81,17 @@ const classifiedRoads=new Set<string>();
 const roadEndpoints=new Map<string,[string,string]>();
 const roadInsertionOrder:string[]=[];
 const roadClassCache=new Map<string,Set<string>>();
+// Once a road class has actually been discovered, keep its specialists
+// unlocked even when the HQ frontier advances or moves to another tile.
+const discoveredRoleHistory=new Set<RestrictedExplorerRole>();
+function rememberDiscoveredRole(kind:string|undefined){
+ switch(roadRole(kind??'')){
+ case 'motorway':case 'trunk':discoveredRoleHistory.add('highway');break;
+ case 'primary':discoveredRoleHistory.add('primary');break;
+ case 'secondary':case 'tertiary':discoveredRoleHistory.add('secondary');break;
+ case 'residential':case 'rural':case 'service':discoveredRoleHistory.add('residential');break;
+ }
+}
 const REGION_DEGREES=0.02;
 function purpleStartNear(position:Point,explored:Set<string>){
  const lat=Math.floor(position[1]/REGION_DEGREES);
@@ -385,7 +396,7 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
  let rebuild=explored.size<indexedExplored.size||hqNode!==connectedHqNode;
  if(!rebuild)for(const id of indexedExplored)if(!explored.has(id)){rebuild=true;break;}
  if(rebuild){
-  indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();
+  indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();
   connectedHqNode=hqNode;discoveryIndexRoads=0;discoveryIndexRebuilds++;
  }
  const touched=new Set<string>();
@@ -394,7 +405,10 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
  for(const id of explored)if(!indexedExplored.has(id)){
   indexedExplored.add(id);
   const ends=roadEndpoints.get(id);
-  if(ends)for(const node of ends){revealedNodesIndex.add(node);touched.add(node);}
+  if(ends){const road=(g.edges.get(ends[0])??[]).find(e=>e.id===id)??
+   (g.edges.get(ends[1])??[]).find(e=>e.id===id);
+   rememberDiscoveredRole(road?.highway);
+   for(const node of ends){revealedNodesIndex.add(node);touched.add(node);}}
  }
  // Road additions can expose new connector candidates between revealed nodes.
  if(discoveryIndexRoads!==seenRoadIds.size){
@@ -576,7 +590,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -590,6 +604,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0||seenRoadIds.has(road.id))continue;
     seenRoadIds.add(road.id);
     allRoads.add(road.id);
+    if(indexedExplored.has(road.id))rememberDiscoveredRole(road.highway);
     const role=roadRole(road.highway??'');
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
@@ -792,6 +807,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const poiRoads=poiRoadsIndex;
    const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
     explored,poiRoads);
+   for(const role of discoveredRoleHistory)unlockedRoles.add(role);
    // An initial purple service/parking segment must not give the motorway
    // specialist permission to cross red streets toward a distant motorway.
    for(let i=0;i<taxis.length;i++){
@@ -1321,6 +1337,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updatePoiIndex(graph,poiTargets);
    const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
     explored,poiRoadsIndex);
+   for(const role of discoveredRoleHistory)unlockedRoles.add(role);
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i];
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&
