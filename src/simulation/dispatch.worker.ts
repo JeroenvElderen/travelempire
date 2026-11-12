@@ -6,7 +6,7 @@ import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
-import {createPassengerRequest,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 // Two independent exploration planners run outside passenger dispatch.
 // Their results are committed by this coordinator only after validating the
@@ -459,6 +459,10 @@ const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='t
 type Init={type:'init';revision:number;plannerPoolEnabled?:boolean};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
 const idleFallbackAt=new Map<string,number>();
+// Prevent deterministic fallback generation from repeatedly selling the
+// same point-to-point ride every few seconds when the map is still small.
+const recentPassengerPairs=new Map<string,number>();
+const PASSENGER_PAIR_COOLDOWN_MS=180000;
 // Avoid repeating costly route extensions on every dispatch while a scout
 // continues following a valid route.
 const extensionRetryAt=new Map<string,number>();
@@ -658,8 +662,19 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
   const demand=demandAt(now,passengerTaxis.length);
   if(msg.allowMission&&queue.length<demand.queueLimit){
-   const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier,eligibleStops);
-   if(request){queue.push(request);generatedMission=true;passengerRequestsCreated++;}else passengerRequestsRejected++;
+   for(const [pair,created] of recentPassengerPairs)
+    if(now-created>PASSENGER_PAIR_COOLDOWN_MS)recentPassengerPairs.delete(pair);
+   const exclude=new Set(recentPassengerPairs.keys());
+   for(const pending of queue){
+    exclude.add(passengerPairKey(pending.pickup,pending.dropoff));
+    exclude.add(passengerPairKey(pending.dropoff,pending.pickup));
+   }
+   const request=createPassengerRequest(graph,validDiscovered,hq,now,demand.fareMultiplier,eligibleStops,exclude);
+   if(request){
+    for(const pair of [passengerPairKey(request.pickup,request.dropoff),
+     passengerPairKey(request.dropoff,request.pickup)])recentPassengerPairs.set(pair,now);
+    queue.push(request);generatedMission=true;passengerRequestsCreated++;
+   }else passengerRequestsRejected++;
   }
   const preparationMs=performance.now()-dispatchStarted;
   const passengerStarted=performance.now();
