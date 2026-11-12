@@ -1164,8 +1164,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         continue;
        }
        singleWorkerScanResult.set(idleVehicle.id,'route-rejected-by-directed-validation');
-      }else if(role!=='poi'&&planned&&planned.diagnostic.visitedPurpleNodes<=1&&hqNode&&
-       meters(idleVehicle.position,hq)>300){
+      }else if(role!=='poi'&&planned&&hqNode&&
+       meters(idleVehicle.position,hq)>300&&
+       (planned.diagnostic.visitedPurpleNodes<=1||
+        now-(idleSince.get(idleVehicle.id)??now)>45000)){
        // Do not leave a specialist parked at an exhausted one-way spur:
        // return to headquarters *only* if already discovered roads provide
        // a legally directed route. This never discovers unrelated classes.
@@ -1173,11 +1175,13 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        if(homeRoute&&homeRoute.edgeIds.length>0){
         const returnRoute=prependPurpleStart(homeRoute,origin);
         if(returnRoute.edgeIds.length===returnRoute.path.length-1){
-         taxis[index]={...idleVehicle,status:'RETURNING',pauseAtHome:true,
+         // Reposition to HQ without parking forever: the scout resumes
+         // normal frontier planning as soon as the directed trip finishes.
+         taxis[index]={...idleVehicle,status:'RETURNING',pauseAtHome:false,
           path:returnRoute.path,edgeIds:returnRoute.edgeIds,
           discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
           leg:0,distanceIntoLeg:0,speedKph:0};
-         explorerPlanSkipReason.set(idleVehicle.id,'returning-to-depot-no-connected-class-frontier');
+         explorerPlanSkipReason.set(idleVehicle.id,'repositioning-to-hq-no-reachable-frontier');
          singleWorkerScanResult.set(idleVehicle.id,'directed-return-to-depot:edges='+returnRoute.edgeIds.length);
          continue;
         }
