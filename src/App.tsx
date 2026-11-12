@@ -49,6 +49,8 @@ import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
 import LiveFinanceTicker from "./components/LiveFinanceTicker";
+import DailySummaryModal from './components/DailySummaryModal';
+import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBaseline,type DailySummary} from './simulation/dailySummary';
 import * as Research from "./research";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
@@ -200,6 +202,7 @@ export default function App(){
      else history.push({day,revenue:gross,expenses:costs,trips:0});
      const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
      return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+      ferryRevenueByDay:(()=>{const days={...(old.ferryRevenueByDay??{})};days[day]=Math.round(((days[day]??0)+gross)*100)/100;const keys=Object.keys(days).sort();for(const oldDay of keys.slice(0,-45))delete days[oldDay];return days;})(),
       financeHistory:history.slice(-365),
       transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:nowGame,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...events.map(event=>({id:crypto.randomUUID(),...event})),
        ...(old.transactions??[])].slice(0,100)};
@@ -2093,6 +2096,36 @@ export default function App(){
   }
   harbourSeenRef.current=true;
  },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
+ // Show a single end-of-day report when the accelerated game clock passes midnight.
+ // Baselines are company-specific and saved separately from the fleet so restarting
+ // Safari cannot repeatedly generate the same daily report.
+ const [dailyReport,setDailyReport]=useState<DailySummary|null>(null);
+ const dailyBaselineRef=useRef<ReturnType<typeof dayBaseline>|null>(null);
+ useEffect(()=>{dailyBaselineRef.current=null;setDailyReport(null)},[company?.id]);
+ useEffect(()=>{
+  if(!company||!gameClock)return;
+  const day=gameDay(gameClock.epochMs);
+  const baseline=dailyBaselineRef.current??readSummaryBaseline(company.id);
+  const snapshotFleet=fleetSaveRef.current;
+  const currentCash=(companyRef.current?.cash??company.cash)+pendingCashRef.current;
+  if(!baseline){
+   const first=dayBaseline(day,snapshotFleet,currentCash,unlockedHarbours.length);
+   dailyBaselineRef.current=first;saveSummaryBaseline(company.id,first);
+   return;
+  }
+  dailyBaselineRef.current=baseline;
+  if(baseline.day>=day)return;
+  // Offline skips can span days; only generate a report for a day that
+  // actually reached midnight during the current session.
+  const elapsed=(Date.parse(day+'T00:00:00Z')-Date.parse(baseline.day+'T00:00:00Z'))/86400000;
+  if(elapsed===1){
+   const report=buildDailySummary(baseline.day,snapshotFleet,baseline,currentCash,unlockedHarbours.length);
+   setDailyReport(report);
+   try{localStorage.setItem('travelempire.lastDailyReport.v1.'+company.id,JSON.stringify(report))}catch{}
+  }
+  const next=dayBaseline(day,snapshotFleet,currentCash,unlockedHarbours.length);
+  dailyBaselineRef.current=next;saveSummaryBaseline(company.id,next);
+ },[company?.id,gameClock?.epochMs,unlockedHarbours.length]);
  // POI explorers return to their depot after the full harbour network is unlocked.
  // Keep the retirement request stable across simulation updates and page changes.
  const harbourRetireRequestedRef=useRef(new Set<string>());
@@ -2189,6 +2222,7 @@ export default function App(){
  const researchRemaining=activeResearch?Math.max(0,activeResearch.endsAt-researchGameNow):0;
  const researchRemainingLabel=researchRemaining>=3600000?`${Math.ceil(researchRemaining/3600000)}h remaining`:`${Math.ceil(researchRemaining/60000)}m remaining`;
  return <div className={`shell nav-v216 ${sidebarCollapsed?'nav-collapsed':''} ${page==='World'&&!consoleOpen?'nav-map-mode':''}`}><aside className={`sidebar ${drawerOpen?'open':''}`}><header className="brand"><div className="brand-mark"><CarFront size={23}/></div><div className="nav-brand-copy"><strong>TravelEmpire</strong><small>v2.1.6 · MANAGEMENT</small></div><button className="nav-collapse-button" title={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} aria-label={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><button className="close-menu" aria-label="Close menu" onClick={()=>setDrawerOpen(false)}><X size={19}/></button></header><nav className="navigation" aria-label="Main navigation"><div className="nav-group-label">OPERATIONS</div>{navigation.filter(n=>['World','Fleet','Dealership','Drivers','Operations','Ferries'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name==='World'?'World Map':name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'World Map':name}</span></button>)}<div className="nav-group-label">MANAGEMENT</div>{navigation.filter(n=>['Company','Finance','Investments','Research','Explorer AI'].includes(n.name)).map(({name,icon:Icon})=><button key={name} title={name} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}<div className="nav-group-label">DIAGNOSTICS</div><button type="button" className={consoleOpen?"selected":""} onClick={()=>{setPage('World');setConsoleOpen(true);setDrawerOpen(false)}}><ScrollText size={19}/><span>Frontend console</span></button><div className="nav-group-label">FUTURE</div>{futureNavigation.map(({name,icon:Icon})=><button key={name} type="button" title={`${name} · Development brief`} aria-current={page===name?'page':undefined} className={page===name?'selected':''} onClick={()=>go(name)}><Icon size={19}/><span>{name}</span></button>)}</nav><button className="sidebar-bottom nav-company-shortcut" title={company?.name??'Company'} onClick={()=>go('Company')}><span className="nav-company-avatar"><CarFront size={20}/></span><span className="nav-company-copy"><strong>{company?.name??'Create company'}</strong><small>{company?'Company workspace':'Set up your company'}</small></span></button></aside>
+ {dailyReport&&<DailySummaryModal summary={dailyReport} onClose={()=>setDailyReport(null)}/>}
  {drawerOpen&&<button className="backdrop" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}/>}<main className="main"><header className={`topbar ${page==='World'&&!consoleOpen?'world-topbar world-minimal-topbar':''}`}>{page==='World'&&!consoleOpen?<><span className="world-minimal-date" title="In-game date and time"><CalendarClock size={16}/>{gameClock?formatGameClock(gameClock):'Simulation paused'}</span><span className="world-minimal-money" title="Available company funds"><CircleDollarSign size={17}/>{company?new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(company.cash):'€0'}</span><button type="button" className="world-minimal-layers" aria-label="Toggle map layers" title="Map layers" aria-controls="map-layer-options" onClick={()=>setLayersToggleToken(v=>v+1)}><Layers3 size={19}/></button></>:<><button className="menu-toggle" aria-label="Open navigation" onClick={()=>setDrawerOpen(true)}><Menu size={21}/></button><div className="nav-page-identity"><strong>{consoleOpen?'Frontend console':page}</strong><small>TravelEmpire</small></div><div className="nav-top-stats">{company&&<span className="nav-top-stat"><CircleDollarSign size={16}/><strong>{new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(company.cash)}</strong></span>}</div></>}</header>
  {company&&(activeResearchProject?
  <button type="button" className="research-header-progress" onClick={()=>go('Research')} aria-label={`Research: ${activeResearchProject.name}, ${Math.round(researchProgress)} percent complete`}>
