@@ -31,6 +31,17 @@ describe('stranded explorer recovery',()=>{
   expect(route?.path[0]).toEqual(position);
   expect(route?.targetNode).toBe('D');
  });
+ it('escapes from the downstream end of a discovered one-way road',()=>{
+  const graph=makeGraph();
+  // The purple road points INTO B with no legal purple edge leaving B.
+  // The explorer must use the directed service-road escape B → C → D.
+  graph.edges.set('B',[{id:'bc',to:'C',meters:90,speedKph:35,highway:'service'}]);
+  const discovered=new Set(['ab','purple']);
+  const route=routeStrandedExplorerToPurple(graph,[23.901,37.900],discovered,
+   endpoints,new Set(['ab','bc','cd','purple']));
+  expect(route?.targetNode).toBe('D');
+  expect(route?.edgeIds).toEqual(['bc','cd']);
+ });
  it('rejects a disconnected or wrong-way exit rather than teleporting',()=>{
   const graph=makeGraph();
   graph.edges.set('C',[]);
