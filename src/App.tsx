@@ -1857,14 +1857,14 @@ export default function App(){
   setSimError('');
  };
  const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
- const acceptBankPartnership=(bankId:string,request:number)=>{
+ const acceptBankPartnership=(bankId:string,request:number,share:number)=>{
   const current=companyRef.current;
   if(!current)return;
   const state=fleetSaveRef.current;
   const clock=gameClockRef.current?.epochMs??Date.now();
   const valuation=valueCompany(current,state,clock).value;
   const score=securedQuote(current,state,clock,1000,365).score;
-  const offer=partnershipOffer(bankId,request,valuation,revenueAverage(state.financeHistory??[]),score,state.bankPartnerships??[]);
+  const offer=partnershipOffer(bankId,request,valuation,revenueAverage(state.financeHistory??[]),score,state.bankPartnerships??[],share);
   if(!offer.approved){setSimError(offer.reason);return;}
   const contract:BankPartnership={id:crypto.randomUUID(),bank:offer.bank,
    principal:offer.funding,revenueShare:offer.revenueShare,
