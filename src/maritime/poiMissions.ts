@@ -35,3 +35,29 @@ function distance(a:Point,b:Point):number{
  const cos=Math.cos((a[1]+b[1])*Math.PI/360);
  return Math.hypot((a[0]-b[0])*cos,a[1]-b[1]);
 }
+
+/** Bounded candidate window for route-finding. Search nearby unlocked ports as
+ * well as the current destination, so an island or missing road tile cannot
+ * strand a POI scout when a different harbour is reachable.
+ * The worker chooses the final destination using directed road distance. */
+export function poiRouteCandidates(
+ taxis:readonly Taxi[],ports:readonly FerryPort[],unlocked:ReadonlySet<string>,
+ perExplorer=14,
+):Array<{vehicleId:string;portId:string;point:Point}>{
+ const available=ports.filter(p=>!unlocked.has(p.id));
+ const scouts=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi'&&!t.ferryTrip);
+ const assigned=new Set(scouts.map(t=>t.poiTargetId).filter((id):id is string=>!!id));
+ const result:Array<{vehicleId:string;portId:string;point:Point}>=[];
+ for(const scout of scouts){
+  const own=available.find(p=>p.id===scout.poiTargetId);
+  // Do not steal destinations that another scout is already working toward.
+  const choices=available.filter(p=>!assigned.has(p.id)||p.id===scout.poiTargetId)
+   .sort((a,b)=>distance(scout.position,a.roadAccess??a.position)-
+     distance(scout.position,b.roadAccess??b.position));
+  const selected=own?[own,...choices.filter(p=>p.id!==own.id).slice(0,Math.max(0,perExplorer-1))]:
+   choices.slice(0,perExplorer);
+  for(const port of selected)result.push({vehicleId:scout.id,portId:port.id,
+   point:port.roadAccess??port.position});
+ }
+ return result;
+}
