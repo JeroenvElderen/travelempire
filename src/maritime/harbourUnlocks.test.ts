@@ -29,6 +29,17 @@ describe('harbour discovery access-road indexing',()=>{
   expect(matches).toContain('approach');
   expect(matches).not.toContain('distant-road');
  });
+ it('recognises a discovered approach road roughly 180m from a berth without requiring every spur',async()=>{
+  const roads=graph([
+   {id:'berth-spur',a:at(24.00001),b:at(24.00008)},
+   {id:'blue-main-approach',a:at(24.0019),b:at(24.0021)},
+   {id:'unrelated-street',a:at(24.008),b:at(24.009)}
+  ]);
+  const matches=(await harbourRoadEdges(port(at(24)),roads)).get('rafina')??[];
+  expect(matches).toContain('berth-spur');
+  expect(matches).toContain('blue-main-approach');
+  expect(matches).not.toContain('unrelated-street');
+ });
  it('falls back to the nearest mapped access segment when no nearby alternative exists',async()=>{
   const roads=graph([{id:'single',a:at(24.005),b:at(24.006)}]);
   expect((await harbourRoadEdges(port(at(24)),roads)).get('rafina')).toEqual(['single']);
