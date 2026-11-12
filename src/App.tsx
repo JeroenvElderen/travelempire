@@ -176,7 +176,8 @@ export default function App(){
      time:arrival.completedAt});
    }
    const net=Math.round((gross-costs)*100)/100;
-   if(net!==0){
+   // Even a break-even crossing has gross receipts subject to bank revenue share.
+   if(net!==0||gross>0){
     pendingCashRef.current+=net;
     setFleet(old=>{
      const savingsBank=bankOf(old.bank);
