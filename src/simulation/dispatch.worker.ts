@@ -560,6 +560,9 @@ const explorerPlanSkipReason=new Map<string,string>();
 // into two planning workers. Throttle deterministic frontier scans per explorer.
 const singleWorkerScanAt=new Map<string,number>();
 const singleWorkerScanResult=new Map<string,string>();
+// Legacy roundabout/one-way fallback is expensive; do not rescan the entire
+// graph every time a new connected-frontier search finds no candidate.
+const legacyFallbackAt=new Map<string,number>();
 const strandedRecoveryRetryAt=new Map<string,number>();
 
 let poiRoadCursor=0;
@@ -573,7 +576,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -1089,15 +1092,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const connected=role==='poi'&&harbourRoute?null:planConnectedFrontier(
        activeGraph,origin.node,explored,allowed,reservedEdges,reservedTargets,
        role,role==='poi'?65000:95000,harbourGoal);
-      const planned=role==='poi'?null:connected!.route?connected!:
-       planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
+      const useLegacyFallback=()=>{
+       const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
+       if(time-last<30000)return null;
+       legacyFallbackAt.set(idleVehicle.id,time);
+       return planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
         reservedEdges,reservedTargets,role);
+      };
+      const planned=role==='poi'?null:connected!.route?connected!:
+       useLegacyFallback()??connected!;
       // If destination tiles have not formed a connected route yet, move
       // along legal discoverable roads to expand the road network. Keep the
       // assigned harbour and retry the full road route as tiles are streamed.
       const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
-       ?connected?.route?connected:planReachableExplorerRoad(activeGraph,origin.node,
-         explored,allowed,reservedEdges,reservedTargets,'poi'):null;
+       ?connected?.route?connected:useLegacyFallback():null;
       const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
       const indexedHarbourCandidates=role==='poi'
        ?[...candidateIndexes].filter(i=>nearestHarbourRoads.has(i)).length:0;
