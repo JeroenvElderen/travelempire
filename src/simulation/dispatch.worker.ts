@@ -874,9 +874,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if(taxi.kind!=='explorer'||taxi.status!=='IDLE'||taxi.deliveryUntil||
-       !specialistCanDepart(taxi,unlockedRoles)||
        taxi.refillRequested||taxi.serviceDestination||taxi.refillDestination||
-       energyPercent(taxi)<=10||purpleStartNear(taxi.position,explored))continue;
+       energyPercent(taxi)<=10)continue;
+    // Being physically near a discovered edge is not the same as having a
+    // directed exit from its endpoint. A saved POI/specialist can otherwise
+    // remain IDLE forever at the downstream end of a one-way segment.
+    // Recovery is transport only and must not require the specialist role
+    // to be unlocked at this location.
+    const purpleOrigin=purpleStartNear(taxi.position,explored);
+    const hasDrivablePurpleExit=!!purpleOrigin&&
+     (activeGraph.edges.get(purpleOrigin.node)??[]).some(edge=>
+      edge.meters>0&&explored.has(edge.id));
+    if(hasDrivablePurpleExit)continue;
     if(performance.now()<(strandedRecoveryRetryAt.get(taxi.id)??0))continue;
     strandedRecoveryRetryAt.set(taxi.id,performance.now()+15000);
     const gx=Math.floor(taxi.position[0]/REGION_DEGREES);
