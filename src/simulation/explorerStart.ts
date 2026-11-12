@@ -23,6 +23,20 @@ export function resolvePurpleExplorerStart(
 ):PurpleStart|null{
  if(!discovered.size)return null;
  const closestNode=nearest(graph,position);
+ // Prefer the actual junction beneath the vehicle when it has a legal
+ // outgoing discovered edge. A segment-projection-only snap can otherwise
+ // select a downstream node of an adjacent one-way edge and strand the scout
+ // in a tiny disconnected component. This never transfers across a gap:
+ // require the stored vertex coordinates to match the vehicle within 2 m.
+ if(closestNode){
+  const actual=graph.nodes.get(closestNode);
+  if(actual&&meters(actual,position)<=2){
+   const departing=(graph.edges.get(closestNode)??[]).find(e=>
+    discovered.has(e.id)&&e.meters>0&&graph.nodes.has(e.to));
+   if(departing)return {node:closestNode,roadId:departing.id,
+    distanceFromRoadMeters:meters(actual,position)};
+  }
+ }
  let best:PurpleStart|null=null;
  let bestScore=Infinity;
  const seen=new Set<string>();
