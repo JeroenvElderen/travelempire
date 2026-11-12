@@ -2033,13 +2033,20 @@ export default function App(){
     if(typeof id==='string'&&knownPorts.has(id))earned.add(id);
   }catch{}
   for(const id of unlockedHarbours)if(knownPorts.has(id))earned.add(id);
-  // Existing purchases are authoritative evidence of an earlier unlock.
-  // At least the origin port had to be known to purchase the route. Restoring
-  // it also repairs saves whose historical unlock list was overwritten.
-  const purchased=new Set(company.purchasedFerryRouteIds??[]);
-  for(const route of harbourNetwork.routes)
-   if(purchased.has(route.id)&&knownPorts.has(route.from))earned.add(route.from);
   const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
+  // Purchases required at least one discovered endpoint. Prefer the
+  // currently verified endpoint (or an existing historical unlock). Only
+  // grandfather the route's origin if the old save lost both endpoint IDs:
+  // the original choice cannot be reconstructed once it was overwritten.
+  const purchased=new Set(company.purchasedFerryRouteIds??[]);
+  for(const route of harbourNetwork.routes){
+   if(!purchased.has(route.id))continue;
+   if(earned.has(route.from)||earned.has(route.to))continue;
+   const verified=[route.from,route.to].find(id=>
+    (harbourEdges?.get(id)??[]).some(edge=>discovered.has(edge)));
+   const recovered=verified??route.from;
+   if(knownPorts.has(recovered))earned.add(recovered);
+  }
   const newlyUnlocked:string[]=[];
   for(const [id,edges] of harbourEdges??[]){
    if(!knownPorts.has(id)||earned.has(id))continue;
