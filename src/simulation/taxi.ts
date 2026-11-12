@@ -24,6 +24,12 @@ export type Taxi = {
   dropoff?: Point;
 
   fare: number;
+  /** Current passenger job's routed distance, excluding driving to pickup. */
+  jobDistanceMeters?:number;
+  /** Actual passenger-carrying distance travelled on the current job. */
+  jobDrivenMeters?:number;
+  /** Expected final payment including fleet/research modifiers (not yet paid). */
+  jobFareTotal?:number;
   completed: number;
   journeyEdges?: string[];
   // Last completed road approach, retained across separate assignments.
@@ -552,7 +558,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  // remain restricted to discovered roads in the TO_PICKUP -> TO_DROPOFF transition.
  const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
- return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare};
+ return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
@@ -1032,13 +1038,16 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
    }
    return false;
   }):[];
- let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered]};
+ let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered],
+  ...(taxi.status==='TO_DROPOFF'?{jobDrivenMeters:Math.min(
+   taxi.jobDistanceMeters??Infinity,(taxi.jobDrivenMeters??0)+advanced.distanceMeters)}:{})};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
   const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,t.lastRoadTo===from?t.lastRoadFrom??'':''):route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
-   t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0};
+   t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0,
+    jobDistanceMeters:next.length,jobDrivenMeters:0,jobFareTotal:undefined};
    return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
   }
  }
@@ -1069,7 +1078,8 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,journeyEdges:[],speedKph:0,
+  pickup:undefined,dropoff:undefined,fare:0,jobDistanceMeters:undefined,
+  jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
  return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
 }
