@@ -272,8 +272,8 @@ export default function App(){
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
- // Ignore dispatcher responses computed before a manual explorer teleport.
- const teleportedExplorersRef=useRef(new Map<string,[number,number]>());
+ // Ignore dispatcher responses computed before a manual vehicle reset.
+ const resetVehicleTargetsRef=useRef(new Map<string,[number,number]>());
  const shiftRestRetryRef=useRef(new Map<string,number>());
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;target?:[number,number]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
@@ -624,10 +624,10 @@ export default function App(){
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
    setFleet(old=>({...old,taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
-    const teleportTarget=teleportedExplorersRef.current.get(t.id);
-    if(teleportTarget&&t.kind==='explorer'){
+    const teleportTarget=resetVehicleTargetsRef.current.get(t.id);
+    if(teleportTarget){
      if(!assigned||meters(assigned.position,teleportTarget)>15)return t;
-     teleportedExplorersRef.current.delete(t.id);
+     resetVehicleTargetsRef.current.delete(t.id);
     }
     // The main simulation owns rest travel, rest timers and wake-up.
     if(t.kind==='explorer'&&t.restStopId)return t;
@@ -1659,8 +1659,8 @@ export default function App(){
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
  const controlExplorer=(id:string,action:'home'|'resume'|'teleport')=>{
   if(action==='teleport'){
-   const current=fleet.taxis.find(t=>t.id===id&&t.kind==='explorer');
-   if(!current||!company||!graph){setSimError('Explorer or road network unavailable.');return;}
+   const current=fleet.taxis.find(t=>t.id===id&&(t.kind==='explorer'||t.kind==='taxi'||!t.kind));
+   if(!current||!company||!graph){setSimError('Vehicle or road network unavailable.');return;}
    if(current.ferryTrip||current.recoveryPending||
       (current.deliveryUntil&&current.deliveryUntil>Date.now())||
       recoveriesRef.current.some(job=>job.targetId===id)){
@@ -1669,8 +1669,8 @@ export default function App(){
    const assigned=(company.depots??[]).find(d=>d.id===current.depotId);
    const depotPoint:[number,number]=assigned?
     [assigned.lng,assigned.lat]:[company.headquarters.lng,company.headquarters.lat];
-   // Snap onto the actual purple road at the depot, not the closest red
-   // graph node. This gives the explorer a valid starting road immediately.
+   // Both passenger taxis and explorers must reset onto an already
+   // discovered road at their assigned depot, never a red road.
    const purple=resolvePurpleExplorerStart(graph,depotPoint,
     new Set(fleet.exploredEdgeIds??[]),undefined,80);
    if(!purple){
@@ -1679,25 +1679,29 @@ export default function App(){
    }
    const destination=graph.nodes.get(purple.node);
    if(!destination){setSimError('The depot road junction is not loaded.');return;}
-   // Discard any late worker-generated return route for this explorer.
+   // Cancel pending routes and cached rest/fuel plans for the old position.
+   operationalRoutesRef.current.delete(id);
+   pendingFuelRef.current.delete(id);
+   fuelPlanCacheRef.current.delete(id);
+   shiftRestRetryRef.current.delete(id);
    for(const [key,pending] of pendingRoutesRef.current)
     if(pending.vehicleId===id)pendingRoutesRef.current.delete(key);
    manualRecoveryRequestsRef.current.delete(id);
    manualRecoveryPurposeRef.current.delete(id);
-   teleportedExplorersRef.current.set(id,[...destination]);
+   resetVehicleTargetsRef.current.set(id,[...destination]);
    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:{
     ...t,position:[...destination] as [number,number],status:'IDLE' as const,
     path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
     leg:0,distanceIntoLeg:0,speedKph:0,
-    pickup:undefined,dropoff:undefined,journeyEdges:[],
-    pauseAtHome:false,shiftParked:false,routeInvalid:false,
-    recoveryPending:false,restStopId:undefined,restStopName:undefined,
+    pickup:undefined,dropoff:undefined,fare:0,journeyEdges:[],
+    pauseAtHome:false,shiftParked:false,scheduledShiftParked:false,routeInvalid:false,
+    recoveryPending:false,restStopId:undefined,restStopName:undefined,restStopPosition:undefined,
     restUntilGameMs:undefined,scheduledBreakUntil:undefined,
     scheduledBreakPending:false,scheduledRestPending:false,
     refillDestination:undefined,refillRequested:false,refillAtDepot:undefined,
     serviceDestination:undefined,lastRoadFrom:undefined,lastRoadTo:undefined
    })}));
-   diagnostic('explorer:teleport',`returned ${current.name} to assigned depot purple road`);
+   diagnostic('vehicle:reset-to-depot',`returned ${current.name} to assigned depot purple road`);
    setSimError('');
    return;
   }
