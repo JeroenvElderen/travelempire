@@ -541,7 +541,7 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
    if(to===from||recentPairs.has(passengerPairKey(origin,graph.nodes.get(to)!)))continue;
    const direct=meters(origin,graph.nodes.get(to)!);
    if(direct<150||direct>4000)continue;
-   const trip=route(graph,from,to);
+   const trip=routeDiscovered(graph,from,to,explored);
    if(!trip||trip.length<150||trip.length>5000)continue;
    return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(trip.length,fareMultiplier),fareMultiplier,createdAt:now,expiresAt:now+120000};
   }
