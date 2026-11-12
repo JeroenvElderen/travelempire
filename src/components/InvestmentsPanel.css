@@ -16,3 +16,20 @@
 .investment-preview-metrics span{color:#aab5d1;letter-spacing:.5px;font-weight:750;font-size:9px}
 .investment-preview-metrics strong{color:#eddbff;font-size:16px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .investment-preview>small{color:#adabc8;font-size:10px;line-height:1.55}
+
+/* Independent, touch-friendly investment amount selector on every POI. */
+.investment-poi-amount{display:grid;gap:10px;margin:15px 0;padding:14px;border:1px solid #405b79;border-radius:13px;background:#142740}
+.investment-poi-amount-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.investment-poi-amount-header label{font-size:12px;font-weight:750;color:#cfdef0}
+.investment-poi-amount-header strong{font-size:17px;color:#e7cbff;font-variant-numeric:tabular-nums}
+.investment-poi-slider{width:100%;height:24px;margin:1px 0;accent-color:#aa75ef;cursor:pointer;touch-action:pan-y}
+.investment-poi-slider:disabled{cursor:not-allowed;opacity:.45}
+.investment-poi-range{display:flex;justify-content:space-between;gap:8px;color:#a2b7d0;font-size:10px;font-variant-numeric:tabular-nums}
+.investment-poi-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.investment-poi-entry>span{color:#b5c8de;font-size:11px;flex:1;min-width:92px}
+.investment-poi-entry input{min-width:0;flex:1 1 100px;max-width:160px;padding:10px;border:1px solid #536d88;border-radius:9px;background:#0e1e32;color:#fff;font-size:14px;font-variant-numeric:tabular-nums}
+.investment-poi-entry input[aria-invalid=true]{border-color:#d98585}
+.investment-poi-entry button{padding:10px 12px;border:1px solid #9669cb;background:#3e2c60;border-radius:9px;color:#f7ecff;font-size:12px;font-weight:750;cursor:pointer}
+.investment-poi-entry button:disabled{opacity:.45;cursor:not-allowed}
+.investment-poi-amount>small{color:#a8bfd2;font-size:10px;line-height:1.5}
+@media(max-width:430px){.investment-poi-entry input{max-width:none}}
