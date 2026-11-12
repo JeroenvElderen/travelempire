@@ -42,6 +42,19 @@ describe('POI explorer discovers real harbour approach roads',()=>{
    discoveryEdgeIds:[],pauseAtHome:true}),graph,120);
   expect(result.discovered).toContain('red-road');
  });
+ it('never reveals emergency recovery transit roads, even for a POI explorer',()=>{
+  const result=tickTaxi(taxi({kind:'explorer',explorerRole:'poi',status:'RETURNING',
+   recoveryTransitOnly:true,discoveryEdgeIds:[],restStopId:undefined,
+   pauseAtHome:false}),graph,120);
+  expect(result.discovered).toEqual([]);
+  expect(result.taxi.recoveryTransitOnly).toBeUndefined();
+ });
+ it('does not reveal emergency transit even if an old rest-stop identifier survived',()=>{
+  const result=tickTaxi(taxi({kind:'explorer',explorerRole:'primary',status:'RETURNING',
+   recoveryTransitOnly:true,restStopId:'old-stop',
+   discoveryEdgeIds:[],pauseAtHome:false}),graph,120);
+  expect(result.discovered).toEqual([]);
+ });
  it('does not grant the same privilege to other explorer roles',()=>{
   const result=tickTaxi(taxi({kind:'explorer',explorerRole:'primary',status:'EXPLORING',
    discoveryEdgeIds:[]}),graph,120);
