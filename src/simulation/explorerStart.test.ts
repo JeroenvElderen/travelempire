@@ -39,6 +39,12 @@ describe('purple road explorer starting position',()=>{
   expect(start?.node).toBe('B');
   expect(start?.connector?.edgeId).toBe('purple');
  });
+ it('keeps a scout at the origin of a directed discovered road',()=>{
+  const graph=makeGraph(true);
+  const start=resolvePurpleExplorerStart(graph,[0,0],new Set(['purple']),endpoints);
+  expect(start?.node).toBe('A');
+  expect(start?.connector).toBeUndefined();
+ });
  it('does not teleport onto a remote discovered road',()=>{
   const graph=makeGraph();
   expect(resolvePurpleExplorerStart(graph,[0.001,0.001],
