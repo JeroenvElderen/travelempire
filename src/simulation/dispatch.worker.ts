@@ -354,6 +354,7 @@ let discoveryIndexRebuilds=0;
 let discoveryIndexLastMs=0;
 let poiRoadsIndex=new Set<string>();
 const nearestHarbourRoads=new Map<number,{id:string;distance:number}>();
+const harbourAccessCandidates=new Map<number,Array<{id:string;distance:number}>>();
 let poiTargetsSignature='';
 let poiIndexedRoads=0;
 const pendingLoadedExplored=new Set<string>();
@@ -425,7 +426,7 @@ function updateDiscoveryIndex(g:RoadGraph, explored:Set<string>, hqNode:string|n
 function updatePoiIndex(g:RoadGraph,targets:Point[]){
  const signature=JSON.stringify(targets);
  if(signature!==poiTargetsSignature){
-  poiTargetsSignature=signature;poiRoadsIndex=new Set();nearestHarbourRoads.clear();poiIndexedRoads=0;poiRoadCursor=0;
+  poiTargetsSignature=signature;poiRoadsIndex=new Set();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiIndexedRoads=0;poiRoadCursor=0;
  }
  if(!targets.length)return;
  if(poiIndexedRoads===seenRoadIds.size)return;
@@ -447,9 +448,21 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
    const distance=Math.hypot(ax+fraction*vx,ay+fraction*vy);
    const previous=nearestHarbourRoads.get(i);
    if(distance<=300&&(!previous||distance<previous.distance))nearestHarbourRoads.set(i,{id,distance});
+   // A mapped terminal often spans several connected short road pieces.
+   // Match the same entrance corridor used by the harbour-unlock index.
+   if(distance<=220){
+    const list=harbourAccessCandidates.get(i)??[];
+    list.push({id,distance});
+    harbourAccessCandidates.set(i,list);
+   }
   }
  }
- poiRoadsIndex=new Set([...nearestHarbourRoads.values()].map(v=>v.id));
+ poiRoadsIndex=new Set();
+ for(const [index,best] of nearestHarbourRoads){
+  poiRoadsIndex.add(best.id);
+  for(const road of harbourAccessCandidates.get(index)??[])
+   if(road.distance<=Math.min(120,best.distance+90))poiRoadsIndex.add(road.id);
+ }
  poiRoadCursor=cursor;
  poiIndexedRoads=seenRoadIds.size;
 }
@@ -461,15 +474,23 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
  reserved:Set<string>):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
  const targets:Array<{node:string;offsetMeters:number}>=[];
  const legs:Array<{from:string;to:string;id:string}>=[];
- for(const {id} of nearestHarbourRoads.values()){
-  if(explored.has(id)||reserved.has(id))continue;
-  const pair=roadEndpoints.get(id);if(!pair)continue;
-  for(const from of pair){
+ for(const [index,best] of nearestHarbourRoads){
+  const local=[best.id,...(harbourAccessCandidates.get(index)??[])
+   .filter(road=>road.distance<=Math.min(120,best.distance+90))
+   .map(road=>road.id)];
+  // Once any real terminal-access segment is explored the harbour is done.
+  // Do not keep targeting different sections of an already unlocked port.
+  if(local.some(id=>explored.has(id)))continue;
+  for(const id of new Set(local)){
+   if(reserved.has(id))continue;
+   const pair=roadEndpoints.get(id);if(!pair)continue;
+   for(const from of pair){
    for(const edge of g.edges.get(from)??[]){
     if(edge.id!==id)continue;
     targets.push({node:from,offsetMeters:edge.meters});
     legs.push({from,to:edge.to,id});
    }
+  }
   }
  }
  if(!targets.length)return null;
