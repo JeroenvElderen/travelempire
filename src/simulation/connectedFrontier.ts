@@ -1,4 +1,4 @@
-import type {Point,RoadGraph,Taxi} from './taxi';
+import {meters,type Point,type RoadGraph,type Taxi} from './taxi';
 import type {ExplorerRoutePlan,ExplorerRouteDiagnostic} from './explorerRoadPlanner';
 
 /** Shared, directed frontier search. All specialists TRANSIT on discovered
@@ -12,7 +12,7 @@ import type {ExplorerRoutePlan,ExplorerRouteDiagnostic} from './explorerRoadPlan
 export function planConnectedFrontier(
  graph:RoadGraph,start:string,explored:ReadonlySet<string>,eligible:ReadonlySet<string>,
  reservedEdges:ReadonlySet<string>,reservedNodes:ReadonlySet<string>,
- role:Taxi['explorerRole'],maxVisits=90000,
+ role:Taxi['explorerRole'],maxVisits=90000,goal?:Point,
 ):{route:ExplorerRoutePlan|null;diagnostic:ExplorerRouteDiagnostic}{
  const diagnostic:ExplorerRouteDiagnostic={visitedPurpleNodes:0,reachableClassEdges:0,
   eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
@@ -48,9 +48,14 @@ export function planConnectedFrontier(
   return false;
  };
  let candidate:{from:string;to:string;id:string}|null=null;
+ let bestScore=Infinity;
  while(heap.length&&diagnostic.visitedPurpleNodes<nodeBudget){
   const item=pop()!;
   if(item.cost!==(dist.get(item.node)??Infinity))continue;
+  // For harbour scouts, choose the frontier that best progresses toward
+  // the saved port. This is a ranking heuristic only; all route edges still
+  // come from the legally directed, connected road network.
+  if(goal&&item.cost>bestScore)break;
   diagnostic.visitedPurpleNodes++;
   const links=graph.edges.get(item.node)??[];
   for(const edge of links){
@@ -60,9 +65,14 @@ export function planConnectedFrontier(
    if(!canReturn(item.node,edge.to,edge.id)){
     diagnostic.unsafeOneWaySkipped++;continue;
    }
-   candidate={from:item.node,to:edge.to,id:edge.id};break;
+   const point=graph.nodes.get(edge.to);
+   const score=item.cost+(goal&&point?0.65*meters(point,goal):0);
+   if(score<bestScore){
+    bestScore=score;candidate={from:item.node,to:edge.to,id:edge.id};
+   }
+   if(!goal)break;
   }
-  if(candidate)break;
+  if(candidate&&!goal)break;
   for(const edge of links){
    if(edge.meters<=0||!explored.has(edge.id))continue;
    const next=item.cost+edge.meters;
