@@ -1,23 +1,20 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useMemo,useState} from 'react';
 import type {Company} from '../company';
 import type {FerryNetwork} from '../maritime/ferries';
-import {loadFerryNetwork} from '../maritime/ferries';
 import {ferryRoutePrice} from '../maritime/routePlanning';
 import './ferry-routes.css';
 
-export default function FerryRoutesPanel({company,onPurchase,onTicketPriceChange,unlockedHarbourIds}:{company:Company|null;onPurchase:(routeId:string,price:number)=>void;onTicketPriceChange:(routeId:string,fare:number)=>void;unlockedHarbourIds:string[]}){
- const [network,setNetwork]=useState<FerryNetwork|null>(null);
+export default function FerryRoutesPanel({company,onPurchase,onTicketPriceChange,unlockedHarbourIds,network,onReloadNetwork}:{company:Company|null;onPurchase:(routeId:string,price:number)=>void;onTicketPriceChange:(routeId:string,fare:number)=>void;unlockedHarbourIds:string[];network:FerryNetwork|null;onReloadNetwork:()=>Promise<void>}){
+
  const [error,setError]=useState('');
  const [reloading,setReloading]=useState(false);
  const [lastReloaded,setLastReloaded]=useState('');
- useEffect(()=>{let active=true;loadFerryNetwork().then(value=>{if(active)setNetwork(value)}).catch(e=>{if(active)setError(String(e))});return()=>{active=false}},[]);
  const reloadData=async()=>{
   if(reloading)return;
   setReloading(true);setError('');setLastReloaded('');
   try{
-   const latest=await loadFerryNetwork(undefined,true);
-   setNetwork(latest);
-   setLastReloaded(`Updated: ${latest.routes.length} routes loaded`);
+   await onReloadNetwork();
+   setLastReloaded('Harbour and route data refreshed');
   }catch(e){setError(`Reload failed: ${String(e)}`);}
   finally{setReloading(false);}
  };
