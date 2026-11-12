@@ -652,7 +652,11 @@ export default function App(){
      resetVehicleTargetsRef.current.delete(t.id);
     }
     // The main simulation owns rest travel, rest timers and wake-up.
-    if(t.kind==='explorer'&&t.restStopId)return t;
+    // A stale rest-stop ID must not override a newly planned directed
+    // component-recovery route. Active rest/service journeys still belong to
+    // the main simulation and are otherwise left untouched.
+    if(t.kind==='explorer'&&t.restStopId&&
+       !(t.status==='IDLE'&&assigned?.recoveryTransitOnly))return t;
     // Apply boundary enforcement from the worker to already-moving Explorers.
     // Keep the current simulated position instead of reverting to the worker snapshot.
     if((t.kind==='explorer')&&t.status==='EXPLORING'&&assigned&&
