@@ -18,7 +18,7 @@ describe('midnight daily summary',()=>{
    vehicleFinanceHistory:[{day:'2026-11-24',taxiId:'taxi',name:'Taxi',revenue:6000,expenses:1000,km:150,trips:4}],
    ferryRevenueByDay:{'2026-11-24':1500},
    loans:[{id:'loan',principal:1000,balance:800,annualRate:0,termDays:10,remainingDays:8,dailyPayment:100,accruedGameSeconds:0}]
-  }),9000,3);
+  }),baseline,9000,3);
   expect(summary).toMatchObject({revenue:8000,expenses:2000,net:6000,trips:4,
    ferryRevenue:1500,taxiRevenue:6000,otherRevenue:500,roadsDiscovered:2,
    harboursDiscovered:1,distanceKm:150,cashChange:4000,loanBalance:800});
