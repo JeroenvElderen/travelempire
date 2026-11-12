@@ -51,7 +51,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const updateAmount=(id:string,value:string)=>
   setAmounts(old=>({...old,[id]:value}));
  return <section className="investment-page">
-  <div className="investment-heading"><span className="eyebrow">PROPERTY INVESTMENT · LIVE OSM LOCATIONS</span><h1>Investments</h1><p>Buy fractional ownership in real hotel and parking POIs using the same company balance as your taxis. Own 100% by purchasing more shares over time.</p></div>
+  <div className="investment-heading"><span className="eyebrow">PROPERTY INVESTMENT · LIVE OSM LOCATIONS</span><h1>Investments</h1><p>Invest in hotels with a fixed number of guest rooms or parking facilities with a fixed number of spaces. Every occupied room or space earns revenue; your ownership share determines your dividends.</p></div>
   <div className="investment-metrics">
    <article><span>OWNED PROPERTIES</span><strong>{holdings.length}</strong></article>
    <article><span>TOTAL INVESTED</span><strong>{euro(invested)}</strong></article>
@@ -81,7 +81,25 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     return <article className="investment-property" key={p.id}>
      <div className="investment-property-top"><span className="investment-property-icon">{p.kind==='hotel'?<Hotel size={23}/>:<CarFront size={23}/>}</span><div className="investment-property-name"><strong>{p.name|| (p.kind==='hotel'?'Unnamed hotel':'Parking facility')}</strong><span><MapPin size={12}/>{p.kind==='hotel'?'Hotel':'Parking'} · {p.position[1].toFixed(3)}°, {p.position[0].toFixed(3)}°</span></div><span className="investment-tag">{percent===100?'Fully owned':percent>0?'Part owned':'Available'}</span></div>
      <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>YOUR HOURLY INCOME</small><strong>{euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
-     <div className="investment-property-performance"><span>{p.kind==='hotel'?'Room occupancy':'Parking utilisation'} <strong>{performance.activityPercent}%</strong></span><span>Gross <strong>{euro(performance.grossCents)}/h</strong></span><span>Costs <strong>{euro(performance.costCents)}/h</strong></span><span>Net <strong>{euro(performance.netCents)}/h</strong></span></div>
+     <div className="investment-unit-economics">
+      <div className="investment-unit-heading"><strong>{p.kind==='hotel'?'Hotel rooms':'Parking spaces'}</strong><small>Estimated operating capacity</small></div>
+      <div className="investment-unit-summary">
+       <div><small>TOTAL {p.kind==='hotel'?'ROOMS':'SPACES'}</small><strong>{performance.capacity}</strong></div>
+       <div><small>{p.kind==='hotel'?'OCCUPIED ROOMS':'OCCUPIED SPACES'}</small><strong>{performance.occupiedUnits}</strong></div>
+       <div><small>AVAILABLE</small><strong>{performance.vacantUnits}</strong></div>
+      </div>
+      <div className="investment-unit-track" role="progressbar" aria-label={p.kind==='hotel'?'Room occupancy':'Parking occupancy'} aria-valuenow={performance.occupiedUnits} aria-valuemin={0} aria-valuemax={performance.capacity}>
+       <span style={{width:`${performance.activityPercent}%`}}/>
+      </div>
+      <div className="investment-unit-rate"><span>Occupancy <strong>{performance.activityPercent}%</strong></span><span>Rate <strong>{exactEuro(Math.round(performance.unitRateEuros*100))}/{p.kind==='hotel'?'night':'hour'}</strong></span></div>
+      <div className="investment-unit-revenue">
+       <span>Occupied {p.kind==='hotel'?'rooms':'spaces'} × {p.kind==='hotel'?'nightly':'hourly'} rate</span>
+       <strong>{euro(performance.grossCents)} / hour gross</strong>
+      </div>
+      <div className="investment-unit-costs"><span>Fixed operating costs</span><strong>−{euro(performance.fixedCostCents)}/h</strong><span>Usage-based costs</span><strong>−{euro(performance.variableCostCents)}/h</strong></div>
+      <div className="investment-unit-net"><span>Property net income</span><strong>{euro(performance.netCents)}/h</strong></div>
+      <small className="investment-unit-note">Capacity and rates are gameplay estimates, not verified real-world room or parking-space counts. Hotel nightly revenue is spread over 24 game hours.</small>
+     </div>
      <div className="investment-poi-amount">
       <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{exactEuro(charge)}</strong></div>
       <input className="investment-poi-slider" type="range"
@@ -115,7 +133,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        <div><span>30-DAY FORECAST</span><strong>{euro(projection.monthAfter)}</strong></div>
        <div><span>EXTRA PER HOUR</span><strong>+{euro(Math.max(0,projection.hourAfter-projection.hourBefore))}</strong></div>
       </div>
-      <small>Projections are not guaranteed. Forecast assumes the displayed ownership stays constant and uses current simulated seasonal demand.</small>
+      <small>Forecast uses estimated room or space occupancy and unit prices over the next 24 game hours, less fixed and usage-based costs. Income is proportional to your projected ownership share.</small>
      </div>
      <div className="investment-track"><span style={{width:`${percent}%`}}/></div>
      <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{remaining<=0?'100% Owned':limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${exactEuro(charge)}`}</button></div>
@@ -123,6 +141,6 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
    })}
   </div>
   {entries.length===0&&<div className="investment-empty"><Building2 size={28}/><strong>No properties loaded yet</strong><p>Hotels and parking facilities come from the existing rest-stop POI tiles around headquarters and your active vehicles. As new areas load, their properties appear here.</p></div>}
-  <p className="investment-disclaimer"><Landmark size={15}/> Valuations and dividends are in-game estimates, not real property prices. Dividends settle once per simulated hour, with a 30-day catch-up limit. Occupancy and utilisation vary with season and time.</p>
+  <p className="investment-disclaimer"><Landmark size={15}/> Physical capacity, rates, occupancy and valuations are deterministic gameplay estimates, not verified property information. Dividends are based on occupied rooms or parking spaces, calculated hourly, with a 30-day catch-up limit.</p>
  </section>;
 }
