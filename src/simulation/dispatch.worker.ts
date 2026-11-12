@@ -480,9 +480,9 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
   const local=[best.id,...(harbourAccessCandidates.get(index)??[])
    .filter(road=>road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))
    .map(road=>road.id)];
-  // Once any real terminal-access segment is explored the harbour is done.
-  // Do not keep targeting different sections of an already unlocked port.
-  if(local.some(id=>explored.has(id)))continue;
+  // Ports still in the candidate list have not been confirmed unlocked.
+  // A discovered harbour approach may be used for a legitimate arrival
+  // mission; skipping it here previously stranded scouts near blue roads.
   for(const id of new Set(local)){
    if(reserved.has(id))continue;
    const pair=roadEndpoints.get(id);if(!pair)continue;
