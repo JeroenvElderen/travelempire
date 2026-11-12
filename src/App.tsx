@@ -65,6 +65,7 @@ import {ferryRoutePrice} from './maritime/routePlanning';
 import {completedFerryArrivals} from './maritime/ferryService';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
+import {assignPoiHarbours,type PoiHarbourMission} from './maritime/poiMissions';
 import {useRef} from 'react';
 import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
 
@@ -273,6 +274,9 @@ export default function App(){
  useEffect(()=>{const next=loadPortfolio(company?.id);portfolioRef.current=next;setPortfolio(next);setInvestmentPois([]);restStopsRef.current.clear();restLoadedRef.current.clear();setInvestmentError('');},[company?.id]);
  const restLoadedRef=useRef<Set<string>>(new Set());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
+ const harbourMissionsRef=useRef<PoiHarbourMission[]>([]);
+ const harbourPrefetchProgressRef=useRef(new Map<string,number>());
+ const harbourPrefetchCursorRef=useRef(0);
  const stationLoadedRef=useRef<Set<string>>(new Set());
  const [roadPackages,setRoadPackages]=useState(0);
  const [roadDiagnostics,setRoadDiagnostics]=useState({queued:0,edges:0,workerEdges:0});
@@ -720,7 +724,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
-    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourPoiRef.current.slice(0,150),poiTargets:harbourPoiRef.current.slice(0,150),stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.shiftParked&&!t.restStopId&&canAcceptPassengerJob(t,fleetSaveRef.current.drivers??[],gameClockRef.current?.epochMs??now)).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourMissionsRef.current.map(m=>m.point),poiTargets:harbourMissionsRef.current.map(m=>m.point),poiMissions:harbourMissionsRef.current,stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.shiftParked&&!t.restStopId&&canAcceptPassengerJob(t,fleetSaveRef.current.drivers??[],gameClockRef.current?.epochMs??now)).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     // iOS suspends background tabs; avoid expensive route planning while hidden.
     allowScout:document.visibilityState==='visible'});
    // Do not suppress retries merely because a dispatch message was sent.
@@ -753,16 +757,32 @@ export default function App(){
      }
    }
    networkRef.current?.consider(positions);
-   // Request one harbour-access tile near an active POI explorer each cycle.
-   // Avoid bulk ferry-port downloads that could exhaust mobile Safari memory.
-   const poiExplorers=taxisRef.current.filter(t=>t.kind==='explorer'&&!t.ferryTrip);
-   if(poiExplorers.length&&harbourPoiRef.current.length){
-    let closest:[number,number]|null=null,closestMeters=20000;
-    for(const harbour of harbourPoiRef.current)for(const explorer of poiExplorers){
-     const distance=meters(harbour,explorer.position);
-     if(distance<closestMeters){closest=harbour;closestMeters=distance;}
+   // Preload one destination and one bounded corridor segment each scan.
+   // A permanent target is never blocked merely because its road tile has not
+   // been loaded yet. Advance streaming requests at most ~3 km per scan and
+   // keep the existing iPhone tile queue/backpressure intact.
+   const missions=harbourMissionsRef.current;
+   if(missions.length){
+    const mission=missions[harbourPrefetchCursorRef.current++%missions.length];
+    const explorer=taxisRef.current.find(t=>t.id===mission.vehicleId);
+    if(explorer&&!explorer.ferryTrip){
+     const manager=networkRef.current;
+     manager?.considerHarbour(mission.point);
+     const distance=meters(explorer.position,mission.point);
+     const progress=Math.min(distance,harbourPrefetchProgressRef.current.get(mission.vehicleId)??0);
+     const next=Math.min(distance,progress+3000);
+     if(distance>0){
+      const pointAt=(metersAlong:number):[number,number]=>{
+       const ratio=metersAlong/distance;
+       return [explorer.position[0]+(mission.point[0]-explorer.position[0])*ratio,
+        explorer.position[1]+(mission.point[1]-explorer.position[1])*ratio];
+      };
+      // This is tile prefetch only. Vehicles STILL follow road-graph routes,
+      // never this straight line or a shortcut across water.
+      manager?.considerHarbour(pointAt(next));
+      harbourPrefetchProgressRef.current.set(mission.vehicleId,next>=distance?0:next);
+     }
     }
-    if(closest)networkRef.current?.considerHarbour(closest);
    }
    const manager=networkRef.current;
    if(manager)setRoadDiagnostics({queued:manager.queuedCount,edges:manager.edgeCount,workerEdges:workerRoadCountRef.current});
@@ -1928,6 +1948,25 @@ export default function App(){
   setHarbourNetwork(data);
  };
  const [unlockedHarbours,setUnlockedHarbours]=useState<string[]>([]);
+ useEffect(()=>{
+  harbourMissionsRef.current=[];harbourPrefetchProgressRef.current.clear();
+  if(!company||!harbourNetwork)return;
+  const update=()=>{
+   const current=fleetSaveRef.current;
+   const result=assignPoiHarbours(current.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
+   harbourMissionsRef.current=result.missions;
+   if(result.changed){
+    diagnostic('poi:assign',result.missions.map(m=>m.vehicleId+' → '+m.portId).join(', '));
+    setFleet(old=>{
+     const latest=assignPoiHarbours(old.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
+     return latest.changed?{...old,taxis:latest.taxis}:old;
+    });
+   }
+  };
+  update();
+  const timer=window.setInterval(update,12000);
+  return()=>window.clearInterval(timer);
+ },[company?.id,harbourNetwork,unlockedHarbours]);
  const [harbourNotice,setHarbourNotice]=useState<{id:string;name:string}|null>(null);
  const harbourSeenRef=useRef(false);
  useEffect(()=>{let cancelled=false;void loadFerryNetwork().then(data=>{if(!cancelled){harbourPoiRef.current=data.ports.map(p=>p.roadAccess??p.position);setHarbourNetwork(data)}}).catch(console.warn);return()=>{cancelled=true}},[]);
