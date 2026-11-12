@@ -1,6 +1,7 @@
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
+import {planConnectedFrontier} from './connectedFrontier';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart} from './specialistAccess';
@@ -1072,8 +1073,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const origin=purpleStartNear(idleVehicle.position,explored);
      if(origin){
       const allowed=discoveryRoads(idleVehicle);
-      const planned=role==='poi'?null:planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
-       reservedEdges,reservedTargets,role);
+      // Shared directed frontier search spans every connected loaded tile.
+      // The original specialist planner is retained for legal one-way exits
+      // and verified roundabout links that need its specialised handling.
+      const connected=planConnectedFrontier(activeGraph,origin.node,explored,allowed,
+       reservedEdges,reservedTargets,role,role==='poi'?65000:95000);
+      const planned=role==='poi'?null:connected.route?connected:
+       planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
+        reservedEdges,reservedTargets,role);
       const candidateIndexes=new Set<number>();
       if(role==='poi')for(let i=0;i<(msg.poiMissions?.length??0);i++){
        if(msg.poiMissions![i].vehicleId===idleVehicle.id)candidateIndexes.add(i);
@@ -1088,8 +1095,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       // along legal discoverable roads to expand the road network. Keep the
       // assigned harbour and retry the full road route as tiles are streamed.
       const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
-       ?planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
-         reservedEdges,reservedTargets,'poi'):null;
+       ?connected.route?connected:planReachableExplorerRoad(activeGraph,origin.node,
+         explored,allowed,reservedEdges,reservedTargets,'poi'):null;
       const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
       const indexedHarbourCandidates=role==='poi'
        ?[...candidateIndexes].filter(i=>nearestHarbourRoads.has(i)).length:0;
@@ -1100,7 +1107,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
          :'no-reachable-harbour-or-road-frontier')+
         ':candidates='+candidateIndexes.size+':loaded='+indexedHarbourCandidates
        :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
-       ':classEdges='+planned!.diagnostic.reachableClassEdges);
+       ':classEdges='+planned!.diagnostic.reachableClassEdges+
+       ':connectedNodes='+connected.diagnostic.visitedPurpleNodes);
       if(route){
        const completed=prependPurpleStart(route,origin);
        const destination=nearest(activeGraph,completed.path.at(-1)!);
