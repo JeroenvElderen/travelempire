@@ -1,7 +1,7 @@
 import type {RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from './ferries';
 
-// Select the closest *road segment*, not the nearest junction's arbitrary edges.
+// Select harbour-local *road segments*, not a single arbitrary nearest junction edge.
 // The spatial grid avoids a full graph scan for every harbour.
 export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,signal?:AbortSignal):Promise<Map<string,string[]>>{
  const yieldFrame=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
@@ -39,6 +39,9 @@ export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,sign
   const x=Math.floor(point[0]/cell),y=Math.floor(point[1]/cell);
   const cos=Math.cos(point[1]*Math.PI/180);
   let best=Infinity,closest:string|undefined;
+  // A ferry terminal often has several short connected access segments.
+  // Index all plausible entrance segments, not only one arbitrary nearest ID.
+  const nearby:Array<{id:string;distance:number}>=[];
   const checked=new Set<string>();
   for(let radius=0;radius<=16;radius++){
    for(let dx=-radius;dx<=radius;dx++)for(let dy=-radius;dy<=radius;dy++){
@@ -51,13 +54,24 @@ export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,sign
      const t=Math.max(0,Math.min(1,-(ax*vx+ay*vy)/(vx*vx+vy*vy||1)));
      const d=Math.hypot(ax+t*vx,ay+t*vy);
      if(d<best){best=d;closest=segment.id;}
+     // Keep only harbour-local road segments; do not unlock a port from
+     // a road several blocks away or an unrelated distant highway.
+     if(d<=0.002)nearby.push({id:segment.id,distance:d});
     }
    }
    // A road in a searched square cannot beat an already found closer segment
    // once the entire surrounding grid margin is farther away.
    if(closest&&radius*cell>best*2+cell)break;
   }
-  if(closest)result.set(port.id,[closest]);
+  if(closest){
+   // Include roads within 120m of the port's mapped road access and within
+   // 90m of its nearest entrance. This handles multi-segment quays and
+   // segmented terminal approach roads while avoiding unrelated streets.
+   const cutoff=Math.min(0.00108,best+0.00081);
+   const matches=nearby.filter(candidate=>candidate.distance<=cutoff)
+    .sort((a,b)=>a.distance-b.distance).slice(0,32).map(candidate=>candidate.id);
+   result.set(port.id,matches.length?matches:[closest]);
+  }
  }
  return result;
 }
