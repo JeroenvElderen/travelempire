@@ -42,7 +42,7 @@ function distance(a:Point,b:Point):number{
  * The worker chooses the final destination using directed road distance. */
 export function poiRouteCandidates(
  taxis:readonly Taxi[],ports:readonly FerryPort[],unlocked:ReadonlySet<string>,
- perExplorer=14,
+ perExplorer=18,
 ):Array<{vehicleId:string;portId:string;point:Point}>{
  const available=ports.filter(p=>!unlocked.has(p.id));
  const scouts=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole==='poi'&&!t.ferryTrip);
