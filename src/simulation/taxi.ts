@@ -70,6 +70,8 @@ export type Taxi = {
   restUntilGameMs?: number;
   restExpense?: number;
   recoveryPending?: boolean;
+  /** Directed emergency repositioning: transit roads never become discovered. */
+  recoveryTransitOnly?: boolean;
   depotId?: string;
   // Edges eligible for discovery on this assignment; transit edges are excluded.
   discoveryEdgeIds?: string[];
@@ -1030,8 +1032,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   // purple, including on pickup, drop-off and operational return trips.
   // Explorer assignments are the sole authority for new discoveries.
   const poiRoadTravel=taxi.kind==='explorer'&&taxi.explorerRole==='poi'&&
-   !taxi.ferryTrip&&(taxi.status==='EXPLORING'||taxi.status==='RETURNING');
+   !taxi.ferryTrip&&!taxi.recoveryTransitOnly&&
+   (taxi.status==='EXPLORING'||taxi.status==='RETURNING');
   const operationalDiscovery=taxi.kind==='explorer'&&taxi.status==='RETURNING'&&
+   !taxi.recoveryTransitOnly&&
    Boolean(taxi.restStopId||taxi.refillDestination||taxi.serviceDestination);
   // POI explorers discover every *real completed road edge* they drive over,
   // regardless of whether a worker included the ID in discoveryEdgeIds.
@@ -1100,7 +1104,8 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const earned=t.status==='TO_DROPOFF'?t.fare:0;
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
-  pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,jobSurgeMultiplier:undefined,
+  pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
+  recoveryTransitOnly:undefined,jobSurgeMultiplier:undefined,
   jobDistanceMeters:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
