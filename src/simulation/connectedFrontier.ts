@@ -17,6 +17,9 @@ export function planConnectedFrontier(
  const diagnostic:ExplorerRouteDiagnostic={visitedPurpleNodes:0,reachableClassEdges:0,
   eligibleClassRoads:eligible.size,unsafeOneWaySkipped:0,reason:'no-connected-class-road'};
  if(!graph.nodes.has(start))return {route:null,diagnostic:{...diagnostic,reason:'no-start-node'}};
+ // Harbour routing also runs its dedicated shortest-port search, so keep its
+ // frontier fallback smaller to protect Safari's worker memory.
+ const nodeBudget=role==='poi'?Math.min(maxVisits,70000):maxVisits;
  // Heap of directed road distances; no Euclidean shortcuts.
  const dist=new Map<string,number>([[start,0]]);
  const parents=new Map<string,{from:string;id:string}>();
@@ -45,7 +48,7 @@ export function planConnectedFrontier(
   return false;
  };
  let candidate:{from:string;to:string;id:string}|null=null;
- while(heap.length&&diagnostic.visitedPurpleNodes<maxVisits){
+ while(heap.length&&diagnostic.visitedPurpleNodes<nodeBudget){
   const item=pop()!;
   if(item.cost!==(dist.get(item.node)??Infinity))continue;
   diagnostic.visitedPurpleNodes++;
@@ -81,7 +84,7 @@ export function planConnectedFrontier(
   const parent=parents.get(cursor);
   if(!parent)return{route:null,diagnostic:{...diagnostic,reason:'broken-parent-route'}};
   keys.push(parent.from);ids.push(parent.id);cursor=parent.from;
-  if(keys.length>maxVisits)return{route:null,diagnostic:{...diagnostic,reason:'route-too-long'}};
+  if(keys.length>nodeBudget)return{route:null,diagnostic:{...diagnostic,reason:'route-too-long'}};
  }
  keys.reverse();ids.reverse();
  keys.push(selected.to);ids.push(selected.id);
