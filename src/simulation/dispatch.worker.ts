@@ -1091,10 +1091,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        ?planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
          reservedEdges,reservedTargets,'poi'):null;
       const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
+      const indexedHarbourCandidates=role==='poi'
+       ?[...candidateIndexes].filter(i=>nearestHarbourRoads.has(i)).length:0;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
-       ?harbourRoute?'shortest-reachable-harbour-route'
-        :frontier?.route?'expanding-legal-road-frontier-while-harbour-loads'
-         :'no-reachable-harbour-or-road-frontier'
+       ?(harbourRoute
+         ?'reachable-harbour:'+String(msg.poiMissions?.[harbourRoute.portIndex]?.portId)
+         :frontier?.route?'expanding-connected-frontier'
+         :'no-reachable-harbour-or-road-frontier')+
+        ':candidates='+candidateIndexes.size+':loaded='+indexedHarbourCandidates
        :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
        ':classEdges='+planned!.diagnostic.reachableClassEdges);
       if(route){
