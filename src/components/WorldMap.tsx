@@ -6,7 +6,7 @@ import {applyTravelEmpireStyle,mapDayPhase} from './travelEmpireMapStyle';
 import {gameHour,GAME_TIME_SCALE} from '../simulation/gameClock';
 import type {GameClock} from '../simulation/gameClock';
 import './station-markers.css';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
 import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
@@ -19,11 +19,11 @@ import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
 import {vehicleActivity} from '../simulation/vehicleActivity';
 import {liveJobMeter} from '../simulation/liveJobMeter';
 import {deliveryPosition} from '../dealership';
-import {loadStationTile,stationTileKey,stationDistanceKm,type Station} from '../data/stations';
+import {loadStationTile,stationTileKey,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
 import type {RestStop} from '../simulation/driverRest';
-import {energyRangeKm} from '../simulation/energy';
-import {reachableStations,type StationRoute} from '../data/stationRouting';
+import type {PropertyHolding} from '../investments';
+import {visibleOperationalPois} from './poiVisibility';
 
 // The delivery SVG faces right (east) at zero rotation. Rotate it to the
 // bearing of the current road segment, not the overall delivery route.
@@ -167,10 +167,10 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];ownedProperties?:PropertyHolding[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],ownedProperties=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
  useEffect(()=>{
@@ -279,13 +279,32 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const ferryServiceStartsRef=useRef(ferryServiceStartedAt);ferryServiceStartsRef.current=ferryServiceStartedAt;
  const offscreenLayer=useRef<HTMLDivElement>(null);
  const depotMarkers=useRef(new Map<string,maplibregl.Marker>());
- const [stationsVisible,setStationsVisible]=useState(true);
- const [restStopsVisible,setRestStopsVisible]=useState(true);
  const [restStops,setRestStops]=useState<RestStop[]>([]);
  const [restStatus,setRestStatus]=useState('Rest POI lookup waiting');
  const [stations,setStations]=useState<Station[]>([]);
  const [stationStatus,setStationStatus]=useState('Station lookup waiting');
- const [stationRoutes,setStationRoutes]=useState<Record<string,StationRoute|null>>({});
+ // Map POI visibility follows investments and active vehicle destinations.
+ // Neither marker visibility nor local tile loading governs routing eligibility.
+ const destinationKey=taxis.map(t=>{
+  if(t.status!=='RETURNING'&&t.status!=='REFUELLING'&&t.status!=='SERVICING')return '';
+  return [t.id,t.status,t.refillDestination?.join(','),t.serviceDestination?.join(','),
+   t.restStopPosition?.join(','),t.restStopId].join(':');
+ }).filter(Boolean).join('|');
+ const facilityTargets=useMemo(()=>{
+  const stations:Array<[number,number]>=[];
+  const rests:Array<[number,number]>=[];
+  for(const t of taxis){
+   if(t.status!=='RETURNING'&&t.status!=='REFUELLING'&&t.status!=='SERVICING')continue;
+   if(t.refillDestination)stations.push(t.refillDestination);
+   if(t.serviceDestination)stations.push(t.serviceDestination);
+   if(t.restStopPosition)rests.push(t.restStopPosition);
+  }
+  return {stations,rests};
+ // destinationKey deliberately captures changes to only relevant vehicle fields.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[destinationKey]);
+ const visiblePoi=useMemo(()=>visibleOperationalPois(stations,restStops,
+  ownedProperties,taxis),[stations,restStops,ownedProperties,destinationKey]);
  const deliveryMarkers=useRef(new Map<string,maplibregl.Marker>());
  const initialHeadquarters=useRef(headquarters);
  const firstHeadquartersPositioned=useRef(false);
