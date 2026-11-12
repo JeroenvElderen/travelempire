@@ -1049,8 +1049,10 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
    return false;
   }):[];
  let t={...advanced.taxi,journeyEdges:[...(taxi.journeyEdges??[]),...newlyDiscovered],
-  ...(taxi.status==='TO_DROPOFF'?{jobDrivenMeters:Math.min(
-   taxi.jobDistanceMeters??Infinity,(taxi.jobDrivenMeters??0)+advanced.distanceMeters)}:{})};
+  // Measure the actual passenger movement continuously; never freeze the
+  // meter when a route exceeds its original estimated distance.
+  ...(taxi.status==='TO_DROPOFF'?{jobDrivenMeters:
+   Math.max(0,(taxi.jobDrivenMeters??0)+advanced.distanceMeters)}:{})};
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
