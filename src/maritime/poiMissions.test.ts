@@ -34,8 +34,8 @@ describe('nationwide harbour scout missions',()=>{
   const result=poiRouteCandidates([scout('poi-1',24,'port-0')],ports,new Set(),14);
   expect(result.length).toBe(14);
   expect(result[0].portId).toBe('port-0');
-  expect(result.some(m=>m.portId==='port-23')).toBe(true);
-  expect(result.some(m=>m.portId==='port-48')).toBe(true);
+  expect(result.some(m=>m.portId==='port-24')).toBe(true);
+  expect(result.some(m=>m.portId==='port-49')).toBe(true);
  });
  it('does not offer harbours assigned to another explorer',()=>{
   const ports=[port('a',24),port('b',24.1),port('c',24.2),port('d',24.3)];
