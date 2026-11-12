@@ -1,6 +1,12 @@
 import type {RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from './ferries';
 
+// Ports have multiple berths and short access roads. A discovered approach
+// within the terminal corridor is enough; individual berth spurs need not
+// all be explored. Keep the worker and UI thresholds identical.
+export const HARBOUR_ACCESS_RADIUS_METERS=250;
+export const HARBOUR_ACCESS_EXTRA_METERS=200;
+
 // Select harbour-local *road segments*, not a single arbitrary nearest junction edge.
 // The spatial grid avoids a full graph scan for every harbour.
 export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,signal?:AbortSignal):Promise<Map<string,string[]>>{
@@ -64,10 +70,10 @@ export async function harbourRoadEdges(network:FerryNetwork,graph:RoadGraph,sign
    if(closest&&radius*cell>best*2+cell)break;
   }
   if(closest){
-   // Include roads within 120m of the port's mapped road access and within
-   // 90m of its nearest entrance. This handles multi-segment quays and
-   // segmented terminal approach roads while avoiding unrelated streets.
-   const cutoff=Math.min(0.00108,best+0.00081);
+   // Include the harbour's nearby approach corridor, not only the short
+   // individual berth spur. Distances here are latitude-equivalent degrees.
+   const cutoff=Math.min(HARBOUR_ACCESS_RADIUS_METERS/111320,
+    best+HARBOUR_ACCESS_EXTRA_METERS/111320);
    const matches=nearby.filter(candidate=>candidate.distance<=cutoff)
     .sort((a,b)=>a.distance-b.distance).slice(0,32).map(candidate=>candidate.id);
    result.set(port.id,matches.length?matches:[closest]);
