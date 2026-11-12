@@ -2014,10 +2014,23 @@ export default function App(){
   setHarbourEdges(null);
   if(!harbourNetwork||!graph)return;
   const controller=new AbortController();
-  void harbourRoadEdges(harbourNetwork,graph,controller.signal).then(result=>{
-   if(!controller.signal.aborted)setHarbourEdges(result);
-  }).catch(error=>{if(!controller.signal.aborted)console.error('Harbour road indexing failed',error)});
-  return()=>controller.abort();
+  let indexing=false;
+  // The road graph is expanded IN PLACE when new tiles arrive: 'graph' itself
+  // does not change identity. Re-index periodically so newly loaded harbour
+  // access roads can unlock ports without a full page refresh.
+  const update=async()=>{
+   if(indexing||controller.signal.aborted)return;
+   indexing=true;
+   try{
+    const result=await harbourRoadEdges(harbourNetwork,graph,controller.signal);
+    if(!controller.signal.aborted)setHarbourEdges(result);
+   }catch(error){
+    if(!controller.signal.aborted)console.error('Harbour road indexing failed',error);
+   }finally{indexing=false;}
+  };
+  void update();
+  const timer=window.setInterval(()=>{void update()},12000);
+  return()=>{controller.abort();window.clearInterval(timer)};
  },[harbourNetwork,graph]);
  useEffect(()=>{
   if(!company||!harbourNetwork)return;
