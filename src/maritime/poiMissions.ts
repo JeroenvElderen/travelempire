@@ -54,8 +54,26 @@ export function poiRouteCandidates(
   const choices=available.filter(p=>!assigned.has(p.id)||p.id===scout.poiTargetId)
    .sort((a,b)=>distance(scout.position,a.roadAccess??a.position)-
      distance(scout.position,b.roadAccess??b.position));
-  const selected=own?[own,...choices.filter(p=>p.id!==own.id).slice(0,Math.max(0,perExplorer-1))]:
-   choices.slice(0,perExplorer);
+  // Combine nearby and progressively more distant harbours. The nearest
+  // ports may be on islands with no road route from the current landmass.
+  // A geographically farther mainland harbour can be the first reachable one.
+  const selected:FerryPort[]=[];
+  if(own)selected.push(own);
+  const remaining=choices.filter(p=>p.id!==own?.id);
+  const immediate=Math.min(8,Math.max(0,perExplorer-selected.length));
+  selected.push(...remaining.slice(0,immediate));
+  const ranks=[11,16,23,33,48,70,100,145,210,300];
+  for(const rank of ranks){
+   if(selected.length>=perExplorer)break;
+   const candidate=remaining[rank];
+   if(candidate&&!selected.includes(candidate))selected.push(candidate);
+  }
+  // Short lists contain no distant ranks; fill leftover capacity with nearby
+  // unassigned ports so every game region can still be explored.
+  for(const candidate of remaining){
+   if(selected.length>=perExplorer)break;
+   if(!selected.includes(candidate))selected.push(candidate);
+  }
   for(const port of selected)result.push({vehicleId:scout.id,portId:port.id,
    point:port.roadAccess??port.position});
  }
