@@ -125,7 +125,6 @@ const majorRoadSearchDiagnostics=new Map<string,{role:string;outcome:string;elig
 const explorerPlanningAttempts=new Map<string,number>();
 const failedRouteSignature=(id:string,role:string,position:Point,tier:number,roadCount:number,_exploredCount:number,poiSignature:string)=>[id,role,position[0].toFixed(5),position[1].toFixed(5),tier,roadCount,role==='poi'?poiSignature:''].join('|');
 let successorNegativeCacheHits=0;
-const POI_RETRY_MS=20000;
 const poiRetryWallClock=new Map<string,{until:number;roadCount:number;poiSignature:string}>();
 let poiCooldownSkips=0;
 const regionKey=(lat:number,lon:number)=>lat+':'+lon;
