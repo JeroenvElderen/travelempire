@@ -65,7 +65,7 @@ import {ferryRoutePrice} from './maritime/routePlanning';
 import {completedFerryArrivals} from './maritime/ferryService';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
-import {assignPoiHarbours,type PoiHarbourMission} from './maritime/poiMissions';
+import {assignPoiHarbours,poiRouteCandidates,type PoiHarbourMission} from './maritime/poiMissions';
 import {useRef} from 'react';
 import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
 
@@ -275,6 +275,7 @@ export default function App(){
  const restLoadedRef=useRef<Set<string>>(new Set());
  const harbourPoiRef=useRef<Array<[number,number]>>([]);
  const harbourMissionsRef=useRef<PoiHarbourMission[]>([]);
+ const harbourCandidatesRef=useRef<PoiHarbourMission[]>([]);
  const harbourPrefetchProgressRef=useRef(new Map<string,number>());
  const harbourPrefetchCursorRef=useRef(0);
  const stationLoadedRef=useRef<Set<string>>(new Set());
@@ -724,7 +725,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
-    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourMissionsRef.current.map(m=>m.point),poiTargets:harbourMissionsRef.current.map(m=>m.point),poiMissions:harbourMissionsRef.current,stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.shiftParked&&!t.restStopId&&canAcceptPassengerJob(t,fleetSaveRef.current.drivers??[],gameClockRef.current?.epochMs??now)).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
+    hq:[company.headquarters.lng,company.headquarters.lat],harbourTargets:harbourCandidatesRef.current.map(m=>m.point),poiTargets:harbourCandidatesRef.current.map(m=>m.point),poiMissions:harbourCandidatesRef.current,stations:[...stationsRef.current.values()].filter(s=>s.kind==='fuel'&&s.access!=='private').map(s=>[s.lng,s.lat] as [number,number]),availableTaxiIds:taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.shiftParked&&!t.restStopId&&canAcceptPassengerJob(t,fleetSaveRef.current.drivers??[],gameClockRef.current?.epochMs??now)).map(t=>t.id),allowTaxiShift:true,allowMission:!!gameClockRef.current&&taxis.some(t=>(!t.kind||t.kind==='taxi'))&&now-lastMissionAt.current>=demandAt(now,taxis.filter(t=>(!t.kind||t.kind==='taxi')).length).intervalMs,
     // iOS suspends background tabs; avoid expensive route planning while hidden.
     allowScout:document.visibilityState==='visible'});
    // Do not suppress retries merely because a dispatch message was sent.
@@ -1949,12 +1950,13 @@ export default function App(){
  };
  const [unlockedHarbours,setUnlockedHarbours]=useState<string[]>([]);
  useEffect(()=>{
-  harbourMissionsRef.current=[];harbourPrefetchProgressRef.current.clear();
+  harbourMissionsRef.current=[];harbourCandidatesRef.current=[];harbourPrefetchProgressRef.current.clear();
   if(!company||!harbourNetwork)return;
   const update=()=>{
    const current=fleetSaveRef.current;
    const result=assignPoiHarbours(current.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
    harbourMissionsRef.current=result.missions;
+   harbourCandidatesRef.current=poiRouteCandidates(result.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
    if(result.changed){
     diagnostic('poi:assign',result.missions.map(m=>m.vehicleId+' → '+m.portId).join(', '));
     setFleet(old=>{
