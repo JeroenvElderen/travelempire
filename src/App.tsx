@@ -33,6 +33,7 @@ import FrontendConsole from "./components/FrontendConsole";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
 import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,UPGRADES} from "./economy";
 import {securedQuote,createSecuredLoan,advanceSecuredLoans} from './simulation/securedLoans';
+import {partnershipOffer,collectBankRevenue,revenueAverage,type BankPartnership} from './simulation/bankPartnerships';
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,explorerDepotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
@@ -186,15 +187,20 @@ export default function App(){
       bankEntry('Automatic savings · ferry income',-savingsAmount,'operating','transfer'),
       bankEntry('Automatic savings · ferry income',savingsAmount,'savings','transfer')
      ]):old.bank;
+     // Revenue financing is collected on owned ferry receipts as well as taxi fares.
+     const partnership=collectBankRevenue(old.bankPartnerships??[],gross);
+     if(partnership.paid>0)pendingCashRef.current-=partnership.paid;
+     const partnershipBank=partnership.paid>0?appendBankEntries(bankOf(updatedBank),
+      partnership.settlements.map(item=>bankEntry('Revenue partnership · '+item.bank,-item.amount,'operating','repayment'))):updatedBank;
      const day=new Date(settlement.arrivals.at(-1)?.completedAt??nowGame).toISOString().slice(0,10);
      const history=[...(old.financeHistory??[])];
      const lastDay=history[history.length-1];
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
      const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
-     return {...old,accounting:ferryAccounting,bank:updatedBank,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+     return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       financeHistory:history.slice(-365),
-      transactions:[...events.map(event=>({id:crypto.randomUUID(),...event})),
+      transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:nowGame,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...events.map(event=>({id:crypto.randomUUID(),...event})),
        ...(old.transactions??[])].slice(0,100)};
     });
    }
@@ -1289,7 +1295,8 @@ export default function App(){
       description:`Bank repossession · ${recovered.vehicleName} · ${recovered.value.toFixed(2)} debt recovered (non-cash)`,
       taxiId:recovered.vehicleId,amount:0});
     }
-    const net=operatingNet-securedTick.payments;
+    const partnership=collectBankRevenue(old.bankPartnerships??[],revenue);
+    const net=operatingNet-securedTick.payments-partnership.paid;
     if(net!==0)pendingCashRef.current+=net;
     // Sweep a percentage of each passenger-income settlement immediately.
     // Loan proceeds, transfers and asset sales are not operating income.
@@ -1331,8 +1338,8 @@ export default function App(){
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
       financeHistory:(()=>{const day=tickDay;const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead:overhead+facilityCost,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
       vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];for(const entry of vehicleFinanceDeltas){const existing=list.find(v=>v.day===entry.day&&v.taxiId===entry.taxiId);if(existing){existing.revenue+=entry.revenue;existing.expenses+=entry.expenses;existing.km+=entry.km;existing.trips+=entry.trips;}else list.push(entry);}const cutoff=new Date(gameNow-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
-      bank:loanTick.payments>0||leaseTick.payments>0||taxPaid>0?appendBankEntries(bankOf(updatedBank),[...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[]),...(taxSettlement.paidVat>0?[bankEntry('Monthly VAT settlement',-taxSettlement.paidVat,'operating','repayment')]:[]),...(taxSettlement.paidCorporate>0?[bankEntry('Monthly corporate tax settlement',-taxSettlement.paidCorporate,'operating','repayment')]:[])]):updatedBank,
-      loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal+securedTick.repossessions.reduce((sum,event)=>sum+event.value,0),transactions:[...transactions,...(old.transactions??[])].slice(0,100)};
+      bank:loanTick.payments>0||leaseTick.payments>0||taxPaid>0||partnership.paid>0?appendBankEntries(bankOf(updatedBank),[...(partnership.settlements.map(item=>bankEntry('Revenue partnership · '+item.bank,-item.amount,'operating','repayment'))),...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[]),...(taxSettlement.paidVat>0?[bankEntry('Monthly VAT settlement',-taxSettlement.paidVat,'operating','repayment')]:[]),...(taxSettlement.paidCorporate>0?[bankEntry('Monthly corporate tax settlement',-taxSettlement.paidCorporate,'operating','repayment')]:[])]):updatedBank,
+      bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal+securedTick.repossessions.reduce((sum,event)=>sum+event.value,0),transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:gameNow,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...transactions,...(old.transactions??[])].slice(0,100)};
    });
   },1000);
   return()=>window.clearInterval(timer);
@@ -1850,6 +1857,38 @@ export default function App(){
   setSimError('');
  };
  const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
+ const acceptBankPartnership=(bankId:string,request:number)=>{
+  const current=companyRef.current;
+  if(!current)return;
+  const state=fleetSaveRef.current;
+  const clock=gameClockRef.current?.epochMs??Date.now();
+  const valuation=valueCompany(current,state,clock).value;
+  const score=securedQuote(current,state,clock,1000,365).score;
+  const offer=partnershipOffer(bankId,request,valuation,revenueAverage(state.financeHistory??[]),score,state.bankPartnerships??[]);
+  if(!offer.approved){setSimError(offer.reason);return;}
+  const contract:BankPartnership={id:crypto.randomUUID(),bank:offer.bank,
+   principal:offer.funding,revenueShare:offer.revenueShare,
+   repaymentMultiple:offer.repaymentMultiple,repaymentCap:offer.repaymentCap,repaid:0,startedAt:clock};
+  pendingCashRef.current+=offer.funding;
+  setFleet(old=>({...old,bankPartnerships:[...(old.bankPartnerships??[]),contract],
+   bank:appendBankEntries(bankOf(old.bank),[bankEntry('Bank partnership funding · '+offer.bank,offer.funding,'operating','loan')]),
+   transactions:[{id:crypto.randomUUID(),time:clock,description:'Revenue partnership funding · '+offer.bank,amount:offer.funding},...(old.transactions??[])].slice(0,100)}));
+  setSimError('');
+ };
+ const buyOutBankPartnership=(id:string)=>{
+  const current=companyRef.current;
+  const contract=fleetSaveRef.current.bankPartnerships?.find(d=>d.id===id);
+  if(!current||!contract)return;
+  const remaining=Math.max(0,Math.round((contract.repaymentCap-contract.repaid)*100)/100);
+  if(remaining<=0)return;
+  if(current.cash+pendingCashRef.current<remaining){setSimError('Insufficient operating cash to buy out the partnership.');return;}
+  pendingCashRef.current-=remaining;
+  setFleet(old=>({...old,bankPartnerships:(old.bankPartnerships??[]).map(d=>d.id===id?{...d,repaid:d.repaymentCap}:d),
+   bankPartnershipPaid:(old.bankPartnershipPaid??0)+remaining,
+   bank:appendBankEntries(bankOf(old.bank),[bankEntry('Bank partnership buyout · '+contract.bank,-remaining,'operating','repayment')]),
+   transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Bank partnership buyout · '+contract.bank,amount:-remaining},...(old.transactions??[])].slice(0,100)}));
+  setSimError('');
+ };
  const takeLoan=(amount:number,days:number)=>{
   const current=companyRef.current;
   if(!current)return;
@@ -2118,7 +2157,7 @@ export default function App(){
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours}/>}
  {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
- {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
+ {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
