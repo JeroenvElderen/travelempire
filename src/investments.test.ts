@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {buyPropertyShare,emptyPortfolio,ownership,propertyOperations,propertyValuationCents,settlePropertyDividends} from './investments';
+import {buyPropertyShare,emptyPortfolio,ownership,propertyOperations,propertyValuationCents,propertyCapacity,settlePropertyDividends} from './investments';
 import type {InvestablePOI} from './investments';
 
 const hotel:InvestablePOI={id:'osm-hotel-123',name:'Example Hotel',kind:'hotel',position:[22.9,37.6]};
@@ -41,6 +41,44 @@ describe('hourly property investments',()=>{
   const nightDemand=propertyOperations({id:parking.id,kind:'parking',valuationCents:parkingValue},200*24+2);
   expect(dayDemand.activityPercent).toBeGreaterThan(nightDemand.activityPercent);
   expect(dayDemand.grossCents).toBeGreaterThan(dayDemand.costCents);
+ });
+ it('gives each hotel a consistent physical room count and nightly revenue',()=>{
+  const asset={id:hotel.id,kind:hotel.kind,valuationCents:propertyValuationCents(hotel)};
+  const morning=propertyOperations(asset,200*24+8);
+  const evening=propertyOperations(asset,200*24+20);
+  expect(propertyCapacity(asset)).toBe(morning.capacity);
+  expect(morning.unitKind).toBe('room');
+  expect(morning.ratePeriod).toBe('night');
+  expect(morning.capacity).toBeGreaterThan(10);
+  expect(morning.occupiedUnits+morning.vacantUnits).toBe(morning.capacity);
+  expect(morning.occupiedUnits).toBe(evening.occupiedUnits);
+  expect(morning.grossCents).toBe(evening.grossCents);
+  expect(morning.grossCents).toBeCloseTo(
+   morning.occupiedUnits*morning.unitRateEuros*100/24,0);
+  expect(morning.fixedCostCents+morning.variableCostCents).toBe(morning.costCents);
+ });
+ it('produces hourly parking revenue per occupied space',()=>{
+  const asset={id:parking.id,kind:parking.kind,valuationCents:propertyValuationCents(parking)};
+  const daytime=propertyOperations(asset,200*24+14);
+  const nighttime=propertyOperations(asset,200*24+2);
+  expect(daytime.unitKind).toBe('space');
+  expect(daytime.ratePeriod).toBe('hour');
+  expect(daytime.occupiedUnits+daytime.vacantUnits).toBe(daytime.capacity);
+  expect(daytime.occupiedUnits).toBeGreaterThan(nighttime.occupiedUnits);
+  expect(daytime.grossCents).toBe(daytime.occupiedUnits*Math.round(daytime.unitRateEuros*100));
+  expect(daytime.costCents).toBe(daytime.fixedCostCents+daytime.variableCostCents);
+ });
+ it('keeps saved property capacity and payouts stable after additional share purchases',()=>{
+  const original=buyPropertyShare(emptyPortfolio(),parking,1200000,day);
+  const before=original.holdings[parking.id];
+  const extended=buyPropertyShare(original,parking,1000000,day);
+  const after=extended.holdings[parking.id];
+  expect(propertyCapacity(before)).toBe(propertyCapacity(after));
+  expect(propertyOperations(before,200*24)).toEqual(propertyOperations(after,200*24));
+  const first=settlePropertyDividends(original,day+hour);
+  const expanded=settlePropertyDividends(extended,day+hour);
+  expect(expanded.incomeCents).toBeGreaterThan(first.incomeCents);
+  expect(settlePropertyDividends(expanded.portfolio,day+hour).incomeCents).toBe(0);
  });
  it('limits catch-up to 30 simulated days',()=>{
   const investment=buyPropertyShare(emptyPortfolio(),hotel,1500000,0);
