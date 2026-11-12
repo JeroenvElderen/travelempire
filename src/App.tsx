@@ -880,6 +880,7 @@ export default function App(){
     for(const vehicle of old.taxis){const id=vehicle.depotId??'main';assignedByDepot.set(id,(assignedByDepot.get(id)??0)+1);}
 
     const transactions:FinancialTransaction[]=[];
+    const paidPassengerJobs=new Set(old.paidPassengerJobIds??[]);
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     let slowestVehicleMs=0,slowestVehicle='—',routingMs=0,integratorMs=0,discoveryMs=0;
     const depotUpgradesById=new Map<string,ReturnType<typeof upgradesFor>>();
@@ -1183,12 +1184,20 @@ export default function App(){
      const insurance=((t.kind==='explorer')?0.00045:0.00085)*(1-Research.level(research,'insuranceResearch')*0.05); // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
-     const fareMultiplier=(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
-     const earned=next.earned*fareMultiplier;
+     const fareMultiplier=Math.min(1.6,(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0)) );
+     // Stable request IDs prevent a delayed worker result or save replay from
+     // booking the same completed passenger journey more than once.
+     const jobId=working.activeJobId;
+     const duplicate=next.finished&&!!jobId&&paidPassengerJobs.has(jobId);
+     if(next.finished&&jobId&&!duplicate)paidPassengerJobs.add(jobId);
+     const earned=duplicate?0:Math.round(next.earned*fareMultiplier*100)/100;
      revenue+=earned;
-     if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
-     if(next.finished)completed++;
-     if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
+     if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,
+      description:`${t.name} · passenger fare · ${((working.jobDrivenMeters??0)+next.distanceMeters)/1000>=0?(
+       ((working.jobDrivenMeters??0)+next.distanceMeters)/1000).toFixed(2):'0.00'} km`,
+      amount:earned});
+     if(next.finished&&!duplicate)completed++;
+     if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished&&!duplicate?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
      const discoveryStarted=performance.now();
      if(t.kind==='explorer'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
      let newRoadKm=0;
@@ -1201,6 +1210,7 @@ export default function App(){
      }});
      discoveryMs+=performance.now()-discoveryStarted;
      return {...next.taxi,
+      completed:duplicate?t.completed:next.taxi.completed,
       jobFareTotal:next.taxi.status==='TO_DROPOFF'?
        Math.round(Math.max(0,next.taxi.fare*fareMultiplier)*100)/100:undefined,
       discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&(t.status==='EXPLORING'||(t.status==='RETURNING'&&Boolean(t.restStopId||t.refillDestination||t.serviceDestination)))?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
@@ -1314,7 +1324,7 @@ export default function App(){
     return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,
       creditMisses:(old.creditMisses??0)+securedTick.missed,
       creditDefaults:(old.creditDefaults??0)+securedTick.repossessions.length,
-      drivers,taxis:securedTick.taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,exploredEdgeIds:updatedIds,
+      drivers,taxis:securedTick.taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,paidPassengerJobIds:[...paidPassengerJobs].slice(-512),exploredEdgeIds:updatedIds,
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
