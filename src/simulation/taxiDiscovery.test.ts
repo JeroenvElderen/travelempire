@@ -30,3 +30,21 @@ describe('passenger taxis never reveal roads',()=>{
   expect(result.discovered).toEqual([]);
  });
 });
+
+describe('POI explorer discovers real harbour approach roads',()=>{
+ it('discovers all road types driven, even if the planner omitted discoveryEdgeIds',()=>{
+  const result=tickTaxi(taxi({kind:'explorer',explorerRole:'poi',status:'EXPLORING',
+   discoveryEdgeIds:[]}),graph,120);
+  expect(result.discovered).toContain('red-road');
+ });
+ it('discovers access roads driven on operational return journeys',()=>{
+  const result=tickTaxi(taxi({kind:'explorer',explorerRole:'poi',status:'RETURNING',
+   discoveryEdgeIds:[],pauseAtHome:true}),graph,120);
+  expect(result.discovered).toContain('red-road');
+ });
+ it('does not grant the same privilege to other explorer roles',()=>{
+  const result=tickTaxi(taxi({kind:'explorer',explorerRole:'primary',status:'EXPLORING',
+   discoveryEdgeIds:[]}),graph,120);
+  expect(result.discovered).toEqual([]);
+ });
+});
