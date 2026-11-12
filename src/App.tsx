@@ -940,10 +940,26 @@ export default function App(){
         restStopName:undefined,restStopPosition:undefined,restUntilGameMs:undefined};
       }
       if(delivered.scheduledShiftParked&&delivered.status==='RETURNING'){
-       if(!canWork)return delivered; // Finish the transfer, not the sleep, only while off duty.
-       return {...delivered,status:'IDLE' as const,shiftParked:false,
-        scheduledShiftParked:false,pauseAtHome:false,path:[],edgeIds:[],
-        leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,restStopName:undefined,restStopPosition:undefined};
+       // Off-duty taxis MUST still drive to the assigned rest facility.
+       // Never return early here: the movement integrator below advances
+       // RETURNING along its route, even outside a rostered shift.
+       if(canWork){
+        // Driver is back on duty: cancel the unfinished rest transfer.
+        return {...delivered,status:'IDLE' as const,shiftParked:false,
+         scheduledShiftParked:false,pauseAtHome:false,path:[],edgeIds:[],
+         leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,
+         restStopName:undefined,restStopPosition:undefined};
+       }
+       // Do not leave a corrupt legacy save stuck in RETURNING forever.
+       // The IDLE branch below will request a fresh route on the next tick.
+       if(delivered.path.length<2||delivered.edgeIds.length===0||
+          delivered.leg>=delivered.edgeIds.length){
+        return {...delivered,status:'IDLE' as const,shiftParked:false,
+         scheduledShiftParked:false,pauseAtHome:false,path:[],edgeIds:[],
+         leg:0,distanceIntoLeg:0,speedKph:0,restStopId:undefined,
+         restStopName:undefined,restStopPosition:undefined};
+       }
+       // Valid off-duty journey: fall through to tickTaxi for movement.
       }
       if(delivered.status==='IDLE'&&!canWork){
        const overnight=!schedule.onDuty;
