@@ -22,6 +22,7 @@ import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
+import {resetVehicleAtDepot} from './simulation/vehicleReset';
 import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/explorerRestPolicy';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
@@ -1689,18 +1690,8 @@ export default function App(){
    manualRecoveryRequestsRef.current.delete(id);
    manualRecoveryPurposeRef.current.delete(id);
    resetVehicleTargetsRef.current.set(id,[...destination]);
-   setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id!==id?t:{
-    ...t,position:[...destination] as [number,number],status:'IDLE' as const,
-    path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
-    leg:0,distanceIntoLeg:0,speedKph:0,
-    pickup:undefined,dropoff:undefined,fare:0,journeyEdges:[],
-    pauseAtHome:false,shiftParked:false,scheduledShiftParked:false,routeInvalid:false,
-    recoveryPending:false,restStopId:undefined,restStopName:undefined,restStopPosition:undefined,
-    restUntilGameMs:undefined,scheduledBreakUntil:undefined,
-    scheduledBreakPending:false,scheduledRestPending:false,
-    refillDestination:undefined,refillRequested:false,refillAtDepot:undefined,
-    serviceDestination:undefined,lastRoadFrom:undefined,lastRoadTo:undefined
-   })}));
+   setFleet(old=>({...old,taxis:old.taxis.map(t=>
+    t.id===id?resetVehicleAtDepot(t,destination):t)}));
    diagnostic('vehicle:reset-to-depot',`returned ${current.name} to assigned depot purple road`);
    setSimError('');
    return;
