@@ -17,13 +17,19 @@ export const PARTNERSHIP_BANKS=[
 ] as const;
 const cents=(v:number)=>Math.round(v*100)/100;
 export function partnershipOffer(bankId:string,request:number,valuation:number,
- averageDailyRevenue:number,creditScore:number,active:readonly BankPartnership[]):PartnershipOffer{
+ averageDailyRevenue:number,creditScore:number,active:readonly BankPartnership[],proposedShare?:number):PartnershipOffer{
  const bank=PARTNERSHIP_BANKS.find(b=>b.id===bankId)??PARTNERSHIP_BANKS[1];
+ const minimumShare=Math.max(5,bank.share-(creditScore>=750?4:creditScore>=650?2:0));
+ const desiredShare=Number.isFinite(proposedShare)?Math.max(5,Math.min(35,Math.round(proposedShare!))):bank.share;
+ const negotiatedShare=Math.max(minimumShare,desiredShare);
+ const negotiatedMultiple=Math.max(1.15,Math.round((bank.multiple+
+  Math.max(0,bank.share-negotiatedShare)*.02-
+  Math.max(0,negotiatedShare-bank.share)*.01)*100)/100);
  const committed=active.reduce((sum,d)=>sum+(d.repaid<d.repaymentCap-.005?d.revenueShare:0),0);
  const outstanding=active.reduce((sum,d)=>sum+Math.max(0,d.repaymentCap-d.repaid),0);
- const ceiling=Math.max(0,Math.min(10000000,valuation*bank.appraisal+
-  Math.max(0,averageDailyRevenue)*90-outstanding*.25));
- const affordableShare=committed+bank.share<=45;
+ const ceiling=Math.max(0,Math.min(10000000,(valuation*bank.appraisal+
+  Math.max(0,averageDailyRevenue)*90-outstanding*.25)*(1+Math.max(0,negotiatedShare-bank.share)*.02)));
+ const affordableShare=committed+negotiatedShare<=45;
  const eligible=creditScore>=550&&averageDailyRevenue>=500&&active.filter(d=>d.repaid<d.repaymentCap-.005).length<3&&affordableShare;
  const requested=Number.isFinite(request)?Math.max(0,Math.round(request)):0;
  // Bank may counteroffer a smaller amount rather than silently refuse.
@@ -35,9 +41,10 @@ export function partnershipOffer(bankId:string,request:number,valuation:number,
   !affordableShare?'Total bank revenue shares cannot exceed 45%':
   requested<500000||requested>10000000?'Request €500,000 to €10,000,000':
   funding<500000?'Insufficient valuation for a bank offer':
-  funding<requested?'The bank will counteroffer a lower amount':'Offer available';
- return {bank:bank.name,requested,funding,revenueShare:bank.share,
-  repaymentMultiple:bank.multiple,repaymentCap:cents(funding*bank.multiple),
+  funding<requested?'The bank will counteroffer a lower amount':
+  desiredShare<minimumShare?'The bank counters with a '+minimumShare+'% revenue share':'Offer available';
+ return {bank:bank.name,requested,funding,revenueShare:negotiatedShare,
+  repaymentMultiple:negotiatedMultiple,repaymentCap:cents(funding*negotiatedMultiple),
   approved,reason};
 }
 export function collectBankRevenue(deals:readonly BankPartnership[],gross:number):
