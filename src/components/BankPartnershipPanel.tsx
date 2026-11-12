@@ -5,17 +5,18 @@ import {PARTNERSHIP_BANKS,partnershipOffer,revenueAverage} from '../simulation/b
 import {securedQuote} from '../simulation/securedLoans';
 
 type Props={company:Company;fleet:FleetState;gameEpochMs:number;
- onAccept:(bankId:string,amount:number)=>void;onBuyout:(id:string)=>void};
+ onAccept:(bankId:string,amount:number,share:number)=>void;onBuyout:(id:string)=>void};
 const eur=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(value);
 
 export default function BankPartnershipPanel({company,fleet,gameEpochMs,onAccept,onBuyout}:Props){
  const [requested,setRequested]=useState(2000000);
  const [selected,setSelected]=useState('growth');
+ const [proposedShare,setProposedShare]=useState(15);
  const valuation=securedQuote(company,fleet,gameEpochMs,1000,365);
  const history=fleet.financeHistory??[];
  const avg=revenueAverage(history);
  const contracts=fleet.bankPartnerships??[];
- const offers=PARTNERSHIP_BANKS.map(bank=>({id:bank.id,...partnershipOffer(bank.id,requested,valuation.companyValue,avg,valuation.score,contracts)}));
+ const offers=PARTNERSHIP_BANKS.map(bank=>({id:bank.id,...partnershipOffer(bank.id,requested,valuation.companyValue,avg,valuation.score,contracts,proposedShare)}));
  const chosen=offers.find(o=>o.id===selected)??offers[1];
  const committed=contracts.filter(d=>d.repaid<d.repaymentCap-.005).reduce((a,d)=>a+d.revenueShare,0);
  return <section className="finance-loan loan-configurator" aria-label="Bank partnerships" style={{marginTop:24}}>
@@ -32,7 +33,10 @@ export default function BankPartnershipPanel({company,fleet,gameEpochMs,onAccept
    value={requested} onChange={e=>setRequested(Number(e.target.value)||0)}/>
   <input aria-label="Adjust bank funding request" type="range" min={500000} max={10000000} step={100000}
    value={Math.min(10000000,Math.max(500000,requested))} onChange={e=>setRequested(Number(e.target.value))}/>
-  <p>Choose a lender to compare their revenue-share percentage, repayment cap, and counteroffer. Offers depend on current valuation, historical revenue, credit and existing agreements.</p>
+  <label htmlFor="proposed-bank-share">Proposed bank revenue share: {proposedShare}%</label>
+  <input id="proposed-bank-share" type="range" min={5} max={35} step={1}
+   value={proposedShare} onChange={e=>setProposedShare(Number(e.target.value))}/>
+  <p>Propose a percentage and choose a lender. The bank can counter with a higher share, different total repayment cap, or less funding based on your performance and existing agreements.</p>
   <div style={{display:'grid',gap:12}}>
    {offers.map(offer=><button key={offer.id} type="button" onClick={()=>setSelected(offer.id)}
     aria-pressed={selected===offer.id}
@@ -51,7 +55,7 @@ export default function BankPartnershipPanel({company,fleet,gameEpochMs,onAccept
    <article><small>ESTIMATED PER GAME DAY</small><strong>{eur(avg*chosen.revenueShare/100)}</strong></article>
   </div>
   <button type="button" disabled={!chosen.approved} onClick={()=>{
-   if(window.confirm('Accept '+chosen.bank+' funding of '+eur(chosen.funding)+'? The bank receives '+chosen.revenueShare+'% of future gross revenue until '+eur(chosen.repaymentCap)+' has been repaid.'))onAccept(chosen.id,requested);
+   if(window.confirm('Accept '+chosen.bank+' funding of '+eur(chosen.funding)+'? The bank receives '+chosen.revenueShare+'% of future gross revenue until '+eur(chosen.repaymentCap)+' has been repaid.'))onAccept(chosen.id,requested,proposedShare);
   }}>{chosen.approved?'Accept '+chosen.bank+' offer':'No eligible bank offer'}</button>
   <small>{chosen.reason}. Repayment estimates assume the same average daily gross revenue and can change with operations. Negotiating a new bank does not alter current secured loans.</small>
   {contracts.length>0&&<div style={{marginTop:18}}>
