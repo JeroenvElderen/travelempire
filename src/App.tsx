@@ -1183,7 +1183,8 @@ export default function App(){
      const insurance=((t.kind==='explorer')?0.00045:0.00085)*(1-Research.level(research,'insuranceResearch')*0.05); // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
-     const earned=next.earned*(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
+     const fareMultiplier=(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0));
+     const earned=next.earned*fareMultiplier;
      revenue+=earned;
      if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,description:`${t.name} · passenger fare`,amount:earned});
      if(next.finished)completed++;
@@ -1199,7 +1200,10 @@ export default function App(){
       discovered.add(id);
      }});
      discoveryMs+=performance.now()-discoveryStarted;
-     return {...next.taxi,discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&(t.status==='EXPLORING'||(t.status==='RETURNING'&&Boolean(t.restStopId||t.refillDestination||t.serviceDestination)))?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
+     return {...next.taxi,
+      jobFareTotal:next.taxi.status==='TO_DROPOFF'?
+       Math.round(Math.max(0,next.taxi.fare*fareMultiplier)*100)/100:undefined,
+      discoveredKm:(t.discoveredKm??0)+((t.kind==='explorer')&&(t.status==='EXPLORING'||(t.status==='RETURNING'&&Boolean(t.restStopId||t.refillDestination||t.serviceDestination)))?km:0),uniqueDiscoveredKm:(t.uniqueDiscoveredKm??0)+newRoadKm,vehicleCondition:Math.max(0,(t.vehicleCondition??100)-km*wearPerKm),operatingKm:(t.operatingKm??0)+km,vehicleMileage:(t.vehicleMileage??0)+km,
        fuelExpense:(t.fuelExpense??0)+fuel,maintenanceExpense:(t.maintenanceExpense??0)+maintenance,explorationExpense:(t.explorationExpense??0)+explorerTravelCost,
        energyRemaining:Math.max(0,energyRemaining(delivered)-consumed),
        refillRequested:next.taxi.refillRequested||energyRemaining(delivered)-consumed<=0,
