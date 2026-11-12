@@ -2235,8 +2235,10 @@ export default function App(){
  const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
   const current=companyRef.current,clock=gameClockRef.current;
   if(!current||!clock)return 'Create a company before buying property shares.';
-  if(!Number.isSafeInteger(amountEuros)||amountEuros<=0)return 'Invalid investment amount.';
-  const available=Math.round((current.cash+pendingCashRef.current)*100),cost=amountEuros*100;
+  const cost=Math.round(amountEuros*100);
+  if(!Number.isFinite(amountEuros)||!Number.isSafeInteger(cost)||cost<=0||
+    Math.abs(amountEuros*100-cost)>0.000001)return 'Invalid investment amount.';
+  const available=Math.round((current.cash+pendingCashRef.current)*100);
   if(cost>available)return 'Insufficient company cash.';
   let next;
   try{
@@ -2244,7 +2246,7 @@ export default function App(){
    savePortfolio(current.id,next);
   }catch(error){return error instanceof Error?error.message:'Investment could not be saved.';}
   portfolioRef.current=next;setPortfolio(next);
-  const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-amountEuros)*100)/100};
+  const updated={...current,cash:Math.round((current.cash+pendingCashRef.current)*100-cost)/100};
   pendingCashRef.current=0;
   companyRef.current=updated;saveCompany(updated);setCompany(updated);
   setFleet(old=>({...old,transactions:[{
