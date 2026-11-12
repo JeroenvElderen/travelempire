@@ -8,7 +8,8 @@ export type Taxi = {
   kind?: 'taxi' | 'explorer' | 'surveyor' | 'recovery';
   ferryVisitedPorts?: string[];
   ferryTrip?: {stage:'boarding'|'sailing';routeId:string;fromPortId:string;toPortId:string;geometry:Point[];destination:Point;durationGameMs:number;startedGameMs?:number;ticketEuros:number;seedRoadId?:string};
-  poiTargetId?:string; // Persistent nationwide harbour mission, assigned by the main simulation.
+  poiTargetId?:string;
+  poiTargetName?:string; // Persistent nationwide harbour mission, assigned by the main simulation.
   explorerRole?: 'motorway'|'trunk'|'primary'|'secondary'|'tertiary'|'residential'|'rural'|'service'|'poi'|'completion'|'highway'|'urban'|'balanced'; // Older saves default to taxi.
   name: string;
   driver: string;
