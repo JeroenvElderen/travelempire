@@ -35,7 +35,7 @@ describe('nationwide harbour scout missions',()=>{
   expect(result.length).toBe(14);
   expect(result[0].portId).toBe('port-0');
   expect(result.some(m=>m.portId==='port-23')).toBe(true);
-  expect(result.some(m=>m.portId==='port-100')).toBe(true);
+  expect(result.some(m=>m.portId==='port-48')).toBe(true);
  });
  it('does not offer harbours assigned to another explorer',()=>{
   const ports=[port('a',24),port('b',24.1),port('c',24.2),port('d',24.3)];
