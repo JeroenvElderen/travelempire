@@ -170,9 +170,8 @@ type Basemap='standard'|'satellite';
 type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onViewportChange,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const [perfOpen,setPerfOpen]=useState(false);
- const viewportCallbackRef=useRef(onViewportChange);viewportCallbackRef.current=onViewportChange;
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
  useEffect(()=>{
   enablePerformanceMonitor(perfOpen);
@@ -782,7 +781,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const elevatedLayerId='elevated-road-network';
   const parkedSourceId='static-parked-cars';
   const parkedLayerId='static-parked-cars-layer';
-  const empty:GeoJSON.FeatureCollection={type:'FeatureCollection',features:[]};
   const remove=()=>{
    if(instance.getLayer(parkedLayerId))instance.removeLayer(parkedLayerId);
    if(instance.getSource(parkedSourceId))instance.removeSource(parkedSourceId);
@@ -802,9 +800,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    ++scanRevision;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
-   // Ask the road manager to load any missing viewport tiles. MapTiler's
-   // background tiles do not contain our game's road segment IDs.
-   viewportCallbackRef.current?.({west,east,south,north});
+   // No viewport-only tile requests: the base map supplies visible roads,
+   // and simulation loaders independently fetch Explorer-relevant tiles.
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
    // Source existence is checked to support map-style reloads.
    const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadGraphVersion;
