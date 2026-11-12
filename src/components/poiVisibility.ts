@@ -41,18 +41,31 @@ export function visibleOperationalPois(
  // A target is never a license to show all facilities on the same tile.
  // A small tolerance handles differences between OSM POI and road-access
  // coordinates without making an unrelated nearby POI visible.
- const nearby=(a:Point,b:Point,radius=120)=>{
+ const distance=(a:Point,b:Point)=>{
   const scale=Math.cos((a[1]+b[1])*Math.PI/360);
-  return Math.hypot((a[0]-b[0])*111320*scale,(a[1]-b[1])*111320)<=radius;
+  return Math.hypot((a[0]-b[0])*111320*scale,(a[1]-b[1])*111320);
  };
- const selectedStations=stations.filter(s=>stationTargets.some(target=>
-  target.kind===s.kind&&nearby([s.lng,s.lat],target.point)));
- const selectedStops=[...owned.values()];
- for(const stop of restStops){
-  if(owned.has(stop.id))continue;
-  if(restTargets.has(stop.id)||restPoints.some(point=>nearby(point,stop.position))){
-   selectedStops.push(stop);
+ const stationById=new Map<string,Station>();
+ for(const target of stationTargets){
+  let closest:Station|undefined,best=120;
+  for(const candidate of stations){
+   if(candidate.kind!==target.kind)continue;
+   const d=distance([candidate.lng,candidate.lat],target.point);
+   if(d<best){best=d;closest=candidate;}
   }
+  if(closest)stationById.set(closest.id,closest);
  }
- return {stations:selectedStations,restStops:selectedStops};
+ const selectedStops=new Map(owned);
+ for(const stop of restStops){
+  if(restTargets.has(stop.id))selectedStops.set(stop.id,stop);
+ }
+ for(const point of restPoints){
+  let closest:RestStop|undefined,best=120;
+  for(const candidate of restStops){
+   const d=distance(candidate.position,point);
+   if(d<best){best=d;closest=candidate;}
+  }
+  if(closest)selectedStops.set(closest.id,closest);
+ }
+ return {stations:[...stationById.values()],restStops:[...selectedStops.values()]};
 }
