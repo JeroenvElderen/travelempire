@@ -25,9 +25,9 @@ export function liveJobMeter(t:Taxi):LiveJobMeter|null{
   (t.jobDistanceMeters&&t.jobDistanceMeters>0?t.jobDistanceMeters:routeMeters));
  const completedLegs=path.slice(1,Math.min(path.length,Math.max(0,t.leg)+1))
   .reduce((total,p,i)=>total+meters(path[i],p),0);
- const travelled=Math.min(totalMeters,Math.max(0,pickup?
+ const travelled=Math.max(0,pickup?
   completedLegs+(t.distanceIntoLeg??0):
-  t.jobDrivenMeters??completedLegs+(t.distanceIntoLeg??0)));
+  t.jobDrivenMeters??completedLegs+(t.distanceIntoLeg??0));
  // Edge lengths and the old request's quotation sometimes disagree.
  // Derive remaining kilometres from the ACTIVE road path, so the meter
  // cannot finish early while the vehicle still has edges to traverse.
