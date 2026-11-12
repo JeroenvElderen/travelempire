@@ -1,4 +1,4 @@
-import {type Taxi,type RoadGraph,type Point} from './taxi';
+import {routeToNearestTarget,type Taxi,type RoadGraph,type Point} from './taxi';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import type {RoadSegment} from '../data/roadTiles';
@@ -28,7 +28,7 @@ function nearbyRoads(point:Point):Set<string>{
 }
 let roadCount=0;
 const roleAllowed=(role:Taxi['explorerRole'],poiRoadIds:string[]):Set<string>=>{
- if(role==='poi')return new Set(poiRoadIds);
+ if(role==='poi')return known;
  if(!role||role==='balanced')return known;
  let result=roadClasses.get(role);
  if(result)return result;
@@ -37,6 +37,27 @@ const roleAllowed=(role:Taxi['explorerRole'],poiRoadIds:string[]):Set<string>=>{
  roadClasses.set(role,result);
  return result;
 };
+function shortestHarbourRoute(start:string,explored:Set<string>,poiRoadIds:string[]){
+ const targets:Array<{node:string;offsetMeters:number}>=[];
+ const finalLegs:Array<{to:string;id:string}>=[];
+ for(const id of poiRoadIds){
+  if(explored.has(id))continue;
+  const ends=roadEndpoints.get(id);if(!ends)continue;
+  for(const from of ends)for(const edge of graph.edges.get(from)??[]){
+   if(edge.id!==id)continue;
+   targets.push({node:from,offsetMeters:edge.meters});
+   finalLegs.push({to:edge.to,id});
+  }
+ }
+ const found=routeToNearestTarget(graph,start,targets,'',150000);
+ if(!found)return null;
+ const leg=finalLegs[found.targetIndex],point=graph.nodes.get(leg.to);
+ if(!point)return null;
+ const edgeIds=[...found.edgeIds,leg.id];
+ return {path:[...found.path,point],edgeIds,
+  discoveryEdgeIds:[...new Set(edgeIds.filter(id=>!explored.has(id)))],
+  escapeTransitEdgeIds:[] as string[]};
+}
 function addRoads(roads:RoadSegment[]):void{
  for(const road of roads){
   if(known.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
@@ -94,18 +115,21 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  const currentNode=origin.node;
  try{
   const valid=new Set(roleAllowed(msg.vehicle.explorerRole,msg.poiRoadIds));
-  const planned=planReachableExplorerRoad(graph,currentNode,explored,valid,
+  const planned=msg.vehicle.explorerRole==='poi'?null:planReachableExplorerRoad(graph,currentNode,explored,valid,
    new Set(msg.reservedRoads),new Set(msg.reservedDestinations),
    msg.vehicle.explorerRole);
-  const route=planned.route?prependPurpleStart(planned.route,origin):null;
+  const candidate=msg.vehicle.explorerRole==='poi'
+   ?shortestHarbourRoute(currentNode,explored,msg.poiRoadIds)
+   :planned?.route??null;
+  const route=candidate?prependPurpleStart(candidate,origin):null;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
-   vehicleId:msg.vehicle.id,outcome:route?'planned':planned.diagnostic.reason,
+   vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-harbour',
    taxi:route?{...msg.vehicle,status:'EXPLORING',path:route.path,
     edgeIds:route.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
-    escapeTransitEdgeIds:planned.route?.escapeTransitEdgeIds??[],
+    escapeTransitEdgeIds:candidate?.escapeTransitEdgeIds??[],
     journeyEdges:[],leg:0,distanceIntoLeg:0,
     scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}:undefined,
-   diagnostic:planned.diagnostic,roadCount,ms:performance.now()-started});
+   diagnostic:planned?.diagnostic,roadCount,ms:performance.now()-started});
  }catch(error){
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,vehicleId:msg.vehicle.id,
    outcome:'error',error:String(error),roadCount,ms:performance.now()-started});
