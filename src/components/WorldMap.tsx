@@ -502,11 +502,13 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       button.disabled=pending||(!paused&&current.status==='RETURNING'&&Boolean(current.pauseAtHome));
       button.addEventListener('click',()=>{explorerCommandRef.current?.(current.id,paused?'resume':'home');sheet.remove();});
       actions.appendChild(button);
+     }
+     if(current.kind==='explorer'||current.kind==='taxi'||!current.kind){
       const teleport=document.createElement('button');teleport.type='button';
-      teleport.textContent='↪ Teleport to depot';
+      teleport.textContent='↪ Reset to depot';
       teleport.disabled=pending||Boolean(current.ferryTrip)||Boolean(current.recoveryPending)||
        Boolean(current.deliveryUntil&&current.deliveryUntil>Date.now());
-      teleport.title='Instantly return this explorer to its assigned depot road, clearing the current route';
+      teleport.title='Instantly reset this vehicle to its assigned depot road, cancelling its current route';
       teleport.addEventListener('click',()=>{
        if(!window.confirm('Teleport '+current.name+' to its assigned depot? This cancels its current trip.'))return;
        explorerCommandRef.current?.(current.id,'teleport');sheet.remove();
