@@ -15,7 +15,7 @@ describe('midnight daily summary',()=>{
   const summary=buildDailySummary('2026-11-24',fleet({
    exploredEdgeIds:['old','a','b'],
    financeHistory:[{day:'2026-11-24',revenue:8000,expenses:2000,trips:4,categories:{fuel:100,maintenance:0,exploration:400,payroll:1000,insurance:50,overhead:450,interest:0}}],
-   vehicleFinanceHistory:[{day:'2026-11-24',taxiId:'taxi',name:'Taxi',revenue:6000,expenses:1000,km:150,trips:4,depotId:'main'}],
+   vehicleFinanceHistory:[{day:'2026-11-24',taxiId:'taxi',name:'Taxi',revenue:6000,expenses:1000,km:150,trips:4}],
    ferryRevenueByDay:{'2026-11-24':1500},
    loans:[{id:'loan',principal:1000,balance:800,annualRate:0,termDays:10,remainingDays:8,dailyPayment:100,accruedGameSeconds:0}]
   }),9000,3);
