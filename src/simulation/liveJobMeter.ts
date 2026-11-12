@@ -28,10 +28,21 @@ export function liveJobMeter(t:Taxi):LiveJobMeter|null{
  const travelled=Math.min(totalMeters,Math.max(0,pickup?
   completedLegs+(t.distanceIntoLeg??0):
   t.jobDrivenMeters??completedLegs+(t.distanceIntoLeg??0)));
- const progress=totalMeters>0?Math.min(1,travelled/totalMeters):0;
+ // Edge lengths and the old request's quotation sometimes disagree.
+ // Derive remaining kilometres from the ACTIVE road path, so the meter
+ // cannot finish early while the vehicle still has edges to traverse.
+ let routeRemaining=0;
+ for(let leg=Math.max(0,t.leg);leg<path.length-1;leg++){
+  const segment=meters(path[leg],path[leg+1]);
+  routeRemaining+=Math.max(0,segment-(leg===t.leg?(t.distanceIntoLeg??0):0));
+ }
+ const accurateTotal=pickup?totalMeters:Math.max(totalMeters,travelled+routeRemaining);
+ // A 100% bar means the ride has already been settled; TO_DROPOFF is
+ // explicitly still in progress. The panel vanishes on confirmed arrival.
+ const progress=accurateTotal>0?Math.min(pickup?1:0.995,travelled/accurateTotal):0;
  const expectedFare=Math.max(0,t.jobFareTotal??t.fare??0);
  return {phase:pickup?'pickup':'passenger',
   earnedSoFar:pickup?0:Math.round(expectedFare*progress*100)/100,
-  expectedFare,drivenKm:travelled/1000,totalKm:totalMeters/1000,
-  remainingKm:Math.max(0,totalMeters-travelled)/1000,progress};
+  expectedFare,drivenKm:travelled/1000,totalKm:accurateTotal/1000,
+  remainingKm:Math.max(0,accurateTotal-travelled)/1000,progress};
 }
