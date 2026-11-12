@@ -763,6 +763,14 @@ export default function App(){
      }
    }
    networkRef.current?.consider(positions);
+   // Load neighbouring road packages even when an explorer is stationary.
+   // Otherwise the loaded graph ends at its current tile and the planner
+   // cannot find a legal frontier in the next one. Use idle scouts first;
+   // include moving explorers with short remaining routes for lookahead.
+   const expansionScouts=taxisRef.current.filter(t=>
+    t.kind==='explorer'&&!t.ferryTrip&&!t.deliveryUntil&&
+    (t.status==='IDLE'||t.status==='EXPLORING'&&t.edgeIds.length-t.leg<=6));
+   networkRef.current?.considerExplorerExpansion(expansionScouts.map(t=>t.position));
    // Preload one destination and one bounded corridor segment each scan.
    // A permanent target is never blocked merely because its road tile has not
    // been loaded yet. Advance streaming requests at most ~3 km per scan and
