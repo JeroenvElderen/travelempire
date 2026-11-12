@@ -325,91 +325,93 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{if(!map.current)return;map.current.getCanvas().style.cursor=selecting?'crosshair':'';},[selecting]);
  useEffect(()=>{if(!map.current)return;marker.current?.remove();marker.current=null;if(headquarters){marker.current=new maplibregl.Marker({color:'#4bd9ac'}).setLngLat([headquarters.lng,headquarters.lat]).setPopup(new maplibregl.Popup({offset:20}).setText(`${headquarters.label} — ${headquarters.country}`)).addTo(map.current);marker.current.getElement().style.zIndex='3';if(!firstHeadquartersPositioned.current){firstHeadquartersPositioned.current=true;map.current.jumpTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}else{map.current.flyTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}}},[headquarters]);
  useEffect(()=>{if(!map.current)return;const ids=new Set(depots.map(d=>d.id));for(const [id,m] of depotMarkers.current)if(!ids.has(id)){m.remove();depotMarkers.current.delete(id);}for(const d of depots){const existing=depotMarkers.current.get(d.id);if(existing){existing.setLngLat([d.lng,d.lat]);continue;}const marker=new maplibregl.Marker({color:'#f7ae43'}).setLngLat([d.lng,d.lat]).setPopup(new maplibregl.Popup({offset:18}).setText(`${d.name} · ${d.capacity} spaces`)).addTo(map.current);depotMarkers.current.set(d.id,marker);}},[depots]);
- // Query small OSM cells near operating vehicles. Cap requests to avoid overwhelming public servers.
+ // Load POI tiles only where a vehicle has an actual operational
+ // destination. Fleet routing loads its own data independently of the map.
  useEffect(()=>{
-  if(!stationsVisible||!ready||!taxis.length){setStations([]);setStationStatus(!stationsVisible?'Stations hidden':'Waiting for taxis');return;}
-  let cancelled=false;let busyLoading=false;
-  const load=async()=>{
-   if(busyLoading)return;busyLoading=true;
-   const coords=taxis.filter(t=>Number.isFinite(t.position[0])&&Number.isFinite(t.position[1])).map(t=>({lng:t.position[0],lat:t.position[1]}));
-   const unique=new Map<string,{lng:number;lat:number}>();for(const p of coords){const key=stationTileKey(p.lng,p.lat);if(!unique.has(key))unique.set(key,p);if(unique.size>=6)break;}
-   if(!unique.size){busyLoading=false;setStationStatus('No valid taxi positions');return;}
-   setStationStatus('Loading offline OSM station tiles…');
-   const results=await Promise.allSettled([...unique.values()].map(p=>loadStationTile(p.lng,p.lat)));
-   busyLoading=false;if(cancelled)return;
-   const found=new Map<string,Station>();for(const result of results)if(result.status==='fulfilled')for(const station of result.value)found.set(station.id,station);
-   setStations([...found.values()]);const failed=results.filter(r=>r.status==='rejected').length;
-   setStationStatus(`${found.size} offline OSM locations nearby${failed?` · ${failed} tile(s) unavailable`:''}`);
-  };
-  void load();const timer=setInterval(()=>void load(),60000);
-  return()=>{cancelled=true;clearInterval(timer);};
- },[ready,stationsVisible,taxis.map(t=>stationTileKey(t.position[0],t.position[1])).join('|')]);
- useEffect(()=>{
-  const instance=map.current;if(!instance)return;
-  const visible=stationsVisible?stations:[];const ids=new Set(visible.map(s=>s.id));
-  for(const [id,marker] of stationMarkers.current)if(!ids.has(id)){marker.remove();stationMarkers.current.delete(id);}
-  for(const station of visible){if(stationMarkers.current.has(station.id))continue;
-   const element=document.createElement('div');element.className=`te-station-marker te-station-${station.kind}`;element.textContent=station.kind==='fuel'?'⛽':station.kind==='charging'?'⚡':'🔧';element.title=station.name;
-   const popup=new maplibregl.Popup({offset:15}).setText(`${station.name} · ${station.kind==='fuel'?'Fuel':station.kind==='charging'?'EV charging':'Vehicle workshop'}${station.operator?' · '+station.operator:''}${station.access?' · Access: '+station.access:''}`);
-   const marker=new maplibregl.Marker({element,anchor:'bottom'}).setLngLat([station.lng,station.lat]).setPopup(popup).addTo(instance);stationMarkers.current.set(station.id,marker);
+  if(!ready||!facilityTargets.stations.length){
+   setStations([]);setStationStatus('Stations hidden unless a vehicle is travelling to one');
+   return;
   }
- },[stations,stationsVisible,ready]);
- // Same offline 0.1-degree OSM tiles as fuel stations; only load near vehicles.
- useEffect(()=>{
-  if(!restStopsVisible||!ready||!taxis.length){setRestStops([]);setRestStatus(!restStopsVisible?'Rest locations hidden':'Waiting for vehicles');return;}
   let cancelled=false;
-  const load=async()=>{
-   const unique=new Map<string,[number,number]>();
-   for(const t of taxis){
-    const [lng,lat]=t.position;
-    if(!Number.isFinite(lng)||!Number.isFinite(lat))continue;
-    const key=stationTileKey(lng,lat);
-    if(!unique.has(key))unique.set(key,[lng,lat]);
-    if(unique.size>=6)break;
-   }
-   const results=await Promise.allSettled([...unique.values()].map(([lng,lat])=>loadRestStopTile(lng,lat)));
+  const unique=new Map<string,[number,number]>();
+  for(const point of facilityTargets.stations){
+   const key=stationTileKey(point[0],point[1]);
+   if(!unique.has(key))unique.set(key,point);
+  }
+  void Promise.allSettled([...unique.values()].map(point=>
+   loadStationTile(point[0],point[1]))).then(results=>{
+   if(cancelled)return;
+   const found=new Map<string,Station>();
+   for(const result of results)if(result.status==='fulfilled')
+    for(const station of result.value)found.set(station.id,station);
+   setStations([...found.values()]);
+   setStationStatus(found.size+' facilities indexed near active vehicle destinations');
+  });
+  return()=>{cancelled=true;};
+ },[ready,facilityTargets.stations]);
+ useEffect(()=>{
+  if(!ready||!facilityTargets.rests.length){
+   setRestStops([]);setRestStatus('Rest facilities hidden unless invested in or targeted');
+   return;
+  }
+  let cancelled=false;
+  const unique=new Map<string,[number,number]>();
+  for(const point of facilityTargets.rests){
+   const key=stationTileKey(point[0],point[1]);
+   if(!unique.has(key))unique.set(key,point);
+  }
+  void Promise.allSettled([...unique.values()].map(point=>
+   loadRestStopTile(point[0],point[1]))).then(results=>{
    if(cancelled)return;
    const found=new Map<string,RestStop>();
-   for(const result of results)if(result.status==='fulfilled')for(const stop of result.value)found.set(stop.id,stop);
+   for(const result of results)if(result.status==='fulfilled')
+    for(const stop of result.value)found.set(stop.id,stop);
    setRestStops([...found.values()]);
-   setRestStatus(found.size+' parking, rest-area and hotel POIs nearby'+(results.some(r=>r.status==='rejected')?' · some tiles unavailable':''));
-  };
-  void load();
-  const timer=setInterval(()=>void load(),60000);
-  return()=>{cancelled=true;clearInterval(timer);};
- },[ready,restStopsVisible,taxis.map(t=>stationTileKey(t.position[0],t.position[1])).join('|')]);
+   setRestStatus(found.size+' rest facilities indexed near active vehicle destinations');
+  });
+  return()=>{cancelled=true;};
+ },[ready,facilityTargets.rests]);
  useEffect(()=>{
   const instance=map.current;if(!instance)return;
-  const visible=restStopsVisible?restStops:[];
+  const visible=visiblePoi.stations;
+  const ids=new Set(visible.map(s=>s.id));
+  for(const [id,marker] of stationMarkers.current)if(!ids.has(id)){
+   marker.remove();stationMarkers.current.delete(id);
+  }
+  for(const station of visible){
+   if(stationMarkers.current.has(station.id))continue;
+   const element=document.createElement('div');
+   element.className=`te-station-marker te-station-${station.kind}`;
+   element.textContent=station.kind==='fuel'?'⛽':station.kind==='charging'?'⚡':'🔧';
+   element.title=station.name;
+   const popup=new maplibregl.Popup({offset:15}).setText(
+    `${station.name} · ${station.kind==='fuel'?'Fuel':station.kind==='charging'?'EV charging':'Vehicle workshop'}`);
+   stationMarkers.current.set(station.id,new maplibregl.Marker({element,anchor:'bottom'})
+    .setLngLat([station.lng,station.lat]).setPopup(popup).addTo(instance));
+  }
+  diagnostic('map:poI-markers',`stations=${visible.length} activeDestinations=${facilityTargets.stations.length}`);
+ },[visiblePoi.stations,ready]);
+ useEffect(()=>{
+  const instance=map.current;if(!instance)return;
+  const visible=visiblePoi.restStops;
   const ids=new Set(visible.map(p=>p.id));
-  for(const [id,marker] of restMarkers.current)if(!ids.has(id)){marker.remove();restMarkers.current.delete(id);}
+  for(const [id,marker] of restMarkers.current)if(!ids.has(id)){
+   marker.remove();restMarkers.current.delete(id);
+  }
   for(const stop of visible){
    if(restMarkers.current.has(stop.id))continue;
    const element=document.createElement('div');
    element.className='te-station-marker te-rest-'+stop.kind;
    element.textContent=stop.kind==='hotel'?'🛏️':stop.kind==='parking'?'🅿️':'☕';
    element.title=stop.name;
-   const label=stop.kind==='hotel'?'Hotel / accommodation':stop.kind==='parking'?'Parking':stop.kind==='services'?'Motorway services':'Rest area';
-   const popup=new maplibregl.Popup({offset:15}).setText(stop.name+' · '+label);
-   restMarkers.current.set(stop.id,new maplibregl.Marker({element,anchor:'bottom'}).setLngLat(stop.position).setPopup(popup).addTo(instance));
+   const label=stop.kind==='hotel'?'Hotel / accommodation':
+    stop.kind==='parking'?'Parking':stop.kind==='services'?'Motorway services':'Rest area';
+   restMarkers.current.set(stop.id,new maplibregl.Marker({element,anchor:'bottom'})
+    .setLngLat(stop.position).setPopup(new maplibregl.Popup({offset:15})
+    .setText(stop.name+' · '+label)).addTo(instance));
   }
- },[restStops,restStopsVisible,ready]);
- // Route calculations run only when station data or the road graph changes,
- // not on every taxi animation frame. Keep the UI responsive for large fleets.
- useEffect(()=>{
-  if(!stationsVisible||!graph||!stations.length){setStationRoutes({});return;}
-  let cancelled=false;
-  const timer=setTimeout(()=>{
-   const output:Record<string,StationRoute|null>={};
-   for(const t of taxis.slice(0,8)){
-    const kind='fuel';
-    output[t.id]=reachableStations(graph,t.position,stations,kind,energyRangeKm(t))[0]??null;
-   }
-   if(!cancelled)setStationRoutes(output);
-  },100);
-  return()=>{cancelled=true;clearTimeout(timer);};
- },[graph,stations,stationsVisible,taxis.map(t=>`${t.id}:${Math.floor(t.position[0]*1000)}:${Math.floor(t.position[1]*1000)}`).join('|')]);
- const nearestInfo=taxis.slice(0,4).map(t=>{const kind='fuel';const point={lng:t.position[0],lat:t.position[1]};const match=stationRoutes[t.id]??null;return {taxi:t.name,kind,match,distance:match?.roadKm??null,straight:match?stationDistanceKm(point,match.station):null};});
+  diagnostic('map:poI-markers',`rest=${visible.length} invested=${ownedProperties.length}`);
+ },[visiblePoi.restStops,ready]);
  const taxisRef=useRef(taxis);taxisRef.current=taxis;
  // Render one simulation tick behind the authoritative state. This avoids running
  // the road integrator on every animation frame and prevents one-second jumps.
@@ -1103,5 +1105,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><label className="territory-toggle"><input type="checkbox" checked={stationsVisible} onChange={e=>setStationsVisible(e.target.checked)}/> Show fuel, EV charging and workshop locations</label><div>{stationStatus}</div><label className="territory-toggle"><input type="checkbox" checked={restStopsVisible} onChange={e=>setRestStopsVisible(e.target.checked)}/> Show parking, motorway rest areas and hotels</label><div>{restStatus}</div>{stationsVisible&&nearestInfo.map(item=><div key={item.taxi} className="te-nearest-station">{item.taxi}: {item.match?`${item.match.station.name} (${item.distance?.toFixed(1)} km by road · ${item.straight?.toFixed(1)} km direct)`:`No reachable ${item.kind} station within current range / loaded roads`}</div>)}<label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><div>{stationStatus}</div><div>{restStatus}</div><div>Only invested properties and destinations in use are shown; all facilities remain available for routing.</div><label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
