@@ -19,9 +19,10 @@ export function assignPoiHarbours(
    [...candidates].filter(p=>!used.has(p.id)).sort((a,b)=>
     distance(t.position,a.roadAccess??a.position)-distance(t.position,b.roadAccess??b.position))[0];
   if(chosen)used.add(chosen.id);
-  if((chosen?.id??undefined)===t.poiTargetId)return t;
+  if((chosen?.id??undefined)===t.poiTargetId&&
+     (chosen?.name??undefined)===t.poiTargetName)return t;
   changed=true;
-  return {...t,poiTargetId:chosen?.id};
+  return {...t,poiTargetId:chosen?.id,poiTargetName:chosen?.name};
  });
  const missions: PoiHarbourMission[]=result.flatMap(t=>{
   if(t.kind!=='explorer'||t.explorerRole!=='poi'||!t.poiTargetId)return [];
