@@ -1093,7 +1093,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
        ?harbourRoute?'shortest-reachable-harbour-route'
-        :frontier?.route?'discovering-connected-roads-toward-harbour'
+        :frontier?.route?'expanding-legal-road-frontier-while-harbour-loads'
          :'no-reachable-harbour-or-road-frontier'
        :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
        ':classEdges='+planned!.diagnostic.reachableClassEdges);
