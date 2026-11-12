@@ -45,6 +45,15 @@ describe('purple road explorer starting position',()=>{
   expect(start?.node).toBe('A');
   expect(start?.connector).toBeUndefined();
  });
+ it('selects the real directed purple junction directly beneath a stationary scout',()=>{
+  const graph=makeGraph();
+  // A busy intersection has multiple nearby road geometries. At an actual
+  // discovered junction there is no need to snap to a different segment.
+  const start=resolvePurpleExplorerStart(graph,[0.000003,0],
+   new Set(['purple']),endpoints);
+  expect(start?.node).toBe('A');
+  expect(start?.connector).toBeUndefined();
+ });
  it('does not teleport onto a remote discovered road',()=>{
   const graph=makeGraph();
   expect(resolvePurpleExplorerStart(graph,[0.001,0.001],
