@@ -1,6 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 
-/** Streets v4 retains its native paint, labels and road hierarchy.
+/** The selected MapTiler basemap retains its native labels and road hierarchy.
  * Only optional 3D building extrusions are added at close zoom. */
 export type MapDayPhase='day'|'dusk'|'night';
 export function mapDayPhase(hour:number):MapDayPhase {
@@ -22,11 +22,11 @@ export function applyTravelEmpireStyle(map:maplibregl.Map,_phase:MapDayPhase,thr
   map.addLayer({
    id:extrusionId,type:'fill-extrusion',source:building.source,'source-layer':'building',minzoom:15,
    paint:{
-    'fill-extrusion-color':'#d6c8b8',
+    'fill-extrusion-color':'#304451',
     'fill-extrusion-height':['interpolate',['linear'],['zoom'],15,0,16,['coalesce',['get','render_height'],['get','height'],12]],
     'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],
-    'fill-extrusion-opacity':0.65,
+    'fill-extrusion-opacity':0.58,
    },
   },firstLabel?.id);
- }catch(error){console.warn('[TravelEmpire] 3D buildings unavailable for Streets v4',error);}
+ }catch(error){console.warn('[TravelEmpire] 3D buildings unavailable for current basemap',error);}
 }
