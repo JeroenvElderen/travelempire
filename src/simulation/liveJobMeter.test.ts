@@ -6,7 +6,7 @@ const vehicle=(overrides:Partial<Taxi>={}):Taxi=>({
  id:'taxi-1',kind:'taxi',name:'Taxi 1',driver:'Driver',
  position:[23.9,37.9],status:'TO_DROPOFF',
  path:[[23.9,37.9],[23.902,37.9]],edgeIds:['route-1'],
- leg:0,distanceIntoLeg:0,
+ leg:0,distanceIntoLeg:50,
  pickup:[23.9,37.9],dropoff:[23.902,37.9],
  fare:8,jobFareTotal:10,jobDistanceMeters:200,
  jobDrivenMeters:50,completed:0,...overrides
@@ -32,11 +32,18 @@ describe('live passenger job meter',()=>{
   expect(result?.drivenKm).toBeGreaterThan(0);
   expect(result?.expectedFare).toBe(8);
  });
- it('caps the meter at the projected fare even after the final segment',()=>{
-  const result=liveJobMeter(vehicle({jobDrivenMeters:300}));
-  expect(result?.earnedSoFar).toBe(10);
-  expect(result?.progress).toBe(1);
-  expect(result?.remainingKm).toBe(0);
+ it('never displays a 100% collected fare before the confirmed drop-off',()=>{
+  const result=liveJobMeter(vehicle({jobDrivenMeters:300,distanceIntoLeg:175}));
+  expect(result?.earnedSoFar).toBeLessThan(10);
+  expect(result?.progress).toBeLessThan(1);
+  expect(result?.drivenKm).toBeCloseTo(.3);
+ });
+ it('extends the remaining trip distance when its old quote underestimates the route',()=>{
+  const result=liveJobMeter(vehicle({
+   jobDistanceMeters:100,jobDrivenMeters:100,distanceIntoLeg:20
+  }));
+  expect(result?.totalKm).toBeGreaterThan(.1);
+  expect(result?.progress).toBeLessThan(1);
  });
  it('hides the meter for explorers, idle taxis, and completed jobs',()=>{
   expect(liveJobMeter(vehicle({kind:'explorer',status:'EXPLORING'}))).toBeNull();
