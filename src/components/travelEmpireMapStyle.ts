@@ -22,10 +22,10 @@ export function applyTravelEmpireStyle(map:maplibregl.Map,_phase:MapDayPhase,thr
   map.addLayer({
    id:extrusionId,type:'fill-extrusion',source:building.source,'source-layer':'building',minzoom:15,
    paint:{
-    'fill-extrusion-color':'#304451',
+    'fill-extrusion-color':'#B5C7D0',
     'fill-extrusion-height':['interpolate',['linear'],['zoom'],15,0,16,['coalesce',['get','render_height'],['get','height'],12]],
     'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],
-    'fill-extrusion-opacity':0.58,
+    'fill-extrusion-opacity':0.65,
    },
   },firstLabel?.id);
  }catch(error){console.warn('[TravelEmpire] 3D buildings unavailable for current basemap',error);}
