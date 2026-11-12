@@ -455,6 +455,35 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
  poiIndexedRoads=seenRoadIds.size;
 }
 
+// The POI specialist pursues harbour-access segments by shortest driven distance.
+// Unlike road-class specialists, every previously red road on the chosen route
+// is a discovery edge. The route remains directed and stays on the road graph.
+function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
+ reserved:Set<string>):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
+ const targets:Array<{node:string;offsetMeters:number}>=[];
+ const legs:Array<{from:string;to:string;id:string}>=[];
+ for(const {id} of nearestHarbourRoads.values()){
+  if(explored.has(id)||reserved.has(id))continue;
+  const pair=roadEndpoints.get(id);if(!pair)continue;
+  for(const from of pair){
+   for(const edge of g.edges.get(from)??[]){
+    if(edge.id!==id)continue;
+    targets.push({node:from,offsetMeters:edge.meters});
+    legs.push({from,to:edge.to,id});
+   }
+  }
+ }
+ if(!targets.length)return null;
+ const result=routeToNearestTarget(g,start,targets,'',150000);
+ if(!result)return null;
+ const leg=legs[result.targetIndex];
+ const destination=g.nodes.get(leg.to);
+ if(!destination)return null;
+ const edgeIds=[...result.edgeIds,leg.id];
+ return {path:[...result.path,destination],edgeIds,
+  discoveryEdgeIds:[...new Set(edgeIds.filter(id=>!explored.has(id)))],
+  escapeTransitEdgeIds:[]};
+}
 const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'||h==='track'||h==='road'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number;plannerPoolEnabled?:boolean};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
@@ -753,7 +782,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='balanced'||!role)return allRoads;
-    if(role==='poi')return poiRoads;
+    if(role==='poi')return allRoads;
     if(role==='completion')return completionRoads;
     // Each specialist discovers ONLY its own road classes, while all may
     // travel along already-purple roads to reach their next target.
@@ -900,7 +929,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
 
     const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
-    if(remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
+    if(taxi.explorerRole==='poi'||remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
     if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-3)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
@@ -1012,12 +1041,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const origin=purpleStartNear(idleVehicle.position,explored);
      if(origin){
       const allowed=discoveryRoads(idleVehicle);
-      const planned=planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
+      const planned=role==='poi'?null:planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
        reservedEdges,reservedTargets,role);
-      singleWorkerScanResult.set(idleVehicle.id,planned.diagnostic.reason+
-       ':visited='+planned.diagnostic.visitedPurpleNodes+
-       ':classEdges='+planned.diagnostic.reachableClassEdges);
-      const route=planned.route;
+      const route=role==='poi'
+       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges)
+       :planned?.route??null;
+      singleWorkerScanResult.set(idleVehicle.id,role==='poi'
+       ?route?'shortest-harbour-route':'no-reachable-undiscovered-harbour'
+       :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
+       ':classEdges='+planned!.diagnostic.reachableClassEdges);
       if(route){
        const completed=prependPurpleStart(route,origin);
        const destination=nearest(activeGraph,completed.path.at(-1)!);
@@ -1102,8 +1134,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const candidateStarted=performance.now();
     // Do not rescan and sort regional candidates for every incremental slice.
-    // Indexed POIs form a small target set; never discard a reachable
-    // harbour/facility road just because a nearer POI is disconnected.
+    // Harbour explorers must never fall back to arbitrary local exploration.
+    // They retry their directed shortest-harbour search as road tiles arrive.
+    if(idleVehicle.explorerRole==='poi'){
+     explorerPlanSkipReason.set(idleVehicle.id,'awaiting-shortest-harbour-route');
+     continue;
+    }
     const candidates=continuingMajorSearch
      ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
      :idleVehicle.explorerRole==='poi'
