@@ -33,3 +33,27 @@
 .investment-poi-entry button:disabled{opacity:.45;cursor:not-allowed}
 .investment-poi-amount>small{color:#a8bfd2;font-size:10px;line-height:1.5}
 @media(max-width:430px){.investment-poi-entry input{max-width:none}}
+
+
+/* Unit-level property performance: actual occupied room/space counts. */
+.investment-unit-economics{display:grid;gap:12px;margin:0 0 17px;padding:15px;border:1px solid #385778;border-radius:13px;background:linear-gradient(150deg,#112a42,#132338)}
+.investment-unit-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.investment-unit-heading strong{font-size:14px;color:#e0ecff}
+.investment-unit-heading small{color:#93aeca;font-size:10px}
+.investment-unit-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.investment-unit-summary>div{display:grid;gap:6px;padding:10px 8px;border-radius:10px;background:#1d334c}
+.investment-unit-summary small{font-size:9px;font-weight:700;letter-spacing:.4px;color:#9db1c8}
+.investment-unit-summary strong{font-size:22px;font-variant-numeric:tabular-nums;color:#f3f6ff}
+.investment-unit-track{height:8px;background:#354359;overflow:hidden;border-radius:20px}
+.investment-unit-track span{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#9065d3,#47c59b)}
+.investment-unit-rate{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;color:#a4bfd2;font-size:12px}
+.investment-unit-rate strong{color:#f2e5ff;font-variant-numeric:tabular-nums}
+.investment-unit-revenue{display:grid;gap:4px;border-top:1px solid #354b60;padding-top:12px}
+.investment-unit-revenue span{color:#98b3cb;font-size:11px}
+.investment-unit-revenue strong{font-size:15px;color:#9bead5;font-variant-numeric:tabular-nums}
+.investment-unit-costs{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;font-size:11px;color:#9eb6cb}
+.investment-unit-costs strong{font-variant-numeric:tabular-nums;color:#e0d3dc}
+.investment-unit-net{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:11px;border-top:1px solid #38516b;color:#c0d3e4;font-size:12px}
+.investment-unit-net strong{font-variant-numeric:tabular-nums;font-size:16px;color:#a5efd8}
+.investment-unit-note{font-size:10px;line-height:1.5;color:#8ca4bb}
+@media(max-width:420px){.investment-unit-economics{padding:12px}.investment-unit-summary strong{font-size:19px}.investment-unit-rate{font-size:11px}}
