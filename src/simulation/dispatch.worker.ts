@@ -1142,9 +1142,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const candidates=continuingMajorSearch
      ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
-     :idleVehicle.explorerRole==='poi'
-      ?new Set([...discoveryRoads(idleVehicle)].filter(id=>!explored.has(id)&&!reservedEdges.has(id)))
-      :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
+     :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
     candidateSelectionMs+=performance.now()-candidateStarted;
     if(candidates.size===0){
      explorerPlanSkipReason.set(idleVehicle.id,'no-eligible-candidates');negativeScoutEmptySkips++;idleSkipped++;
@@ -1161,7 +1159,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     idleMissionPlans++;
     planningCalls++;
     const scoutRouteStarted=performance.now();
-    const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk'||idleVehicle.explorerRole==='poi';
+    const majorRoad=idleVehicle.explorerRole==='motorway'||idleVehicle.explorerRole==='trunk';
     const purpleOrigin=purpleStartNear(idleVehicle.position,explored);
     if(!purpleOrigin){explorerPlanSkipReason.set(idleVehicle.id,'no-purple-segment-near-vehicle');continue;}
     const anchoredTaxi={...idleVehicle,position:graph.nodes.get(purpleOrigin.node)!};
@@ -1204,10 +1202,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       continue;
      }
      failedRouteSearches++;failedRouteCache.set('idle|'+idleVehicle.id,{signature:idleFailureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});
-      if(idleVehicle.explorerRole==='poi')poiRetryWallClock.set(idleVehicle.id,{until:performance.now()+POI_RETRY_MS,roadCount:seenRoadIds.size,poiSignature:poiTargetsSignature});
       negativeScoutCache.set(idleVehicle.id,{signature,until:now+NEGATIVE_SCOUT_TTL_MS});
      explorerSearchTier.set(idleVehicle.id,Math.min(tier+1,SEARCH_RADII_KM.length-1));
-     idleRetryAt.set(idleVehicle.id,now+(idleVehicle.explorerRole==='poi'?POI_RETRY_MS:IDLE_RETRY_MS));
+     idleRetryAt.set(idleVehicle.id,now+IDLE_RETRY_MS);
      idleRetryRoadCount.set(idleVehicle.id,seenRoadIds.size);
      idleRetryExploredCount.set(idleVehicle.id,explored.size);
      idleRetryPosition.set(idleVehicle.id,positionKey);
