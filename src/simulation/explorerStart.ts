@@ -44,10 +44,18 @@ export function resolvePurpleExplorerStart(
   // Do not prefer a faraway endpoint just because it is on a nominally
   // closer parallel road. Use perpendicular match first, then travel length.
   const travel=meters(position,b);
-  const score=offset*1000+travel;
+  // At the physical source junction of a directed purple edge, start at
+  // that junction. The old implementation always snapped downstream to B,
+  // sometimes jumping the entire edge and leaving visitedPurpleNodes=1.
+  const nearSource=meters(position,a)<=5;
+  const depart=nearSource?from:to;
+  const connector=!nearSource&&travel>12?{from:position,to:b,edgeId:id}:undefined;
+  // Prefer a vertex with an actual outgoing discovered road, but never
+  // manufacture a reverse turn on a one-way segment.
+  const hasPurpleExit=(graph.edges.get(depart)??[]).some(e=>discovered.has(e.id)&&e.meters>0);
+  const score=offset*1000+(nearSource?0:travel)+(hasPurpleExit?0:200);
   if(score>=bestScore)return;
-  const connector=travel>12?{from:position,to:b,edgeId:id}:undefined;
-  best={node:to,roadId:id,distanceFromRoadMeters:offset,connector};
+  best={node:depart,roadId:id,distanceFromRoadMeters:offset,connector};
   bestScore=score;
  };
  if(endpoints){
