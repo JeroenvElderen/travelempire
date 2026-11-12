@@ -66,7 +66,7 @@ export function planConnectedFrontier(
     diagnostic.unsafeOneWaySkipped++;continue;
    }
    const point=graph.nodes.get(edge.to);
-   const score=item.cost+(goal&&point?0.65*meters(point,goal):0);
+   const score=item.cost+(goal&&point?1.25*meters(point,goal):0);
    if(score<bestScore){
     bestScore=score;candidate={from:item.node,to:edge.to,id:edge.id};
    }
