@@ -2115,6 +2115,23 @@ export default function App(){
    if(knownPorts.has(recovered))earned.add(recovered);
   }
   const newlyUnlocked:string[]=[];
+  // A POI mission may physically arrive at its mapped terminal access even
+  // when the static OSM harbour-to-road index selected a different berth
+  // spur. Count a REAL explorer arriving on the driven road network; a map
+  // viewport or proximity of some unrelated vehicle never unlocks a port.
+  for(const mission of harbourMissionsRef.current){
+   if(earned.has(mission.portId))continue;
+   const vehicle=fleet.taxis.find(t=>t.id===mission.vehicleId);
+   const port=harbourNetwork.ports.find(p=>p.id===mission.portId);
+   if(!vehicle||!port||vehicle.explorerRole!=='poi'||vehicle.poiTargetId!==port.id)continue;
+   const radius=port.roadAccess?125:180;
+   if(meters(vehicle.position,port.roadAccess??port.position)>radius)continue;
+   // Require a completed, recorded access road, not just a vehicle marker
+   // that starts near the port before driving anything.
+   const edges=harbourEdges?.get(port.id)??[];
+   if(!edges.some(id=>discovered.has(id)))continue;
+   earned.add(port.id);newlyUnlocked.push(port.id);
+  }
   for(const [id,edges] of harbourEdges??[]){
    if(!knownPorts.has(id)||earned.has(id))continue;
    if(edges.some(edge=>discovered.has(edge))){
