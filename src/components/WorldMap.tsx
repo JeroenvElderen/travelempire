@@ -712,6 +712,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const currentExploredRoads=useRef<Set<string>>(new Set());
  const visibleExploredFeatures=useRef<Map<string,GeoJSON.Feature>>(new Map());
  const visibleRoadIndex=useRef<Map<string,GeoJSON.Feature>>(new Map());
+ // Retain only the spatial index reference and viewport for live blue-road
+ // updates. Do not pre-create red GeoJSON features for undiscovered roads.
+ const currentRoadSpatialRef=useRef<RoadSpatialIndex|null>(null);
+ const currentRoadBoundsRef=useRef<{west:number;east:number;south:number;north:number}|null>(null);
  const lastPurpleSourceUpdate=useRef(0);
  const purpleRenderStats=useRef({updates:0,slow:0,maxMs:0,lastReport:0});
  const purpleRefreshTimer=useRef<number|null>(null);
@@ -749,10 +753,23 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let changed=false;
   // Restore purple geometry when a road tile/index is rebuilt without new IDs.
   for(const id of next){
-   const feature=visible.get(id);
-   if(feature&&!visibleExploredFeatures.current.has(id)){
-    visibleExploredFeatures.current.set(id,feature);changed=true;
+   if(visibleExploredFeatures.current.has(id))continue;
+   let feature=visible.get(id);
+   if(!feature){
+    const road=currentRoadSpatialRef.current?.byId.get(id);
+    const bounds=currentRoadBoundsRef.current;
+    if(road&&bounds&&
+     Math.max(road.a[0],road.b[0])>=bounds.west&&
+     Math.min(road.a[0],road.b[0])<=bounds.east&&
+     Math.max(road.a[1],road.b[1])>=bounds.south&&
+     Math.min(road.a[1],road.b[1])<=bounds.north){
+     feature={type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,
+      bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},
+      geometry:{type:'LineString',coordinates:[road.a,road.b]}};
+     visible.set(id,feature);
+    }
    }
+   if(feature){visibleExploredFeatures.current.set(id,feature);changed=true;}
   }
   for(const id of previous){
    if(next.has(id))continue;
@@ -791,7 +808,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(instance.getLayer(sourceId))instance.removeLayer(sourceId);
    if(instance.getSource(purpleSourceId))instance.removeSource(purpleSourceId);
    if(instance.getSource(sourceId))instance.removeSource(sourceId);
-   visibleRoadIndex.current.clear();visibleTunnelIds.current.clear();viewportSourceSignature.current='';
+   visibleRoadIndex.current.clear();currentRoadSpatialRef.current=null;currentRoadBoundsRef.current=null;visibleTunnelIds.current.clear();viewportSourceSignature.current='';
   };
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
@@ -819,6 +836,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Undiscovered roads remain in the graph, not a map GeoJSON source.
    const scanId=++scanRevision;
    const spatial=indexRoadGraph(graph,roadGraphVersion);
+   currentRoadSpatialRef.current=spatial;
+   currentRoadBoundsRef.current={west,east,south,north};
    const candidates=viewportRoadCandidates(spatial,west,east,south,north);
    const iterator=candidates[Symbol.iterator]();
    let examined=0;
