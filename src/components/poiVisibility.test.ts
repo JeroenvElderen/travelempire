@@ -35,6 +35,13 @@ describe('investment and vehicle-destination POI rendering',()=>{
    [vehicle({status:'RETURNING',refillDestination:[23.7,37.9]})]);
   expect(visible.stations.map(p=>p.id)).toEqual(['fuel-1']);
  });
+ it('renders only one fuel station when multiple POIs overlap a vehicle target',()=>{
+  const adjacent:Station={...station,id:'fuel-adjacent',lng:23.7002};
+  const visible=visibleOperationalPois([adjacent,station,other],[],[],[
+   vehicle({status:'RETURNING',refillDestination:[23.7,37.9]})
+  ]);
+  expect(visible.stations.map(s=>s.id)).toEqual(['fuel-1']);
+ });
  it('shows the targeted workshop only during servicing travel',()=>{
   const visible=visibleOperationalPois([station,workshop],[],[],
    [vehicle({status:'RETURNING',serviceDestination:[23.6,37.9]})]);
