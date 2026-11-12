@@ -27,7 +27,7 @@ function nearbyRoads(point:Point):Set<string>{
  return nearby;
 }
 let roadCount=0;
-const roleAllowed=(role:Taxi['explorerRole'],poiRoadIds:string[]):Set<string>=>{
+const roleAllowed=(role:Taxi['explorerRole']):Set<string>=>{
  if(role==='poi')return known;
  if(!role||role==='balanced')return known;
  let result=roadClasses.get(role);
@@ -114,7 +114,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  }
  const currentNode=origin.node;
  try{
-  const valid=new Set(roleAllowed(msg.vehicle.explorerRole,msg.poiRoadIds));
+  const valid=new Set(roleAllowed(msg.vehicle.explorerRole));
   const planned=msg.vehicle.explorerRole==='poi'?null:planReachableExplorerRoad(graph,currentNode,explored,valid,
    new Set(msg.reservedRoads),new Set(msg.reservedDestinations),
    msg.vehicle.explorerRole);
