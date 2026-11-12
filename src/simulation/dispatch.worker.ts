@@ -1081,11 +1081,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       // Route to the closest LEGALLY REACHABLE harbour by graph distance.
       // Do not hold a scout idle because its first geographical assignment
       // is missing a tile, on an island, or blocked by one-way restrictions.
-      const route=role==='poi'
+      const harbourRoute=role==='poi'
        ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,candidateIndexes)
-       :planned?.route??null;
+       :null;
+      // If destination tiles have not formed a connected route yet, move
+      // along legal discoverable roads to expand the road network. Keep the
+      // assigned harbour and retry the full road route as tiles are streamed.
+      const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
+       ?planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
+         reservedEdges,reservedTargets,'poi'):null;
+      const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
-       ?route?'shortest-harbour-route':'no-reachable-undiscovered-harbour'
+       ?harbourRoute?'shortest-reachable-harbour-route'
+        :frontier?.route?'discovering-connected-roads-toward-harbour'
+         :'no-reachable-harbour-or-road-frontier'
        :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
        ':classEdges='+planned!.diagnostic.reachableClassEdges);
       if(route){
