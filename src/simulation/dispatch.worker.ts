@@ -1073,31 +1073,30 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const origin=purpleStartNear(idleVehicle.position,explored);
      if(origin){
       const allowed=discoveryRoads(idleVehicle);
-      // Shared directed frontier search spans every connected loaded tile.
-      // The original specialist planner is retained for legal one-way exits
-      // and verified roundabout links that need its specialised handling.
-      const harbourGoal=role==='poi'?
-       msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
-      const connected=planConnectedFrontier(activeGraph,origin.node,explored,allowed,
-       reservedEdges,reservedTargets,role,role==='poi'?65000:95000,harbourGoal);
-      const planned=role==='poi'?null:connected.route?connected:
-       planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
-        reservedEdges,reservedTargets,role);
       const candidateIndexes=new Set<number>();
       if(role==='poi')for(let i=0;i<(msg.poiMissions?.length??0);i++){
        if(msg.poiMissions![i].vehicleId===idleVehicle.id)candidateIndexes.add(i);
       }
-      // Route to the closest LEGALLY REACHABLE harbour by graph distance.
-      // Do not hold a scout idle because its first geographical assignment
-      // is missing a tile, on an island, or blocked by one-way restrictions.
+      // First try the actual shortest legal harbour route. Avoid a second
+      // expensive 65k-node frontier search when the harbour is reachable.
       const harbourRoute=role==='poi'
        ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,candidateIndexes)
        :null;
+      // Shared directed frontier search spans every connected loaded tile.
+      // The specialist fallback handles legal one-way exits and roundabouts.
+      const harbourGoal=role==='poi'?
+       msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
+      const connected=role==='poi'&&harbourRoute?null:planConnectedFrontier(
+       activeGraph,origin.node,explored,allowed,reservedEdges,reservedTargets,
+       role,role==='poi'?65000:95000,harbourGoal);
+      const planned=role==='poi'?null:connected!.route?connected!:
+       planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
+        reservedEdges,reservedTargets,role);
       // If destination tiles have not formed a connected route yet, move
       // along legal discoverable roads to expand the road network. Keep the
       // assigned harbour and retry the full road route as tiles are streamed.
       const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
-       ?connected.route?connected:planReachableExplorerRoad(activeGraph,origin.node,
+       ?connected?.route?connected:planReachableExplorerRoad(activeGraph,origin.node,
          explored,allowed,reservedEdges,reservedTargets,'poi'):null;
       const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
       const indexedHarbourCandidates=role==='poi'
@@ -1110,7 +1109,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         ':candidates='+candidateIndexes.size+':loaded='+indexedHarbourCandidates
        :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
        ':classEdges='+planned!.diagnostic.reachableClassEdges+
-       ':connectedNodes='+connected.diagnostic.visitedPurpleNodes);
+       ':connectedNodes='+(connected?.diagnostic.visitedPurpleNodes??0));
       if(route){
        const completed=prependPurpleStart(route,origin);
        const destination=nearest(activeGraph,completed.path.at(-1)!);
