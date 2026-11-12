@@ -34,8 +34,8 @@ export function visibleOperationalPois(
    restTargets.add(t.restStopId);
    // Rest mission IDs are stored with a purpose prefix, e.g. hotel:123.
    // Some older saves use a parking/overnight prefix as well.
-   const last=t.restStopId.split(':').at(-1);
-   if(last)restTargets.add(last);
+   const originalId=t.restStopId.replace(/^(?:overnight:parking:|hotel:|parking:)/,'');
+   if(originalId)restTargets.add(originalId);
   }
  }
  // A target is never a license to show all facilities on the same tile.
