@@ -771,21 +771,31 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const fullReplace=(additions+removals)>Math.max(6000,previous.size*0.85);
   // updateData is asynchronous and coalesces pending edits in MapLibre.
   // Both initial and fallback setData calls carry stable GeoJSON feature IDs.
-  const operation=fullReplace||typeof source.updateData!=='function'
-   ?source.setData({type:'FeatureCollection',features:[...current.values()]})
-   :source.updateData(diff);
-  purpleSentFeatures.current=new Map(current);
-  flushedPurpleRevision.current=purpleRevision.current;
-  void operation.catch(error=>{
-   if(purpleSentSource.current!==source)return;
+  try{
+   if(fullReplace||typeof source.updateData!=='function'){
+    source.setData({type:'FeatureCollection',features:[...current.values()]});
+   }else{
+    source.updateData(diff);
+   }
+   purpleSentFeatures.current=new Map(current);
+   flushedPurpleRevision.current=purpleRevision.current;
+  }catch(error){
    diagnostic('map:purple-diff-error',String(error));
-   // Restore source contents from the latest visible state, not a stale
-   // queued diff. This also recovers from an invalid incremental update.
-   const latest=visibleExploredFeatures.current;
-   purpleSentFeatures.current=new Map(latest);
-   void source.setData({type:'FeatureCollection',features:[...latest.values()]}).catch(e=>
-    diagnostic('map:purple-recovery-error',String(e)));
-  });
+   // MapLibre GeoJSONSource methods return the source itself (not a Promise).
+   // A failed incremental update needs an explicit full-source recovery.
+   try{
+    source.setData({type:'FeatureCollection',
+     features:[...visibleExploredFeatures.current.values()]});
+    purpleSentFeatures.current=new Map(visibleExploredFeatures.current);
+    flushedPurpleRevision.current=purpleRevision.current;
+   }catch(recoveryError){
+    diagnostic('map:purple-recovery-error',String(recoveryError));
+    // Keep the revision pending so the next update can try again.
+    purpleSentFeatures.current=new Map();
+    flushedPurpleRevision.current=-1;
+    return;
+   }
+  }
   if(performanceMonitorEnabled())recordActivity('map:purple-source',performance.now()-started);
   lastPurpleSourceUpdate.current=started;
   const stats=purpleRenderStats.current,duration=performance.now()-started;
