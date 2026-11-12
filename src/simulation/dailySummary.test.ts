@@ -23,6 +23,20 @@ describe('midnight daily summary',()=>{
    ferryRevenue:1500,taxiRevenue:6000,otherRevenue:500,roadsDiscovered:2,
    harboursDiscovered:1,distanceKm:150,cashChange:4000,loanBalance:800});
  });
+ it('builds chart data, passenger and ferry milestones from recorded game history',()=>{
+  const previous={day:'2026-11-23',revenue:2000,expenses:1000,trips:1};
+  const current={day:'2026-11-24',revenue:4500,expenses:2000,trips:3};
+  const summary=buildDailySummary('2026-11-24',fleet({
+   financeHistory:[previous,current],
+   ferryRevenueByDay:{'2026-11-24':700},
+   transactions:[{id:'f',time:Date.parse('2026-11-24T16:00:00Z'),description:'Ferry fare · port',amount:700}],
+  }),dayBaseline('2026-11-24',fleet(),100,0),200,0);
+  expect(summary.weekly).toHaveLength(2);
+  expect(summary.previousNet).toBe(1000);
+  expect(summary.previousRevenue).toBe(2000);
+  expect(summary.ferryCrossings).toBe(1);
+  expect(summary.net).toBe(2500);
+ });
  it('does not treat loan proceeds as operating revenue',()=>{
   const summary=buildDailySummary('2026-11-24',fleet(),dayBaseline('2026-11-24',fleet(),1000,0),201000,0);
   expect(summary.revenue).toBe(0);
