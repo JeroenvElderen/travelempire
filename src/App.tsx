@@ -45,6 +45,7 @@ import type {AccountingSettings} from './simulation/taxi';
 import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
+import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -503,6 +504,8 @@ export default function App(){
    const roadStartupAt=performance.now();
    diagnostic('roads:startup',`begin company=${company.id}`);
    try{
+    // Road length cache follows streamed tiles, not just the initial map.
+    roadLengthByIdRef.current.clear();
     const manager=new RoadNetworkManager((next,count)=>{
       if(active){
        // Road graph updates are background work; keep user input and vehicle UI responsive.
@@ -522,6 +525,8 @@ export default function App(){
       }
     },message=>{if(active)console.warn('[TravelEmpire road tiles]',message)},async roads=>{
        if(!active)return;
+       // A later road tile must contribute actual metres to new discoveries.
+       for(const road of roads)if(road.length>0)roadLengthByIdRef.current.set(road.id,road.length);
        const worker=dispatchWorkerRef.current;
        if(!worker)return;
        // Serialize dispatch-worker transfers: one 4000-road batch in flight.
@@ -1241,15 +1246,9 @@ export default function App(){
      if(next.finished&&!duplicate)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished&&!duplicate?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
      const discoveryStarted=performance.now();
-     if(t.kind==='explorer'&&next.discovered.length>0&&roadLengthByIdRef.current.size===0){for(const links of graph.edges.values())for(const edge of links)roadLengthByIdRef.current.set(edge.id,edge.meters);}
-     let newRoadKm=0;
-     next.discovered.forEach(id=>{if(t.kind==='explorer'){
-      if(!discovered.has(id)){
-       const length=roadLengthByIdRef.current.get(id)??0;
-       newRoadKm+=length/1000;
-      }
-      discovered.add(id);
-     }});
+     const newRoadKm=t.kind==='explorer'
+      ?registerNewRoadDistance(next.discovered,discovered,roadLengthByIdRef.current,
+        working.edgeIds,working.path).kilometres:0;
      discoveryMs+=performance.now()-discoveryStarted;
      return {...next.taxi,
       completed:duplicate?t.completed:next.taxi.completed,
