@@ -1129,6 +1129,24 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         continue;
        }
        singleWorkerScanResult.set(idleVehicle.id,'route-rejected-by-directed-validation');
+      }else if(role!=='poi'&&planned&&planned.diagnostic.visitedPurpleNodes<=1&&hqNode&&
+       meters(idleVehicle.position,hq)>300){
+       // Do not leave a specialist parked at an exhausted one-way spur:
+       // return to headquarters *only* if already discovered roads provide
+       // a legally directed route. This never discovers unrelated classes.
+       const homeRoute=routeDiscovered(activeGraph,origin.node,hqNode,explored);
+       if(homeRoute&&homeRoute.edgeIds.length>0){
+        const returnRoute=prependPurpleStart(homeRoute,origin);
+        if(returnRoute.edgeIds.length===returnRoute.path.length-1){
+         taxis[index]={...idleVehicle,status:'RETURNING',pauseAtHome:true,
+          path:returnRoute.path,edgeIds:returnRoute.edgeIds,
+          discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
+          leg:0,distanceIntoLeg:0,speedKph:0};
+         explorerPlanSkipReason.set(idleVehicle.id,'returning-to-depot-no-connected-class-frontier');
+         singleWorkerScanResult.set(idleVehicle.id,'directed-return-to-depot:edges='+returnRoute.edgeIds.length);
+         continue;
+        }
+       }
       }
      }else singleWorkerScanResult.set(idleVehicle.id,'no-purple-segment-near-vehicle');
     }
