@@ -17,6 +17,17 @@ describe('revenue-backed bank partnerships',()=>{
   expect(offer.funding).toBeLessThan(offer.requested);
   expect(offer.approved).toBe(true);
  });
+ it('counters an aggressively low revenue-share proposal',()=>{
+  const offer=partnershipOffer('growth',2000000,666284.58,7359.52,636,[],5);
+  expect(offer.approved).toBe(true);
+  expect(offer.revenueShare).toBe(18);
+  expect(offer.reason).toContain('counters');
+ });
+ it('rewards a higher negotiated share with a lower repayment multiple',()=>{
+  const base=partnershipOffer('growth',2000000,666284.58,7359.52,636,[],18);
+  const revised=partnershipOffer('growth',2000000,666284.58,7359.52,636,[],25);
+  expect(revised.repaymentMultiple).toBeLessThan(base.repaymentMultiple);
+ });
  it('collects the contracted share of gross revenue',()=>{
   const r=collectBankRevenue([contract()],10000);
   expect(r.paid).toBe(1800);
