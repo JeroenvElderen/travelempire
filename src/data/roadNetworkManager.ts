@@ -117,6 +117,58 @@ export class RoadNetworkManager {
   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
   this.pump();
  }
+ /** Expand the loaded road graph beyond stationary explorers.
+  * Position-based prefetch alone can never leave the first 0.1-degree tile:
+  * a scout cannot move toward roads that have not been loaded. Request just
+  * the next neighbouring tiles of the already loaded graph, prioritized by
+  * explorer proximity. This loads map DATA, never creates a drivable shortcut.
+  *
+  * iOS loads at most one extra tile each scan, after normal active-route
+  * requests. Only tiles adjacent to already loaded tiles qualify; a distant
+  * ferry port or island cannot silently join the HQ road network.
+  */
+ considerExplorerExpansion(explorers:readonly Point[]):number{
+  if(this.disposed||!this.available.size||!this.loaded.size||!explorers.length)return 0;
+  const capacity=Math.min(IOS_REDUCED_MEMORY?1:2,
+   Math.max(0,MAX_PENDING_TILES-this.queue.length-this.inFlight));
+  if(!capacity)return 0;
+  const now=Date.now(),maxRing=IOS_REDUCED_MEMORY?5:7;
+  const choices=new Map<string,{id:string;score:number}>();
+  for(const point of explorers){
+   if(!Number.isFinite(point[0])||!Number.isFinite(point[1]))continue;
+   const cx=Math.floor(point[0]/this.tileSize),cy=Math.floor(point[1]/this.tileSize);
+   // No countrywide scan: check at most 11×11 tile keys per mobile scout.
+   for(let dy=-maxRing;dy<=maxRing;dy++)for(let dx=-maxRing;dx<=maxRing;dx++){
+    const ring=Math.max(Math.abs(dx),Math.abs(dy));
+    if(ring===0)continue;
+    const x=cx+dx,y=cy+dy,id=x+'_'+y;
+    if(!this.available.has(id)||this.loaded.has(id)||this.queued.has(id)||
+       (this.failedUntil.get(id)??0)>now)continue;
+    let touchesLoaded=false;
+    for(let ny=-1;ny<=1&&!touchesLoaded;ny++)
+     for(let nx=-1;nx<=1;nx++)
+      if((nx!==0||ny!==0)&&this.loaded.has((x+nx)+'_'+(y+ny))){
+       touchesLoaded=true;break;
+      }
+    if(!touchesLoaded)continue;
+    const score=ring+this.tileDistance(id,point)*3;
+    const existing=choices.get(id);
+    if(!existing||score<existing.score)choices.set(id,{id,score});
+   }
+  }
+  const selected=[...choices.values()].sort((a,b)=>a.score-b.score).slice(0,capacity);
+  for(const {id,score} of selected){
+   this.queued.add(id);this.queue.push(id);
+   this.priority.set(id,3+score);
+  }
+  if(selected.length){
+   diagnostic('roads:explorer-expansion',
+    `requested=${selected.map(v=>v.id).join(',')} loaded=${this.loaded.size} queued=${this.queue.length} candidates=${choices.size}`);
+   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
+   this.pump();
+  }
+  return selected.length;
+ }
  considerPoint(p:Point){this.consider([p]);}
  considerRoute(path:Point[]){if(!path.length)return;const points:Point[]=[path[0]];
   for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i];const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),dy=(b[1]-a[1])*111320;
