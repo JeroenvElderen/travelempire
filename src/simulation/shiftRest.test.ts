@@ -56,6 +56,29 @@ describe('scheduled taxi rest destinations',()=>{
   expect(arrived.position).toEqual(nodes.get('B'));
   expect(arrived.restStopId).toBe('h1');
  });
+ it('advances an off-duty scheduled RETURNING taxi toward parking on consecutive ticks',()=>{
+  const from:[number,number]=[23.9,37.9];
+  const to:[number,number]=[23.902,37.9];
+  const nodes=new Map<string,[number,number]>([['A',from],['B',to]]);
+  const graph:RoadGraph={nodes,nodeKeys:['A','B'],edges:new Map([
+   ['A',[{id:'road',to:'B',meters:175,speedKph:30,highway:'residential'}]],
+   ['B',[{id:'road',to:'A',meters:175,speedKph:30,highway:'residential'}]]
+  ])};
+  const vehicle:Taxi={id:'off-duty',kind:'taxi',name:'Taxi',driver:'Driver',
+   position:from,status:'RETURNING',path:[from,to],edgeIds:['road'],
+   leg:0,distanceIntoLeg:0,speedKph:0,shiftParked:true,
+   scheduledShiftParked:true,pauseAtHome:true,restStopId:'parking:p1',
+   restStopName:'Parking',restStopPosition:to,fare:0,completed:0};
+  const first=tickTaxi(vehicle,graph,0.5);
+  expect(first.distanceMeters).toBeGreaterThan(0);
+  expect(first.taxi.status).toBe('RETURNING');
+  expect(first.taxi.speedKph).toBeGreaterThan(0);
+  const second=tickTaxi(first.taxi,graph,0.5);
+  expect(second.taxi.distanceIntoLeg).toBeGreaterThan(first.taxi.distanceIntoLeg);
+  const final=tickTaxi(second.taxi,graph,60);
+  expect(final.taxi.status).toBe('PAUSED');
+  expect(final.taxi.position).toEqual(to);
+ });
  it('does not show Zzz on the wrong road when saved destination metadata is missing',()=>{
   const nodes=new Map([
    ['A',[23.9,37.9] as [number,number]],
