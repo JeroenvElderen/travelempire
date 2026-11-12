@@ -8,7 +8,22 @@ export type PropertyHolding={
  lastHour?:number;lastDay?:number
 };
 export type PropertyPortfolio={holdings:Record<string,PropertyHolding>};
-export type PropertyOperations={activityPercent:number;capacity:number;unitRateEuros:number;grossCents:number;costCents:number;netCents:number};
+export type PropertyOperations={
+ activityPercent:number;
+ /** Physical room count for hotels, bay count for parking. */
+ capacity:number;
+ occupiedUnits:number;
+ vacantUnits:number;
+ unitKind:'room'|'space';
+ ratePeriod:'night'|'hour';
+ /** Price paid per occupied room/night or parked space/hour. */
+ unitRateEuros:number;
+ grossCents:number;
+ costCents:number;
+ netCents:number;
+ fixedCostCents:number;
+ variableCostCents:number;
+};
 const prefix='travelempire.property-investments.v1.';
 const HOUR_MS=3600000;
 const MAX_CATCHUP_HOURS=30*24;
@@ -58,29 +73,72 @@ export function buyPropertyShare(portfolio:PropertyPortfolio,p:InvestablePOI,amo
  return {holdings:{...portfolio.holdings,[p.id]:holding}};
 }
 function clamp(n:number,low:number,high:number){return Math.max(low,Math.min(high,n));}
-/** Deterministic hourly hotel/parking operations; no random reroll on refresh. */
+
+/**
+ * OSM POIs rarely include a trustworthy capacity or a published tariff.
+ * Estimate a consistent physical capacity from the property's valuation.
+ * It is stable across reloads; existing holdings retain their valuation.
+ */
+export function propertyCapacity(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'>):number{
+ const value=Math.max(0,p.valuationCents/100);
+ const baseline=p.kind==='hotel'?value/20000:value/4300;
+ const variation=(stableHash(p.id+':capacity')%13-6)/100;
+ return p.kind==='hotel'
+  ?clamp(Math.round(baseline*(1+variation)),12,180)
+  :clamp(Math.round(baseline*(1+variation)),15,220);
+}
+
+/** Hotel guests pay per occupied room/night; parking users pay per
+ * occupied space/hour. Results are stable across refreshes and per hour,
+ * and payouts are still multiplied by the player's property share.
+ *
+ * Hotel demand is sampled once per in-game day: guests do not instantly
+ * disappear at the start of each hour. Parking demand varies by hour.
+ * All revenue and cost calculations use integer cents.
+ */
 export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'>,hour:number):PropertyOperations{
  const day=Math.floor(hour/24);
  const time=((hour%24)+24)%24;
  const date=new Date(day*86400000);
  const month=date.getUTCMonth();
- const seasonal=p.kind==='hotel'
-  ?(month>=5&&month<=8?1.23:month>=3&&month<=9?1:0.68)
-  :1;
- const variation=(stableHash(p.id+':'+day)%21-10)/100;
- const rooms=p.kind==='hotel'
-  ?clamp(Math.round(p.valuationCents/100/20000),12,180)
-  :clamp(Math.round(p.valuationCents/100/8500),15,180);
- const activity=p.kind==='hotel'
-  ?clamp(0.70*seasonal+variation,0.16,0.96)
-  :clamp((time>=8&&time<19?0.72:time>=19&&time<23?0.48:0.20)+variation,0.08,0.96);
- const rate=p.kind==='hotel'?80:2.5;
- // Hotel room rates are nightly and spread across all 24 game hours.
- const gross=rooms*activity*rate/(p.kind==='hotel'?24:1);
- const costRatio=p.kind==='hotel'?0.60:0.52;
- const grossCents=Math.round(gross*100);
- const costCents=Math.round(gross*costRatio*100);
- return {activityPercent:Math.round(activity*100),capacity:rooms,unitRateEuros:rate,grossCents,costCents,netCents:Math.max(0,grossCents-costCents)};
+ const capacity=propertyCapacity(p);
+ const hotel=p.kind==='hotel';
+ const variation=(stableHash(p.id+':demand:'+day)%25-12)/100;
+ const seasonal=month>=5&&month<=8?1.17:month>=3&&month<=9?1:0.75;
+ const weekend=((day+4)%7+7)%7>=5;
+ const desiredOccupancy=hotel
+  ?clamp(0.66*seasonal+(weekend?0.06:0)+variation,0.12,0.97)
+  :clamp((time>=8&&time<19?0.70:time>=19&&time<23?0.47:0.18)+
+    (weekend&&time>=10&&time<21?0.08:0)+variation,0.05,0.98);
+ const occupiedUnits=clamp(Math.round(capacity*desiredOccupancy),0,capacity);
+ const vacantUnits=capacity-occupiedUnits;
+ const activityPercent=Math.round(100*occupiedUnits/capacity);
+
+ // Per-property tariffs remain stable, with a small hotel seasonal factor
+ // and a predictable parking peak-hour surcharge.
+ const priceVariation=stableHash(p.id+':price')%31;
+ const rateCents=hotel
+  ?Math.round((90+priceVariation)*100*(month>=5&&month<=8?1.1:1))
+  :Math.round((2.5+priceVariation/20+(time>=8&&time<19?0.50:0))*100);
+ const grossCents=hotel
+  ?Math.round(occupiedUnits*rateCents/24)
+  :occupiedUnits*rateCents;
+ // Operational expenses do not vanish when a property is empty.
+ // Hotels have greater staffing/room-turnover costs; parking has lower
+ // variable costs but still incurs supervision, lighting and maintenance.
+ const fixedCostCents=hotel?Math.round(capacity*18):Math.round(capacity*13);
+ const variableCostCents=hotel
+  ?Math.round(occupiedUnits*rateCents*0.24/24)
+  :Math.round(occupiedUnits*rateCents*0.16);
+ const costCents=fixedCostCents+variableCostCents;
+ return {
+  activityPercent,capacity,occupiedUnits,vacantUnits,
+  unitKind:hotel?'room':'space',
+  ratePeriod:hotel?'night':'hour',
+  unitRateEuros:rateCents/100,
+  grossCents,costCents,netCents:Math.max(0,grossCents-costCents),
+  fixedCostCents,variableCostCents
+ };
 }
 /** Accrue once for every completed simulated hour. Never repay already settled hours. */
 export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:number):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
