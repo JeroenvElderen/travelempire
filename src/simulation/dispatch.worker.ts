@@ -472,10 +472,11 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
 // Unlike road-class specialists, every previously red road on the chosen route
 // is a discovery edge. The route remains directed and stays on the road graph.
 function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
- reserved:Set<string>):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
+ reserved:Set<string>,targetIndex:number):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
  const targets:Array<{node:string;offsetMeters:number}>=[];
  const legs:Array<{from:string;to:string;id:string}>=[];
  for(const [index,best] of nearestHarbourRoads){
+  if(index!==targetIndex)continue;
   const local=[best.id,...(harbourAccessCandidates.get(index)??[])
    .filter(road=>road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))
    .map(road=>road.id)];
@@ -566,12 +567,12 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean};
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];harbourTargets?:Point[];availableTaxiIds?:string[]};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];availableTaxiIds?:string[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -782,7 +783,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    updateDiscoveryIndex(graph,explored,hqNode);
    const revealedNodes=revealedNodesIndex;
    const completionRoads=completionRoadsIndex;
-   const poiTargets=(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]).slice(0,150);
+   const poiTargets=msg.poiMissions?.map(m=>m.point)??(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
    const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
@@ -1073,8 +1074,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const allowed=discoveryRoads(idleVehicle);
       const planned=role==='poi'?null:planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
        reservedEdges,reservedTargets,role);
-      const route=role==='poi'
-       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges)
+      const assignedIndex=role==='poi'?(msg.poiMissions?.findIndex(m=>m.vehicleId===idleVehicle.id)??-1):-1;
+      const route=role==='poi'&&assignedIndex>=0
+       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,assignedIndex)
        :planned?.route??null;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
        ?route?'shortest-harbour-route':'no-reachable-undiscovered-harbour'
@@ -1269,7 +1271,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   if(msg.allowScout&&planningPool.length===2){
    const hqNode=nearest(graph,hq);
    updateDiscoveryIndex(graph,explored,hqNode);
-   const poiTargets=(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]).slice(0,150);
+   const poiTargets=msg.poiMissions?.map(m=>m.point)??(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]);
    updatePoiIndex(graph,poiTargets);
    const unlockedRoles=unlockedSpecialistRoles(graph,connectedFrontierIndex,
     explored,poiRoadsIndex);
@@ -1385,7 +1387,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // At most two concurrent tasks. Independent search state remains bound to
    // the explorer ID; failed POI searches do not block other specialists.
    const inFlight=new Set([...planningRequests.values()].map(r=>r.id));
-   const explorers=taxis.filter(t=>t.kind==='explorer'&&t.status==='IDLE'&&
+   const explorers=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole!=='poi'&&t.status==='IDLE'&&
     specialistCanDepart(t,unlockedRoles)&&
     !t.ferryTrip&&!t.deliveryUntil&&!t.serviceDestination&&
     !t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
@@ -1435,7 +1437,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Only spend otherwise unused pool capacity on route extensions. Idle
    // specialists always take precedence over moving explorers' lookahead.
    if(explorers.length===0){
-    const moving=taxis.filter(t=>t.kind==='explorer'&&t.status==='EXPLORING'&&
+    const moving=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole!=='poi'&&t.status==='EXPLORING'&&
      specialistCanDepart(t,unlockedRoles)&&
      !t.ferryTrip&&!t.deliveryUntil&&t.path.length>=2&&
      t.edgeIds.length-t.leg<=10&&!inFlight.has(t.id)&&
