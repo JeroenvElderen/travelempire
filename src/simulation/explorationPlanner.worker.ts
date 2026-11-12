@@ -1,6 +1,7 @@
 import {routeToNearestTarget,type Taxi,type RoadGraph,type Point} from './taxi';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
+import {planConnectedFrontier} from './connectedFrontier';
 import type {RoadSegment} from '../data/roadTiles';
 import {explorerClassEligible} from './explorerRoles';
 
@@ -115,12 +116,15 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  const currentNode=origin.node;
  try{
   const valid=new Set(roleAllowed(msg.vehicle.explorerRole));
-  const planned=msg.vehicle.explorerRole==='poi'?null:planReachableExplorerRoad(graph,currentNode,explored,valid,
-   new Set(msg.reservedRoads),new Set(msg.reservedDestinations),
-   msg.vehicle.explorerRole);
-  const candidate=msg.vehicle.explorerRole==='poi'
-   ?shortestHarbourRoute(currentNode,explored,msg.poiRoadIds)
-   :planned?.route??null;
+  const reserved=new Set(msg.reservedRoads),reservedDest=new Set(msg.reservedDestinations);
+  const connected=planConnectedFrontier(graph,currentNode,explored,valid,
+   reserved,reservedDest,msg.vehicle.explorerRole,75000);
+  const harbour=msg.vehicle.explorerRole==='poi'
+   ?shortestHarbourRoute(currentNode,explored,msg.poiRoadIds):null;
+  const planned=msg.vehicle.explorerRole==='poi'||connected.route?connected:
+   planReachableExplorerRoad(graph,currentNode,explored,valid,
+    reserved,reservedDest,msg.vehicle.explorerRole);
+  const candidate=harbour??planned.route??null;
   const route=candidate?prependPurpleStart(candidate,origin):null;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
    vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-harbour',
