@@ -23,6 +23,7 @@ import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule'
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
 import {resetVehicleAtDepot} from './simulation/vehicleReset';
+import {settlePassengerFare} from './simulation/passengerSettlement';
 import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/explorerRestPolicy';
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
@@ -1187,15 +1188,15 @@ export default function App(){
      const fareMultiplier=Math.min(1.6,(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0)) );
      // Stable request IDs prevent a delayed worker result or save replay from
      // booking the same completed passenger journey more than once.
-     const jobId=working.activeJobId;
-     const duplicate=next.finished&&!!jobId&&paidPassengerJobs.has(jobId);
-     if(next.finished&&jobId&&!duplicate)paidPassengerJobs.add(jobId);
-     const earned=duplicate?0:Math.round(next.earned*fareMultiplier*100)/100;
+     const {earned,duplicate}=settlePassengerFare(
+      working.activeJobId,next.finished,next.earned,fareMultiplier,paidPassengerJobs);
      revenue+=earned;
-     if(earned)transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,
-      description:`${t.name} · passenger fare · ${((working.jobDrivenMeters??0)+next.distanceMeters)/1000>=0?(
-       ((working.jobDrivenMeters??0)+next.distanceMeters)/1000).toFixed(2):'0.00'} km`,
-      amount:earned});
+     if(earned){
+      const tripKm=((working.jobDrivenMeters??0)+next.distanceMeters)/1000;
+      transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,
+       description:`${t.name} · passenger fare · ${tripKm.toFixed(2)} km`,
+       amount:earned});
+     }
      if(next.finished&&!duplicate)completed++;
      if(person){const previous=driverUpdates.get(person.id)??{trips:0,km:0,revenue:0,wages:0};driverUpdates.set(person.id,{trips:previous.trips+(next.finished&&!duplicate?((old.upgrades??[]).includes('training')?1.2:1):0),km:previous.km+km,revenue:previous.revenue+earned,wages:previous.wages+wage});}
      const discoveryStarted=performance.now();
