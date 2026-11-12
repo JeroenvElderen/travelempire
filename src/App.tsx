@@ -2020,31 +2020,47 @@ export default function App(){
   return()=>controller.abort();
  },[harbourNetwork,graph]);
  useEffect(()=>{
-  if(!company||!harbourEdges||!harbourNetwork)return;
-  // Legacy saved unlocks were calculated from arbitrary nearby junctions and
-  // cannot be trusted. Rebuild from actual discovered access-road segments.
+  if(!company||!harbourNetwork)return;
+  // Unlocks are permanent achievements. Never revoke them when a road tile
+  // unloads, the graph rebuilds, or an old discovered segment is not in
+  // today's local index. Persist previously saved achievements and merge new
+  // verified segments instead of replacing the entire history.
+  const knownPorts=new Set(harbourNetwork.ports.map(p=>p.id));
+  const earned=new Set<string>();
+  try{
+   const saved=JSON.parse(localStorage.getItem(harbourStorageKey(company.id))??'[]') as unknown;
+   if(Array.isArray(saved))for(const id of saved)
+    if(typeof id==='string'&&knownPorts.has(id))earned.add(id);
+  }catch{}
+  for(const id of unlockedHarbours)if(knownPorts.has(id))earned.add(id);
+  // Existing purchases are authoritative evidence of an earlier unlock.
+  // At least the origin port had to be known to purchase the route. Restoring
+  // it also repairs saves whose historical unlock list was overwritten.
+  const purchased=new Set(company.purchasedFerryRouteIds??[]);
+  for(const route of harbourNetwork.routes)
+   if(purchased.has(route.id)&&knownPorts.has(route.from))earned.add(route.from);
   const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
-  const verified:string[]=[];
-  for(const [id,edges] of harbourEdges){
-   if(edges.some(edge=>discovered.has(edge)))verified.push(id);
+  const newlyUnlocked:string[]=[];
+  for(const [id,edges] of harbourEdges??[]){
+   if(!knownPorts.has(id)||earned.has(id))continue;
+   if(edges.some(edge=>discovered.has(edge))){
+    earned.add(id);newlyUnlocked.push(id);
+   }
   }
-  const verifiedSet=new Set(verified);
-  const newlyUnlocked=verified.filter(id=>!unlockedHarbours.includes(id));
-  if(verified.length!==unlockedHarbours.length||unlockedHarbours.some(id=>!verifiedSet.has(id))){
-   setUnlockedHarbours(verified);
-  }
+  const next=[...earned];
+  if(next.length!==unlockedHarbours.length||next.some(id=>!unlockedHarbours.includes(id)))
+   setUnlockedHarbours(next);
   try{
    const key=harbourStorageKey(company.id);
-   const stored=localStorage.getItem(key);
-   const encoded=JSON.stringify(verified);
-   if(stored!==encoded)localStorage.setItem(key,encoded);
+   const encoded=JSON.stringify(next);
+   if(localStorage.getItem(key)!==encoded)localStorage.setItem(key,encoded);
   }catch{}
   if(harbourSeenRef.current&&newlyUnlocked.length){
    const port=harbourNetwork.ports.find(p=>p.id===newlyUnlocked[0]);
    if(port)setHarbourNotice({id:port.id,name:englishFerryName(port.name)});
   }
   harbourSeenRef.current=true;
- },[company?.id,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
+ },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
  // POI explorers return to their depot after the full harbour network is unlocked.
  // Keep the retirement request stable across simulation updates and page changes.
  const harbourRetireRequestedRef=useRef(new Set<string>());
