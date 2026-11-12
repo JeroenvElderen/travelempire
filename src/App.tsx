@@ -1919,6 +1919,11 @@ export default function App(){
   pendingCashRef.current-=offer.cost;
   setFleet(old=>({...old,upgrades:[...(old.upgrades??[]),id],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:offer.name,amount:-offer.cost},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const [harbourNetwork,setHarbourNetwork]=useState<FerryNetwork|null>(null);
+ const reloadHarbourNetwork=async()=>{
+  const data=await loadFerryNetwork(undefined,true);
+  harbourPoiRef.current=data.ports.map(p=>p.roadAccess??p.position);
+  setHarbourNetwork(data);
+ };
  const [unlockedHarbours,setUnlockedHarbours]=useState<string[]>([]);
  const [harbourNotice,setHarbourNotice]=useState<{id:string;name:string}|null>(null);
  const harbourSeenRef=useRef(false);
@@ -2199,7 +2204,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Dealership'&&company&&<DealershipPage cash={company.cash} ready={Boolean(graph)} onOrder={buyTaxiBatch}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
- {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours}/>}
+ {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork}/>}
  {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
