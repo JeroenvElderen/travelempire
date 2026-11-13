@@ -45,5 +45,10 @@ public/data/roads/tiles/
 # Supabase-hosted station tiles
 public/data/stations/tiles/
 
+# Separate, locally generated Greece-wide foot/bicycle tiles (large)
+data/greece-mobility-tiles/
+data/mobility-tiles/
+public/data/mobility/tiles/
+
 # Vite cache
 .vite/*.zip
