@@ -308,7 +308,7 @@ export function nearbyRoadNodes(graph:RoadGraph,point:Point,maxMeters=35,limit=8
 }
 // Compare the actual geometry, not just identical node IDs: OSM often
 // represents a straight reversal as two different short road segments.
-function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string,allowed?:Set<string>):boolean{
+function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string,allowed?:Set<string>,allowTaxiOnly=true):boolean{
  const a=graph.nodes.get(previous),b=graph.nodes.get(current),c=graph.nodes.get(next);
  if(!a||!b||!c)return previous===next;
  const lat=b[1]*Math.PI/180,scale=Math.cos(lat);
@@ -319,7 +319,8 @@ function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:stri
  if(!reversal&&previous!==next)return false;
  // A dead end has no legal forward/side exit; ignore the reversing option.
  return (graph.edges.get(current)??[]).some(e=>
-  (!allowed||allowed.has(e.id))&&e.to!==next&&e.to!==previous&&
+  (!e.taxiOnly||allowTaxiOnly)&&
+  (!allowed||allowed.has(e.id)||(allowTaxiOnly&&e.taxiOnly))&&e.to!==next&&e.to!==previous&&
   !forbiddenTurnGeometry(graph,previous,current,e.to));
 }
 function forbiddenTurnGeometry(graph:RoadGraph,previous:string,current:string,next:string):boolean{
@@ -350,9 +351,10 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
   // A U-turn is legal only when no alternative permitted outgoing road exists.
 
   for(const edge of links){
-   if(allowed&&!allowed.has(edge.id))continue;
+   // Taxi-only roads are legal transit corridors, not discovered stops.
+   if(allowed&&!allowed.has(edge.id)&&!(allowTaxiOnly&&edge.taxiOnly))continue;
    if(edge.taxiOnly&&!allowTaxiOnly)continue;
-   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,allowed))continue;
+   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,allowed,allowTaxiOnly))continue;
    const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph):edge.meters);
    const k=JSON.stringify([edge.to,state.node]);
    if(cost>=(best.get(k)??Infinity))continue;
@@ -400,7 +402,7 @@ export function routeFromDirectedRoad(
   return{path:null,edgeIds:null,reason:'position-off-edge'};
  // A passenger already on a discovered directed edge can finish that edge;
  // never create a short private connector to a visually overlapping street.
- if(discovered&&!discovered.has(anchor.edgeId))
+ if(discovered&&!discovered.has(anchor.edgeId)&&!matching.taxiOnly)
   return{path:null,edgeIds:null,reason:'no-directed-path'};
  const remaining=meters(anchor.position,b);
  const onward=discovered
@@ -450,7 +452,7 @@ export function routeToNearestTarget(
   }
   for(const edge of graph.edges.get(state.node)??[]){
    if(edge.taxiOnly&&!allowTaxiOnly)continue;
-   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to))continue;
+   if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,undefined,allowTaxiOnly))continue;
    const cost=state.cost+edge.meters;
    if(cost>selectedCost)continue;
    const k=JSON.stringify([edge.to,state.node]);
@@ -586,7 +588,7 @@ export function pricedPassengerFare(distanceMeters:number,surgeMultiplier=1):num
 // A passenger stop is valid only at a node touching an Explorer-discovered edge.
 export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<string>{
  const eligible=new Set<string>();
- for(const [from,links] of graph.edges)for(const edge of links)if(discovered.has(edge.id)){
+ for(const [from,links] of graph.edges)for(const edge of links)if(discovered.has(edge.id)&&!edge.taxiOnly){
   eligible.add(from);eligible.add(edge.to);
  }
  return eligible;
