@@ -46,6 +46,7 @@ import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
+import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -309,6 +310,11 @@ export default function App(){
  const dispatchBusyRef=useRef(false);
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
+ // Per-passenger-job progress tracking, never persisted in a fleet save.
+ const passengerRouteWatchRef=useRef(new Map<string,{
+  job:string;status:'TO_PICKUP'|'TO_DROPOFF';leg:number;distanceIntoLeg:number;
+  lastProgressAt:number;lastAttemptAt:number;pending:boolean
+ }>());
  // Ignore dispatcher responses computed before a manual vehicle reset.
  const resetVehicleTargetsRef=useRef(new Map<string,[number,number]>());
  const shiftRestRetryRef=useRef(new Map<string,number>());
@@ -593,7 +599,7 @@ export default function App(){
  useEffect(()=>{
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
-  pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();
+  pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();passengerRouteWatchRef.current.clear();
   for(const ack of roadSyncAcksRef.current.splice(0))ack();dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
@@ -1202,6 +1208,63 @@ export default function App(){
       return {...delivered,status:'IDLE' as const,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,
        fuelExpense:(t.fuelExpense??0)+cost,refillDestination:undefined,refillAtDepot:undefined,refillUntil:undefined,refillRequested:false};
      }
+
+     // Stalled passenger jobs are replanned on the existing routing worker.
+     // No geometrical shortcuts: directed OSM edges (and discovered passenger
+     // roads for drop-off legs) are always authoritative.
+     if(passengerTaxi&&(delivered.status==='TO_PICKUP'||delivered.status==='TO_DROPOFF')){
+      const status=delivered.status;
+      const job=delivered.activeJobId??'legacy:'+String(delivered.pickup)+':'+String(delivered.dropoff);
+      const previous=passengerRouteWatchRef.current.get(delivered.id);
+      const fresh=!previous||previous.job!==job||previous.status!==status;
+      const watch=fresh?
+       {job,status,leg:delivered.leg,distanceIntoLeg:delivered.distanceIntoLeg,
+        lastProgressAt:now,lastAttemptAt:0,pending:false}:previous;
+      const issue=passengerRouteIssue(delivered);
+      if(!fresh&&passengerRouteAdvanced(watch,delivered)){
+       watch.lastProgressAt=now;
+       watch.pending=false;
+      }
+      watch.leg=delivered.leg;
+      watch.distanceIntoLeg=delivered.distanceIntoLeg;
+      passengerRouteWatchRef.current.set(delivered.id,watch);
+      const stalled=now-watch.lastProgressAt>12000;
+      if((issue||stalled)&&now-watch.lastAttemptAt>=15000&&!watch.pending){
+       const target=status==='TO_PICKUP'?delivered.pickup:delivered.dropoff;
+       const worker=dispatchWorkerRef.current;
+       if(target&&worker&&workerReadyRef.current){
+        watch.lastAttemptAt=now;
+        watch.pending=true;
+        const requestId=++routeSequenceRef.current;
+        const from:[number,number]=[...delivered.position];
+        diagnostic('taxi:route-recovery-request',
+         `taxi=${delivered.name} id=${delivered.id} job=${job} status=${status} reason=${issue??'stalled'} leg=${delivered.leg} edge=${delivered.edgeIds[delivered.leg]??'none'} from=${from.join(',')} target=${target.join(',')}`);
+        pendingRoutesRef.current.set(requestId,{
+         vehicleId:delivered.id,position:from,status,
+         onResult:(path,edgeIds)=>{
+          watch.pending=false;
+          const valid=!!path&&!!edgeIds&&path.length>1&&edgeIds.length===path.length-1&&
+           meters(path[0],from)<=15&&meters(path[path.length-1],target)<=100;
+          diagnostic(valid?'taxi:route-recovered':'taxi:route-recovery-unavailable',
+           `taxi=${delivered.name} id=${delivered.id} job=${job} status=${status} reason=${issue??'stalled'} ${valid?`newEdges=${edgeIds?.length}`:'no connected route (or unsafe snap)'}`);
+          if(!valid)return;
+          setFleet(latest=>({...latest,taxis:latest.taxis.map(vehicle=>
+           vehicle.id===delivered.id&&vehicle.status===status&&
+           (vehicle.activeJobId??'legacy:'+String(vehicle.pickup)+':'+String(vehicle.dropoff))===job&&
+           meters(vehicle.position,from)<=15
+            ?{...vehicle,path:path!,edgeIds:edgeIds!,leg:0,distanceIntoLeg:0,speedKph:0,routeInvalid:false}
+            :vehicle
+          )}));
+          watch.lastProgressAt=Date.now();
+         }
+        });
+        worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,
+         requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF'});
+       }
+      }
+      // Do not silently end an active fare because its saved path is corrupt.
+      if(issue)return delivered;
+     }else passengerRouteWatchRef.current.delete(delivered.id);
      const routeStarted=performance.now();
      // Refuel according to the shortest reachable road route, not a fixed tank percentage.
      // Cache routing for 10 seconds to avoid expensive pathfinding on every simulation tick.
