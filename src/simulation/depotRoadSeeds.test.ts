@@ -51,6 +51,7 @@ describe('recovering real OSM depot access for legacy explorer saves',()=>{
  it('never seeds a depot road kilometres away',()=>{
   const far=graph();
   far.nodes.set('port',[24.9,37.9]);
+  far.nodes.set('island-end',[24.9002,37.9]);
   far.nodeKeys=[...far.nodes.keys()];
   expect(missingDepotAccessSeeds(company,{taxis:[starter('andros')]},far,new Set())).toEqual([]);
  });
