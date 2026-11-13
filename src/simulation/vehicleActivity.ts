@@ -4,6 +4,9 @@ export type VehicleActivity={icon:string;label:string};
 
 /** Pure status mapping; badges update on simulation ticks, not animation frames. */
 export function vehicleActivity(t:Taxi):VehicleActivity{
+ if(t.ferryTrip?.stage==='boarding')return {icon:'⚓',label:'Driving to ferry terminal'};
+ if(t.ferryTrip?.stage==='waiting')return {icon:'⛴️',label:'Waiting at harbour for scheduled ferry'};
+ if(t.ferryTrip?.stage==='sailing')return {icon:'⛴️',label:'Travelling aboard ferry'};
  if(t.recoveryPending)return {icon:'🛻',label:'Awaiting roadside assistance'};
  if(t.status==='REFUELLING')return {icon:(t.vehicleFuel??'').toLowerCase().includes('electric')?'🔋':'⛽',label:'Refuelling / charging'};
  if(t.status==='SERVICING')return {icon:'🔧',label:'Maintenance'};
