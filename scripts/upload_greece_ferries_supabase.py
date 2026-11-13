@@ -153,6 +153,33 @@ def main():
         tags["@id"]=f"way/{element['id']}"
         features.append({"type":"Feature","properties":tags,"geometry":{"type":"LineString","coordinates":coords}})
     network=build({"type":"FeatureCollection","features":features})
+    # The scheduled Overpass import must NOT erase names enriched from the
+    # full Greece OSM PBF. Existing IDs are stable coordinate-derived keys.
+    # Retain names only if the endpoint coordinates still match exactly.
+    try:
+        current=request_json(f"{storage}/object/public/{BUCKET}/{OBJECT}",timeout=40)
+        old_ports={port["id"]:port for port in current.get("ports",[])
+                   if isinstance(port,dict) and isinstance(port.get("id"),str)}
+        preserved=0
+        for port in network["ports"]:
+            previous=old_ports.get(port["id"])
+            if not previous or previous.get("position")!=port["position"]:
+                continue
+            name=previous.get("name","")
+            if not isinstance(name,str) or not name.strip() or (
+                name.strip().casefold()=="ferry terminal (road access unverified)"):
+                continue
+            port["name"]=name
+            for field in ("nameSource","nameConfidence","nameDistanceMeters"):
+                if field in previous:
+                    port[field]=previous[field]
+            preserved+=1
+        print(f"Preserved {preserved} previously verified harbour names",flush=True)
+    except (RuntimeError,ValueError,TypeError,KeyError) as exc:
+        # Existing remote data can be missing on the first import. Otherwise
+        # refuse to overwrite potentially curated names until it is readable.
+        if "HTTP 404" not in str(exc):
+            raise RuntimeError("Could not verify existing harbour names; refusing to overwrite GRC.json") from exc
     print(f"OSM ferry ways: {len(features)}; valid ferry routes: {len(network['routes'])}; provisional ports: {len(network['ports'])}")
     if not network["routes"]:
         sys.exit("No valid routes found. Remote data was NOT overwritten. Check OSM geometry and endpoints.")
