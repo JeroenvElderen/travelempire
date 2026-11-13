@@ -6,6 +6,7 @@ import json
 import math
 import sqlite3
 from pathlib import Path
+from osm_taxi_access import taxi_access_exception, taxi_oneway
 
 try:
     import osmium
@@ -63,7 +64,7 @@ def main():
     CREATE TABLE IF NOT EXISTS edges(
       id TEXT PRIMARY KEY, way_id INTEGER, from_node INTEGER, to_node INTEGER,
       lng1 REAL,lat1 REAL,lng2 REAL,lat2 REAL,length_m REAL, highway TEXT,
-      speed_kmh INTEGER, oneway INTEGER
+      speed_kmh INTEGER, oneway INTEGER, taxi_only INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS region_edges(
       region_id TEXT NOT NULL,edge_id TEXT NOT NULL,
@@ -71,6 +72,9 @@ def main():
     );
     CREATE INDEX IF NOT EXISTS region_edges_edge ON region_edges(edge_id);
     """)
+    # Upgrade older local SQLite databases before replacing their contents.
+    if not any(row[1] == "taxi_only" for row in db.execute("PRAGMA table_info(edges)")):
+        db.execute("ALTER TABLE edges ADD COLUMN taxi_only INTEGER NOT NULL DEFAULT 0")
     # Rebuild tables to avoid mixing data from different PBF/GADM versions.
     db.execute("DELETE FROM region_edges");db.execute("DELETE FROM edges")
     db.execute("DELETE FROM regions")
@@ -83,7 +87,9 @@ def main():
     pending_edges=[];pending_links=[]
     def flush():
         if not pending_edges:return
-        db.executemany("INSERT OR IGNORE INTO edges VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",pending_edges)
+        db.executemany("""INSERT OR IGNORE INTO edges
+          (id,way_id,from_node,to_node,lng1,lat1,lng2,lat2,length_m,highway,speed_kmh,oneway,taxi_only)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",pending_edges)
         db.executemany("INSERT OR IGNORE INTO region_edges VALUES (?,?)",pending_links)
         db.commit()
         pending_edges.clear();pending_links.clear()
@@ -92,10 +98,16 @@ def main():
         def way(self,w):
             highway=w.tags.get("highway")
             if highway not in ALLOWED or w.tags.get("area")=="yes":return
-            if any(w.tags.get(k) in {"no","private"} for k in ("access","vehicle","motor_vehicle","motorcar")):return
+            tags={tag.k:tag.v for tag in w.tags}
+            restricted=any(tags.get(k) in {"no","private"} for k in
+                           ("access","vehicle","motor_vehicle","motorcar"))
+            taxi_only=restricted and taxi_access_exception(tags)
+            if restricted and not taxi_only:return
             stats["ways"]+=1
             direction=str(w.tags.get("oneway","")).lower()
-            oneway=-1 if direction=="-1" else 1 if direction in ("yes","true","1") or w.tags.get("junction")=="roundabout" else 0
+            oneway=(taxi_oneway(tags) if taxi_only else
+                    (-1 if direction=="-1" else 1 if direction in ("yes","true","1") or
+                     w.tags.get("junction")=="roundabout" else 0))
             vmax=speed(w.tags,highway)
             nodes=list(w.nodes)
             for a,b in zip(nodes,nodes[1:]):
@@ -108,7 +120,7 @@ def main():
                 hits=[ids[int(i)] for i in candidates if shapes[int(i)].intersects(line)]
                 if not hits:continue
                 edge_id=f"{w.id}:{a.ref}:{b.ref}"
-                pending_edges.append((edge_id,w.id,a.ref,b.ref,*aa,*bb,round(length_m(aa,bb),2),highway,vmax,oneway))
+                pending_edges.append((edge_id,w.id,a.ref,b.ref,*aa,*bb,round(length_m(aa,bb),2),highway,vmax,oneway,int(taxi_only)))
                 pending_links.extend((rid,edge_id) for rid in hits)
                 stats["edges"]+=1;stats["associations"]+=len(hits)
                 if len(pending_edges)>=10000:flush()
@@ -120,7 +132,7 @@ def main():
     manifest={"format":"travelempire-road-regions-v1","regions":{}}
     for rid in ids:
         rows=db.execute("""SELECT e.id,e.from_node,e.to_node,e.lng1,e.lat1,e.lng2,e.lat2,
-                 e.length_m,e.highway,e.speed_kmh,e.oneway
+                 e.length_m,e.highway,e.speed_kmh,e.oneway,e.taxi_only
                  FROM edges e JOIN region_edges r ON r.edge_id=e.id
                  WHERE r.region_id=? ORDER BY e.id""",(rid,))
         # JSONL gzip supports incremental reads without holding all region edges in memory.
@@ -130,7 +142,8 @@ def main():
             for row in rows:
                 out.write(json.dumps({"id":row[0],"a":row[1],"b":row[2],
                     "coordinates":[[row[3],row[4]],[row[5],row[6]]],
-                    "length":row[7],"highway":row[8],"speed":row[9],"oneway":row[10]},
+                    "length":row[7],"highway":row[8],"speed":row[9],"oneway":row[10],
+                    **({"taxiOnly":True} if row[11] else {})},
                     separators=(",",":"))+"\n")
                 count+=1
         manifest["regions"][rid]={"file":filename,"edges":count}
