@@ -62,7 +62,7 @@ def way_id(road, pattern):
     if match:
         return int(match.group(1))
     # Supplemental ferry-terminal tiles use osm-<way-id>-<segment-index>.
-    alternate = re.match(r"^osm-(\\d+)-\\d+$", raw)
+    alternate = re.match(r"^osm-(\d+)-\d+$", raw)
     return int(alternate.group(1)) if alternate else None
 
 
