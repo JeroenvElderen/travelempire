@@ -66,7 +66,7 @@ import "./aurora-glass.css";
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
-import {completedFerryArrivals} from './maritime/ferryService';
+import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
 import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
@@ -1014,22 +1014,49 @@ export default function App(){
      try{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
      if(delivered.deliveryUntil)return delivered;
-     // A ferry voyage is controlled by game time, never by road exploration.
+     // A booked ferry ticket is not permission to drive into the sea.
+     // Explore ONLY on legal motor roads to the terminal; stay parked there
+     // until a matching scheduled vessel departs from this side of the route.
      if(delivered.ferryTrip){
       const crossing=delivered.ferryTrip;
       if(crossing.stage==='boarding'){
-       const boarding=delivered.path.length>=2?tickTaxi(delivered,graph,elapsedSeconds).taxi:delivered;
-       if(boarding.status==='PAUSED'||boarding.path.length<2){
-        return {...boarding,status:'PAUSED' as const,position:ferryPosition(crossing.geometry,0),
+       const approach=delivered.path.length>=2?tickTaxi(delivered,graph,elapsedSeconds).taxi:delivered;
+       if(approach.status==='PAUSED'||approach.path.length<2||
+          approach.leg>=Math.max(0,approach.path.length-1)){
+        const dock=crossing.boarding??approach.position;
+        const serviceStart=crossing.serviceStartGameMs??PUBLIC_PASSENGER_FERRY_EPOCH_MS;
+        const slot=nextPassengerDeparture(serviceStart,
+         crossing.durationGameMs/60000,gameNow,crossing.fromInitialPort??true);
+        return {...approach,status:'PAUSED' as const,position:dock,
          path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,pauseAtHome:false,
-         ferryTrip:{...crossing,stage:'sailing' as const,startedGameMs:gameNow}};
+         ferryTrip:{...crossing,stage:'waiting' as const,
+          departureGameMs:slot.departureGameMs}};
        }
-       return boarding;
+       return approach;
       }
+      if(crossing.stage==='waiting'){
+       const dock=crossing.boarding??delivered.position;
+       const serviceStart=crossing.serviceStartGameMs??PUBLIC_PASSENGER_FERRY_EPOCH_MS;
+       const departure=crossing.departureGameMs??nextPassengerDeparture(
+        serviceStart,crossing.durationGameMs/60000,gameNow,
+        crossing.fromInitialPort??true).departureGameMs;
+       if(gameNow<departure){
+        return {...delivered,status:'PAUSED' as const,position:dock,
+         path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
+         ferryTrip:{...crossing,departureGameMs:departure}};
+       }
+       // A normal 1 s real-time physics tick advances 24 game seconds.
+       // Board only at the reserved departure (no independent sea movement).
+       const sailing={...crossing,stage:'sailing' as const,
+        startedGameMs:departure,departureGameMs:departure};
+       return {...delivered,status:'PAUSED' as const,position:dock,
+        path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
+        ferryTrip:sailing};
+      }
+      // Legacy mid-sea voyages finish safely on the new release; on-screen
+      // car markers are hidden for ALL sailing vehicles.
       const progress=Math.max(0,(gameNow-(crossing.startedGameMs??gameNow))/crossing.durationGameMs);
       if(progress>=1){
-       // An arriving priority scout unlocks just the real harbour access
-       // road, not arbitrary roads on the other island.
        if(crossing.seedRoadId)discovered.add(crossing.seedRoadId);
        return {...delivered,status:'IDLE' as const,position:crossing.destination,
         ferryTrip:undefined,ferryVisitedPorts:[...(delivered.ferryVisitedPorts??[]),crossing.fromPortId,crossing.toPortId].slice(-40),
@@ -2240,6 +2267,20 @@ export default function App(){
       const latest=taxisRef.current.find(t=>t.id===scout.id);
       const current=companyRef.current;
       if(!latest||latest.status!=='IDLE'||latest.ferryTrip||!current||current.id!==companyId)return;
+      // The visual ferry and passenger ticket must share the exact same
+      // ship orientation and clock. Unowned routes use a permanent public
+      // timetable; owned routes use the company vessel's saved start.
+      const routeInfo=harbourNetwork.routes.find(r=>r.id===offer.routeId);
+      const portFrom=harbourNetwork.ports.find(p=>p.id===routeInfo?.from);
+      const portTo=harbourNetwork.ports.find(p=>p.id===routeInfo?.to);
+      if(!routeInfo||!portFrom||!portTo)return;
+      const home:[number,number]=[current.headquarters.lng,current.headquarters.lat];
+      const startsAtFrom=ferryStartsAtFrom(portFrom.position,portTo.position,home);
+      const initialPortId=startsAtFrom?routeInfo.from:routeInfo.to;
+      const fromInitialPort=offer.fromPortId===initialPortId;
+      const serviceStart=(current.purchasedFerryRouteIds??[]).includes(offer.routeId)
+       ?current.ferryServiceStartedAt?.[offer.routeId]??PUBLIC_PASSENGER_FERRY_EPOCH_MS
+       :PUBLIC_PASSENGER_FERRY_EPOCH_MS;
       const fare=offer.ticketEuros;
       if(current.cash+pendingCashRef.current<fare){
        diagnostic('explorers:ferry-ticket','insufficient funds for '+scout.id);return;
@@ -2256,8 +2297,10 @@ export default function App(){
         path,edgeIds,leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[],
         ferryTrip:{stage:'boarding' as const,routeId:offer.routeId,
          fromPortId:offer.fromPortId,toPortId:offer.toPortId,
+         boarding:offer.boarding,
          geometry:offer.geometry,destination:offer.destination,
-         durationGameMs:Math.max(1,offer.durationMinutes)*60000,ticketEuros:fare,seedRoadId:offer.seedRoadId}
+         durationGameMs:Math.max(1,offer.durationMinutes)*60000,ticketEuros:fare,
+         serviceStartGameMs:serviceStart,fromInitialPort,seedRoadId:offer.seedRoadId}
        })
       }));
       networkRef.current?.considerHarbour(offer.destination);
