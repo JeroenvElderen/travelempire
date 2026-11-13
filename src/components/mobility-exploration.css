@@ -1,5 +1,5 @@
 .te-mobility-panel{
- position:absolute;z-index:29;right:12px;top:76px;
+ position:absolute;z-index:2;right:12px;top:76px;
  width:min(325px,calc(100vw - 24px));max-height:min(76vh,660px);overflow-y:auto;
  padding:15px;border:1px solid rgba(161,218,228,.24);border-radius:18px;
  background:linear-gradient(130deg,rgba(20,41,55,.94),rgba(12,22,33,.96));
