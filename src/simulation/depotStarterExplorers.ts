@@ -66,6 +66,7 @@ export function reconcileDepotStarterExplorers(
   const anchor=anchors.get(depot.id);
   if(missing.length&&!anchor)continue; // Streaming graph may not have arrived.
   if(missing.length&&anchor){
+   const startingCount=additions.length;
    const starters=createDepotStarterExplorers(depot.id,depot.name,anchor.position);
    for(const vehicle of starters){
     if(assigned.has(vehicle.explorerRole))continue;
@@ -74,7 +75,7 @@ export function reconcileDepotStarterExplorers(
    }
    // A real OSM road becomes discovered so the new explorers can depart.
    seeded.add(anchor.roadId);
-   if(additions.length)
+   if(additions.length>startingCount)
     events.push({id:`depot-starter-grant-${depot.id}`,time:Date.now(),
      description:`Depot ${depot.name} · original starter explorers restored`,amount:0});
   }
