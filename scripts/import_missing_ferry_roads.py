@@ -73,6 +73,22 @@ def build_tile(x, y, ways):
             continue
         highway = tags.get("highway", "")
         oneway = 1 if tags.get("oneway") in ("yes", "1", "true") else (-1 if tags.get("oneway") == "-1" else 0)
+        vertical={}
+        try:
+            layer=int(tags.get("layer","0"))
+            if layer: vertical["layer"]=layer
+        except ValueError:
+            pass
+        try:
+            level=float(tags["level"]) if tags.get("level") else None
+            if level is not None and math.isfinite(level):
+                vertical["level"]=level
+        except ValueError:
+            pass
+        if tags.get("bridge","no").lower() not in ("no","false","0"):
+            vertical["bridge"]=True
+        if tags.get("tunnel","no").lower() not in ("no","false","0"):
+            vertical["tunnel"]=True
         for i in range(1, len(coords)):
             a = [coords[i-1]["lon"], coords[i-1]["lat"]]
             b = [coords[i]["lon"], coords[i]["lat"]]
@@ -84,7 +100,7 @@ def build_tile(x, y, ways):
                 continue
             roads.append({"id": f"osm-{way['id']}-{i-1}", "a": nodes[i-1], "b": nodes[i],
                           "coordinates": [a, b], "length": length, "highway": highway,
-                          "speed": speed.get(highway, 40), "oneway": oneway})
+                          "speed": speed.get(highway, 40), "oneway": oneway, **vertical})
     return roads
 
 def main():
@@ -95,7 +111,11 @@ def main():
         raise RuntimeError("Ferry network GRC.json unavailable")
     network = json.loads(ferry_bytes)
     existing = get(ROAD_BUCKET, "supplemental-manifest.json")
-    supplemental = json.loads(existing) if existing else {"format": bundled["format"], "tileSize": TILE_SIZE, "tiles": {}}
+    supplemental = json.loads(existing) if existing else None
+    # Never allow legacy v1 supplements to override the deployed v2 manifest.
+    if (supplemental is None or supplemental.get("format")!=bundled["format"]
+            or supplemental.get("tileSize")!=bundled["tileSize"]):
+        supplemental={"format":bundled["format"],"tileSize":bundled["tileSize"],"tiles":{}}
     candidates = []
     seen = set()
     for port in network["ports"]:
@@ -114,7 +134,7 @@ def main():
             if not roads:
                 print(f"{key}: no drivable OSM roads; leaving absent", flush=True)
                 continue
-            name = f"{key}.jsonl.gz"
+            name = f"{key}.v2.jsonl.gz" if "v2" in bundled["format"] else f"{key}.jsonl.gz"
             payload = gzip.compress(("".join(json.dumps(road, separators=(",", ":"))+"\n" for road in roads)).encode())
             put(ROAD_BUCKET, name, payload, "application/gzip")
             supplemental["tiles"][key] = {"file": name, "edges": len(roads)}
