@@ -61,3 +61,47 @@ export function completedFerryArrivals(
  }
  return {paid,arrivals,changed};
 }
+
+/** Public passenger ferries exist independently of player-owned routes.
+ * Use one stable game-time epoch so boat positions and ticket departures
+ * remain identical after reloading iOS Safari; do not invent an instant boat.
+ */
+export const PUBLIC_PASSENGER_FERRY_EPOCH_MS=Date.UTC(2026,0,1);
+
+/** The visual boat starts from the end nearest company headquarters, or
+ * the OSM route 'from' endpoint if the company has no usable headquarters.
+ * Shared by the visible vessel and passenger boarding logic.
+ */
+export function ferryStartsAtFrom(
+ from:[number,number],to:[number,number],home?:[number,number],
+):boolean{
+ if(!home)return true;
+ const distance=(a:[number,number],b:[number,number])=>{
+  const lat=(a[1]+b[1])*Math.PI/360;
+  return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320);
+ };
+ return distance(home,from)<=distance(home,to);
+}
+
+export type FerryBoardingSlot={departureGameMs:number;voyageIndex:number};
+
+/** Find an ACTUAL scheduled sailing from this terminal. Even-indexed
+ * voyages leave the visual boat's initial port; odd-indexed voyages leave
+ * the other one. Both purchased and public passenger routes use this.
+ * Does not account for travel to the dock: call it when the vehicle arrives.
+ */
+export function nextPassengerDeparture(
+ startGameMs:number,durationMinutes:number,nowGameMs:number,fromInitialPort:boolean,
+ turnaroundMinutes=FERRY_TURNAROUND_MINUTES,
+):FerryBoardingSlot{
+ if(!Number.isFinite(startGameMs)||!Number.isFinite(nowGameMs))
+  throw Error('Ferry clock unavailable');
+ const sailingMs=Math.max(10,Number.isFinite(durationMinutes)?durationMinutes:10)*MINUTE_MS;
+ const turnMs=Math.max(0,turnaroundMinutes)*MINUTE_MS;
+ const firstDeparture=startGameMs+turnMs;
+ const spacing=sailingMs+turnMs;
+ const requiredParity=fromInitialPort?0:1;
+ let index=Math.max(0,Math.ceil((nowGameMs-firstDeparture)/spacing));
+ if(index%2!==requiredParity)index++;
+ return {departureGameMs:firstDeparture+index*spacing,voyageIndex:index};
+}
