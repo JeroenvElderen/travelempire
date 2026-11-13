@@ -41,7 +41,6 @@ function paintMobility(map:maplibregl.Map,controller:MobilityController|null,sho
  try{
   ensureLayers(map);
   if(!controller)return;
-    if(!controller)return;
     const {segments,discovered}=controller.snapshot;
     const bounds=map.getBounds();
     const zoom=map.getZoom();
@@ -65,7 +64,6 @@ function paintMobility(map:maplibregl.Map,controller:MobilityController|null,sho
     }
     const source=map.getSource(SOURCE) as maplibregl.GeoJSONSource|undefined;
     source?.setData({type:'FeatureCollection',features});
-   }catch(error){console.warn('Mobility map overlay unavailable',error)}
   }catch(error){console.warn('Mobility map overlay unavailable',error)}
 }
 
