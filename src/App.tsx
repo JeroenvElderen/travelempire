@@ -1219,7 +1219,7 @@ export default function App(){
       const fresh=!previous||previous.job!==job||previous.status!==status;
       const watch=fresh?
        {job,status,leg:delivered.leg,distanceIntoLeg:delivered.distanceIntoLeg,
-        lastProgressAt:now,lastAttemptAt:0,pending:false}:previous;
+        lastProgressAt:now,lastAttemptAt:0,pending:false}:previous!;
       const issue=passengerRouteIssue(delivered);
       if(!fresh&&passengerRouteAdvanced(watch,delivered)){
        watch.lastProgressAt=now;
@@ -1228,8 +1228,12 @@ export default function App(){
       watch.leg=delivered.leg;
       watch.distanceIntoLeg=delivered.distanceIntoLeg;
       passengerRouteWatchRef.current.set(delivered.id,watch);
+      const targetPosition=status==='TO_PICKUP'?delivered.pickup:delivered.dropoff;
+      const alreadyAtTarget=!!targetPosition&&meters(delivered.position,targetPosition)<=12;
       const stalled=now-watch.lastProgressAt>12000;
-      if((issue||stalled)&&now-watch.lastAttemptAt>=15000&&!watch.pending){
+      // A route request lost during a worker reset must not block recovery forever.
+      if(watch.pending&&now-watch.lastAttemptAt>18000)watch.pending=false;
+      if(((issue&&!alreadyAtTarget)||stalled)&&now-watch.lastAttemptAt>=15000&&!watch.pending){
        const target=status==='TO_PICKUP'?delivered.pickup:delivered.dropoff;
        const worker=dispatchWorkerRef.current;
        if(target&&worker&&workerReadyRef.current){
@@ -1263,7 +1267,7 @@ export default function App(){
        }
       }
       // Do not silently end an active fare because its saved path is corrupt.
-      if(issue)return delivered;
+      if(issue&&!alreadyAtTarget)return delivered;
      }else passengerRouteWatchRef.current.delete(delivered.id);
      const routeStarted=performance.now();
      // Refuel according to the shortest reachable road route, not a fixed tank percentage.
