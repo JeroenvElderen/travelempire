@@ -1,4 +1,5 @@
 import {diagnostic} from '../frontendDiagnostics';
+import {hardcodedRoadSpeedKph} from './hardcodedSpeedLimits';
 import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} from './roadTiles';
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
@@ -213,8 +214,57 @@ export class RoadNetworkManager {
   void this.load(id).catch(e=>{this.failedUntil.set(id,Date.now()+60000);this.onError(`Road tile ${id}: ${String(e)}`)}).finally(()=>{this.queued.delete(id);this.inFlight--;if(this.disposed)return;
    // Give Safari a rendering opportunity between completed background tiles.
    if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
+ /** Safari-safe ingestion: reuse parsed road objects locally instead of
+  * structured-cloning 30k+ roads to a graph worker, receiving a second full
+  * delta, and retaining that worker's unbounded global road-ID Set.
+  * Road tile IDs are globally unique by OSM segment midpoint tile.
+  */
+ private async applyMobileRoads(roads:RoadSegment[]):Promise<number>{
+  const seenInTile=new Set<string>();
+  let applied=0,sliceStarted=performance.now(),yieldCount=0;
+  for(let i=0;i<roads.length;i++){
+   if(this.disposed)break;
+   const road=roads[i];
+   if(road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0||
+      seenInTile.has(road.id))continue;
+   seenInTile.add(road.id);
+   const a=String(road.a),b=String(road.b);
+   if(!this.graph.nodes.has(a)){
+    this.graph.nodes.set(a,road.coordinates[0]);
+    this.graph.nodeKeys.push(a);
+   }
+   if(!this.graph.nodes.has(b)){
+    this.graph.nodes.set(b,road.coordinates[1]);
+    this.graph.nodeKeys.push(b);
+   }
+   const speed=hardcodedRoadSpeedKph(road.highway);
+   const add=(from:string,to:string)=>{
+    let links=this.graph.edges.get(from);
+    if(!links){links=[];this.graph.edges.set(from,links);}
+    links.push({to,meters:road.length,id:road.id,speedKph:speed,
+     highway:road.highway,layer:road.layer,bridge:road.bridge,tunnel:road.tunnel,
+     level:road.level,taxiOnly:road.taxiOnly});
+   };
+   if(road.oneway!==-1)add(a,b);
+   if(road.oneway!==1)add(b,a);
+   applied++;
+   if(i%96===0&&performance.now()-sliceStarted>=MERGE_BUDGET_MS){
+    yieldCount++;await yieldToRenderer();sliceStarted=performance.now();
+   }
+  }
+  diagnostic('roads:ios-direct-merge',
+   `applied=${applied} yields=${yieldCount} nodes=${this.graph.nodeKeys.length}`);
+  return applied;
+ }
  private async load(id:string){if(this.loaded.has(id)||this.disposed)return;
   const fetchStarted=performance.now();const roads=await loadRoadTile(id);diagnostic('roads:tile',`loaded segments=${roads.length} parseMs=${Math.round(performance.now()-fetchStarted)} queued=${this.queue.length}`);if(this.disposed)return;
+  if(IOS_REDUCED_MEMORY){
+   // The tile parser already runs in its own worker. Avoid creating another
+   // large structured-clone graph delta on Safari; merge in short UI slices.
+   const applied=await this.applyMobileRoads(roads);
+   if(this.disposed)return;
+   this.edgeTotal+=applied;
+  }else{
   // Build and deduplicate edges off the main thread. Only the compact graph
   // delta is applied to the live graph; rendering is yielded between batches.
   const workerStarted=performance.now();const delta=await this.prepareInWorker(roads);diagnostic('roads:worker',`processingMs=${Math.round(performance.now()-workerStarted)} nodes=${delta.nodes.length} edges=${delta.count}`);
@@ -236,6 +286,7 @@ export class RoadNetworkManager {
    if(this.disposed)return;
   }
   diagnostic('roads:apply',`elapsedMs=${Math.round(performance.now()-applyStarted)} cpuMs=${Math.round(applyCpuMs)} yields=${applyYields} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
+  }
   this.loaded.add(id);this.scheduleGraphPublish();
   // A tile already in flight may cross the mobile budget by one tile; after
   // its current routes are safely synced, stop any queued speculative tiles.
