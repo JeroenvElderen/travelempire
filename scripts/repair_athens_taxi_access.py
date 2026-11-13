@@ -117,6 +117,9 @@ def main():
         p.error("General access restrictions changed; review manually")
     if osm.nodes[0][0]!=NODE:
         p.error("Expected this OSM way to start at the trapped node")
+    matched_inbound=next(r for r in incoming if r["id"].startswith("osm-157768344-"))
+    if length_metres(osm.nodes[0][1],matched_inbound["coordinates"][1])>10:
+        p.error("OSM taxi exit location differs from saved incoming node; inspect PBF age")
     additions=[]
     out_of_tile=0
     for i,((aid,a),(bid,b)) in enumerate(zip(osm.nodes,osm.nodes[1:])):
@@ -142,6 +145,14 @@ def main():
         p.error("Existing edge ID collision")
     if any(str(r["a"])==str(NODE) for r in original if r.get("taxiOnly")):
         p.error("Taxi exit already present")
+    # The legal exit must reconnect to at least one existing outward segment.
+    # Otherwise this would merely move the dead end to the next OSM node.
+    rejoin_ids={str(r["b"]) for r in additions}
+    exits_from_new=[r["id"] for r in original
+        if (str(r.get("a")) in rejoin_ids and r.get("oneway")!=-1)
+        or (str(r.get("b")) in rejoin_ids and r.get("oneway")!=1)]
+    if not exits_from_new:
+        p.error("Taxi-only way does not rejoin a permitted road in this tile; do NOT deploy a partial connection")
     patched=original+additions
     ids={r["id"] for r in patched}
     if len(ids)!=len(patched):
@@ -166,6 +177,7 @@ def main():
             "incomingBefore":len(incoming),"outgoingBefore":len(outgoing),
             "outgoingAfter":1,
             "firstAddedEdge":additions[0]["id"],"lastAddedEdge":additions[-1]["id"],
+            "existingRejoinEdges":exits_from_new[:12],
             "source":source,"osmTags":tags,
             "inputIDsPreserved":True,"readyToUpload":True}
     (args.output/"validation.json").write_text(json.dumps(report,indent=2)+"\n")
