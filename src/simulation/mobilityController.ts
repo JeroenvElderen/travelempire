@@ -77,7 +77,12 @@ export class MobilityController{
    (a,b)=>a===mobilityTileId(point)?-1:b===mobilityTileId(point)?1:0);
   let added=0;
   for(const id of ids){
-   if(!this.manifest.tiles[id]||this.loaded.has(id)||this.pending.has(id))continue;
+   if(!this.manifest.tiles[id]||this.pending.has(id))continue;
+   if(this.loaded.has(id)){
+    const recent=this.loaded.get(id)!;
+    this.loaded.delete(id);this.loaded.set(id,recent);
+    continue;
+   }
    this.pending.add(id);this.changed();
    try{
     const roads=await loadMobilityTile(id);
