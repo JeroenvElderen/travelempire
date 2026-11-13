@@ -48,6 +48,7 @@ import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,typ
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
 import {createDepotStarterExplorers,reconcileDepotStarterExplorers,type DepotStarterAnchor} from './simulation/depotStarterExplorers';
+import {depotParkingChoices,requireDepotParking} from './simulation/depotParking';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -1788,12 +1789,15 @@ export default function App(){
   if(!Number.isFinite(percent)||!Number.isFinite(minimum))return;
   setFleet(old=>({...old,bank:{...bankOf(old.bank),autoSavePercent:Math.max(0,Math.min(100,percent)),minimumOperatingCash:Math.max(0,minimum)}}));
  };
- const buyTaxiBatch=(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90)=>{
+ const buyTaxiBatch=(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90,depotId='main')=>{
   const current=companyRef.current;
   const currentFleet=fleetSaveRef.current;
   if(!current||!graph)return;
   try{
    if(!Number.isInteger(quantity)||quantity<1||quantity>50)throw Error('Choose 1–50 vehicles.');
+   // Enforce parking *before* charging or preparing finance. Pending vehicle
+   // deliveries already occupy their assigned depot's capacity reservation.
+   const deliveryDepot=requireDepotParking(current,currentFleet,depotId,quantity);
    if(![30,60,90,180].includes(termDays)||![10,20,25,30,40,50].includes(depositPercent))throw Error('Invalid finance terms.');
    const discount=Research.level(research,'procurement')*0.04;
    const price=Math.round(offer.price*(1-discount)*100)/100;
@@ -1804,11 +1808,15 @@ export default function App(){
    if(current.cash+pendingCashRef.current<total)throw Error('Insufficient company funds for the entire batch.');
    if(mode==='finance'&&(currentFleet.loans??[]).length+quantity>2)throw Error('Maximum two active loans, including vehicle finance.');
    if(mode==='finance'&&quote.principal*quantity>corporateCreditCapacity(currentFleet))throw Error('Batch exceeds available borrowing capacity.');
-   const hq:[number,number]=[current.headquarters.lng,current.headquarters.lat];
-   const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
-   const position=graph.nodes.get(node)!;
+   const location=depotId==='main'?current.headquarters:current.depots?.find(d=>d.id===depotId);
+   if(!location)throw Error('Delivery depot no longer exists.');
+   const destination:[number,number]=[location.lng,location.lat];
+   const node=nearest(graph,destination);
+   const position=node?graph.nodes.get(node):undefined;
+   if(!position||meters(position,destination)>1500)
+    throw Error('Roads near '+deliveryDepot.name+' are not loaded. View that depot on the map before ordering.');
    const now=Date.now();
-   const path=deliveryRoute(graph,hq);
+   const path=deliveryRoute(graph,position);
    const usedNames=new Set([...(currentFleet.drivers??[]).map(d=>d.name.toLowerCase()),...currentFleet.taxis.map(t=>t.driver.toLowerCase())]);
    const firstNames=['Alex','Maria','Nikos','Sofia','Dimitris','Elena','Andreas','Katerina','Petros','Anna','George','Irene','Lucas','Eva','Theo','Christina','Markos','Nina','Stavros','Lena'];
    const lastNames=['Papadopoulos','Georgiou','Nikolaou','Ioannou','Pappas','Vasileiou','Dimitriou','Karagiannis','Antoniou','Kostas','Martin','Smith','Brown','Wilson','Taylor','Murphy'];
@@ -1822,18 +1830,25 @@ export default function App(){
    const taxis=drivers.map(d=>{
     while(existingNumbers.has('Taxi '+number))number++;
     const name='Taxi '+number++;existingNumbers.add(name);
-    return {id:crypto.randomUUID(),name,ownership:mode==='lease'?'leased' as const:'owned' as const,driver:d.name,position,status:'IDLE' as const,path:[] as [number,number][],edgeIds:[] as string[],leg:0,distanceIntoLeg:0,fare:0,completed:0,purchasePrice:mode==='lease'?undefined:price,vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleTrim:offer.trim,vehicleOptionIds:offer.optionIds,vehiclePaintHex:offer.paintHex,vehicleRevenueBonus:offer.revenueBonus,vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:path} satisfies Taxi;
+    return {id:crypto.randomUUID(),name,ownership:mode==='lease'?'leased' as const:'owned' as const,driver:d.name,position,status:'IDLE' as const,path:[] as [number,number][],edgeIds:[] as string[],leg:0,distanceIntoLeg:0,fare:0,completed:0,purchasePrice:mode==='lease'?undefined:price,vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleTrim:offer.trim,vehicleOptionIds:offer.optionIds,vehiclePaintHex:offer.paintHex,vehicleRevenueBonus:offer.revenueBonus,vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:path,depotId} satisfies Taxi;
    });
    const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-total)*100)/100};
    pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
    const loans=mode==='finance'?taxis.map(t=>({...createLoan(quote.principal,0.09,termDays),purpose:'vehicle' as const,vehicleId:t.id})):[];
    const leases=mode==='lease'?taxis.map(t=>({id:crypto.randomUUID(),vehicleId:t.id,vehicleName:t.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0})):[];
    const entries=taxis.flatMap(t=>[...(mode==='finance'?[bankEntry('Taxi finance disbursement · '+t.name,quote.principal,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+t.name,-perVehicle,'operating','purchase')]);
-   setFleet(old=>({...old,taxis:[...old.taxis,...taxis],drivers:[...(old.drivers??[]),...drivers],loans:[...(old.loans??[]),...loans],leases:[...(old.leases??[]),...leases],leaseExpense:(old.leaseExpense??0)+(mode==='lease'?lease.upfront*quantity:0),bank:appendBankEntries(bankOf(old.bank),entries),transactions:[{id:crypto.randomUUID(),time:now,description:'Batch vehicle order · '+quantity+' × '+offer.model,amount:-total},...(old.transactions??[])].slice(0,100)}));
+   // Commit the reservation immediately; rapid consecutive orders must see
+   // the first order before React's next render or the 5-second disk save.
+   const ordered:FleetState={...currentFleet,taxis:[...currentFleet.taxis,...taxis],drivers:[...(currentFleet.drivers??[]),...drivers],loans:[...(currentFleet.loans??[]),...loans],leases:[...(currentFleet.leases??[]),...leases],leaseExpense:(currentFleet.leaseExpense??0)+(mode==='lease'?lease.upfront*quantity:0),bank:appendBankEntries(bankOf(currentFleet.bank),entries),transactions:[{id:crypto.randomUUID(),time:now,description:'Batch vehicle order · '+quantity+' × '+offer.model+' → '+deliveryDepot.name,amount:-total},...(currentFleet.transactions??[])].slice(0,100)};
+   fleetSaveRef.current=ordered;
+   setFleet(ordered);
+   saveFleet(current.id,{...ordered,exploredEdgeIds:[]});
    setSimError('');
-  }catch(error){setSimError(String(error));}
+  }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
- const buyTaxi=(driver:string,offer:VehicleOffer,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90)=>{if(!company||!graph)return;try{
+ const buyTaxi=(driver:string,offer:VehicleOffer,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90,depotId='main')=>{if(!company||!graph)return;try{
+  const currentFleet=fleetSaveRef.current;
+  const deliveryDepot=requireDepotParking(company,currentFleet,depotId,1);
   if(!driver.trim())throw Error('Enter a driver name.');
   const discount=Research.level(research,'procurement')*0.04;
   const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
@@ -1846,24 +1861,33 @@ export default function App(){
   if(mode==='finance'&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
   if(mode==='finance'&&financed>corporateCreditCapacity(fleet))throw Error('Borrowing limit of €75,000 exceeded.');
   if(company.cash+pendingCashRef.current<cashDue)throw Error('Insufficient company funds.');
-  const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
-  const node=nearest(graph,hq);if(!node)throw Error('No roads near headquarters.');
+  const location=depotId==='main'?company.headquarters:company.depots?.find(d=>d.id===depotId);
+  if(!location)throw Error('Delivery depot no longer exists.');
+  const destination:[number,number]=[location.lng,location.lat];
+  const node=nearest(graph,destination);
+  if(!node||meters(graph.nodes.get(node)!,destination)>1500)
+   throw Error('Roads near '+deliveryDepot.name+' are not loaded. View that depot on the map before ordering.');
   const now=Date.now();
   const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,ownership:mode==='lease'?'leased':'owned',driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
    purchasePrice:mode==='lease'?undefined:price,vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleTrim:offer.trim,vehicleOptionIds:offer.optionIds,vehicleRevenueBonus:offer.revenueBonus,vehicleClass:offer.className,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
-   deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,hq)};
+   deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,graph.nodes.get(node)!),depotId};
   const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cashDue)*100)/100};
   pendingCashRef.current=0;companyRef.current=updated;
-  saveCompany(updated);setCompany(updated);setFleet(old=>({...old,
+  saveCompany(updated);setCompany(updated);
+  const old=currentFleet;
+  const ordered:FleetState={...old,
    loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,termDays),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
    leases:mode==='lease'?[...(old.leases??[]),{id:crypto.randomUUID(),vehicleId:taxi.id,vehicleName:taxi.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0}]:old.leases,
    leaseExpense:(old.leaseExpense??0)+(mode==='lease'?lease.upfront:0),
    accounting:mode==='lease'?bookAccounting(old.accounting,periodMonth(gameClockRef.current?.epochMs??now),0,lease.upfront,0,0):old.accounting,
    financeHistory:mode==='lease'?(()=>{const day=new Date(gameClockRef.current?.epochMs??now).toISOString().slice(0,10);const list=[...(old.financeHistory??[])];const last=list[list.length-1];if(last?.day===day)list[list.length-1]={...last,expenses:last.expenses+lease.upfront};else list.push({day,revenue:0,expenses:lease.upfront,trips:0});return list.slice(-365);})():old.financeHistory,
    bank:appendBankEntries(bankOf(old.bank),[...(financed>0?[bankEntry('Taxi finance disbursement · '+taxi.name,financed,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,-(mode==='lease'?cashDue:cost),'operating','purchase')]),
-   transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??now,taxiId:taxi.id,description:(mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name,amount:-(mode==='lease'?cashDue:cost)},...(old.transactions??[])].slice(0,100),
-   drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]}));setSimError('');
- }catch(e){setSimError(String(e))}};
+   transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??now,taxiId:taxi.id,description:(mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+taxi.name+' → '+deliveryDepot.name,amount:-(mode==='lease'?cashDue:cost)},...(old.transactions??[])].slice(0,100),
+   drivers:[...(old.drivers??[]),...((old.drivers??[]).some(d=>d.name.toLowerCase()===taxi.driver.toLowerCase())?[]:[{id:crypto.randomUUID(),name:taxi.driver,hiredAt:Date.now()}])],taxis:[...old.taxis,taxi]};
+  fleetSaveRef.current=ordered;setFleet(ordered);
+  saveFleet(company.id,{...ordered,exploredEdgeIds:[]});
+  setSimError('');
+ }catch(e){setSimError(e instanceof Error?e.message:String(e))}};
  const hireDriver=(name:string)=>{const cleaned=name.trim();if(!cleaned){setSimError('Enter a driver name.');return;}if((fleet.drivers??[]).some(d=>d.name.toLowerCase()===cleaned.toLowerCase())){setSimError('This driver is already employed.');return;}if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<DRIVER_COST){setSimError('Insufficient funds to hire a driver.');return;}pendingCashRef.current-=DRIVER_COST;setFleet(old=>({...old,drivers:[...(old.drivers??[]),{id:crypto.randomUUID(),name:cleaned,hiredAt:Date.now()}],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`Driver onboarding · ${cleaned}`,amount:-DRIVER_COST},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
