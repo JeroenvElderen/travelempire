@@ -15,3 +15,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: Verify offline Greece data tooling
+        run: |
+          python3 -m py_compile scripts/enrich_ferry_names_from_pbf.py scripts/upload_enriched_ferry_network.py scripts/download_live_road_tiles.py scripts/enrich_geographic_road_tiles.py scripts/import_missing_ferry_roads.py scripts/upload_greece_ferries_supabase.py
+          python3 -m unittest discover -s scripts -p "test_greece_data_enrichment.py"
