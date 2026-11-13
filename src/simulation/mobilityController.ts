@@ -19,6 +19,7 @@ export class MobilityController{
  readonly sessions:Partial<Record<MobilityMode,MobilitySession>>={};
  private graphs:Record<MobilityMode,MobilityGraph>={walk:emptyMobilityGraph(),cycle:emptyMobilityGraph()};
  private loaded=new Map<string,MobilitySegment[]>();
+ private visibleSegments:MobilitySegment[]=[];
  private pending=new Set<string>();
  private updating=false;
  private dirty=false;
@@ -28,7 +29,7 @@ export class MobilityController{
 
  get snapshot():MobilitySnapshot{
   return{sessions:{...this.sessions},discovered:this.discovered,
-   segments:[...this.loaded.values()].flat(),loadedTiles:this.loaded.size,
+   segments:this.visibleSegments,loadedTiles:this.loaded.size,
    loading:this.pending.size>0,error:this.error};
  }
  private changed(){this.notify()}
@@ -50,6 +51,7 @@ export class MobilityController{
  }
 
  private rebuild(){
+  this.visibleSegments=[...this.loaded.values()].flat();
   this.graphs={walk:emptyMobilityGraph(),cycle:emptyMobilityGraph()};
   for(const roads of this.loaded.values())
    for(const mode of MODES)appendMobilityRoads(this.graphs[mode],roads,mode);
