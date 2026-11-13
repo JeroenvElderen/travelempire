@@ -17,7 +17,7 @@ self.onmessage=(event:MessageEvent<{id:number;roads:RoadSegment[]}>)=>{
   const add=(from:string,to:string)=>{
    let links=edges.get(from);if(!links){links=[];edges.set(from,links)}
    links.push({to,meters:road.length,id:road.id,speedKph:hardcodedRoadSpeedKph(road.highway),highway:road.highway,
-    layer:road.layer,bridge:road.bridge,tunnel:road.tunnel,level:road.level});
+    layer:road.layer,bridge:road.bridge,tunnel:road.tunnel,level:road.level,taxiOnly:road.taxiOnly});
   };
   if(road.oneway!==-1)add(a,b);
   if(road.oneway!==1)add(b,a);
