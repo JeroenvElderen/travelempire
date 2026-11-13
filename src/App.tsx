@@ -1240,6 +1240,18 @@ export default function App(){
        const target=status==='TO_PICKUP'?delivered.pickup:delivered.dropoff;
        const worker=dispatchWorkerRef.current;
        if(target&&worker&&workerReadyRef.current){
+        const currentEdge=delivered.edgeIds[delivered.leg];
+        const segmentStart=delivered.path[delivered.leg];
+        const segmentEnd=delivered.path[delivered.leg+1];
+        if(!currentEdge||!segmentStart||!segmentEnd){
+         // Without the real current OSM edge ID, a nearest-node recovery
+         // could switch the taxi from an underpass onto an overpass.
+         watch.lastAttemptAt=now;
+         diagnostic('taxi:route-anchor-unavailable',
+          `taxi=${delivered.name} id=${delivered.id} reason=missing-active-road edge=${currentEdge??'none'}`);
+         networkRef.current?.consider([delivered.position,target]);
+         return delivered;
+        }
         watch.lastAttemptAt=now;
         watch.pending=true;
         const requestId=++routeSequenceRef.current;
@@ -1268,17 +1280,9 @@ export default function App(){
           watch.lastProgressAt=Date.now();
          }
         });
-        const currentEdge=delivered.edgeIds[delivered.leg];
-        const segmentStart=delivered.path[delivered.leg];
-        const segmentEnd=delivered.path[delivered.leg+1];
-        if(!currentEdge||!segmentStart||!segmentEnd){
-         diagnostic('taxi:route-anchor-unavailable',
-          `taxi=${delivered.name} id=${delivered.id} reason=missing-active-road edge=${currentEdge??'none'}`);
-        }
         worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,
          requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF',
-         activeRoad:currentEdge&&segmentStart&&segmentEnd?
-          {edgeId:currentEdge,start:segmentStart,end:segmentEnd}:undefined});
+         activeRoad:{edgeId:currentEdge,start:segmentStart,end:segmentEnd}});
        }
       }
       // Do not silently end an active fare because its saved path is corrupt.
