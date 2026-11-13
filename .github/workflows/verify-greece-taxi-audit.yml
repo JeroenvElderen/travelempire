@@ -6,6 +6,7 @@ on:
       - "scripts/osm_taxi_access.py"
       - "scripts/repair_greece_taxi_access.py"
       - "scripts/activate_greece_taxi_access.py"
+      - "scripts/build_greece_road_database.py"
       - "scripts/tests/test_greece_taxi_access.py"
       - ".github/workflows/verify-greece-taxi-audit.yml"
 jobs:
@@ -20,6 +21,6 @@ jobs:
       - name: Install local OSM reader
         run: python -m pip install osmium
       - name: Compile scripts
-        run: python -m py_compile scripts/osm_taxi_access.py scripts/repair_greece_taxi_access.py scripts/activate_greece_taxi_access.py
+        run: python -m py_compile scripts/osm_taxi_access.py scripts/repair_greece_taxi_access.py scripts/activate_greece_taxi_access.py scripts/build_greece_road_database.py
       - name: Exercise access rules and synthetic OSM audit
         run: python -m unittest discover -s scripts/tests -p 'test_greece_taxi_access.py' -v
