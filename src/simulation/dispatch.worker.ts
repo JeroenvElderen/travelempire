@@ -505,7 +505,7 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
    const pair=roadEndpoints.get(id);if(!pair)continue;
    for(const from of pair){
    for(const edge of g.edges.get(from)??[]){
-    if(edge.id!==id)continue;
+    if(edge.id!==id||edge.taxiOnly)continue;
     targets.push({node:from,offsetMeters:edge.meters});
     legs.push({from,to:edge.to,id,portIndex:index});
    }
@@ -513,7 +513,7 @@ function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
   }
  }
  if(!targets.length)return null;
- const result=routeToNearestTarget(g,start,targets,'',150000);
+ const result=routeToNearestTarget(g,start,targets,'',150000,undefined,false);
  if(!result)return null;
  const leg=legs[result.targetIndex];
  const destination=g.nodes.get(leg.to);
@@ -610,7 +610,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     seenRoadIds.add(road.id);
     allRoads.add(road.id);
     if(indexedExplored.has(road.id))rememberDiscoveredRole(road.highway);
-    const role=roadRole(road.highway??'');
+    const role=road.taxiOnly?null:roadRole(road.highway??'');
     if(role){let ids=byClass.get(role);if(!ids){ids=new Set();byClass.set(role,ids);}ids.add(road.id);classifiedRoads.add(road.id);}
     const a=String(road.a),b=String(road.b);
     roadEndpoints.set(road.id,[a,b]);roadInsertionOrder.push(road.id);
