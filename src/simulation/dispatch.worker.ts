@@ -10,7 +10,7 @@ import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole}
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
-import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,nearbyRoadNodes,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 // Two independent exploration planners run outside passenger dispatch.
 // Their results are committed by this coordinator only after validating the
@@ -697,14 +697,35 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      if(!forward&&!reverse){
       reason='active-edge-endpoints-mismatch';
      }else{
-      const anchored=routeFromDirectedRoad(graph,{
+      const roadAnchor={
        edgeId,fromNode:forward?a:b,toNode:forward?b:a,position:msg.from,
-      },to,msg.discoveredOnly?indexedExplored:undefined);
-      planned=anchored.path&&anchored.edgeIds?
-       {path:anchored.path,edgeIds:anchored.edgeIds}:null;
-      reason=anchored.reason;
+      };
+      const candidates=nearbyRoadNodes(graph,msg.to,35,8);
+      if(!candidates.length&&to)candidates.push(to);
+      // A nearby node on a different road level may be closer in 2D but
+      // unreachable. Choose a real directed path to a nearby node, not a
+      // new connection between vertically overlapping street segments.
+      let bestLength=Infinity;
+      reason='no-directed-path';
+      for(const candidate of candidates){
+       const anchored=routeFromDirectedRoad(graph,roadAnchor,candidate,
+        msg.discoveredOnly?indexedExplored:undefined);
+       if(anchored.reason==='ok'&&anchored.path&&anchored.edgeIds){
+        const length=anchored.path.slice(1).reduce((sum,p,i)=>sum+meters(p,anchored.path![i]),0);
+        if(length<bestLength){
+         bestLength=length;
+         planned={path:anchored.path,edgeIds:anchored.edgeIds};
+         reason='ok';
+         targetNode=candidate;
+        }
+       }else if(!planned&&reason==='no-directed-path')reason=anchored.reason;
+       // Structural anchor errors cannot be solved by trying another target.
+       if(anchored.reason==='active-edge-missing'||
+          anchored.reason==='active-edge-not-directed'||
+          anchored.reason==='position-off-edge')break;
+      }
+      if(!candidates.length)reason='target-unloaded';
       originNode=forward?a:b;
-      targetNode=to;
      }
     }
    }else if(from&&to){
