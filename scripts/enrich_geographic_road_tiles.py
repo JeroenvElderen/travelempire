@@ -15,6 +15,7 @@ import argparse
 import gzip
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 try:
@@ -66,11 +67,13 @@ class VerticalWays(osmium.SimpleHandler):
         self.wanted = wanted
         self.metadata = {}
         self.found = 0
+        self.found_ids = set()
 
     def way(self, way):
         if way.id not in self.wanted:
             return
         self.found += 1
+        self.found_ids.add(way.id)
         tags = parse_vertical_tags(way.tags)
         if tags:
             self.metadata[way.id] = tags
@@ -97,6 +100,7 @@ def main():
         parser.error("--way-id-pattern requires a capture group containing the OSM way ID")
     tiles = manifest["tiles"]
     wanted = set()
+    segment_counts_by_way = Counter()
     unrecognized = []
     total = 0
     for tile in tiles.values():
@@ -112,6 +116,7 @@ def main():
                 identifier = way_id(road, pattern)
                 if identifier is not None:
                     wanted.add(identifier)
+                    segment_counts_by_way[identifier] += 1
                 elif len(unrecognized) < 5:
                     unrecognized.append(str(road.get("id")))
     if not total:
@@ -123,6 +128,12 @@ def main():
     handler.apply_file(str(args.pbf), locations=False)
     if handler.found < len(wanted) * 0.90:
         raise SystemExit(f'Only {handler.found:,}/{len(wanted):,} OSM way IDs matched the PBF. Check the ID regex and PBF version; no tiles written.')
+    # Avoid marking a partially mismatched new PBF as equivalent to the
+    # live network. Most saved segments MUST reference still-present OSM ways.
+    matched_segments = sum(count for identifier, count in segment_counts_by_way.items()
+                           if identifier in handler.found_ids)
+    if matched_segments < total * 0.95:
+        raise SystemExit(f'Only {matched_segments:,}/{total:,} saved road segments match OSM way IDs in this PBF; do NOT deploy. Use the matching extract.')
     args.output.mkdir(parents=True, exist_ok=True)
     new_tiles = {}
     matches = 0
@@ -136,7 +147,7 @@ def main():
                     continue
                 road = json.loads(line)
                 identifier = way_id(road, pattern)
-                if identifier is not None and identifier in wanted:
+                if identifier is not None and identifier in handler.found_ids:
                     matches += 1
                 tags = handler.metadata.get(identifier) if identifier is not None else None
                 if tags:
@@ -146,11 +157,11 @@ def main():
                 dest.write(json.dumps(road, separators=(",", ":")) + "\n")
                 count += 1
         new_tiles[tile_id] = {"file": target, "edges": count}
-    print(f"Segments: {total:,}; parseable IDs: {matches:,}; OSM ways found: {handler.found:,}; metadata-enriched: {with_metadata:,}", flush=True)
+    print(f"Segments: {total:,}; matched segments: {matches:,}; matched OSM ways: {handler.found:,}; metadata-enriched: {with_metadata:,}", flush=True)
     if unrecognized:
         print("Unrecognized ID examples:", ", ".join(unrecognized), flush=True)
     if matches < total * 0.95:
-        raise SystemExit("Less than 95% of road IDs were parseable. Do NOT deploy these tiles. Supply the correct --way-id-pattern.")
+        raise SystemExit("Less than 95% of road segments matched the PBF. Do NOT deploy these tiles. Check the extract version and --way-id-pattern.")
     result = {"format": "travelempire-road-tiles-v2-levels", "tileSize": manifest["tileSize"], "tiles": new_tiles}
     (args.output / "tiles-manifest.json").write_text(json.dumps(result, indent=2))
     print("Staged v2 tiles are ready. Upload the new files first, then deploy the v2 manifest.", flush=True)
