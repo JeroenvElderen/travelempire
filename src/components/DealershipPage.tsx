@@ -3,9 +3,10 @@ import {EUROPEAN_MODELS,BRANDS,type VehicleModel} from '../europeanVehicleCatalo
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import EuropeanDealership from './EuropeanDealership';
+import type {DepotParking} from '../simulation/depotParking';
 import './DealershipPage.css';
 
-type Props={cash:number;ready:boolean;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+type Props={cash:number;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
 const photoFiles:Record<string,string>={
  'Volvo|XC90':'2025 Volvo XC90 (facelift), front 4.11.25.jpg',
  'Volvo|XC60':'Volvo XC60 II 2025 facelift 001.jpg',
@@ -21,7 +22,7 @@ function VehiclePhoto({model}:{model:VehicleModel}){
   {file&&!failed?<img loading="lazy" src={'https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(file)+'?width=900'} alt={model.brand+' '+model.name+' exterior'} onError={()=>setFailed(true)}/>:<div className="dealer-photo-fallback"><span aria-hidden="true">🚘</span><small>Model photo not yet available</small></div>}
  </div>;
 }
-export default function DealershipPage({cash,ready,onOrder}:Props){
+export default function DealershipPage({cash,ready,depots,error='',onDepotChange,onOrder}:Props){
  const [selected,setSelected]=useState<VehicleModel|null>(null);
  const [search,setSearch]=useState('');
  const [brand,setBrand]=useState('All');
@@ -30,12 +31,24 @@ export default function DealershipPage({cash,ready,onOrder}:Props){
  const [mode,setMode]=useState<'cash'|'finance'|'lease'>('cash');
  const [deposit,setDeposit]=useState(25);
  const [term,setTerm]=useState(90);
+ const [depotId,setDepotId]=useState('main');
+ const selectedDepot=depots.find(d=>d.id===depotId);
+ const capacityError=!selectedDepot?'Select an existing delivery depot.':
+  selectedDepot.available<quantity?
+  `${selectedDepot.name} has only ${selectedDepot.available} of ${quantity} required free taxi spaces (${selectedDepot.occupied}/${selectedDepot.capacity} occupied). Choose another depot or expand parking.`:'';
+ const depotSelector=<label className="dealer-depot-selector">Delivery depot
+  <select aria-label="Deliver vehicles to depot" value={depotId} onChange={e=>{setDepotId(e.target.value);onDepotChange?.()}}>
+   {depots.map(d=><option key={d.id} value={d.id}>{d.name} · {d.occupied}/{d.capacity} occupied</option>)}
+  </select>
+  <small>{selectedDepot?`${selectedDepot.available} taxi spaces available · ${selectedDepot.occupied} reserved or assigned`:'Choose a depot'}</small>
+ </label>;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>(brand==='All'||m.brand===brand)&&(m.brand+' '+m.name).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>sort==='price'?a.basePrice-b.basePrice:sort==='price-desc'?b.basePrice-a.basePrice:a.brand.localeCompare(b.brand)||a.name.localeCompare(b.name)),[brand,search,sort]);
  if(selected)return <div className="dealer-page">
-  <div className="dealer-toolbar"><label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Number(e.target.value)||25)))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option></select></label>}</div>
-  <EuropeanDealership key={selected.brand+'|'+selected.name} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setSelected(null)} cash={cash} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days);}}/>
+  <div className="dealer-toolbar">{depotSelector}<label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Number(e.target.value)||25)))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option></select></label>}</div>{capacityError&&<p className="dealer-parking-error" role="alert">{capacityError}</p>}{error&&<p className="dealer-parking-error" role="alert">{error}</p>}
+  <EuropeanDealership key={selected.brand+'|'+selected.name} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setSelected(null)} cash={cash} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
  </div>;
  return <section className="dealer-page"><header className="dealer-page-header"><div><span>TRAVELEMPIRE MOTORS</span><h1>Vehicle Dealership</h1><p>Explore the catalogue, customise your next vehicle and order for your fleet.</p></div><div className="dealer-balance"><small>Available capital</small><strong>{eur(cash)}</strong></div></header>
+ <div className="dealer-toolbar">{depotSelector}</div>
  <div className="dealer-searchbar"><input type="search" aria-label="Search vehicles" placeholder="Search manufacturer or model…" value={search} onChange={e=>setSearch(e.target.value)}/><select aria-label="Sort vehicles" value={sort} onChange={e=>setSort(e.target.value)}><option value="price">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="name">Manufacturer</option></select></div>
  <div className="dealer-brand-tabs" aria-label="Manufacturers">{['All',...BRANDS].map(b=><button key={b} type="button" className={brand===b?'active':''} onClick={()=>setBrand(b)}>{b}</button>)}</div>
  <p className="dealer-results">{models.length} available models · Prices shown are starting prices; final price depends on configuration.</p>
