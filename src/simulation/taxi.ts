@@ -332,7 +332,7 @@ function forbiddenTurnGeometry(graph:RoadGraph,previous:string,current:string,ne
 }
 // Turn-aware Dijkstra: the state includes the incoming road node. A shortest
 // path to an intersection must not erase another valid approach direction.
-function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false,incoming=''):{path:Point[];edgeIds:string[];length:number}|null{
+function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false,incoming='',allowTaxiOnly=true):{path:Point[];edgeIds:string[];length:number}|null{
  if(!graph.nodes.has(from)||!graph.nodes.has(to))return null;
  if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
  type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
@@ -351,6 +351,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
 
   for(const edge of links){
    if(allowed&&!allowed.has(edge.id))continue;
+   if(edge.taxiOnly&&!allowTaxiOnly)continue;
    if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,allowed))continue;
    const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph):edge.meters);
    const k=JSON.stringify([edge.to,state.node]);
@@ -365,7 +366,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  keys.reverse();ids.reverse();
  return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:states[finish].cost};
 }
-export function route(graph:RoadGraph,from:string,to:string,incoming=''){return turnAwareRoute(graph,from,to,undefined,false,incoming);}
+export function route(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true){return turnAwareRoute(graph,from,to,undefined,false,incoming,allowTaxiOnly);}
 
 /** Reroute from the exact directed OSM segment being driven, NOT from the
  * geographically nearest intersection (which can be an upper/lower road).
@@ -418,7 +419,7 @@ export function routeFromDirectedRoad(
 // reachable target is settled; never substitutes straight-line proximity for
 // actual road distance. A target's off-road connection is part of its cost.
 export function routeToNearestTarget(
- graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming='',maxVisits=150000,diagnostics?:{reason?:'invalid-start'|'no-valid-targets'|'search-budget'|'unreachable'|'success';visits?:number}
+ graph:RoadGraph,from:string,targets:{node:string;offsetMeters:number}[],incoming='',maxVisits=150000,diagnostics?:{reason?:'invalid-start'|'no-valid-targets'|'search-budget'|'unreachable'|'success';visits?:number},allowTaxiOnly=true
 ):{targetIndex:number;path:Point[];edgeIds:string[];roadMeters:number;totalMeters:number}|null{
  if(!graph.nodes.has(from)||!targets.length){if(diagnostics)diagnostics.reason='invalid-start';return null;}
  const atNode=new Map<string,{index:number;offset:number}[]>();
@@ -448,6 +449,7 @@ export function routeToNearestTarget(
    }
   }
   for(const edge of graph.edges.get(state.node)??[]){
+   if(edge.taxiOnly&&!allowTaxiOnly)continue;
    if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to))continue;
    const cost=state.cost+edge.meters;
    if(cost>selectedCost)continue;
@@ -621,8 +623,8 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
  }
  return null;
 }
-export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming=''):ReturnType<typeof route>{
- return turnAwareRoute(graph,from,to,discovered,true,incoming);
+export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming='',allowTaxiOnly=true):ReturnType<typeof route>{
+ return turnAwareRoute(graph,from,to,discovered,true,incoming,allowTaxiOnly);
 }
 export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>,eligibleStops?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
