@@ -64,6 +64,7 @@ import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
 import {completedFerryArrivals} from './maritime/ferryService';
+import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
 import {assignPoiHarbours,poiRouteCandidates,type PoiHarbourMission} from './maritime/poiMissions';
@@ -112,9 +113,11 @@ export default function App(){
   let busy=false;
   let ferryRoutes=new Map<string,{durationMinutes:number;name:string;from:string;to:string}>();
   let portNames=new Map<string,string>();
+  let knownPortIds=new Set<string>();
   void loadFerryNetwork().then(network=>{
    if(cancelled)return;
    portNames=new Map(network.ports.map(port=>[port.id,port.name]));
+   knownPortIds=new Set(network.ports.map(port=>port.id));
    const positions=new Map(network.ports.map(port=>[port.id,port.position]));
    const home=companyRef.current?.headquarters;
    ferryRoutes=new Map(network.routes.map(route=>{
@@ -151,6 +154,22 @@ export default function App(){
     companyRef.current=updated;saveCompany(updated);setCompany(updated);
    }
    if(!settlement.arrivals.length)return;
+   // Automatically operated ferries unlock only the harbour they actually
+   // reach. The same timetable powers moving map boats and fare settlements.
+   // Persist per company immediately, including arrivals processed after a
+   // page reload; never infer unlocks from a mere route purchase.
+   const destinations=arrivedHarbourIds(settlement.arrivals,ferryRoutes,knownPortIds);
+   if(destinations.length){
+    const key=harbourStorageKey(current.id);
+    let saved:string[]=[];
+    try{const value=JSON.parse(localStorage.getItem(key)??'[]') as unknown;
+     if(Array.isArray(value))saved=value.filter((id):id is string=>typeof id==='string'&&knownPortIds.has(id));
+    }catch{}
+    const merged=mergeUnlockedHarbours(saved,destinations);
+    try{localStorage.setItem(key,JSON.stringify(merged));}catch{}
+    setUnlockedHarbours(previous=>mergeUnlockedHarbours(previous,destinations));
+    diagnostic('ferry:harbours-unlocked',destinations.join(','));
+   }
    busy=true;
    let gross=0,costs=0;
    const events:Array<{description:string;amount:number;time:number}>=[];
@@ -2123,6 +2142,10 @@ export default function App(){
     if(typeof id==='string'&&knownPorts.has(id))earned.add(id);
   }catch{}
   for(const id of unlockedHarbours)if(knownPorts.has(id))earned.add(id);
+  // Ferry passengers physically arriving at a destination also unlock it.
+  // These port IDs are recorded only at completed vehicle ferry crossings.
+  for(const taxi of fleet.taxis)for(const id of taxi.ferryVisitedPorts??[])
+   if(knownPorts.has(id))earned.add(id);
   const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
   // Purchases required at least one discovered endpoint. Prefer the
   // currently verified endpoint (or an existing historical unlock). Only
@@ -2174,7 +2197,7 @@ export default function App(){
    if(port)setHarbourNotice({id:port.id,name:englishFerryName(port.name)});
   }
   harbourSeenRef.current=true;
- },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,unlockedHarbours]);
+ },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,fleet.taxis,unlockedHarbours]);
  // Show a single end-of-day report when the accelerated game clock passes midnight.
  // Baselines are company-specific and saved separately from the fleet so restarting
  // Safari cannot repeatedly generate the same daily report.
@@ -2321,7 +2344,7 @@ export default function App(){
   {page==='Fleet'&&<FleetPanel company={company} fleet={fleet} graph={graph} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/>}
  {page==='Dealership'&&company&&<DealershipPage cash={company.cash} ready={Boolean(graph)} onOrder={buyTaxiBatch}/>}
  {page==='Operations'&&<OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/>}
- {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork}/>}
+ {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/>}
  {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
  {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
