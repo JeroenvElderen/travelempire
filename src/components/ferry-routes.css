@@ -1,2 +1,94 @@
-.ferry-routes-panel{margin:24px 0;padding:24px;border:1px solid #30475c;border-radius:16px;background:#111f32;color:#e8f3ff}.ferry-routes-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.ferry-routes-heading span{font-size:10px;color:#85baf5;letter-spacing:1.4px}.ferry-routes-heading h2{margin:8px 0;font-size:22px}.ferry-routes-heading p,.ferry-route-card p,.ferry-empty p{color:#9bb2c9;font-size:13px}.ferry-routes-heading>strong{color:#91e5b7}.ferry-routes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:12px;margin-top:18px}.ferry-route-card{border:1px solid #35506a;border-radius:12px;padding:16px;background:#172b42}.ferry-route-card>span{font-size:11px;color:#89bff7}.ferry-route-card h3{font-size:15px}.ferry-route-card footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:20px}.ferry-route-card button{background:#1767bc;color:white;border:0;border-radius:8px;padding:10px;font-weight:700}.ferry-route-card button:disabled{opacity:.55;cursor:default}.ferry-empty{margin-top:16px;padding:16px;border:1px dashed #4a6177;border-radius:10px}
-.ferry-route-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:20px;color:#c7e2f8;font-size:13px}.ferry-route-tools button{background:#1767bc;color:white;border:1px solid #438dd3;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer}.ferry-route-tools button:disabled{opacity:.6;cursor:wait}.ferry-reload-status{color:#91e5b7;font-size:12px;margin-top:8px}
+/* TravelEmpire / maritime control centre */
+.ferry-routes-panel{--ferry-bg:#101f33;--ferry-elevated:#172b43;--ferry-stroke:#355570;--ferry-muted:#9fb7cf;--ferry-aqua:#61e4ef;position:relative;margin:18px 0 90px;padding:18px;min-width:0;border:1px solid #344d68;border-radius:22px;background:linear-gradient(154deg,#101f35 0%,#10233c 50%,#0b1b31 100%);color:#edf5ff;box-shadow:0 16px 36px #0003;overflow:hidden}
+.ferry-routes-panel button{font:inherit;cursor:pointer}
+.ferry-routes-panel button:disabled{opacity:.5;cursor:not-allowed}
+.ferry-hero{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:115px;overflow:hidden;border-radius:17px;padding:24px;background:radial-gradient(ellipse at 85% 40%,#26639166,transparent 54%),linear-gradient(115deg,#16365b,#11233b 68%,#173c60);border:1px solid #3c6685}
+.ferry-hero-identity{display:flex;align-items:center;gap:17px;position:relative;z-index:1;min-width:0}
+.ferry-hero-symbol{display:grid;place-items:center;flex:none;width:58px;height:58px;border:1px solid #78c6fb80;border-radius:17px;color:#beecff;background:linear-gradient(145deg,#2e76b3,#1a385f);box-shadow:0 8px 24px #001e4066}
+.ferry-overline{font-weight:800;letter-spacing:1.7px;color:#8ccbee;font-size:10px}
+.ferry-hero h2{font-size:clamp(25px,3vw,34px);line-height:1.1;margin:7px 0;font-weight:800;letter-spacing:-.7px}
+.ferry-hero p{font-size:13px;color:#c2d6e8;margin:0;line-height:1.45}
+.ferry-hero-decoration{display:flex;align-items:center;gap:12px;color:#78c6fd55;margin-right:5%;transform:rotate(-5deg)}
+.ferry-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;border:1px solid #4b6584;border-radius:15px;background:#15263fb8;margin-top:15px}
+.ferry-tabs button{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;padding:13px 8px;border:0;border-radius:11px;color:#bcd1e5;background:transparent;font-size:14px;font-weight:750}
+.ferry-tabs button.active{color:#fff;border:1px solid #7ad1ff;background:linear-gradient(140deg,#2371be,#2454a3 60%,#173d7d);box-shadow:inset 0 1px 0 #9adcff55,0 0 17px #2277c36e}
+.ferry-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:16px 0 18px}
+.ferry-stats article{display:flex;flex-direction:column;align-items:center;gap:8px;justify-content:center;min-width:0;min-height:105px;border:1px solid #46617d;border-radius:14px;background:linear-gradient(155deg,#203752,#172943);padding:13px 8px;text-align:center}
+.ferry-stats article svg{color:#a6ddfa}
+.ferry-stats strong{font-size:clamp(17px,2.5vw,26px);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.2}
+.ferry-stats article:nth-child(3) strong{color:#8ee9c9}
+.ferry-stats span{font-size:11px;color:#b2c7db}
+.ferry-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 17px}
+.ferry-search{display:flex;align-items:center;gap:10px;flex:1;min-width:150px;padding:0 13px;min-height:43px;color:#a3bbd5;border:1px solid #405b78;border-radius:11px;background:#14263e}
+.ferry-search input{width:100%;min-width:0;padding:11px 0;border:0;outline:none;background:none;color:#fff;font-size:13px}
+.ferry-reload{display:flex;align-items:center;justify-content:center;gap:8px;min-height:43px;border:1px solid #4c718f;border-radius:11px;padding:10px 13px;background:#1c3958;color:#d8edfd;font-weight:700;font-size:12px}
+.ferry-section-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 14px}
+.ferry-section-heading h3{font-size:17px;margin:0 0 5px;letter-spacing:-.2px}
+.ferry-section-heading p{font-size:12px;color:#9eb5ca;margin:0;line-height:1.5}
+.ferry-section-heading>span{color:#80dcea;border:1px solid #3a6484;background:#1b3853;border-radius:999px;padding:8px 11px;font-size:11px;white-space:nowrap}
+.ferry-routes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,365px),1fr));gap:14px}
+.ferry-route-card{min-width:0;padding:17px;border:1px solid #496986;border-radius:17px;background:linear-gradient(145deg,#213b5a,#142941 85%);box-shadow:0 8px 22px #0002}
+.ferry-route-top{display:flex;align-items:flex-start;gap:11px;min-width:0}
+.ferry-card-icon{flex:none;width:43px;height:43px;display:grid;place-items:center;border-radius:12px;background:#275d91;color:#d0edff}
+.ferry-route-name{flex:1;min-width:0;display:grid;gap:5px}
+.ferry-route-name strong{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:15px;line-height:1.3;color:#f0f7ff;overflow-wrap:anywhere}
+.ferry-route-name strong svg{color:#79cef3;flex:none}
+.ferry-route-name small{font-size:11px;line-height:1.4;color:#b3c9db;overflow-wrap:anywhere}
+.ferry-state{display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:999px;padding:7px 10px;font-size:10px;white-space:nowrap;border:1px solid #536c88;background:#243950;color:#c5d7e9;font-weight:750}
+.ferry-state.is-unlocked{background:#113c37;color:#97f5d1;border-color:#389b7d}
+.ferry-state.is-approaching{background:#35284f;color:#d3b8ff;border-color:#7859ab}
+.ferry-state.is-locked{background:#273850;color:#b4c5db;border-color:#58708a}
+.ferry-green-dot{width:7px;height:7px;background:#41eaaa;border-radius:50%;box-shadow:0 0 7px #3ce7a9}
+.ferry-route-progress{margin:20px 0 13px}
+.ferry-route-terminals{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.ferry-route-terminals>div{display:flex;flex-direction:column;gap:4px;max-width:45%}
+.ferry-route-terminals>div:last-child{align-items:flex-end;text-align:right}
+.ferry-route-terminals svg{color:#a8defe}
+.ferry-route-terminals strong{font-size:12px;overflow-wrap:anywhere}
+.ferry-route-terminals span{font-size:10px;color:#abc3d8}
+.ferry-progress-line{position:relative;margin:19px 10px 15px;height:7px;border:1px solid #6386a7;border-radius:999px;background:#32506b}
+.ferry-progress-fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#2387d4,#67e7e6);border-radius:999px;box-shadow:0 0 12px #4fc9ec88}
+.ferry-progress-boat{position:absolute;top:50%;color:#dbf7ff;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px #051021)}
+.ferry-journey-caption{display:flex;align-items:center;justify-content:center;gap:7px;color:#b8d8ed;font-size:11px;line-height:1.5;text-align:center}
+.ferry-route-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#3a5673;border:1px solid #42607c;border-radius:12px;overflow:hidden}
+.ferry-route-details>div{display:grid;justify-items:center;gap:6px;padding:10px 6px;background:#182f49;text-align:center;min-width:0}
+.ferry-route-details svg{color:#abd6f6}
+.ferry-route-details span{font-size:10px;color:#aabed2}
+.ferry-route-details strong{font-size:12px;color:#e6f8ff;font-variant-numeric:tabular-nums}
+.ferry-fare-control{display:grid;gap:8px;border-top:1px solid #385775;margin-top:15px;padding-top:13px}
+.ferry-fare-control label{display:flex;justify-content:space-between;gap:8px;color:#aec4d8;font-size:12px}
+.ferry-fare-control label strong{color:#e5faff}
+.ferry-fare-control input{width:100%;accent-color:#50c0ed}
+.ferry-fare-control small{font-size:11px;color:#9cb8d0;line-height:1.4}
+.ferry-route-card footer{display:flex;align-items:center;justify-content:space-between;gap:11px;margin-top:17px;flex-wrap:wrap}
+.ferry-route-card footer>span:first-child{color:#e2f3ff;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.ferry-route-card footer button,.ferry-empty button{border:1px solid #4bd4c8;border-radius:11px;background:linear-gradient(140deg,#16a69b,#147683);padding:10px 15px;color:white;font-size:12px;font-weight:800;box-shadow:0 4px 12px #053d4766}
+.ferry-owned-label{display:flex;align-items:center;gap:6px;font-size:11px;color:#9feccf;font-weight:750}
+.ferry-discovery-panel{display:flex;gap:14px;align-items:center;margin-top:18px;padding:17px;border:1px solid #74649f;border-radius:15px;background:linear-gradient(125deg,#352b57b8,#172b47);color:#eae6ff}
+.ferry-discovery-panel>span{flex:none;width:46px;height:46px;display:grid;place-items:center;border-radius:50%;border:1px solid #a084ec;background:#554179;color:#f4e9ff;box-shadow:0 0 15px #a184ed44}
+.ferry-discovery-panel strong{font-size:14px}
+.ferry-discovery-panel p{margin:5px 0 0;font-size:12px;color:#bfc8e4;line-height:1.55}
+.ferry-harbour-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:11px}
+.ferry-port-card{display:flex;align-items:center;gap:12px;min-width:0;padding:13px;background:linear-gradient(140deg,#1c3851,#13263e);border:1px solid #42617f;border-radius:13px}
+.ferry-port-symbol{width:42px;height:42px;flex:none;display:grid;place-items:center;background:#35415c;color:#c4cfdf;border-radius:11px}
+.ferry-port-symbol.is-discovered{color:#8ff7d0;background:#175349}
+.ferry-port-copy{min-width:0;flex:1;display:grid;gap:5px}
+.ferry-port-copy strong{font-size:13px;overflow-wrap:anywhere}
+.ferry-port-copy small{font-size:10px;color:#9db8ce;line-height:1.5}
+.ferry-port-card .ferry-state{font-size:9px;padding:6px 8px}
+.ferry-fleet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:12px}
+.ferry-fleet-card{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:11px;padding:15px;border-radius:15px;border:1px solid #496b8a;background:#1b3652}
+.ferry-fleet-icon{display:grid;place-items:center;color:#a7e2ff}
+.ferry-fleet-card>div:nth-child(2){display:grid;gap:5px;min-width:0}
+.ferry-fleet-card strong{font-size:13px;overflow-wrap:anywhere}
+.ferry-fleet-card small{font-size:11px;color:#9eb9d0}
+.ferry-fleet-foot{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid #42617f;padding-top:10px;color:#b7d4e7;font-size:11px}
+.ferry-fleet-foot span{display:flex;align-items:center;gap:6px}
+.ferry-show-more{display:block;margin:17px auto 0;padding:11px 18px;border:1px solid #609ad0;background:#1a496e;color:#e0f4ff;border-radius:11px;font-size:12px;font-weight:750}
+.ferry-empty{display:grid;justify-items:center;gap:8px;text-align:center;padding:27px;border:1px dashed #56728d;border-radius:13px;background:#172b44}
+.ferry-empty p{max-width:540px;font-size:12px;color:#a7bed3;line-height:1.55}
+.ferry-alert,.ferry-reload-status{margin:12px 0;padding:11px;border-radius:11px;font-size:12px}
+.ferry-alert{background:#61283066;border:1px solid #aa5566;color:#ffd5d5}
+.ferry-reload-status{background:#13483c;border:1px solid #408d75;color:#a8f8d6}
+@media(max-width:780px){.ferry-routes-panel{padding:12px;margin:12px 0 110px;border-radius:18px}.ferry-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ferry-stats article{min-height:90px}.ferry-hero{padding:18px;min-height:104px}.ferry-hero-decoration{display:none}.ferry-hero-symbol{width:50px;height:50px}.ferry-tabs button{font-size:12px;gap:6px;padding:12px 5px}.ferry-route-card{padding:14px}.ferry-port-card .ferry-state{white-space:normal;text-align:center}.ferry-route-top .ferry-state{max-width:120px;text-align:center;white-space:normal}}
+@media(max-width:390px){.ferry-hero{padding:14px}.ferry-hero-identity{gap:10px}.ferry-overline{letter-spacing:.8px;font-size:9px}.ferry-hero h2{font-size:25px}.ferry-route-top{flex-wrap:wrap}.ferry-route-top .ferry-state{margin-left:54px}.ferry-port-card{gap:8px}.ferry-port-symbol{width:35px;height:35px}.ferry-tabs button svg{width:16px}}
