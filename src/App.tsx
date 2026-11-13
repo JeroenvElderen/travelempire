@@ -2128,6 +2128,9 @@ export default function App(){
   const timer=window.setInterval(()=>{void update()},12000);
   return()=>{controller.abort();window.clearInterval(timer)};
  },[harbourNetwork,graph]);
+ // Changes only when a completed passenger-ferry trip records a new port.
+ // Do not re-run the expensive harbour road-index scan on every vehicle tick.
+ const ferryVisitedPortsKey=fleet.taxis.flatMap(t=>t.ferryVisitedPorts??[]).join('|');
  useEffect(()=>{
   if(!company||!harbourNetwork)return;
   // Unlocks are permanent achievements. Never revoke them when a road tile
@@ -2197,7 +2200,7 @@ export default function App(){
    if(port)setHarbourNotice({id:port.id,name:englishFerryName(port.name)});
   }
   harbourSeenRef.current=true;
- },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,fleet.taxis,unlockedHarbours]);
+ },[company?.id,company?.purchasedFerryRouteIds,harbourEdges,harbourNetwork,fleet.exploredEdgeIds,ferryVisitedPortsKey,unlockedHarbours]);
  // Show a single end-of-day report when the accelerated game clock passes midnight.
  // Baselines are company-specific and saved separately from the fleet so restarting
  // Safari cannot repeatedly generate the same daily report.
