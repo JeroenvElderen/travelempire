@@ -47,7 +47,7 @@ import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
-import {createDepotStarterExplorers} from './simulation/depotStarterExplorers';
+import {createDepotStarterExplorers,reconcileDepotStarterExplorers,type DepotStarterAnchor} from './simulation/depotStarterExplorers';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -774,7 +774,12 @@ export default function App(){
  useEffect(()=>{
   if(!company||!graph)return;
   const check=()=>{
-   const positions:[number,number][]=[[company.headquarters.lng,company.headquarters.lat]];
+   const positions:[number,number][]=[
+    [company.headquarters.lng,company.headquarters.lat],
+    // Preload saved depot regions so a depot created on an earlier version
+    // can receive its missing starter explorers after the local tiles load.
+    ...(company.depots??[]).map(d=>[d.lng,d.lat] as [number,number]),
+   ];
    for(const taxi of taxisRef.current){
      if(taxi.ferryTrip?.stage==='sailing')continue;
      positions.push(taxi.position);
@@ -855,6 +860,37 @@ export default function App(){
   }).catch(error=>console.error('[TravelEmpire] Exploration restore failed',error));
   return()=>{cancelled=true};
  },[company?.id]);
+ // Migrate existing depots that never received their original five specialists.
+ // Grant exactly once per depot: a stored marker prevents repeated free
+ // replacement vehicles after a player sells or reassigns their explorers.
+ const depotGrantKeys=(company?.depots??[]).map(d=>d.id).join('|');
+ useEffect(()=>{
+  if(!company||!graph||!company.depots?.length)return;
+  const current=fleetSaveRef.current;
+  if(company.depots.every(d=>current.depotStarterExplorerGrants?.[d.id]))return;
+  const anchors=new Map<string,DepotStarterAnchor>();
+  for(const depot of company.depots){
+   if(current.depotStarterExplorerGrants?.[depot.id])continue;
+   const near=nearest(graph,[depot.lng,depot.lat]);
+   const pos=near?graph.nodes.get(near):undefined;
+   if(!pos||meters(pos,[depot.lng,depot.lat])>25)continue;
+   const road=(graph.edges.get(near)??[]).find(e=>e.meters>0&&!e.taxiOnly);
+   if(road)anchors.set(depot.id,{position:[...pos],roadId:road.id});
+  }
+  const migrated=reconcileDepotStarterExplorers(current,company.depots,anchors);
+  if(migrated===current)return;
+  fleetSaveRef.current=migrated;
+  setFleet(migrated);
+  saveFleet(company.id,{...migrated,exploredEdgeIds:[]});
+  const previous=new Set(current.exploredEdgeIds??[]);
+  const added=(migrated.exploredEdgeIds??[]).filter(id=>!previous.has(id));
+  if(added.length)
+   void writeExploration(company.id,{ids:added,segments:{}}).catch(error=>
+    diagnostic('depots:retroactive-seed-save-failed',String(error)));
+  diagnostic('depots:starter-reconcile',
+   `depots=${company.depots.length} added=${migrated.taxis.length-current.taxis.length} anchors=${anchors.size}`);
+ },[company?.id,depotGrantKeys,graph,roadGraphVersion,fleet.taxis.length]);
+
  // Persist periodically instead of serialising the entire explored-road set every second.
  const fleetSaveRef=useRef(fleet);fleetSaveRef.current=fleet;
  // Persist one valuation snapshot per simulated day without affecting operating profit.
@@ -1960,24 +1996,31 @@ export default function App(){
   // The depot needs a genuinely routable OSM edge to let its specialists
   // depart. Seed that one real road purple, just like the initial HQ seed;
   // never create a shortcut across bridges, tunnels or disconnected roads.
-  const initialRoad=(graph.edges.get(node)??[]).find(edge=>edge.meters>0);
+  const initialRoad=(graph.edges.get(node)??[]).find(edge=>edge.meters>0&&!edge.taxiOnly);
   if(!initialRoad){setSimError('Choose a depot location with a connected, drivable road.');return;}
   const depot={id:crypto.randomUUID(),name:location.label||'New depot',lng:point[0],lat:point[1],capacity:5};
   const starterExplorers=createDepotStarterExplorers(depot.id,depot.name,point);
   const updated={...companyRef.current,depots:[...(companyRef.current.depots??[]),depot]};
   pendingCashRef.current-=10000;companyRef.current=updated;setCompany(updated);saveCompany(updated);
-  setFleet(old=>{
-   const currentIds=old.exploredEdgeIds??[];
-   const exploredEdgeIds=currentIds.includes(initialRoad.id)?currentIds:[...currentIds,initialRoad.id];
-   discoveredCacheRef.current={ids:exploredEdgeIds,set:new Set(exploredEdgeIds)};
-   return {...old,
-    // Each new depot starts with its own five free specialists. Existing
-    // headquarters vehicles stay assigned where they were.
-    taxis:[...old.taxis,...starterExplorers],
-    exploredEdgeIds,
-    transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`New depot · ${depot.name} · 5 starter explorers`,amount:-10000},...(old.transactions??[])].slice(0,100)
-   };
-  });
+  // Grant AND save the five explorers in the same purchase operation.
+  // Otherwise a reload, slow mobile render or older saved depot can leave
+  // the building present without its free vehicles.
+  const currentFleet=fleetSaveRef.current;
+  const currentIds=currentFleet.exploredEdgeIds??[];
+  const exploredEdgeIds=currentIds.includes(initialRoad.id)?currentIds:[...currentIds,initialRoad.id];
+  const nextFleet:FleetState={...currentFleet,
+   taxis:[...currentFleet.taxis,...starterExplorers],
+   depotStarterExplorerGrants:{...currentFleet.depotStarterExplorerGrants,[depot.id]:true},
+   exploredEdgeIds,
+   transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`New depot · ${depot.name} · 5 starter explorers`,amount:-10000},...(currentFleet.transactions??[])].slice(0,100),
+  };
+  discoveredCacheRef.current={ids:exploredEdgeIds,set:new Set(exploredEdgeIds)};
+  fleetSaveRef.current=nextFleet;
+  setFleet(nextFleet);
+  // The main 5-second save cycle remains, but the grant is durable now.
+  saveFleet(updated.id,{...nextFleet,exploredEdgeIds:[]});
+  void writeExploration(updated.id,{ids:[initialRoad.id],segments:{}}).catch(error=>
+   diagnostic('depots:seed-save-failed',String(error)));
   diagnostic('depots:starter-explorers',`depot=${depot.id} name=${depot.name} vehicles=${starterExplorers.length} seedRoad=${initialRoad.id}`);
   setPlacingDepot(false);setSelecting(false);setPage('Company');setSimError('');
  };
