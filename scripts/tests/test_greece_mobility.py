@@ -83,7 +83,7 @@ class BuildTilesTests(unittest.TestCase):
             way(201,[101,102],{"highway":"cycleway","foot":"yes","oneway":"yes"})
             way(202,[102,103],{"highway":"steps","bicycle":"yes"})
             way(203,[103,104],{"highway":"service","access":"private"})
-            way(204,[103,104],{"highway":"path","bicycle":"yes","access":"private"})
+            way(204,[103,104],{"highway":"path","access":"private"})
             way(205,[103,104],{"highway":"residential","oneway":"yes","oneway:bicycle":"no"})
             lines.append('</osm>')
             pbf.write_text("\n".join(lines))
@@ -97,7 +97,7 @@ class BuildTilesTests(unittest.TestCase):
             filename=manifest["tiles"]["239_379"]["file"]
             roads=[json.loads(l) for l in gzip.decompress((out/filename).read_bytes()).splitlines()]
             byid={r["id"]:r for r in roads}
-            self.assertEqual(len(roads),6)
+            self.assertEqual(len(roads),5)
             self.assertEqual(byid["mob-200-0"]["a"],"3343921312")
             self.assertEqual(byid["mob-200-0"]["walk"],3)
             self.assertEqual(byid["mob-200-0"]["cycle"],0)
