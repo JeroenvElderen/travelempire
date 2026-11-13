@@ -1,4 +1,4 @@
-import {loadMobilityTile,mobilityTileId,mobilityManifest,type MobilityManifest,
+import {loadMobilityTile,mobilityTileId,type MobilityManifest,
  type MobilityMode,type MobilityPoint,type MobilitySegment} from '../data/mobilityTiles';
 import {readMobilityProgress,writeMobilityProgress} from '../data/mobilityStore';
 import {advanceMobilitySession,appendMobilityRoads,emptyMobilityGraph,
