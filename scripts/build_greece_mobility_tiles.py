@@ -67,7 +67,7 @@ class Writer:
         for i,(tile,count) in enumerate(sorted(self.counts.items()),1):
             file=f"mobility_{tile}.v1.jsonl.gz"
             with (self.spool/(tile+".jsonl")).open("rb") as src:
-                with gzip.open(self.output/file,"wb",compresslevel=6,mtime=None) as dest:
+                with gzip.open(self.output/file,"wb",compresslevel=6) as dest:
                     shutil.copyfileobj(src,dest,length=1024*1024)
             (self.spool/(tile+".jsonl")).unlink()
             manifest["tiles"][tile]={"file":file,"edges":count}
