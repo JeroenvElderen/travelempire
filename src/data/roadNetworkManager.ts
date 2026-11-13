@@ -35,7 +35,6 @@ export class RoadNetworkManager {
    this.memoryGuardLogged=true;
    diagnostic('roads:ios-memory-guard',
     `Pause further geographic road tile loading: edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length} tiles=${this.loaded.size}. Active routes and existing discoveries remain intact.`);
-   this.onError('Mobile Safari memory safety mode: road loading paused to prevent tab reloads. Existing roads and taxi routes remain available.');
   }
   // The fleet may span several distant islands. Keep the current reachable
   // regions; NEVER evict a loaded tile while a vehicle could still use it.
