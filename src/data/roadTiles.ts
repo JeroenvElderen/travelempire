@@ -27,7 +27,8 @@ export async function roadTileManifest():Promise<Manifest>{
    // contains all tiles merged at download/enrichment time.
    if(supplemental.tileSize!==bundled.tileSize||
       supplemental.format!==bundled.format||!supplemental.tiles)return bundled;
-   return {...bundled,tiles:{...bundled.tiles,...supplemental.tiles}};
+   // Bundled patches must win for existing tile keys; supplemental adds only new regions.
+   return {...bundled,tiles:{...supplemental.tiles,...bundled.tiles}};
   }catch{return bundled;}
  })().catch(e=>{manifestPromise=undefined;throw e});
  return manifestPromise;
