@@ -1,7 +1,7 @@
 /** Geographic road tiles. No administrative regions are used at runtime. */
 export interface RoadSegment {id:string;a:number;b:number;coordinates:[[number,number],[number,number]];length:number;highway:string;speed:number;oneway:number;
  /** Optional OSM vertical metadata; absent on existing v1 tiles. */
- layer?:number;bridge?:boolean;tunnel?:boolean;level?:number;
+ layer?:number;bridge?:boolean;tunnel?:boolean;level?:number;taxiOnly?:boolean;
 }
 type Manifest={format:string;tileSize:number;tiles:Record<string,{file:string;edges:number}>};
 let manifestPromise:Promise<Manifest>|undefined;
