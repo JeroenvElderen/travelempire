@@ -45,12 +45,12 @@ function shortestHarbourRoute(start:string,explored:Set<string>,poiRoadIds:strin
   if(explored.has(id))continue;
   const ends=roadEndpoints.get(id);if(!ends)continue;
   for(const from of ends)for(const edge of graph.edges.get(from)??[]){
-   if(edge.id!==id)continue;
+   if(edge.id!==id||edge.taxiOnly)continue;
    targets.push({node:from,offsetMeters:edge.meters});
    finalLegs.push({to:edge.to,id});
   }
  }
- const found=routeToNearestTarget(graph,start,targets,'',150000);
+ const found=routeToNearestTarget(graph,start,targets,'',150000,undefined,false);
  if(!found)return null;
  const leg=finalLegs[found.targetIndex],point=graph.nodes.get(leg.to);
  if(!point)return null;
