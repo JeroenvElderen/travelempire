@@ -4,7 +4,7 @@ import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} f
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
-import {isIOSWebKit,graphMemoryLimitReached,IOS_BACKGROUND_TILE_DELAY_MS} from './roadMemoryPolicy';
+import {isIOSWebKit,roadTileBudgetAvailable,IOS_BACKGROUND_TILE_DELAY_MS} from './roadMemoryPolicy';
 const IOS_REDUCED_MEMORY=typeof navigator!=='undefined'&&isIOSWebKit(navigator.userAgent);
 const PREFETCH_METERS=IOS_REDUCED_MEMORY?1800:6000;
 const BACKGROUND_TILE_DELAY_MS=IOS_REDUCED_MEMORY?IOS_BACKGROUND_TILE_DELAY_MS:350;
@@ -30,16 +30,18 @@ export class RoadNetworkManager {
  private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
  private memoryGuardLogged=false;
- private canLoadAdditionalRoads():boolean{
-  if(!graphMemoryLimitReached(IOS_REDUCED_MEMORY,this.edgeTotal,this.graph.nodeKeys.length))return true;
-  if(!this.memoryGuardLogged){
+ private essentialGuardLogged=false;
+ private canLoadAdditionalRoads(essential=false):boolean{
+  if(roadTileBudgetAvailable(IOS_REDUCED_MEMORY,this.edgeTotal,this.graph.nodeKeys.length,essential))return true;
+  if(essential&&!this.essentialGuardLogged){
+   this.essentialGuardLogged=true;
+   diagnostic('roads:ios-hard-budget',
+    `All graph loading paused until active-region eviction is available: edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length} tiles=${this.loaded.size}`);
+  }else if(!essential&&!this.memoryGuardLogged){
    this.memoryGuardLogged=true;
    diagnostic('roads:ios-memory-guard',
-    `Pause further geographic road tile loading: edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length} tiles=${this.loaded.size}. Active routes and existing discoveries remain intact.`);
+    `Speculative road expansion paused; reserving space for active depot/vehicle tiles. edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length} tiles=${this.loaded.size}`);
   }
-  // The fleet may span several distant islands. Keep the current reachable
-  // regions; NEVER evict a loaded tile while a vehicle could still use it.
-  this.queue.length=0;this.queued.clear();this.priority.clear();
   return false;
  }
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
@@ -185,6 +187,40 @@ export class RoadNetworkManager {
   }
   return selected.length;
  }
+ /** Always prioritise REAL depot/vehicle tiles over speculative neighbouring
+  * roads. A small mobile reserve may be spent only on exact active tiles;
+  * these requests never cross the hard Safari memory budget. */
+ considerEssentialLocations(points:readonly Point[]):number{
+  if(this.disposed||!this.available.size||!this.canLoadAdditionalRoads(true))return 0;
+  if(typeof document!=='undefined'&&document.visibilityState==='hidden')return 0;
+  let added=0;
+  for(const point of points){
+   if(!Number.isFinite(point[0])||!Number.isFinite(point[1]))continue;
+   const id=tileId(point[0],point[1],this.tileSize);
+   if(!this.available.has(id)||this.loaded.has(id)||this.queued.has(id)||
+      (this.failedUntil.get(id)??0)>Date.now())continue;
+   // If optional work filled the tiny iOS queue, replace a speculative tile,
+   // but do not cancel an active in-flight request or another depot request.
+   if(this.queue.length>=MAX_PENDING_TILES){
+    const speculative=this.queue.findLastIndex(key=>(this.priority.get(key)??Infinity)>=0);
+    if(speculative<0)break;
+    const discarded=this.queue.splice(speculative,1)[0];
+    this.queued.delete(discarded);this.priority.delete(discarded);
+   }
+   this.queued.add(id);this.queue.push(id);this.priority.set(id,-100+added);
+   added++;
+   // A few urgent tiles per interval avoid a 50-vehicle burst cloning
+   // dozens of large OSM packages at startup on Safari.
+   if(added>=2)break;
+  }
+  if(added){
+   diagnostic('roads:essential-request',
+    `tiles=${this.queue.filter(key=>(this.priority.get(key)??0)<0).join(',')} edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length}`);
+   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
+   this.pump();
+  }
+  return added;
+ }
  considerPoint(p:Point){this.consider([p]);}
  considerRoute(path:Point[]){if(!path.length)return;const points:Point[]=[path[0]];
   for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i];const dx=(b[0]-a[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),dy=(b[1]-a[1])*111320;
@@ -208,12 +244,33 @@ export class RoadNetworkManager {
   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
   this.pump();
  }
- private pump(){if(this.backgroundTimer!==null||!this.canLoadAdditionalRoads())return;
+ private pump(){
+  if(this.backgroundTimer!==null||this.disposed)return;
   if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
-  while(!this.disposed&&this.inFlight<MAX_CONCURRENT&&this.queue.length){const id=this.queue.shift()!;this.priority.delete(id);this.inFlight++;
-  void this.load(id).catch(e=>{this.failedUntil.set(id,Date.now()+60000);this.onError(`Road tile ${id}: ${String(e)}`)}).finally(()=>{this.queued.delete(id);this.inFlight--;if(this.disposed)return;
-   // Give Safari a rendering opportunity between completed background tiles.
-   if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
+  while(this.inFlight<MAX_CONCURRENT&&this.queue.length){
+   const id=this.queue.shift()!;
+   const priority=this.priority.get(id)??Infinity;
+   this.priority.delete(id);
+   // Skip discarded speculative work without blocking the urgent depot
+   // locations queued behind it. The hard budget still applies to everyone.
+   if(!this.canLoadAdditionalRoads(priority<0)){
+    this.queued.delete(id);
+    continue;
+   }
+   this.inFlight++;
+   void this.load(id).catch(e=>{
+    this.failedUntil.set(id,Date.now()+60000);
+    this.onError(`Road tile ${id}: ${String(e)}`);
+   }).finally(()=>{
+    this.queued.delete(id);this.inFlight--;
+    if(this.disposed)return;
+    if(this.backgroundTimer===null)
+     this.backgroundTimer=setTimeout(()=>{
+      this.backgroundTimer=null;this.pump();
+     },BACKGROUND_TILE_DELAY_MS);
+   });
+  }
+ }
  /** Safari-safe ingestion: reuse parsed road objects locally instead of
   * structured-cloning 30k+ roads to a graph worker, receiving a second full
   * delta, and retaining that worker's unbounded global road-ID Set.
