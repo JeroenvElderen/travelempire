@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {ferryPhase,ferryStartsAtFrom,nextPassengerDeparture,
- PUBLIC_PASSENGER_FERRY_EPOCH_MS,FERRY_TURNAROUND_MINUTES} from './ferryService';
+ PUBLIC_PASSENGER_FERRY_EPOCH_MS,FERRY_TURNAROUND_MINUTES,mayBoardPassengerFerry} from './ferryService';
 import {vehicleActivity} from '../simulation/vehicleActivity';
 import type {Taxi} from '../simulation/taxi';
 
@@ -35,6 +35,14 @@ describe('passenger ferry vehicles wait for the scheduled vessel',()=>{
   const first=origin+FERRY_TURNAROUND_MINUTES*minute;
   expect(nextPassengerDeparture(origin,duration,first,true).departureGameMs).toBe(first);
   expect(nextPassengerDeparture(origin,duration,first-1,true).departureGameMs).toBe(first);
+ });
+ it('refuses to board a ferry that was missed while the tab was suspended',()=>{
+  const first=origin+FERRY_TURNAROUND_MINUTES*minute;
+  expect(mayBoardPassengerFerry(first,first-1)).toBe(false);
+  expect(mayBoardPassengerFerry(first,first+24_000)).toBe(true);
+  expect(mayBoardPassengerFerry(first,first+3*minute)).toBe(false);
+  const next=nextPassengerDeparture(origin,duration,first+3*minute,true);
+  expect(next.departureGameMs).toBeGreaterThan(first+3*minute);
  });
  it('keeps public passenger ferry departures stable across reloads',()=>{
   const now=Date.UTC(2026,11,29,23,19);
