@@ -51,6 +51,7 @@ import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,typ
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
 import {createDepotStarterExplorers,reconcileDepotStarterExplorers,type DepotStarterAnchor} from './simulation/depotStarterExplorers';
+import {missingDepotAccessSeeds} from './simulation/depotRoadSeeds';
 import {depotParkingChoices,requireDepotParking} from './simulation/depotParking';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
@@ -931,6 +932,27 @@ export default function App(){
 
  // Persist periodically instead of serialising the entire explored-road set every second.
  const fleetSaveRef=useRef(fleet);fleetSaveRef.current=fleet;
+ // Older second-depot saves can have their five starter explorers but no
+ // purple launch road after a streamed graph migration. Repair ONLY the
+ // actual legal OSM road at that depot and retain all existing progress.
+ useEffect(()=>{
+  if(!company||!graph)return;
+  const current=fleetSaveRef.current;
+  if(!current.taxis.some(t=>t.kind==='explorer'))return;
+  const explored=discoveredCacheRef.current?.set??new Set(current.exploredEdgeIds??[]);
+  const seeds=missingDepotAccessSeeds(company,current,graph,explored);
+  if(!seeds.length)return;
+  const ids=[...new Set([...(current.exploredEdgeIds??[]),...seeds.map(s=>s.edgeId)])];
+  const next={...current,exploredEdgeIds:ids};
+  fleetSaveRef.current=next;
+  discoveredCacheRef.current={ids,set:new Set(ids)};
+  setFleet(next);
+  // The database merge is additive. Discovery on other islands is untouched.
+  void writeExploration(company.id,{ids:seeds.map(s=>s.edgeId),segments:{}})
+   .catch(error=>diagnostic('depots:access-seed-save-error',String(error)));
+  diagnostic('depots:access-seeded',
+   seeds.map(seed=>seed.depotId+':'+seed.edgeId).join(','));
+ },[company?.id,graph,roadGraphVersion,fleet.taxis.length]);
  // Persist one valuation snapshot per simulated day without affecting operating profit.
  useEffect(()=>{
   if(!company)return;
