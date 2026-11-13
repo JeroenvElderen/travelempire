@@ -97,3 +97,13 @@
    workspace to shrink to one viewport and clip its route/harbour/fleet
    cards. Scroll is owned by .main; the panel grows to its content. */
 .nav-v216 .main > .ferry-routes-panel{flex-shrink:0;height:auto;max-height:none;min-height:max-content;}
+
+
+/* Ownership filters sit beneath search and remain usable on narrow phones. */
+.ferry-route-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 18px}
+.ferry-route-filters button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid #476886;border-radius:11px;background:#1b3049;color:#bdd3e8;font-size:12px;font-weight:750;transition:background .15s,border-color .15s}
+.ferry-route-filters button span{display:inline-flex;align-items:center;justify-content:center;min-width:23px;padding:3px 6px;border-radius:8px;background:#ffffff14;color:#c1d9ef;font-size:10px;font-variant-numeric:tabular-nums}
+.ferry-route-filters button.active{border-color:#81d8ff;background:linear-gradient(135deg,#226cb0,#264d98);color:#fff;box-shadow:0 0 12px #208bd844}
+.ferry-route-filters button.active span{background:#ffffff29;color:#fff}
+.ferry-route-filters button:focus-visible{outline:2px solid #a1e5ff;outline-offset:3px}
+@media(max-width:420px){.ferry-route-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ferry-route-filters button{min-width:0;padding:9px 5px;gap:5px;font-size:11px}.ferry-route-filters button span{padding:3px 5px;min-width:20px}}
