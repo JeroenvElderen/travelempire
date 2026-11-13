@@ -10,6 +10,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {loadFerryNetwork,type FerryNetwork} from '../maritime/ferries';
 import {syncFerryMapLayer} from './FerryMapLayer';
 import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
+import {PUBLIC_PASSENGER_FERRY_EPOCH_MS} from '../maritime/ferryService';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {diffVisibleRoads,withRoadFeatureId,type RoadFeature} from './purpleRoadDiff';
@@ -460,12 +461,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const wallNow=Date.now();
  let changed=0,unchanged=0,created=0,removed=0;
  const ids=new Set<string>();
- for(const taxi of taxis)if(!taxi.deliveryUntil||taxi.deliveryUntil<=wallNow)ids.add(taxi.id);
+ for(const taxi of taxis)if((!taxi.deliveryUntil||taxi.deliveryUntil<=wallNow)&&taxi.ferryTrip?.stage!=='sailing')ids.add(taxi.id);
  for(const [id,m] of taxiMarkers.current){
   if(!ids.has(id)){m.remove();taxiMarkers.current.delete(id);activityMarkers.current.get(id)?.remove();activityMarkers.current.delete(id);taxiSnapshots.current.delete(id);taxiHeadingState.current.delete(id);renderedPosition.current.delete(id);removed++;}
  }
  for(const taxi of taxis){
-  if(taxi.deliveryUntil&&taxi.deliveryUntil>wallNow)continue;
+  if((taxi.deliveryUntil&&taxi.deliveryUntil>wallNow)||taxi.ferryTrip?.stage==='sailing')continue;
   const renderTaxi=alignedTaxi(taxi);
   const previous=taxiSnapshots.current.get(taxi.id);
   // React may supply new Taxi objects with unchanged render-relevant state.
@@ -1100,11 +1101,29 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('zoomend',update);instance.off('style.load',update);};
  },[graph,roadGraphVersion,ready,basemap,showRoadLevelsDebug]);
 
- // Ferries remain operational; sea routes no longer generate territory fog.
+ // Ferries are vessels, not roads. Show an actual boat for every ticketed
+ // crossing, even when the player has not bought that route (public ferry).
+ // Hide the passenger's individual car marker while aboard.
+ const passengerFerryRoutes=[...new Set(taxis
+  .map(t=>t.ferryTrip?.routeId).filter((id):id is string=>!!id))].sort().join('|');
  useEffect(()=>{
   if(!ready||!ferryNetwork||!map.current)return;
-  return startAutomaticFerryMarkers(map.current,ferryNetwork,new Set(purchasedFerryRouteIds),headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId,positions=>{ferryPositionsRef.current=positions;},()=>{const clock=gameClockNowRef.current;return clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();},()=>ferryServiceStartsRef.current);
- },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),headquarters?.lng,headquarters?.lat]);
+  const active=new Set<string>([...purchasedFerryRouteIds,
+   ...passengerFerryRoutes.split('|').filter(Boolean)]);
+  return startAutomaticFerryMarkers(map.current,ferryNetwork,active,
+   headquarters?[headquarters.lng,headquarters.lat]:undefined,()=>{},companyId,
+   positions=>{ferryPositionsRef.current=positions;},
+   ()=>{const clock=gameClockNowRef.current;return clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();},
+   ()=>{
+    const starts={...ferryServiceStartsRef.current};
+    for(const vehicle of taxiStateRef.current){
+     const trip=vehicle.ferryTrip;
+     if(trip&&!Number.isFinite(starts[trip.routeId]))
+      starts[trip.routeId]=trip.serviceStartGameMs??PUBLIC_PASSENGER_FERRY_EPOCH_MS;
+    }
+    return starts;
+   });
+ },[ready,ferryNetwork,companyId,purchasedFerryRouteIds.join('|'),passengerFerryRoutes,headquarters?.lng,headquarters?.lat]);
 
  // Off-screen pointers: bounded, clustered and refreshed at most once per second.
  // This never participates in vehicle animation or road graph updates.
@@ -1118,7 +1137,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    if(width<100||height<100)return;
    const center={x:width/2,y:height/2};
    const candidates:Array<{id:string;lng:number;lat:number;type:string;label:string;limit:number}>=[];
-   for(const t of taxiStateRef.current)candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?(t.explorerRole==='motorway'?'motorway-explorer':t.explorerRole==='trunk'?'trunk-explorer':t.explorerRole==='primary'?'primary-explorer':t.explorerRole==='secondary'?'secondary-explorer':t.explorerRole==='tertiary'?'tertiary-explorer':t.explorerRole==='residential'?'residential-explorer':t.explorerRole==='rural'?'rural-explorer':t.explorerRole==='service'?'service-explorer':t.explorerRole==='completion'?'completion-explorer':t.explorerRole==='highway'?'highway-explorer':t.explorerRole==='urban'?'urban-explorer':t.explorerRole==='poi'?'poi-explorer':'explorer'):t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
+   for(const t of taxiStateRef.current)if(t.ferryTrip?.stage!=='sailing')candidates.push({id:'v:'+t.id,lng:t.position[0],lat:t.position[1],type:t.kind==='explorer'?(t.explorerRole==='motorway'?'motorway-explorer':t.explorerRole==='trunk'?'trunk-explorer':t.explorerRole==='primary'?'primary-explorer':t.explorerRole==='secondary'?'secondary-explorer':t.explorerRole==='tertiary'?'tertiary-explorer':t.explorerRole==='residential'?'residential-explorer':t.explorerRole==='rural'?'rural-explorer':t.explorerRole==='service'?'service-explorer':t.explorerRole==='completion'?'completion-explorer':t.explorerRole==='highway'?'highway-explorer':t.explorerRole==='urban'?'urban-explorer':t.explorerRole==='poi'?'poi-explorer':'explorer'):t.kind==='recovery'?'recovery':'taxi',label:t.name,limit:150000});
    if(headquarters)candidates.push({id:'hq',lng:headquarters.lng,lat:headquarters.lat,type:'depot',label:'Headquarters',limit:150000});
    for(const d of depots)candidates.push({id:'d:'+d.id,lng:d.lng,lat:d.lat,type:'depot',label:d.name,limit:150000});
    for(const f of ferryPositionsRef.current)candidates.push({id:'f:'+f.id,lng:f.point[0],lat:f.point[1],type:'ferry',label:'Ferry '+f.id,limit:250000});
