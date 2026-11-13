@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import maplibregl from 'maplibre-gl';
 import type {FerryNetwork} from '../maritime/ferries';
 import {mobilityManifest,type MobilityMode,type MobilityPoint} from '../data/mobilityTiles';
@@ -68,45 +68,25 @@ function paintMobility(map:maplibregl.Map,controller:MobilityController|null,sho
 }
 
 export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unlockedHarbourIds}:Props){
- const [status,setStatus]=useState('Walking & cycling paths are not loaded');
- const [selectedPort,setSelectedPort]=useState('');
- const [busy,setBusy]=useState(false);
- const [showAvailable,setShowAvailable]=useState(true);
  const [version,setVersion]=useState(0);
+ const [initialized,setInitialized]=useState(false);
+ const showAvailable=false; // Only draw explored roads; no permanent map-wide grey overlay.
  const controllerRef=useRef<MobilityController|null>(null);
  const markers=useRef(new Map<MobilityMode,maplibregl.Marker>());
  const lastTick=useRef(0);
  const unlockedKey=unlockedHarbourIds.join('|');
- const ports=useMemo(()=>{
-  const allowed=new Set(unlockedHarbourIds);
-  return (ferryNetwork?.ports??[])
-   .filter(port=>allowed.has(port.id))
-   .sort((a,b)=>a.name.localeCompare(b.name));
- // unlockedKey reflects contents even if the array reference is reused.
- // eslint-disable-next-line react-hooks/exhaustive-deps
- },[ferryNetwork,unlockedKey]);
-
- // Prefer the nearest already-unlocked harbour to the current camera.
- useEffect(()=>{
-  if(!enabled||!ports.length)return;
-  if(ports.some(p=>p.id===selectedPort))return;
-  const center=map?.getCenter();
-  const camera:MobilityPoint=center?[center.lng,center.lat]:ports[0].position;
-  const closest=[...ports].sort((a,b)=>
-   mobilityMetres(a.position,camera)-mobilityMetres(b.position,camera))[0];
-  setSelectedPort(closest.id);
- },[enabled,ports,selectedPort,map]);
-
+ const autoAttempted=useRef<Record<MobilityMode,string>>({walk:'',cycle:''});
  useEffect(()=>{
   if(!enabled||!companyId)return;
   let cancelled=false;
-  setStatus('Checking pedestrian/cycling dataset…');
+  setInitialized(false);
+  autoAttempted.current={walk:'',cycle:''};
   (async()=>{
    try{
     const manifest=await mobilityManifest();
     if(cancelled)return;
     if(!Object.keys(manifest.tiles).length){
-     setStatus('Mobility tiles not deployed yet. Build and upload the Greece foot/bicycle dataset first.');
+     console.warn('Walking/cycling dataset is not deployed; the mobility layer is inactive.');
      return;
     }
     const controller=new MobilityController(companyId,manifest,()=>{
@@ -115,11 +95,11 @@ export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unl
     controllerRef.current=controller;
     await controller.restore();
     if(cancelled)return;
-    setStatus('Ready. Choose an unlocked harbour to deploy a walking or cycling explorer.');
+    setInitialized(true);
     const restored=Object.values(controller.sessions);
     for(const session of restored)if(session)await controller.loadNear(session.position);
    }catch(error){
-    if(!cancelled)setStatus('Mobility dataset unavailable: '+String(error));
+    if(!cancelled)console.warn('Walking/cycling paths unavailable',error);
    }
   })();
   return()=>{
@@ -129,6 +109,39 @@ export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unl
   };
  },[enabled,companyId]);
 
+
+ // The map is the interface. No large harbour-selection panel: walkers and
+ // cyclists resume automatically, or start at a nearby already-unlocked
+ // harbour with an actual mode-permitted OSM node. Never invent access.
+ useEffect(()=>{
+  const controller=controllerRef.current;
+  if(!enabled||!initialized||!controller||!ferryNetwork||!map)return;
+  let cancelled=false;
+  const ports=ferryNetwork.ports.filter(p=>unlockedHarbourIds.includes(p.id));
+  if(!ports.length)return;
+  const center=map.getCenter();
+  const here:MobilityPoint=[center.lng,center.lat];
+  const byDistance=[...ports].sort((a,b)=>
+   mobilityMetres(a.roadAccess??a.position,here)-
+   mobilityMetres(b.roadAccess??b.position,here));
+  const run=async()=>{
+   for(const mode of ['walk','cycle'] as MobilityMode[]){
+    if(cancelled||controllerRef.current!==controller)return;
+    if(controller.sessions[mode])continue; // Resume previously discovered work.
+    if(autoAttempted.current[mode]===unlockedKey)continue;
+    autoAttempted.current[mode]=unlockedKey;
+    for(const port of byDistance.slice(0,3)){
+     if(cancelled||controllerRef.current!==controller)return;
+     const ok=await controller.deploy(mode,port.id,port.roadAccess??port.position);
+     if(ok)break;
+    }
+   }
+  };
+  void run();
+  return()=>{cancelled=true;};
+ // unlockedKey captures the actual unlocked harbour ID list.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[enabled,initialized,companyId,map,ferryNetwork,unlockedKey]);
  useEffect(()=>{
   if(!map||!enabled)return;
   const refresh=()=>paintMobility(map,controllerRef.current,showAvailable);
@@ -147,7 +160,7 @@ export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unl
   if(now-lastPaintAt.current<2500)return; // Throttle GeoJSON rebuilds on iPhone.
   lastPaintAt.current=now;
   paintMobility(map,controllerRef.current,showAvailable);
- },[map,enabled,showAvailable,version]);
+ },[map,enabled,version]);
 
  useEffect(()=>{
   if(!enabled||!map)return;
@@ -193,56 +206,7 @@ export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unl
   markers.current.clear();
  },[]);
 
- const deploy=async(mode:MobilityMode)=>{
-  const port=ports.find(p=>p.id===selectedPort);
-  const controller=controllerRef.current;
-  if(!port||!controller||busy)return;
-  setBusy(true);
-  setStatus('Loading legal '+(mode==='walk'?'walking':'cycling')+' routes near '+port.name+'…');
-  try{
-   const ok=await controller.deploy(mode,port.id,port.position);
-   if(ok){
-    setStatus((mode==='walk'?'Walking':'Cycling')+' explorer deployed at '+port.name);
-    map?.easeTo({center:port.position,zoom:Math.max(13,map.getZoom()),duration:600});
-   }else setStatus(controller.error??'No legal paths found near this harbour');
-  }catch(error){setStatus('Deployment failed: '+String(error))}
-  finally{setBusy(false);setVersion(v=>v+1)}
- };
- if(!enabled)return null;
- const controller=controllerRef.current;
- const snapshot=controller?.snapshot;
- return <aside className="te-mobility-panel" aria-label="Walking and cycling exploration">
-  <div className="te-mobility-heading">
-   <span className="te-mobility-heading-icon">🚶 🚴</span>
-   <span><strong>Island exploration</strong><small>Separate pedestrian and bicycle networks</small></span>
-  </div>
-  <p className="te-mobility-status" role="status">{snapshot?.error??status}</p>
-  <label htmlFor="te-mobility-port">Unlocked ferry harbour</label>
-  <select id="te-mobility-port" value={selectedPort} onChange={e=>setSelectedPort(e.target.value)}
-   disabled={!ports.length||busy}>
-   {!ports.length&&<option value="">No unlocked harbours</option>}
-   {ports.map(port=><option key={port.id} value={port.id}>{port.name}</option>)}
-  </select>
-  <div className="te-mobility-actions">
-   <button type="button" disabled={!controller?.hasAccess||!selectedPort||busy}
-    onClick={()=>void deploy('walk')}>🚶 Deploy walker</button>
-   <button type="button" disabled={!controller?.hasAccess||!selectedPort||busy}
-    onClick={()=>void deploy('cycle')}>🚴 Deploy cyclist</button>
-  </div>
-  <div className="te-mobility-stats">
-   <span><b>{snapshot?.discovered.walk.size.toLocaleString()??0}</b> walked paths</span>
-   <span><b>{snapshot?.discovered.cycle.size.toLocaleString()??0}</b> cycled paths</span>
-   <span><b>{snapshot?.loadedTiles??0}</b> loaded tiles</span>
-  </div>
-  <div className="te-mobility-legend">
-   <span><i style={{background:'#54e7ac'}}/> Walking</span>
-   <span><i style={{background:'#37c3f0'}}/> Cycling</span>
-   <span><i style={{background:'#8f9bad'}}/> Accessible (not discovered)</span>
-  </div>
-  <label className="te-mobility-option">
-   <input type="checkbox" checked={showAvailable} onChange={e=>setShowAvailable(e.target.checked)}/>
-   Show unvisited accessible paths when zoomed in
-  </label>
-  <small>Starts only at mapped paths within 250 m of unlocked harbours. Routes follow original OSM node connections; taxis cannot use these paths.</small>
- </aside>;
+ // No UI panel. The existing Map Layers toggle controls visibility and
+ // automatic exploration; walkers and cyclists appear as small map markers.
+ return null;
 }
