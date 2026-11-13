@@ -1,5 +1,5 @@
 /* TravelEmpire / maritime control centre */
-.ferry-routes-panel{--ferry-bg:#101f33;--ferry-elevated:#172b43;--ferry-stroke:#355570;--ferry-muted:#9fb7cf;--ferry-aqua:#61e4ef;position:relative;margin:18px 0 90px;padding:18px;min-width:0;border:1px solid #344d68;border-radius:22px;background:linear-gradient(154deg,#101f35 0%,#10233c 50%,#0b1b31 100%);color:#edf5ff;box-shadow:0 16px 36px #0003;overflow:hidden}
+.ferry-routes-panel{flex:0 0 auto;align-self:stretch;height:auto;min-height:max-content;--ferry-bg:#101f33;--ferry-elevated:#172b43;--ferry-stroke:#355570;--ferry-muted:#9fb7cf;--ferry-aqua:#61e4ef;position:relative;margin:18px 0 90px;padding:18px;min-width:0;border:1px solid #344d68;border-radius:22px;background:linear-gradient(154deg,#101f35 0%,#10233c 50%,#0b1b31 100%);color:#edf5ff;box-shadow:0 16px 36px #0003;overflow:hidden}
 .ferry-routes-panel button{font:inherit;cursor:pointer}
 .ferry-routes-panel button:disabled{opacity:.5;cursor:not-allowed}
 .ferry-hero{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:115px;overflow:hidden;border-radius:17px;padding:24px;background:radial-gradient(ellipse at 85% 40%,#26639166,transparent 54%),linear-gradient(115deg,#16365b,#11233b 68%,#173c60);border:1px solid #3c6685}
@@ -92,3 +92,8 @@
 .ferry-reload-status{background:#13483c;border:1px solid #408d75;color:#a8f8d6}
 @media(max-width:780px){.ferry-routes-panel{padding:12px;margin:12px 0 110px;border-radius:18px}.ferry-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ferry-stats article{min-height:90px}.ferry-hero{padding:18px;min-height:104px}.ferry-hero-decoration{display:none}.ferry-hero-symbol{width:50px;height:50px}.ferry-tabs button{font-size:12px;gap:6px;padding:12px 5px}.ferry-route-card{padding:14px}.ferry-port-card .ferry-state{white-space:normal;text-align:center}.ferry-route-top .ferry-state{max-width:120px;text-align:center;white-space:normal}}
 @media(max-width:390px){.ferry-hero{padding:14px}.ferry-hero-identity{gap:10px}.ferry-overline{letter-spacing:.8px;font-size:9px}.ferry-hero h2{font-size:25px}.ferry-route-top{flex-wrap:wrap}.ferry-route-top .ferry-state{margin-left:54px}.ferry-port-card{gap:8px}.ferry-port-symbol{width:35px;height:35px}.ferry-tabs button svg{width:16px}}
+
+/* The app shell is a fixed-height flex column. Do not allow the ferry
+   workspace to shrink to one viewport and clip its route/harbour/fleet
+   cards. Scroll is owned by .main; the panel grows to its content. */
+.nav-v216 .main > .ferry-routes-panel{flex-shrink:0;height:auto;max-height:none;min-height:max-content;}
