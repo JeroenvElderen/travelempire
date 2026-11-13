@@ -57,8 +57,13 @@ def way_id(road, pattern):
     explicit = road.get("osmWayId", road.get("wayId"))
     if explicit is not None:
         return int(explicit) if str(explicit).isdigit() else None
-    match = pattern.match(str(road.get("id", "")))
-    return int(match.group(1)) if match else None
+    raw = str(road.get("id", ""))
+    match = pattern.match(raw)
+    if match:
+        return int(match.group(1))
+    # Supplemental ferry-terminal tiles use osm-<way-id>-<segment-index>.
+    alternate = re.match(r"^osm-(\\d+)-\\d+$", raw)
+    return int(alternate.group(1)) if alternate else None
 
 
 class VerticalWays(osmium.SimpleHandler):
