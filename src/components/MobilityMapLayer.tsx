@@ -36,6 +36,39 @@ function ensureLayers(map:maplibregl.Map){
    'line-opacity':0.95}});
 }
 
+function paintMobility(map:maplibregl.Map,controller:MobilityController|null,showAvailable:boolean){
+ if(!map.isStyleLoaded())return;
+ try{
+  ensureLayers(map);
+  if(!controller)return;
+    if(!controller)return;
+    const {segments,discovered}=controller.snapshot;
+    const bounds=map.getBounds();
+    const zoom=map.getZoom();
+    const features:GeoJSON.Feature<GeoJSON.LineString>[]=[];
+    // Limit GeoJSON work on mobile: no nationwide map data loaded or drawn.
+    const limit=7000;
+    for(const road of segments){
+     if(features.length>=limit)break;
+     const a=road.coordinates[0],b=road.coordinates[1];
+     if(Math.max(a[0],b[0])<bounds.getWest()||Math.min(a[0],b[0])>bounds.getEast()||
+        Math.max(a[1],b[1])<bounds.getSouth()||Math.min(a[1],b[1])>bounds.getNorth())
+      continue;
+     const walked=discovered.walk.has(road.id);
+     const cycled=discovered.cycle.has(road.id);
+     if(!walked&&!cycled&&(!showAvailable||zoom<13))continue;
+     // When both modes used this same segment, cycling is drawn above walking.
+     const state=cycled?'cycled':walked?'walked':'available';
+     features.push({type:'Feature',properties:{id:road.id,state,kind:road.highway,
+       bridge:road.bridge??false,tunnel:road.tunnel??false,layer:road.layer??0},
+      geometry:{type:'LineString',coordinates:road.coordinates}});
+    }
+    const source=map.getSource(SOURCE) as maplibregl.GeoJSONSource|undefined;
+    source?.setData({type:'FeatureCollection',features});
+   }catch(error){console.warn('Mobility map overlay unavailable',error)}
+  }catch(error){console.warn('Mobility map overlay unavailable',error)}
+}
+
 export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unlockedHarbourIds}:Props){
  const [status,setStatus]=useState('Walking & cycling paths are not loaded');
  const [selectedPort,setSelectedPort]=useState('');
@@ -100,42 +133,23 @@ export default function MobilityMapLayer({map,enabled,companyId,ferryNetwork,unl
 
  useEffect(()=>{
   if(!map||!enabled)return;
-  const refresh=()=>{
-   if(!map.isStyleLoaded())return;
-   try{
-    ensureLayers(map);
-    const controller=controllerRef.current;
-    if(!controller)return;
-    const {segments,discovered}=controller.snapshot;
-    const bounds=map.getBounds();
-    const zoom=map.getZoom();
-    const features:GeoJSON.Feature<GeoJSON.LineString>[]=[];
-    // Limit GeoJSON work on mobile: no nationwide map data loaded or drawn.
-    const limit=7000;
-    for(const road of segments){
-     if(features.length>=limit)break;
-     const a=road.coordinates[0],b=road.coordinates[1];
-     if(Math.max(a[0],b[0])<bounds.getWest()||Math.min(a[0],b[0])>bounds.getEast()||
-        Math.max(a[1],b[1])<bounds.getSouth()||Math.min(a[1],b[1])>bounds.getNorth())
-      continue;
-     const walked=discovered.walk.has(road.id);
-     const cycled=discovered.cycle.has(road.id);
-     if(!walked&&!cycled&&(!showAvailable||zoom<13))continue;
-     // When both modes used this same segment, cycling is drawn above walking.
-     const state=cycled?'cycled':walked?'walked':'available';
-     features.push({type:'Feature',properties:{id:road.id,state,kind:road.highway,
-       bridge:road.bridge??false,tunnel:road.tunnel??false,layer:road.layer??0},
-      geometry:{type:'LineString',coordinates:road.coordinates}});
-    }
-    const source=map.getSource(SOURCE) as maplibregl.GeoJSONSource|undefined;
-    source?.setData({type:'FeatureCollection',features});
-   }catch(error){console.warn('Mobility map overlay unavailable',error)}
-  };
+  const refresh=()=>paintMobility(map,controllerRef.current,showAvailable);
   map.on('style.load',refresh);
   map.on('moveend',refresh);
   refresh();
-  return()=>{map.off('style.load',refresh);map.off('moveend',refresh);removeLayers(map)};
- },[map,enabled,version,showAvailable]);
+  return()=>{
+   map.off('style.load',refresh);map.off('moveend',refresh);
+   removeLayers(map);
+  };
+ },[map,enabled,showAvailable]);
+ const lastPaintAt=useRef(0);
+ useEffect(()=>{
+  if(!map||!enabled)return;
+  const now=performance.now();
+  if(now-lastPaintAt.current<2500)return; // Throttle GeoJSON rebuilds on iPhone.
+  lastPaintAt.current=now;
+  paintMobility(map,controllerRef.current,showAvailable);
+ },[map,enabled,showAvailable,version]);
 
  useEffect(()=>{
   if(!enabled||!map)return;
