@@ -1,0 +1,68 @@
+name: Verify Athens road-node connectivity
+on:
+  workflow_dispatch:
+    inputs:
+      node_id:
+        description: "OSM node ID"
+        required: false
+        default: "3343921312"
+  push:
+    paths:
+      - ".github/workflows/verify-road-node.yml"
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Inspect public Supabase tiles and OSM ways without credentials
+        env:
+          NODE_ID: ${{ github.event.inputs.node_id || '3343921312' }}
+          SUPABASE_URL: https://njghlzbdmkwtzthdnnwa.supabase.co
+        run: |
+          python3 - <<'PY'
+          import os, urllib.request, urllib.error, gzip, json, math
+          import xml.etree.ElementTree as ET
+          node=os.environ["NODE_ID"]
+          print("INSPECT NODE:",node,flush=True)
+          req_headers={"User-Agent":"TravelEmpireNodeConnectivityAudit/1.0"}
+          def read(url):
+              with urllib.request.urlopen(urllib.request.Request(url,headers=req_headers),timeout=45) as f:
+                  return f.read()
+          # Confirm membership in the original public OSM network, if accessible.
+          try:
+              xml=ET.fromstring(read(f"https://api.openstreetmap.org/api/0.6/node/{node}/ways"))
+              for way in xml.findall(".//way"):
+                  tags={t.attrib["k"]:t.attrib["v"] for t in way.findall("tag")}
+                  nodes=[n.attrib["ref"] for n in way.findall("nd")]
+                  print("OSM WAY",way.attrib.get("id"),"position",nodes.index(node) if node in nodes else "absent",
+                        "node_count",len(nodes),"tags",{k:tags.get(k) for k in ("highway","oneway","bridge","tunnel","layer","access") if k in tags},flush=True)
+          except Exception as e:print("OSM API unavailable:",type(e).__name__,str(e),flush=True)
+          tile_ids=("238_378","238_379","239_378","239_379","240_378","240_379","238_380","239_380","240_380")
+          base=os.environ["SUPABASE_URL"].rstrip("/")+"/storage/v1/object/public/travelempire-road-tiles/"
+          matches={};failures=[]
+          for tile in tile_ids:
+              try:
+                  packed=read(base+tile+".v2.jsonl.gz")
+                  raw=gzip.decompress(packed)
+                  count=0
+                  for line in raw.splitlines():
+                      r=json.loads(line)
+                      if str(r.get("a"))!=node and str(r.get("b"))!=node:continue
+                      matches.setdefault(r["id"],(tile,r))
+                      count+=1
+                  print("TILE",tile,"bytes",len(packed),"segmentsAtNode",count,flush=True)
+              except Exception as e:
+                  failures.append((tile,str(e)))
+                  print("TILE ERROR",tile,str(e),flush=True)
+          inbound=[];outbound=[]
+          for rid,(tile,r) in matches.items():
+              a=str(r["a"]);b=str(r["b"]); direction=r.get("oneway",0)
+              # -1 = b->a; 0 = bidirectional; 1 = a->b.
+              if (a==node and direction!=-1) or (b==node and direction!=1):outbound.append(rid)
+              if (b==node and direction!=-1) or (a==node and direction!=1):inbound.append(rid)
+              print("EDGE",rid,"tile",tile,"a",a,"b",b,"oneway",direction,"highway",r.get("highway"),
+                    "layer",r.get("layer"),"tunnel",r.get("tunnel"),"bridge",r.get("bridge"),
+                    "coordinates",r.get("coordinates"),flush=True)
+          print("SUMMARY uniqueEdges",len(matches),"inbound",len(inbound),"outbound",len(outbound),
+                "outboundEdgeIds",outbound,"tileFailures",len(failures),flush=True)
+          PY
