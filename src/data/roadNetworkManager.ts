@@ -3,9 +3,10 @@ import {loadRoadTile,releaseRoadTile,roadTileManifest,tileId,type RoadSegment} f
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {FerryNetwork} from '../maritime/ferries';
 import {connectFerryTerminals,type FerryConnectionResult} from '../maritime/roadConnections';
-const IOS_REDUCED_MEMORY=typeof navigator!=='undefined'&&/iPhone|iPad|iPod/i.test(navigator.userAgent);
+import {isIOSWebKit,graphMemoryLimitReached,IOS_BACKGROUND_TILE_DELAY_MS} from './roadMemoryPolicy';
+const IOS_REDUCED_MEMORY=typeof navigator!=='undefined'&&isIOSWebKit(navigator.userAgent);
 const PREFETCH_METERS=IOS_REDUCED_MEMORY?1800:6000;
-const BACKGROUND_TILE_DELAY_MS=IOS_REDUCED_MEMORY?1400:350;
+const BACKGROUND_TILE_DELAY_MS=IOS_REDUCED_MEMORY?IOS_BACKGROUND_TILE_DELAY_MS:350;
 // Safari needs an actual rendering frame between expensive graph batches.
 const MERGE_BUDGET_MS=3;
 const yieldToRenderer=()=>new Promise<void>(resolve=>{
@@ -19,7 +20,7 @@ const MAX_CONCURRENT=1;
 const GRAPH_PUBLISH_INTERVAL_MS=15000;
 type GraphEdge={to:string;meters:number;id:string;speedKph:number;highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number;taxiOnly?:boolean};
 type GraphDelta={id:number;nodes:[string,Point][];edges:[string,GraphEdge[]][];count:number};
-const MAX_PENDING_TILES=IOS_REDUCED_MEMORY?6:32; // Bound speculative prefetch work for large fleets.
+const MAX_PENDING_TILES=IOS_REDUCED_MEMORY?3:32; // Bound speculative prefetch work for large fleets.
 export class RoadNetworkManager {
  private loaded=new Set<string>();private queued=new Set<string>();private queue:string[]=[];
  private priority=new Map<string,number>();private backgroundTimer:ReturnType<typeof setTimeout>|null=null;
@@ -27,6 +28,20 @@ export class RoadNetworkManager {
  private graphWorker:Worker|null=null;private workerSequence=0;
  private workerRequests=new Map<number,{resolve:(delta:GraphDelta)=>void;reject:(error:Error)=>void}>();
  private inFlight=0;private disposed=false;private tileSize=0.1;private available=new Set<string>();
+ private memoryGuardLogged=false;
+ private canLoadAdditionalRoads():boolean{
+  if(!graphMemoryLimitReached(IOS_REDUCED_MEMORY,this.edgeTotal,this.graph.nodeKeys.length))return true;
+  if(!this.memoryGuardLogged){
+   this.memoryGuardLogged=true;
+   diagnostic('roads:ios-memory-guard',
+    `Pause further geographic road tile loading: edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length} tiles=${this.loaded.size}. Active routes and existing discoveries remain intact.`);
+   this.onError('Mobile Safari memory safety mode: road loading paused to prevent tab reloads. Existing roads and taxi routes remain available.');
+  }
+  // The fleet may span several distant islands. Keep the current reachable
+  // regions; NEVER evict a loaded tile while a vehicle could still use it.
+  this.queue.length=0;this.queued.clear();this.priority.clear();
+  return false;
+ }
  private publishTimer:ReturnType<typeof setTimeout>|null=null;private lastPublishedAt=0;private publishedOnce=false;
  private publishGraph(){if(this.disposed)return;const started=performance.now();diagnostic('roads:publish',`nodes=${this.graph.nodeKeys.length} edges=${this.edgeTotal} tiles=${this.loaded.size}`);// Keep the graph identity stable: nodes, edges and nodeKeys are already updated in place.
  this.onGraph(this.graph,this.loaded.size);const elapsed=performance.now()-started;diagnostic('roads:publish-complete',`callbackMs=${Math.round(elapsed)} nodes=${this.graph.nodeKeys.length}`);this.lastPublishedAt=performance.now();this.publishedOnce=true;}
@@ -75,7 +90,8 @@ export class RoadNetworkManager {
  // even if no vehicle is nearby. Bound each request so a large zoom-out
  // cannot flood Safari with hundreds of road tile downloads.
  considerViewport(west:number,east:number,south:number,north:number){
-  if(this.disposed||!this.available.size)return;
+  if(this.disposed||!this.available.size||!this.canLoadAdditionalRoads())return;
+  if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
   if(![west,east,south,north].every(Number.isFinite))return;
   const width=Math.min(360,Math.max(0,east-west));
   if(!width||north<=south)return;
@@ -110,7 +126,7 @@ export class RoadNetworkManager {
   * bounded road-loader backpressure needed by iPhone Safari.
   */
  considerHarbour(p:Point){
-  if(this.disposed||!this.available.size||this.queue.length>=MAX_PENDING_TILES)return;
+  if(this.disposed||!this.available.size||!this.canLoadAdditionalRoads()||this.queue.length>=MAX_PENDING_TILES)return;
   const id=tileId(p[0],p[1],this.tileSize);
   if(!this.available.has(id)||this.loaded.has(id)||this.queued.has(id)||(this.failedUntil.get(id)??0)>Date.now())return;
   this.queued.add(id);this.queue.push(id);this.priority.set(id,5);
@@ -128,7 +144,7 @@ export class RoadNetworkManager {
   * ferry port or island cannot silently join the HQ road network.
   */
  considerExplorerExpansion(explorers:readonly Point[]):number{
-  if(this.disposed||!this.available.size||!this.loaded.size||!explorers.length)return 0;
+  if(this.disposed||!this.available.size||!this.loaded.size||!explorers.length||!this.canLoadAdditionalRoads())return 0;
   const capacity=Math.min(IOS_REDUCED_MEMORY?1:2,
    Math.max(0,MAX_PENDING_TILES-this.queue.length-this.inFlight));
   if(!capacity)return 0;
@@ -176,7 +192,9 @@ export class RoadNetworkManager {
    for(let j=1;j<=steps;j++)points.push([a[0]+(b[0]-a[0])*j/steps,a[1]+(b[1]-a[1])*j/steps]);}
   this.consider(points);
  }
- consider(points:Point[]){if(this.disposed)return;const now=Date.now();
+ consider(points:Point[]){if(this.disposed||!this.canLoadAdditionalRoads())return;
+  if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
+  const now=Date.now();
   for(const p of points){if(this.queue.length>=MAX_PENDING_TILES)break;
    if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))continue;
    for(const id of this.idsNear(p,PREFETCH_METERS)){
@@ -190,7 +208,9 @@ export class RoadNetworkManager {
   this.queue.sort((a,b)=>(this.priority.get(a)??Infinity)-(this.priority.get(b)??Infinity));
   this.pump();
  }
- private pump(){if(this.backgroundTimer!==null)return;while(!this.disposed&&this.inFlight<MAX_CONCURRENT&&this.queue.length){const id=this.queue.shift()!;this.priority.delete(id);this.inFlight++;
+ private pump(){if(this.backgroundTimer!==null||!this.canLoadAdditionalRoads())return;
+  if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;
+  while(!this.disposed&&this.inFlight<MAX_CONCURRENT&&this.queue.length){const id=this.queue.shift()!;this.priority.delete(id);this.inFlight++;
   void this.load(id).catch(e=>{this.failedUntil.set(id,Date.now()+60000);this.onError(`Road tile ${id}: ${String(e)}`)}).finally(()=>{this.queued.delete(id);this.inFlight--;if(this.disposed)return;
    // Give Safari a rendering opportunity between completed background tiles.
    if(this.backgroundTimer===null)this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;this.pump();},BACKGROUND_TILE_DELAY_MS)});}}
@@ -218,6 +238,10 @@ export class RoadNetworkManager {
   }
   diagnostic('roads:apply',`elapsedMs=${Math.round(performance.now()-applyStarted)} cpuMs=${Math.round(applyCpuMs)} yields=${applyYields} nodes=${delta.nodes.length} edgeGroups=${delta.edges.length}`);this.edgeTotal+=delta.count;
   this.loaded.add(id);this.scheduleGraphPublish();
+  // A tile already in flight may cross the mobile budget by one tile; after
+  // its current routes are safely synced, stop any queued speculative tiles.
+  if(!this.canLoadAdditionalRoads())diagnostic('roads:ios-budget-applied',
+   `loadedTile=${id} edges=${this.edgeTotal} nodes=${this.graph.nodeKeys.length}`);
    // Backpressure: do not start another tile while the dispatch worker is
    // processing this tile. Unbounded postMessage cloning exhausted iOS memory.
    const syncStarted=performance.now();
