@@ -587,6 +587,13 @@ export default function App(){
     networkRef.current=manager;
     diagnostic('roads:startup',`initialize-start elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
     await manager.initialize([company.headquarters.lng,company.headquarters.lat]);
+    // Remote depots and explorers must get their ACTUAL road tile before
+    // optional HQ/viewport expansion consumes Safari's small memory budget.
+    manager.considerEssentialLocations([
+     ...(company.depots??[]).map(d=>[d.lng,d.lat] as [number,number]),
+     ...taxisRef.current.filter(t=>t.kind==='explorer'&&!t.ferryTrip)
+      .map(t=>t.position),
+    ]);
     diagnostic('roads:startup',`initialize-complete elapsedMs=${Math.round(performance.now()-roadStartupAt)}`);
 
    }catch(error){
@@ -820,6 +827,16 @@ export default function App(){
        positions.push(taxi.path[end-1]);
      }
    }
+   // Essential direct depot/vehicle tiles are allowed within a reserved,
+   // bounded memory margin even after speculative expansion is paused.
+   // Do these first so island depots don't get starved by the HQ frontier.
+   networkRef.current?.considerEssentialLocations([
+    ...(company.depots??[]).map(d=>[d.lng,d.lat] as [number,number]),
+    ...taxisRef.current.filter(t=>!t.ferryTrip&&
+     (t.kind==='explorer'&&(t.status==='IDLE'||t.status==='PAUSED')||
+      (!t.kind||t.kind==='taxi')&&t.status==='IDLE'))
+     .map(t=>t.position),
+   ]);
    networkRef.current?.consider(positions);
    // Load neighbouring road packages even when an explorer is stationary.
    // Otherwise the loaded graph ends at its current tile and the planner
