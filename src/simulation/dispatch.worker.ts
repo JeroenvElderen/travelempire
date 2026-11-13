@@ -587,9 +587,9 @@ const strandedRecoveryRetryAt=new Map<string,number>();
 let poiRoadCursor=0;
 // A failed scout permits the next road class to bootstrap without motorway access.
 
-type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
-type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
-type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
+type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[];allowTaxiOnly?:boolean};
+type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[];allowTaxiOnly?:boolean};
+type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];availableTaxiIds?:string[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
@@ -649,7 +649,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      ?offsetMeters:Infinity
    }));
    const planned=from?routeToNearestTarget(graph,from,
-    valid.filter(t=>Number.isFinite(t.offsetMeters)), '',50000):null;
+    valid.filter(t=>Number.isFinite(t.offsetMeters)), '',50000,undefined,msg.allowTaxiOnly===true):null;
    // The search's targetIndex indexes the filtered list. Map it back to
    // the original request before returning the selected POI.
    const validIndices=valid.flatMap((t,i)=>Number.isFinite(t.offsetMeters)?[i]:[]);
@@ -669,7 +669,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const node=nearest(graph!,target.point);
     return{node,offsetMeters:node&&graph!.nodes.has(node)?meters(graph!.nodes.get(node)!,target.point):Infinity};
    });
-   const result=from?routeToNearestTarget(graph,from,targets):null;
+   const result=from?routeToNearestTarget(graph,from,targets,'',150000,undefined,msg.allowTaxiOnly===true):null;
    const best=result?{
     ...msg.targets[result.targetIndex],
     roadKm:result.totalMeters/1000,
@@ -732,7 +732,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Legacy route callers are supported; the taxi recovery caller always
     // supplies an exact active segment to avoid accidental level changes.
     const conventional=msg.discoveredOnly
-     ?routeDiscovered(graph,from,to,indexedExplored):route(graph,from,to);
+     ?routeDiscovered(graph,from,to,indexedExplored,'',msg.allowTaxiOnly===true)
+     :route(graph,from,to,'',msg.allowTaxiOnly===true);
     if(conventional){planned=conventional;reason='ok';}
    }else reason=from?'target-unloaded':'origin-unloaded';
    const originPoint=originNode?graph.nodes.get(originNode):undefined;
@@ -1303,7 +1304,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        // Do not leave a specialist parked at an exhausted one-way spur:
        // return to headquarters *only* if already discovered roads provide
        // a legally directed route. This never discovers unrelated classes.
-       const homeRoute=routeDiscovered(activeGraph,origin.node,hqNode,explored);
+       const homeRoute=routeDiscovered(activeGraph,origin.node,hqNode,explored,'',false);
        if(homeRoute&&homeRoute.edgeIds.length>0){
         const returnRoute=prependPurpleStart(homeRoute,origin);
         if(returnRoute.edgeIds.length===returnRoute.path.length-1){
