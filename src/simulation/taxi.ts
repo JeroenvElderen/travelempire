@@ -345,6 +345,53 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
 }
 export function route(graph:RoadGraph,from:string,to:string,incoming=''){return turnAwareRoute(graph,from,to,undefined,false,incoming);}
 
+/** Reroute from the exact directed OSM segment being driven, NOT from the
+ * geographically nearest intersection (which can be an upper/lower road).
+ * The first leg finishes the current segment in its legal direction.
+ * No edge, ramp or node is invented.
+ */
+export type DirectedRoadAnchor={
+ edgeId:string;fromNode:string;toNode:string;position:Point;
+};
+export type AnchoredRouteResult={
+ path:Point[]|null;edgeIds:string[]|null;
+ reason:'ok'|'active-edge-missing'|'active-edge-not-directed'|'position-off-edge'|'target-unloaded'|'no-directed-path';
+};
+function segmentOffsetMeters(point:Point,a:Point,b:Point):number{
+ const scale=Math.cos(((a[1]+b[1])/2)*Math.PI/180);
+ const dx=(b[0]-a[0])*scale,dy=b[1]-a[1];
+ const t=Math.max(0,Math.min(1,((point[0]-a[0])*scale*dx+(point[1]-a[1])*dy)/
+  (dx*dx+dy*dy||1)));
+ return meters(point,[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);
+}
+export function routeFromDirectedRoad(
+ graph:RoadGraph,anchor:DirectedRoadAnchor,targetNode:string,discovered?:Set<string>,
+):AnchoredRouteResult{
+ const a=graph.nodes.get(anchor.fromNode),b=graph.nodes.get(anchor.toNode);
+ if(!a||!b)return{path:null,edgeIds:null,reason:'active-edge-missing'};
+ const edges=graph.edges.get(anchor.fromNode)??[];
+ const matching=edges.find(edge=>edge.id===anchor.edgeId&&edge.to===anchor.toNode);
+ if(!matching)return{path:null,edgeIds:null,reason:'active-edge-not-directed'};
+ if(!graph.nodes.has(targetNode))return{path:null,edgeIds:null,reason:'target-unloaded'};
+ if(!anchor.position.every(Number.isFinite)||segmentOffsetMeters(anchor.position,a,b)>12)
+  return{path:null,edgeIds:null,reason:'position-off-edge'};
+ // A passenger already on a discovered directed edge can finish that edge;
+ // never create a short private connector to a visually overlapping street.
+ if(discovered&&!discovered.has(anchor.edgeId))
+  return{path:null,edgeIds:null,reason:'no-directed-path'};
+ const remaining=meters(anchor.position,b);
+ const onward=discovered
+  ?routeDiscovered(graph,anchor.toNode,targetNode,discovered,anchor.fromNode)
+  :route(graph,anchor.toNode,targetNode,anchor.fromNode);
+ if(!onward)return{path:null,edgeIds:null,reason:'no-directed-path'};
+ const path=remaining>0.5?[anchor.position,...onward.path]:onward.path;
+ const edgeIds=remaining>0.5?[anchor.edgeId,...onward.edgeIds]:onward.edgeIds;
+ if(path.length<2||edgeIds.length!==path.length-1)
+  return{path:null,edgeIds:null,reason:'no-directed-path'};
+ return{path,edgeIds,reason:'ok'};
+}
+
+
 // Single turn-aware Dijkstra for multiple destinations. Stops when the cheapest
 // reachable target is settled; never substitutes straight-line proximity for
 // actual road distance. A target's off-road connection is part of its cost.
