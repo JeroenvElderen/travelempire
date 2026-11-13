@@ -35,7 +35,7 @@ jobs:
                   tags={t.attrib["k"]:t.attrib["v"] for t in way.findall("tag")}
                   nodes=[n.attrib["ref"] for n in way.findall("nd")]
                   print("OSM WAY",way.attrib.get("id"),"position",nodes.index(node) if node in nodes else "absent",
-                        "node_count",len(nodes),"tags",{k:tags.get(k) for k in ("highway","oneway","bridge","tunnel","layer","access") if k in tags},flush=True)
+                        "node_count",len(nodes),"tags",{k:tags.get(k) for k in ("highway","oneway","bridge","tunnel","layer","access","vehicle","motor_vehicle","motorcar","psv","taxi","bus","service","barrier") if k in tags},flush=True)
           except Exception as e:print("OSM API unavailable:",type(e).__name__,str(e),flush=True)
           tile_ids=("238_378","238_379","239_378","239_379","240_378","240_379","238_380","239_380","240_380")
           base=os.environ["SUPABASE_URL"].rstrip("/")+"/storage/v1/object/public/travelempire-road-tiles/"
