@@ -321,7 +321,7 @@ export default function App(){
  const shiftRestRetryRef=useRef(new Map<string,number>());
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;target?:[number,number]|null;ready:boolean}>());
  const pendingFuelRef=useRef(new Map<string,{requestId:number;position:[number,number];at:number;graph:RoadGraph}>());
- const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null)=>void}>());
+ const pendingRoutesRef=useRef(new Map<number,{vehicleId:string;position:[number,number];status:string;onResult:(path:[number,number][]|null,edgeIds:string[]|null,reason?:string)=>void}>());
  const ferryReadinessRef=useRef(new Map<string,{ready:boolean;idleMs:number}>());
  const ferryBookingRef=useRef(new Set<string>());
  const ferryAttemptRef=useRef(new Map<string,number>());
@@ -628,14 +628,16 @@ export default function App(){
     return;
    }
    if(message.type==='routeResult'){
-    const response=message as typeof message & {requestId:number;path:[number,number][]|null;edgeIds:string[]|null;durationMs?:number};
+    const response=message as typeof message & {requestId:number;path:[number,number][]|null;edgeIds:string[]|null;durationMs?:number;reason?:string;originNode?:string;targetNode?:string;originOffsetMeters?:number|null;targetOffsetMeters?:number|null};
     const pending=pendingRoutesRef.current.get(response.requestId);
     if(!pending)return;
     pendingRoutesRef.current.delete(response.requestId);
     const current=taxisRef.current.find(t=>t.id===pending.vehicleId);
     if(!current||current.status!==pending.status||meters(current.position,pending.position)>15)return;
     if((response.durationMs??0)>100)console.warn('[TravelEmpire] Slow worker route',{durationMs:Math.round(response.durationMs??0)});
-    pending.onResult(response.path,response.edgeIds);
+    if(response.reason&&response.reason!=='ok')diagnostic('routing:directed-failure',
+     `vehicle=${pending.vehicleId} reason=${response.reason} originNode=${response.originNode??'none'} targetNode=${response.targetNode??'none'} originOffsetM=${response.originOffsetMeters??'none'} targetOffsetM=${response.targetOffsetMeters??'none'} pendingTiles=${networkRef.current?.queuedCount??'unknown'}`);
+    pending.onResult(response.path,response.edgeIds,response.reason);
     return;
    }
    if(message.type==='ready'){workerReadyRef.current=roadSyncPendingRef.current===0&&workerRoadCountRef.current>0;return;}
@@ -1246,13 +1248,16 @@ export default function App(){
          `taxi=${delivered.name} id=${delivered.id} job=${job} status=${status} reason=${issue??'stalled'} leg=${delivered.leg} edge=${delivered.edgeIds[delivered.leg]??'none'} from=${from.join(',')} target=${target.join(',')}`);
         pendingRoutesRef.current.set(requestId,{
          vehicleId:delivered.id,position:from,status,
-         onResult:(path,edgeIds)=>{
+         onResult:(path,edgeIds,routeReason)=>{
           watch.pending=false;
           const valid=!!path&&!!edgeIds&&path.length>1&&edgeIds.length===path.length-1&&
            meters(path[0],from)<=15&&meters(path[path.length-1],target)<=100;
           diagnostic(valid?'taxi:route-recovered':'taxi:route-recovery-unavailable',
-           `taxi=${delivered.name} id=${delivered.id} job=${job} status=${status} reason=${issue??'stalled'} ${valid?`newEdges=${edgeIds?.length}`:'no connected route (or unsafe snap)'}`);
-          if(!valid)return;
+           `taxi=${delivered.name} id=${delivered.id} job=${job} status=${status} reason=${routeReason??issue??'stalled'} ${valid?`newEdges=${edgeIds?.length}`:'no connected route (or unsafe snap)'}`);
+          if(!valid){
+           networkRef.current?.consider([from,target]);
+           return;
+          }
           setFleet(latest=>({...latest,taxis:latest.taxis.map(vehicle=>
            vehicle.id===delivered.id&&vehicle.status===status&&
            (vehicle.activeJobId??'legacy:'+String(vehicle.pickup)+':'+String(vehicle.dropoff))===job&&
@@ -1263,8 +1268,17 @@ export default function App(){
           watch.lastProgressAt=Date.now();
          }
         });
+        const currentEdge=delivered.edgeIds[delivered.leg];
+        const segmentStart=delivered.path[delivered.leg];
+        const segmentEnd=delivered.path[delivered.leg+1];
+        if(!currentEdge||!segmentStart||!segmentEnd){
+         diagnostic('taxi:route-anchor-unavailable',
+          `taxi=${delivered.name} id=${delivered.id} reason=missing-active-road edge=${currentEdge??'none'}`);
+        }
         worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,
-         requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF'});
+         requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF',
+         activeRoad:currentEdge&&segmentStart&&segmentEnd?
+          {edgeId:currentEdge,start:segmentStart,end:segmentEnd}:undefined});
        }
       }
       // Do not silently end an active fare because its saved path is corrupt.
