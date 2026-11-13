@@ -651,8 +651,18 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let lastDeliveryRefresh=0;
   let lastFrameAt=0,frameSamples=0,slowFrames=0,maxFrameGap=0;
   let lastPerfReport=performance.now();
+  // iPhone Safari has 50+ DOM vehicle markers plus a WebGL map. Updating
+  // their positions at 60 Hz duplicates work without improving simulation.
+  // Aim for ~30 Hz while preserving the existing smooth road interpolation.
+  const mobileMarkerFrameMs=typeof navigator!=='undefined'&&/iPhone|iPad|iPod/i.test(navigator.userAgent)?32:0;
+  let lastMobileMarkerFrame=0;
   const animate=()=>{
    const frameNow=performance.now();
+   if(mobileMarkerFrameMs&&frameNow-lastMobileMarkerFrame<mobileMarkerFrameMs){
+    frame=requestAnimationFrame(animate);
+    return;
+   }
+   lastMobileMarkerFrame=frameNow;
    if(performanceMonitorEnabled())recordActiveFrame(frameNow);
 
    if(lastFrameAt){const gap=frameNow-lastFrameAt;frameSamples++;if(gap>50)slowFrames++;maxFrameGap=Math.max(maxFrameGap,gap);}
