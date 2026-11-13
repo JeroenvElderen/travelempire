@@ -48,8 +48,11 @@ def main():
             supplemental=json.load(response)
         if supplemental.get("tileSize")!=manifest["tileSize"]:
             parser.error("Supplemental tile size differs; inspect the live deployment")
-        manifest["tiles"].update(supplemental.get("tiles") or {})
-        print(f"Merged {len(supplemental.get('tiles') or {})} supplemental tile entries.")
+        if supplemental.get("format")==manifest.get("format"):
+            manifest["tiles"].update(supplemental.get("tiles") or {})
+            print(f"Merged {len(supplemental.get('tiles') or {})} supplemental tile entries.")
+        else:
+            print("Ignoring stale supplemental manifest with a different tile format.")
     except urllib.error.HTTPError as e:
         if e.code!=404:
             raise
