@@ -12,7 +12,7 @@ export type MobilitySnapshot={
  loadedTiles:number;loading:boolean;error:string|null;
 };
 const MODES:MobilityMode[]=['walk','cycle'];
-const MAX_ACTIVE_TILES=9;
+const MAX_ACTIVE_TILES=6;
 
 export class MobilityController{
  readonly discovered:Record<MobilityMode,Set<string>>={walk:new Set(),cycle:new Set()};
@@ -73,8 +73,15 @@ export class MobilityController{
    if(fractionY<0.13)dy.unshift(-1);
    if(fractionY>0.87)dy.push(1);
   }
-  const ids=[...new Set(dx.flatMap(a=>dy.map(b=>`${x+a}_${y+b}`)))].sort(
-   (a,b)=>a===mobilityTileId(point)?-1:b===mobilityTileId(point)?1:0);
+  // Load the centre and the geographically closest neighbours, not all
+  // nine tiles around a harbour; this bounds peak Safari memory use.
+  const ids=[...new Set(dx.flatMap(a=>dy.map(b=>`${x+a}_${y+b}`)))].sort((a,b)=>{
+   const [ax,ay]=a.split('_').map(Number),[bx,by]=b.split('_').map(Number);
+   const scale=Math.cos(point[1]*Math.PI/180);
+   const dist=(ix:number,iy:number)=>((ix+0.5)*this.manifest.tileSize-point[0])**2*scale**2+
+    ((iy+0.5)*this.manifest.tileSize-point[1])**2;
+   return dist(ax,ay)-dist(bx,by);
+  }).slice(0,includeAdjacent?5:4);
   let added=0;
   for(const id of ids){
    if(!this.manifest.tiles[id]||this.pending.has(id))continue;
