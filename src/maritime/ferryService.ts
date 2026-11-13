@@ -105,3 +105,12 @@ export function nextPassengerDeparture(
  if(index%2!==requiredParity)index++;
  return {departureGameMs:firstDeparture+index*spacing,voyageIndex:index};
 }
+
+/** A sleeping browser tab cannot place a dockside vehicle onto a ferry that
+ * departed long ago. Allow only a short game-time physics tick tolerance.
+ */
+export const PASSENGER_BOARDING_GRACE_MS=2*MINUTE_MS;
+export function mayBoardPassengerFerry(departureGameMs:number,nowGameMs:number):boolean{
+ return Number.isFinite(departureGameMs)&&Number.isFinite(nowGameMs)&&
+  nowGameMs>=departureGameMs&&nowGameMs-departureGameMs<=PASSENGER_BOARDING_GRACE_MS;
+}
