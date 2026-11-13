@@ -47,6 +47,7 @@ import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
+import {createDepotStarterExplorers} from './simulation/depotStarterExplorers';
 import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
@@ -1938,10 +1939,28 @@ export default function App(){
   const node=nearest(graph,[location.lng,location.lat]);
   if(!node||meters(graph.nodes.get(node)!,[location.lng,location.lat])>1500){setSimError('Choose a location within 1.5 km of a loaded road.');return;}
   const point=graph.nodes.get(node)!;
+  // The depot needs a genuinely routable OSM edge to let its specialists
+  // depart. Seed that one real road purple, just like the initial HQ seed;
+  // never create a shortcut across bridges, tunnels or disconnected roads.
+  const initialRoad=(graph.edges.get(node)??[]).find(edge=>edge.meters>0);
+  if(!initialRoad){setSimError('Choose a depot location with a connected, drivable road.');return;}
   const depot={id:crypto.randomUUID(),name:location.label||'New depot',lng:point[0],lat:point[1],capacity:5};
+  const starterExplorers=createDepotStarterExplorers(depot.id,depot.name,point);
   const updated={...companyRef.current,depots:[...(companyRef.current.depots??[]),depot]};
   pendingCashRef.current-=10000;companyRef.current=updated;setCompany(updated);saveCompany(updated);
-  setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`New depot · ${depot.name}`,amount:-10000},...(old.transactions??[])].slice(0,100)}));
+  setFleet(old=>{
+   const currentIds=old.exploredEdgeIds??[];
+   const exploredEdgeIds=currentIds.includes(initialRoad.id)?currentIds:[...currentIds,initialRoad.id];
+   discoveredCacheRef.current={ids:exploredEdgeIds,set:new Set(exploredEdgeIds)};
+   return {...old,
+    // Each new depot starts with its own five free specialists. Existing
+    // headquarters vehicles stay assigned where they were.
+    taxis:[...old.taxis,...starterExplorers],
+    exploredEdgeIds,
+    transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`New depot · ${depot.name} · 5 starter explorers`,amount:-10000},...(old.transactions??[])].slice(0,100)
+   };
+  });
+  diagnostic('depots:starter-explorers',`depot=${depot.id} name=${depot.name} vehicles=${starterExplorers.length} seedRoad=${initialRoad.id}`);
   setPlacingDepot(false);setSelecting(false);setPage('Company');setSimError('');
  };
  const resetVehicle=(id:string)=>{
