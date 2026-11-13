@@ -66,7 +66,7 @@ import "./aurora-glass.css";
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
-import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
+import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,mayBoardPassengerFerry,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
 import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
@@ -1040,10 +1040,16 @@ export default function App(){
        const departure=crossing.departureGameMs??nextPassengerDeparture(
         serviceStart,crossing.durationGameMs/60000,gameNow,
         crossing.fromInitialPort??true).departureGameMs;
-       if(gameNow<departure){
+       if(!mayBoardPassengerFerry(departure,gameNow)){
+        // If Safari was suspended past departure, do not teleport onto a
+        // vessel already kilometres away; book the next correct-direction
+        // sailing and keep the vehicle parked on the dock.
+        const next=gameNow>departure?nextPassengerDeparture(
+         serviceStart,crossing.durationGameMs/60000,gameNow,
+         crossing.fromInitialPort??true).departureGameMs:departure;
         return {...delivered,status:'PAUSED' as const,position:dock,
          path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,
-         ferryTrip:{...crossing,departureGameMs:departure}};
+         ferryTrip:{...crossing,departureGameMs:next}};
        }
        // A normal 1 s real-time physics tick advances 24 game seconds.
        // Board only at the reserved departure (no independent sea movement).
