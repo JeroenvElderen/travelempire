@@ -1,6 +1,6 @@
 import {hardcodedRoadSpeedKph} from './hardcodedSpeedLimits';
 import type {RoadSegment} from './roadTiles';
-type Edge={to:string;meters:number;id:string;speedKph:number;highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number};
+type Edge={to:string;meters:number;id:string;speedKph:number;highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number;taxiOnly?:boolean};
 type Result={id:number;nodes:[string,[number,number]][];edges:[string,Edge[]][];count:number};
 const seen=new Set<string>();
 self.onmessage=(event:MessageEvent<{id:number;roads:RoadSegment[]}>)=>{
