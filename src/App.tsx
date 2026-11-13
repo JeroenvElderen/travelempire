@@ -1094,7 +1094,7 @@ export default function App(){
          position:[...delivered.position],status:delivered.status,at:now,
          graph,path:null,edgeIds:null,ready:false});
         worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,
-         requestId,vehicleId:delivered.id,purpose:'shift',from:delivered.position,
+         requestId,vehicleId:delivered.id,purpose:'shift',from:delivered.position,allowTaxiOnly:delivered.kind!=='explorer'&&delivered.kind!=='surveyor'&&delivered.kind!=='recovery',
          targets:stops.map(p=>p.position)});
        }
        // IDLE means waiting for a route, not sleeping. Dispatcher eligibility
@@ -1149,7 +1149,7 @@ export default function App(){
          if(worker&&workerReadyRef.current){
           const requestId=++routeSequenceRef.current;
           operationalRoutesRef.current.set(key,{requestId,purpose:'shift',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
-          worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'shift',from:delivered.position,targets:stops.map(p=>p.position)});
+          worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'shift',from:delivered.position,allowTaxiOnly:delivered.kind!=='explorer'&&delivered.kind!=='surveyor'&&delivered.kind!=='recovery',targets:stops.map(p=>p.position)});
          }
         }
         return delivered;
@@ -1192,7 +1192,7 @@ export default function App(){
       if(worker&&workerReadyRef.current){
        const requestId=++routeSequenceRef.current;
        operationalRoutesRef.current.set(key,{requestId,purpose:'service',position:[...delivered.position],status:delivered.status,at:now,graph,path:null,edgeIds:null,ready:false});
-       worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'service',from:delivered.position,targets:nearby.map(p=>p.position)});
+       worker.postMessage({type:'operationalRoute',revision:graphRevisionRef.current,requestId,vehicleId:key,purpose:'service',from:delivered.position,allowTaxiOnly:delivered.kind!=='explorer'&&delivered.kind!=='surveyor'&&delivered.kind!=='recovery',targets:nearby.map(p=>p.position)});
       }
       return delivered;
      }
@@ -1281,7 +1281,7 @@ export default function App(){
          }
         });
         worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,
-         requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF',
+         requestId,from,to:target,discoveredOnly:status==='TO_DROPOFF',allowTaxiOnly:true,
          activeRoad:{edgeId:currentEdge,start:segmentStart,end:segmentEnd}});
        }
       }
@@ -1306,7 +1306,7 @@ export default function App(){
        const targets=candidates.map(st=>({point:[st.lng,st.lat] as [number,number],depot:false}));
        const requestId=++routeSequenceRef.current;
        pendingFuelRef.current.set(delivered.id,{requestId,position:[...delivered.position],at:now,graph});
-       worker.postMessage({type:'fuelPlan',revision:graphRevisionRef.current,requestId,vehicleId:delivered.id,from:delivered.position,targets});
+       worker.postMessage({type:'fuelPlan',revision:graphRevisionRef.current,requestId,vehicleId:delivered.id,from:delivered.position,targets,allowTaxiOnly:delivered.kind!=='explorer'&&delivered.kind!=='surveyor'&&delivered.kind!=='recovery'});
       }
       fuelTarget=cached?.target??null;
      }
