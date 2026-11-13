@@ -2,6 +2,9 @@ import {diagnostic} from './frontendDiagnostics';
 let lastTaxiDispatchSignature='';
 let lastTaxiDispatchLogAt=0;
 let lastMajorExplorerLogAt=0;
+let lastMissionPerfLogAt=0;
+let lastWorkerPerfLogAt=0;
+let lastSlowDispatchLogAt=0;
 import {recordSimulationTick,recordActivity,performanceMonitorEnabled} from './performanceMonitor';
 import {readExploration,writeExploration,clearExploration} from './data/explorationStore';
 import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from './simulation/energy';
@@ -64,6 +67,7 @@ import "./midnight-glass.css";
 import "./aurora-glass.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
+import {isIOSWebKit,dispatchAllowed,IOS_DISPATCH_INTERVAL_MS,DESKTOP_DISPATCH_INTERVAL_MS} from './data/roadMemoryPolicy';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
 import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,mayBoardPassengerFerry,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
@@ -649,7 +653,7 @@ export default function App(){
     if(ferryPerf)for(const item of ferryPerf)ferryReadinessRef.current.set(item.id,{ready:!!item.ferryReady,idleMs:item.idleMs});
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
     const missionPerf=(message as typeof message & {perf?:{explorationMissions?:{active:number;idlePlans:number;vehicles:Array<{id:string;role:string;status:string;missionId:number|null;remainingEdges:number;retryInMs:number;lastPlannedAt:number|null}>};scoutTimings?:Array<{vehicleId:string;role:string;ms:number;phase:string;result?:string}>}}).perf;
-    if(missionPerf?.explorationMissions&&(perf?.workerMs??0)>100){const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} queue=${JSON.stringify((missionPerf as typeof missionPerf & {planningQueue?:{phase:string;searches:number;queued:number;cursor:number}}).planningQueue??{})} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
+    if(missionPerf?.explorationMissions&&(perf?.workerMs??0)>100&&performance.now()-lastMissionPerfLogAt>12000){lastMissionPerfLogAt=performance.now();const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} queue=${JSON.stringify((missionPerf as typeof missionPerf & {planningQueue?:{phase:string;searches:number;queued:number;cursor:number}}).planningQueue??{})} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
     if(performance.now()-lastMajorExplorerLogAt>15000){
      const explorers=(message as typeof message & {perf?:{explorationMissions?:{vehicles:Array<{id:string;role:string;status:string;planningAttempts?:number;planningSkipReason?:string|null;singleWorkerPlanner?:string|null;majorRoadSearch?:{outcome:string;eligible:number;candidates:number;entries:number;visits:number;attempts:number}|null}>}}}).perf?.explorationMissions?.vehicles;
      if(explorers){lastMajorExplorerLogAt=performance.now();diagnostic('dispatch:explorer-routing',JSON.stringify(explorers.map(v=>({id:v.id,role:v.role,status:v.status,planningAttempts:v.planningAttempts??0,skip:v.planningSkipReason??null,singleWorker:v.singleWorkerPlanner??null,routing:v.majorRoadSearch??null}))));}
@@ -661,14 +665,25 @@ export default function App(){
     if(taxiPerf){
      const idleTaxis=taxiPerf.vehicles.filter(t=>t.status==='IDLE');
      const taxiSignature=JSON.stringify({queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
-     if(taxiSignature!==lastTaxiDispatchSignature||performance.now()-lastTaxiDispatchLogAt>15000){
+     if(performance.now()-lastTaxiDispatchLogAt>12000&&
+       (taxiSignature!==lastTaxiDispatchSignature||performance.now()-lastTaxiDispatchLogAt>30000)){
       lastTaxiDispatchSignature=taxiSignature;lastTaxiDispatchLogAt=performance.now();
       diagnostic('dispatch:taxis',`allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
      }
     }
-    if(perf&&perf.workerMs>150)diagnostic('dispatch:worker-phases',`workerMs=${Math.round(perf.workerMs)} prepareMs=${Math.round(perf.preparationMs)} passengerMs=${Math.round(perf.passengerMs)} scoutMs=${Math.round(perf.scoutMs)} nodes=${perf.graphNodes} roads=${perf.graphRoads} vehicles=${perf.vehicles} missions=${perf.missions}`);
+    if(perf&&perf.workerMs>150&&performance.now()-lastWorkerPerfLogAt>10000){
+     lastWorkerPerfLogAt=performance.now();
+     diagnostic('dispatch:worker-phases',`workerMs=${Math.round(perf.workerMs)} prepareMs=${Math.round(perf.preparationMs)} passengerMs=${Math.round(perf.passengerMs)} scoutMs=${Math.round(perf.scoutMs)} nodes=${perf.graphNodes} roads=${perf.graphRoads} vehicles=${perf.vehicles} missions=${perf.missions}`);
+    }
    }
-   if(dispatchStartedRef.current){const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;if(duration>150){diagnostic('dispatch:slow',`roundTripMs=${Math.round(duration)} vehicles=${taxisRef.current.length} roadSyncPending=${roadSyncPendingRef.current} workerRoads=${workerRoadCountRef.current}`);console.warn('[TravelEmpire] Slow background dispatch',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length,roadSyncPending:roadSyncPendingRef.current,workerRoads:workerRoadCountRef.current});}}
+   if(dispatchStartedRef.current){
+    const duration=performance.now()-dispatchStartedRef.current;dispatchStartedRef.current=0;
+    if(duration>150&&(duration>1800||performance.now()-lastSlowDispatchLogAt>10000)){
+     lastSlowDispatchLogAt=performance.now();
+     diagnostic('dispatch:slow',`roundTripMs=${Math.round(duration)} vehicles=${taxisRef.current.length} roadSyncPending=${roadSyncPendingRef.current} workerRoads=${workerRoadCountRef.current}`);
+     if(duration>1800)console.warn('[TravelEmpire] Severe dispatcher stall',{roundTripMs:Math.round(duration),vehicles:taxisRef.current.length});
+    }
+   }
    if(message.type==='error'){console.warn('[TravelEmpire] Dispatch worker:',message.error);setSimError('Dispatch worker: '+message.error);return;}
    if(message.type!=='result'||!message.taxis||!message.queue)return;
    if(message.generatedMission)lastMissionAt.current=Date.now();
@@ -753,7 +768,8 @@ export default function App(){
  useEffect(()=>{
   if(!company||!graph)return;
   const timer=window.setInterval(()=>{
-   if(!workerReadyRef.current||dispatchBusyRef.current||!dispatchWorkerRef.current)return;
+   if(!dispatchAllowed(document.visibilityState==='visible',workerReadyRef.current,
+       dispatchBusyRef.current)||!dispatchWorkerRef.current)return;
    const now=Date.now();
    const taxis=taxisRef.current;
    if(!taxis.length)return;
@@ -771,7 +787,8 @@ export default function App(){
     allowScout:document.visibilityState==='visible'});
    // Do not suppress retries merely because a dispatch message was sent.
    // Mission/scout cooldowns are applied after the worker reports an actual result.
-  },500);
+  },typeof navigator!=='undefined'&&isIOSWebKit(navigator.userAgent)
+   ?IOS_DISPATCH_INTERVAL_MS:DESKTOP_DISPATCH_INTERVAL_MS);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
  // Prefetch roads near active vehicles and destinations without resetting their routes.
