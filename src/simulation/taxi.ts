@@ -284,6 +284,28 @@ export function nearest(graph: RoadGraph, point: Point): string {
   if (ring > 100000) return best;
  }
 }
+/** Candidate nodes near a POI. At bridges and tunnels different OSM nodes
+ * can have identical XY coordinates; shortest geographic distance alone
+ * cannot identify a legally reachable destination.
+ */
+export function nearbyRoadNodes(graph:RoadGraph,point:Point,maxMeters=35,limit=8):string[]{
+ const index=roadNodeIndex(graph);
+ const cx=Math.floor(point[0]/NEAREST_CELL_DEGREES),cy=Math.floor(point[1]/NEAREST_CELL_DEGREES);
+ const dy=maxMeters/111320;
+ const dx=dy/Math.max(.1,Math.cos(point[1]*Math.PI/180));
+ const rx=Math.max(1,Math.ceil(dx/NEAREST_CELL_DEGREES));
+ const ry=Math.max(1,Math.ceil(dy/NEAREST_CELL_DEGREES));
+ const candidates:{id:string;distance:number}[]=[];
+ for(let x=cx-rx;x<=cx+rx;x++)for(let y=cy-ry;y<=cy+ry;y++)
+  for(const id of index.cells.get(x)?.get(y)??[]){
+   const p=graph.nodes.get(id);
+   if(!p)continue;
+   const distance=meters(p,point);
+   if(distance<=maxMeters)candidates.push({id,distance});
+  }
+ candidates.sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
+ return candidates.slice(0,limit).map(c=>c.id);
+}
 // Compare the actual geometry, not just identical node IDs: OSM often
 // represents a straight reversal as two different short road segments.
 function forbiddenUTurn(graph:RoadGraph,previous:string,current:string,next:string,allowed?:Set<string>):boolean{
