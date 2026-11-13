@@ -851,6 +851,7 @@ export async function dispatchScout(
      (specialist==='completion'&&completionBest&&distance>completionBest.distance)||
      (specialist!=='completion'&&specialistBest&&distance>specialistScore))break;
   for(const edge of graph.edges.get(node)??[]){
+   if(taxi.kind==='explorer'&&edge.taxiOnly)continue;
    if(taxi.kind==='explorer'&&_allowedRoads&&!_allowedRoads.has(edge.id))continue;
 
    // Routing can reverse at a junction when needed to reach the next specialist road.
@@ -899,6 +900,7 @@ export async function dispatchScout(
    let forward:{from:string;to:string;id:string;distance:number;inside:boolean;local:boolean}|null=null;
    let forwardAngle=Infinity;
    for(const edge of graph.edges.get(start)??[]){
+    if(taxi.kind==='explorer'&&edge.taxiOnly)continue;
     if(edge.to===incomingNode||edge.meters<=0||explored.has(edge.id)||reservedEdges.has(edge.id)||reservedTargets.has(edge.to)||
        (_allowedRoads&&!_allowedRoads.has(edge.id))||(discoveryAllowed&&!discoveryAllowed.has(edge.id))||
        (requiredFrontier&&!requiredFrontier.has(start))||(specialist!=='balanced'&&!balanced&&!specialistMatch(edge.highway??'')))continue;
@@ -936,6 +938,7 @@ export async function dispatchScout(
   const MAX_BRANCH_NODES=12000;
   const branchFrom=(junction:string,previousNode:string|undefined)=>{
    for(const candidate of graph.edges.get(junction)??[]){
+    if(taxi.kind==='explorer'&&candidate.taxiOnly)continue;
     if(perimeterIds.has(candidate.id)||visitedBranches.has(candidate.id)||explored.has(candidate.id)||
        reservedEdges.has(candidate.id)||(discoveryAllowed&&!discoveryAllowed.has(candidate.id))||
        (_allowedRoads&&!_allowedRoads.has(candidate.id)))continue;
@@ -951,6 +954,7 @@ export async function dispatchScout(
      if(stack.length>MAX_BRANCH_NODES){overLimit=true;break;}
      const node=stack[cursor];
      for(const edge of graph.edges.get(node)??[]){
+      if(taxi.kind==='explorer'&&edge.taxiOnly)continue;
       if(edge.to===parent.get(node)?.from)continue;
       if(perimeterIds.has(edge.id)||edge.to===junction){hasCycle=true;continue;}
       if((_allowedRoads&&!_allowedRoads.has(edge.id))||
@@ -1014,6 +1018,7 @@ export async function dispatchScout(
  for(let step=0;step<(block?0:maxSegments)&&extraMeters<maxMeters;step++){
   const previousNode=keys.length>1?keys[keys.length-2]:undefined;
   const links=(graph.edges.get(cursor)??[]).filter(edge=>
+   (taxi.kind!=='explorer'||!edge.taxiOnly)&&
    (taxi.kind!=='explorer'||!_allowedRoads||_allowedRoads.has(edge.id))&&
    // A regional candidate shortlist locates the first road. It must not
    // truncate an otherwise contiguous corridor in the same road class.
