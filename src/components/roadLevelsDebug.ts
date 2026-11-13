@@ -59,22 +59,32 @@ export function syncRoadLevelsDebug(map:maplibregl.Map,roads:readonly DebugRoad[
   layout:{'symbol-placement':'line','symbol-spacing':95,'text-field':'➜','text-size':16,'text-rotation-alignment':'map','text-allow-overlap':true,'text-ignore-placement':true},
   paint:{'text-color':'#00e0ff','text-halo-color':'#09192c','text-halo-width':1.5}});
  const incoming=new Map<string,number>();
+ const nodeKinds=new Map<string,Set<string>>();
  for(const road of roads){
   if(road.forward)incoming.set(road.bNode,(incoming.get(road.bNode)??0)+1);
   if(road.reverse)incoming.set(road.aNode,(incoming.get(road.aNode)??0)+1);
+  for(const node of [road.aNode,road.bNode]){
+   let kinds=nodeKinds.get(node);
+   if(!kinds){kinds=new Set();nodeKinds.set(node,kinds);}
+   kinds.add(roadLevelKind(road));
+  }
  }
  const markers:GeoJSON.Feature<GeoJSON.Point>[]=[];
  for(const node of nodeIds){
   if(markers.length>=450)break;
   const point=graph.nodes.get(node);if(!point)continue;
   const outgoing=(graph.edges.get(node)??[]).length,arriving=incoming.get(node)??0;
-  if(arriving>0&&outgoing===0)markers.push({type:'Feature',properties:{node,kind:'no-exit',incoming:arriving,outgoing},geometry:{type:'Point',coordinates:point}});
+  const kind=arriving>0&&outgoing===0?'no-exit':
+   (nodeKinds.get(node)?.size??0)>1?'level-transition':null;
+  if(kind)markers.push({type:'Feature',properties:{node,kind,incoming:arriving,outgoing},
+   geometry:{type:'Point',coordinates:point}});
  }
  const nodes:GeoJSON.FeatureCollection<GeoJSON.Point>={type:'FeatureCollection',features:markers};
  const nodeSource=map.getSource(NODES) as maplibregl.GeoJSONSource|undefined;
  if(nodeSource)nodeSource.setData(nodes);else map.addSource(NODES,{type:'geojson',data:nodes});
  if(!map.getLayer(TERMINALS))map.addLayer({id:TERMINALS,type:'circle',source:NODES,minzoom:15,
   paint:{'circle-radius':['interpolate',['linear'],['zoom'],15,4,18,7],
-   'circle-color':'#ff465f','circle-stroke-color':'#ffffff','circle-stroke-width':1.5,'circle-opacity':0.95}});
- return{roads:features.length,oneWays,tunnels,bridges,noExit:markers.length};
+   'circle-color':['match',['get','kind'],'no-exit','#ff465f','level-transition','#4dffad','#ff465f'],
+   'circle-stroke-color':'#ffffff','circle-stroke-width':1.5,'circle-opacity':0.95}});
+ return{roads:features.length,oneWays,tunnels,bridges,noExit:markers.filter(f=>f.properties?.kind==='no-exit').length,transitions:markers.filter(f=>f.properties?.kind==='level-transition').length};
 }
