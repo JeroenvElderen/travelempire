@@ -14,6 +14,7 @@ import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
 import {diffVisibleRoads,withRoadFeatureId,type RoadFeature} from './purpleRoadDiff';
 import {buildParkedCars,parkedCarSprites,type ParkingRoad} from './parkedCars';
+import {syncRoadLevelsDebug,removeRoadLevelsDebug,ROAD_LEVEL_DEBUG_LAYER_IDS,type DebugRoad} from './roadLevelsDebug';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
@@ -112,7 +113,7 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 }
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
-type IndexedRoad={id:string;a:[number,number];b:[number,number];highway?:string;layer?:number;bridge?:boolean;tunnel?:boolean;level?:number};
+type IndexedRoad=DebugRoad&{highway?:string};
 type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
@@ -128,11 +129,16 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
   const links=graph.edges.get(from)??[];
   if(links.length===(index.edgeCounts.get(from)??0))continue;
   for(const edge of links){
-   if(index.ids.has(edge.id))continue;
+   const found=index.byId.get(edge.id);
+   if(found){
+    if(found.aNode===from&&found.bNode===edge.to)found.forward=true;
+    if(found.bNode===from&&found.aNode===edge.to)found.reverse=true;
+    continue;
+   }
    const b=graph.nodes.get(edge.to);
    if(!b)continue;
    index.ids.add(edge.id);
-   const road:IndexedRoad={id:edge.id,a,b,highway:edge.highway,layer:edge.layer,bridge:edge.bridge,tunnel:edge.tunnel,level:edge.level};
+   const road:IndexedRoad={id:edge.id,a,b,aNode:from,bNode:edge.to,forward:true,reverse:false,highway:edge.highway,layer:edge.layer,bridge:edge.bridge,tunnel:edge.tunnel,level:edge.level};
    // Keep geometry addressable by ID when viewport indexing misses a cell.
    index.byId.set(edge.id,road);
    const minX=Math.floor(Math.min(a[0],b[0])/ROAD_GRID_DEGREES);
@@ -315,6 +321,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{startupTrace('WorldMap mounted');},[]);
  useEffect(()=>{startupTrace('Road graph changed',graph?('nodes='+graph.nodeKeys.length):'not ready');},[graph]);
  useEffect(()=>{startupTrace('Exploration changed','roads='+exploredEdgeIds.length);},[exploredEdgeIds.length]);
+ const [showRoadLevelsDebug,setShowRoadLevelsDebug]=useState(false);
+ const [roadLevelsStats,setRoadLevelsStats]=useState('Zoom in to inspect road connectivity');
  const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
  const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;startupTrace('MapLibre constructor started');const instance=new maplibregl.Map({container:container.current,style,center:initialHeadquarters.current?[initialHeadquarters.current.lng,initialHeadquarters.current.lat]:[-6.1,53.2],zoom:initialHeadquarters.current?11:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
@@ -875,6 +883,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const parkedSourceId='static-parked-cars';
   const parkedLayerId='static-parked-cars-layer';
   const remove=()=>{
+   removeRoadLevelsDebug(instance);
    if(instance.getLayer(parkedLayerId))instance.removeLayer(parkedLayerId);
    if(instance.getSource(parkedSourceId))instance.removeSource(parkedSourceId);
    if(instance.getLayer(exploredTunnelLayerId))instance.removeLayer(exploredTunnelLayerId);
@@ -898,7 +907,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // and simulation loaders independently fetch Explorer-relevant tiles.
    // Ignore duplicate moveend notifications when neither bounds nor sources changed.
    // Source existence is checked to support map-style reloads.
-   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadGraphVersion;
+   const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadGraphVersion+'|levels='+showRoadLevelsDebug;
    if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(purpleSourceId))return;
    const graphChanged=viewportGraphRef.current!==graph;
    viewportSourceSignature.current=signature;
@@ -908,6 +917,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const exploredFeatures:RoadFeature[]=[];
    const parkingRoads:ParkingRoad[]=[];
    const scannedTunnels=new Set<string>();
+   const debugRoads:IndexedRoad[]=[];
    const showParkedCars=instance.getZoom()>=16.8;
    const seen=new Set<string>();
    // Undiscovered roads remain in the graph, not a map GeoJSON source.
@@ -933,6 +943,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(Math.max(a[0],b[0])<west||Math.min(a[0],b[0])>east||Math.min(a[1],b[1])>north||Math.max(a[1],b[1])<south)continue;
      seen.add(id);
      if(road.tunnel===true)scannedTunnels.add(id);
+     if(showRoadLevelsDebug&&debugRoads.length<6000)debugRoads.push(road);
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
      if(!explored)continue;
@@ -978,6 +989,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     }
    }
    visibleTunnelIds.current=scannedTunnels;
+   if(showRoadLevelsDebug){
+    const stats=syncRoadLevelsDebug(instance,debugRoads,graph);
+    setRoadLevelsStats(`${stats.roads.toLocaleString()} loaded roads · ${stats.tunnels} tunnels · ${stats.bridges} bridges · ${stats.oneWays} one-way · ${stats.noExit} no-exit nodes`);
+    diagnostic('map:road-levels',`roads=${stats.roads} tunnels=${stats.tunnels} bridges=${stats.bridges} oneWays=${stats.oneWays} noExit=${stats.noExit}`);
+   }else removeRoadLevelsDebug(instance);
    visibleRoadIndex.current=index;
    visibleExploredFeatures.current=purpleById;
    // Build a new empty updateable source only on first use or style reload.
@@ -1053,7 +1069,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   instance.on('style.load',update);
   if(instance.isStyleLoaded())update();
   return()=>{cancelled=true;++scanRevision;if(scanTimer!==undefined)clearTimeout(scanTimer);if(refreshRoadLines.current===update)refreshRoadLines.current=null;instance.off('moveend',update);instance.off('zoomend',update);instance.off('style.load',update);};
- },[graph,roadGraphVersion,ready,basemap]);
+ },[graph,roadGraphVersion,ready,basemap,showRoadLevelsDebug]);
 
  // Ferries remain operational; sea routes no longer generate territory fog.
  useEffect(()=>{
@@ -1153,5 +1169,5 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><div>{stationStatus}</div><div>{restStatus}</div><div>Only invested properties and destinations in use are shown; all facilities remain available for routing.</div><label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><div>{stationStatus}</div><div>{restStatus}</div><div>Only invested properties and destinations in use are shown; all facilities remain available for routing.</div><label className="territory-toggle"><input type="checkbox" checked={showRoadLevelsDebug} onChange={e=>setShowRoadLevelsDebug(e.target.checked)}/> Road levels &amp; connectivity (diagnostic)</label>{showRoadLevelsDebug&&<div className="te-road-level-legend"><div><span style={{color:'#b660ff'}}>━━</span> Purple dashed: tunnel</div><div><span style={{color:'#ffb249'}}>━━</span> Amber: bridge</div><div><span style={{color:'#e85ad6'}}>┄┄</span> Pink dashed: lower layer</div><div><span style={{color:'#91a1ad'}}>━━</span> Grey: surface</div><div><span style={{color:'#00e0ff'}}>➜</span> Cyan arrows: one-way travel</div><div><span style={{color:'#ff465f'}}>●</span> Red dot: no loaded outgoing road</div><div>{roadLevelsStats}</div><div>Shows only loaded OSM graph roads. A crossing is connected only if the same real node ID is shared; a red dot may disappear when adjacent tiles load. Tap a coloured road to inspect its OSM IDs.</div></div>}<label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }
