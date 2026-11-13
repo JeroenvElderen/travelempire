@@ -324,6 +324,27 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const [showRoadLevelsDebug,setShowRoadLevelsDebug]=useState(false);
  const [roadLevelsStats,setRoadLevelsStats]=useState('Zoom in to inspect road connectivity');
  const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
+ // Tap a diagnostic road or endpoint to inspect actual OSM identifiers.
+ useEffect(()=>{
+  const instance=map.current;
+  if(!ready||!instance||!showRoadLevelsDebug)return;
+  const inspect=(event:maplibregl.MapMouseEvent)=>{
+   if(selectingRef.current)return;
+   const layers=ROAD_LEVEL_DEBUG_LAYER_IDS.filter(id=>instance.getLayer(id));
+   if(!layers.length)return;
+   const feature=instance.queryRenderedFeatures(event.point,{layers})[0];
+   if(!feature)return;
+   const p=feature.properties??{};
+   const endpoint=feature.layer.id==='te-road-level-terminals';
+   const message=endpoint
+    ?`No loaded outbound connection · OSM node ${String(p.node??'?')} · inbound ${String(p.incoming??'?')}. Other tiles may still be loading.`
+    :`OSM road ${String(p.roadId??'?')} · ${String(p.kind??'?')} · ${String(p.direction??'?')} · layer ${String(p.layer??0)}${p.level!==null&&p.level!==undefined?' · level '+String(p.level):''} · OSM nodes ${String(p.aNode??'?')} → ${String(p.bNode??'?')}`;
+   new maplibregl.Popup({offset:14,maxWidth:'320px'}).setLngLat(event.lngLat)
+    .setText(message).addTo(instance);
+  };
+  instance.on('click',inspect);
+  return()=>instance.off('click',inspect);
+ },[ready,showRoadLevelsDebug]);
  const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  useEffect(()=>{const style=styleFor('standard');if(!container.current||!style)return;startupTrace('MapLibre constructor started');const instance=new maplibregl.Map({container:container.current,style,center:initialHeadquarters.current?[initialHeadquarters.current.lng,initialHeadquarters.current.lat]:[-6.1,53.2],zoom:initialHeadquarters.current?11:9,minZoom:1,maxZoom:19,attributionControl:false});map.current=instance;instance.addControl(new maplibregl.NavigationControl({showCompass:true}),'bottom-right');instance.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');instance.on('styleimagemissing',event=>{
   if(!event.id||instance.hasImage(event.id))return;
@@ -1034,6 +1055,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Always keep the purple network above the red road network and basemap.
    // This changes rendering only; vehicle simulation and discovery stay intact.
    if(instance.getLayer(exploredLayerId))instance.moveLayer(exploredLayerId);
+   // Diagnostics belong above the normal blue exploration network so their
+   // colour-coded geometry can be inspected without changing discovery.
+   if(showRoadLevelsDebug)for(const id of ROAD_LEVEL_DEBUG_LAYER_IDS)
+    if(instance.getLayer(id))instance.moveLayer(id);
    // Decorative cars appear only in dense parallel service aisles at close zoom.
    // Reuse GPU symbols: no DOM markers, simulation ticks, timers or saved state.
    const parked=showParkedCars?buildParkedCars(parkingRoads,
