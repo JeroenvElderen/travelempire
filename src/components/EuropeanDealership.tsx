@@ -5,8 +5,8 @@ import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
-type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const [brand,setBrand]=useState(initialBrand);
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
  const [selected,setSelected]=useState(initialModel??'Toyota Corolla Saloon');
@@ -107,8 +107,10 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <div className="eu-revenue"><strong>+{bonus}% fare revenue</strong><span>Example €25 fare → €{(25*(1+bonus/100)).toFixed(2)}</span><small>+1% per paid equipment option or premium paint/wheels; engine +5% above cheapest, or +1% if only one engine is available. Applied to completed passenger fares.</small></div>
     <div className="eu-price-line"><span>Estimated energy cost / 100 km</span><strong>{eur((activeVariant?.fuel??model.fuel)==='Electric'?18*.32:(activeVariant?.fuel??model.fuel)==='Hybrid'?4.6*1.85:(activeVariant?.fuel??model.fuel)==='Diesel'?5.8*1.75:8*1.85)}</strong></div>
     <div className="eu-price-line"><span>Order quantity</span><strong>{quantity}</strong></div>
+    <div className="eu-price-line"><span>Delivery depot</span><strong>{depotName}</strong></div>
+    {parkingError&&<p className="dealer-parking-error" role="alert">{parkingError}</p>}
     <div className="eu-price-total"><span>Due at checkout incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
-    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-source-note">Review your configuration and payment before confirming. {quantity} vehicle(s) · {mode} · {eur(upfront*quantity)} due now · {eur(Math.max(0,cash-upfront*quantity))} cash remaining.</p><button className="eu-order" disabled={!ready||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
+    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-source-note">Review your configuration and payment before confirming. {quantity} vehicle(s) · {mode} · {eur(upfront*quantity)} due now · {eur(Math.max(0,cash-upfront*quantity))} cash remaining.</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
     <small className="eu-disclaimer">Curated European-market-inspired game catalogue. Selected 2026 models have published manufacturer variant prices; other 2026 references may be undated live starting prices. All remaining prices and factory upgrades are gameplay estimates. Model-year availability and equipment compatibility are not fully manufacturer-verified. Petrol, diesel, hybrid and electric vehicles now use separate simplified energy-consumption and operating-cost profiles; model-specific WLTP data and charging infrastructure are not yet implemented.</small>
    </aside>
   </div>
