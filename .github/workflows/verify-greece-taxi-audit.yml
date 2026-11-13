@@ -1,0 +1,25 @@
+name: Verify Greece taxi-access auditing tools
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/osm_taxi_access.py"
+      - "scripts/repair_greece_taxi_access.py"
+      - "scripts/activate_greece_taxi_access.py"
+      - "scripts/tests/test_greece_taxi_access.py"
+      - ".github/workflows/verify-greece-taxi-audit.yml"
+jobs:
+  audit-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install local OSM reader
+        run: python -m pip install osmium
+      - name: Compile scripts
+        run: python -m py_compile scripts/osm_taxi_access.py scripts/repair_greece_taxi_access.py scripts/activate_greece_taxi_access.py
+      - name: Exercise access rules and synthetic OSM audit
+        run: python -m unittest discover -s scripts/tests -p 'test_greece_taxi_access.py' -v
