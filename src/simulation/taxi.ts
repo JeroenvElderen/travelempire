@@ -579,7 +579,7 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 }
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
-export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number};
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string};
 export const passengerPairKey=(pickup:Point,dropoff:Point)=>key(pickup)+'>'+key(dropoff);
 /** The actual passenger route is authoritative, not an outdated quote. */
 export function pricedPassengerFare(distanceMeters:number,surgeMultiplier=1):number{
