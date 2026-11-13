@@ -22,7 +22,11 @@ export async function roadTileManifest():Promise<Manifest>{
    const response=await fetch(url,{cache:'no-store'});
    if(!response.ok)return bundled;
    const supplemental=await response.json() as Manifest;
-   if(supplemental.tileSize!==bundled.tileSize||!supplemental.tiles)return bundled;
+   // A v1 supplemental manifest must not override v2 files after a staged
+   // tunnel/bridge metadata upgrade. The new bundled manifest already
+   // contains all tiles merged at download/enrichment time.
+   if(supplemental.tileSize!==bundled.tileSize||
+      supplemental.format!==bundled.format||!supplemental.tiles)return bundled;
    return {...bundled,tiles:{...bundled.tiles,...supplemental.tiles}};
   }catch{return bundled;}
  })().catch(e=>{manifestPromise=undefined;throw e});
