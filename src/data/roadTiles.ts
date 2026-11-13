@@ -1,4 +1,6 @@
 /** Geographic road tiles. No administrative regions are used at runtime. */
+import {isIOSWebKit} from './roadMemoryPolicy';
+const IOS_REDUCED_MEMORY=typeof navigator!=='undefined'&&isIOSWebKit(navigator.userAgent);
 export interface RoadSegment {id:string;a:number;b:number;coordinates:[[number,number],[number,number]];length:number;highway:string;speed:number;oneway:number;
  /** Optional OSM vertical metadata; absent on existing v1 tiles. */
  layer?:number;bridge?:boolean;tunnel?:boolean;level?:number;taxiOnly?:boolean;
@@ -73,12 +75,15 @@ export function loadRoadTile(id:string):Promise<RoadSegment[]>{
  const task=(async()=>{const manifest=await roadTileManifest();const info=manifest.tiles[id];if(!info)return [];
   const url=storage?`${storage}/storage/v1/object/public/${bucket}/${encodeURIComponent(info.file)}`:`${root}tiles/${encodeURIComponent(info.file)}`;
   const key=`v2:${manifest.format}:${manifest.tileSize}:${id}:${info.file}:${info.edges}`;
-  const persisted=await cachedTile(key).catch(()=>undefined);
+  // Structured-cloning a decoded 30k-edge tile in and out of IndexedDB
+  // briefly doubles the entire JSON object graph on mobile Safari.
+  // On iOS, parse the compressed response in the worker instead.
+  const persisted=IOS_REDUCED_MEMORY?undefined:await cachedTile(key).catch(()=>undefined);
   if(persisted){cache.set(id,persisted);return persisted;}
   const request=++serial;const result=new Promise<RoadSegment[]>((resolve,reject)=>callbacks.set(request,{resolve,reject}));
   parser().postMessage({id:request,regionId:id,url});const roads=await result;cache.set(id,roads);
   // Persist asynchronously; gameplay never waits for a storage transaction.
-  void saveTile(key,roads).catch(()=>{});
+  if(!IOS_REDUCED_MEMORY)void saveTile(key,roads).catch(()=>{});
   return roads;
  })().finally(()=>pending.delete(id));pending.set(id,task);return task;
 }
