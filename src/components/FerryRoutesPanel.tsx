@@ -7,6 +7,7 @@ import {ferryPhase} from '../maritime/ferryService';
 import './ferry-routes.css';
 
 type FerryTab='routes'|'harbours'|'fleet';
+type RouteOwnershipFilter='all'|'unowned'|'purchased';
 type Props={
  company:Company|null;
  onPurchase:(routeId:string,price:number)=>void;
@@ -30,6 +31,7 @@ export default function FerryRoutesPanel({
  onReloadNetwork,gameNow,headquarters,ferryRevenueByDay
 }:Props){
  const [tab,setTab]=useState<FerryTab>('routes');
+ const [routeFilter,setRouteFilter]=useState<RouteOwnershipFilter>('all');
  const [query,setQuery]=useState('');
  const [error,setError]=useState('');
  const [reloading,setReloading]=useState(false);
@@ -60,6 +62,8 @@ export default function FerryRoutesPanel({
  const sailing=boughtRoutes.filter(r=>service(r)?.phase==='sailing').length;
  const normalizedQuery=query.toLowerCase().trim();
  const filteredRoutes=eligibleRoutes.filter(r=>{
+  if(routeFilter==='unowned'&&purchased.has(r.id))return false;
+  if(routeFilter==='purchased'&&!purchased.has(r.id))return false;
   const names=`${r.name??''} ${displayName(ports.get(r.from),r.from)} ${displayName(ports.get(r.to),r.to)}`.toLowerCase();
   return !normalizedQuery||names.includes(normalizedQuery);
  });
@@ -112,8 +116,15 @@ export default function FerryRoutesPanel({
    <button type="button" className="ferry-reload" disabled={reloading} onClick={()=>{void reloadData()}}><RefreshCw size={16}/>{reloading?'Refreshing…':'Refresh data'}</button>
   </div>
   {tab==='routes'&&<>
+   <div className="ferry-route-filters" role="group" aria-label="Filter ferry routes by ownership">
+    {([['all','All routes',eligibleRoutes.length],['unowned','Unowned',eligibleRoutes.length-boughtRoutes.length],['purchased','Purchased',boughtRoutes.length]] as const).map(([filter,label,count])=>
+     <button key={filter} type="button" className={routeFilter===filter?'active':''} aria-pressed={routeFilter===filter}
+      onClick={()=>{setRouteFilter(filter);setShowAll(false)}}>
+      {label}<span>{count}</span>
+     </button>)}
+   </div>
    <div className="ferry-section-heading"><div><h3>Ferry connections</h3><p>Buy a route once to operate one automatic ferry in both directions.</p></div><span>{filteredRoutes.length} available</span></div>
-   {visibleRoutes.length===0&&<div className="ferry-empty"><Anchor size={25}/><strong>{network?'No routes currently available':'Loading ferry network…'}</strong><p>Discover a harbour access road or reach a destination by ferry to reveal more routes.</p></div>}
+   {visibleRoutes.length===0&&<div className="ferry-empty"><Anchor size={25}/><strong>{network?(routeFilter==='unowned'?'No unowned routes match your filters':routeFilter==='purchased'?'No purchased routes match your filters':'No routes currently available'):'Loading ferry network…'}</strong><p>{routeFilter==='purchased'?'Purchase a route from the Unowned filter to start ferry operations.':'Discover a harbour access road or reach a destination by ferry to reveal more routes.'}</p></div>}
    <div className="ferry-routes-grid">{visibleRoutes.map(route=>{
     const owned=purchased.has(route.id),origin=orientation(route),from=displayName(ports.get(origin.from),origin.from),to=displayName(ports.get(origin.to),origin.to);
     const phase=owned?service(route):null;
