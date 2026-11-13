@@ -10,7 +10,7 @@ import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole}
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
-import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 // Two independent exploration planners run outside passenger dispatch.
 // Their results are committed by this coordinator only after validating the
@@ -589,7 +589,7 @@ let poiRoadCursor=0;
 
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[]};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[]};
-type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean};
+type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
 type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];availableTaxiIds?:string[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
@@ -680,8 +680,47 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   if(msg.type==='routeRequest'){
    const started=performance.now();
    const from=nearest(graph,msg.from),to=nearest(graph,msg.to);
-   const planned=from&&to?(msg.discoveredOnly?routeDiscovered(graph,from,to,indexedExplored):route(graph,from,to)):null;
-   self.postMessage({type:'routeResult',revision:activeRevision,requestId:msg.requestId,from:msg.from,to:msg.to,path:planned?.path??null,edgeIds:planned?.edgeIds??null,durationMs:performance.now()-started});
+   let planned:{path:Point[];edgeIds:string[]}|null=null;
+   let reason='no-directed-path';
+   let originNode=from;
+   let targetNode=to;
+   if(msg.activeRoad){
+    const {edgeId,start,end}=msg.activeRoad;
+    const nodes=roadEndpoints.get(edgeId);
+    if(!nodes){
+     reason='active-edge-unloaded';
+    }else{
+     const [a,b]=nodes;
+     const aPoint=graph.nodes.get(a),bPoint=graph.nodes.get(b);
+     const forward=!!aPoint&&!!bPoint&&meters(aPoint,start)<3&&meters(bPoint,end)<3;
+     const reverse=!!aPoint&&!!bPoint&&meters(bPoint,start)<3&&meters(aPoint,end)<3;
+     if(!forward&&!reverse){
+      reason='active-edge-endpoints-mismatch';
+     }else{
+      const anchored=routeFromDirectedRoad(graph,{
+       edgeId,fromNode:forward?a:b,toNode:forward?b:a,position:msg.from,
+      },to,msg.discoveredOnly?indexedExplored:undefined);
+      planned=anchored.path&&anchored.edgeIds?
+       {path:anchored.path,edgeIds:anchored.edgeIds}:null;
+      reason=anchored.reason;
+      originNode=forward?a:b;
+      targetNode=to;
+     }
+    }
+   }else if(from&&to){
+    // Legacy route callers are supported; the taxi recovery caller always
+    // supplies an exact active segment to avoid accidental level changes.
+    const conventional=msg.discoveredOnly
+     ?routeDiscovered(graph,from,to,indexedExplored):route(graph,from,to);
+    if(conventional){planned=conventional;reason='ok';}
+   }else reason=from?'target-unloaded':'origin-unloaded';
+   const originPoint=originNode?graph.nodes.get(originNode):undefined;
+   const targetPoint=targetNode?graph.nodes.get(targetNode):undefined;
+   self.postMessage({type:'routeResult',revision:activeRevision,requestId:msg.requestId,
+    from:msg.from,to:msg.to,path:planned?.path??null,edgeIds:planned?.edgeIds??null,
+    reason,originNode,targetNode,originOffsetMeters:originPoint?Math.round(meters(originPoint,msg.from)):null,
+    targetOffsetMeters:targetPoint?Math.round(meters(targetPoint,msg.to)):null,
+    durationMs:performance.now()-started});
    return;
   }
   // On slow/mobile browsers, a planner may hang during a nationwide graph
