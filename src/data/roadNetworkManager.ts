@@ -202,7 +202,12 @@ export class RoadNetworkManager {
    // If optional work filled the tiny iOS queue, replace a speculative tile,
    // but do not cancel an active in-flight request or another depot request.
    if(this.queue.length>=MAX_PENDING_TILES){
-    const speculative=this.queue.findLastIndex(key=>(this.priority.get(key)??Infinity)>=0);
+    let speculative=-1;
+    for(let i=this.queue.length-1;i>=0;i--){
+     if((this.priority.get(this.queue[i])??Infinity)>=0){
+      speculative=i;break;
+     }
+    }
     if(speculative<0)break;
     const discarded=this.queue.splice(speculative,1)[0];
     this.queued.delete(discarded);this.priority.delete(discarded);
