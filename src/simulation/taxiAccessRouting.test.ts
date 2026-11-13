@@ -28,6 +28,7 @@ describe('explicitly taxi-permitted OSM access',()=>{
    .toEqual(['inbound','osm-157772015-0','outbound']);
   expect(explored.has('osm-157772015-0')).toBe(false);
   expect(passengerRoadNodes(graph(),explored).has('b')).toBe(true);
+  expect(passengerRoadNodes(graph(),new Set(['osm-157772015-0'])).size).toBe(0);
  });
  it('can replan while already on an undiscovered but legal taxi-only road',()=>{
   const result=routeFromDirectedRoad(graph(),{
