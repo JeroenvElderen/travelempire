@@ -825,6 +825,11 @@ export default function App(){
       explorationSection:assigned.explorationSection,explorationSectionCompleted:assigned.explorationSectionCompleted,
       explorationSectionTotal:assigned.explorationSectionTotal};
     }
+    // A timed explorer rest belongs to the game clock. Async dispatch results
+    // cannot cancel it before its deadline.
+    if(t.kind==='explorer'&&t.status==='PAUSED'&&t.shiftParked&&
+       t.restUntilGameMs!==undefined&&
+       (gameClockRef.current?.epochMs??0)<t.restUntilGameMs)return t;
     // Worker state is authoritative for automatic Explorer parking. A stale
     // PAUSED snapshot must not survive after the worker clears that state.
     if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&
@@ -1331,7 +1336,17 @@ export default function App(){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
        const hotelDrivingMs=delivered.drivingSinceHotelGameMs??0;
        if(delivered.status==='PAUSED'&&delivered.shiftParked){
-        const until=delivered.restUntilGameMs??(gameNow+((delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?9*3600000:30*60000));
+        const restDuration=(delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?9*3600000:30*60000;
+         const storedUntil=delivered.restUntilGameMs;
+         const until=storedUntil??(gameNow+restDuration);
+         // Recover corrupted or legacy deadlines more than a game day ahead.
+         if(delivered.kind==='explorer'&&storedUntil!==undefined&&storedUntil>gameNow+24*3600000){
+          diagnostic('explorers:stale-rest-deadline',`id=${delivered.id} deadline=${storedUntil} now=${gameNow}`);
+          return {...delivered,status:'IDLE' as const,shiftParked:false,
+           pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,
+           drivingSinceHotelGameMs:0,restStopId:undefined,restStopName:undefined,
+           restStopPosition:undefined};
+         }
         if(gameNow<until)return {...delivered,restUntilGameMs:until};
         return {...delivered,status:'IDLE' as const,shiftParked:false,pauseAtHome:false,restUntilGameMs:undefined,drivingSinceRestGameMs:0,drivingSinceHotelGameMs:(delivered.restStopId?.startsWith('hotel:')||delivered.restStopId?.startsWith('overnight:'))?0:(delivered.drivingSinceHotelGameMs??0),restStopId:undefined,restStopName:undefined,restStopPosition:undefined};
        }
