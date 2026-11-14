@@ -50,3 +50,30 @@
 .live-finance-overview .live-finance-net{padding:9px 0;border-top:1px solid #344b5c;border-bottom:1px solid #344b5c;font-weight:750}
 .live-finance-overview .live-finance-net strong{font-size:15px}
 @media(max-width:400px){.live-finance-main{padding:7px 11px}.live-finance-summary{gap:7px}.live-finance-summary>strong{font-size:13px}.live-finance-summary-label{font-size:9px}}
+
+
+/* Compact floating finance HUD and scroll-contained category view. */
+.live-finance-wrap{background:rgba(17,25,49,.92);border:1px solid rgba(192,161,255,.40);border-radius:19px;box-shadow:0 8px 28px #0005;backdrop-filter:blur(18px)}
+.live-finance-main{min-height:49px;padding:10px 15px;background:transparent;border:0;border-radius:19px}
+.live-finance-summary{width:100%;gap:10px}
+.live-finance-summary-title{font-size:14px}
+.live-finance-summary>strong{font-size:17px}
+.live-finance-summary>svg:last-child{margin-left:auto}
+.live-finance-panel{top:calc(100% + 5px);left:0;right:0;max-height:min(61dvh,490px);padding:16px 14px;background:rgba(13,22,44,.96);border:1px solid rgba(191,151,245,.43);border-radius:20px;box-shadow:0 18px 40px #0009;gap:14px}
+.live-finance-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:0;border:0}
+.live-finance-overview>div{min-width:0;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;padding:12px 4px;background:#ffffff0b;border:1px solid #ffffff24;border-radius:13px}
+.live-finance-overview>div span{font-size:10px;color:#b6b4cc}
+.live-finance-overview>div strong{font-size:clamp(11px,2.8vw,16px);font-variant-numeric:tabular-nums;white-space:nowrap}
+.live-finance-category-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.live-finance-category-tabs button{min-width:0;min-height:40px;padding:8px 5px;border:1px solid #b9add45c;border-radius:13px;background:#ffffff0b;color:#d9d2eb;font-size:11px;font-weight:650}
+.live-finance-category-tabs button.selected{background:linear-gradient(125deg,#7945a7,#a94cbf);border-color:#e2a5ff;color:white;box-shadow:0 0 13px #b35bdf55}
+.live-finance-category-list{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;scrollbar-width:thin}
+.live-finance-category-list>p{font-size:12px;color:#b3bfd0;margin:0}
+.live-finance-category-row{display:grid;gap:6px}
+.live-finance-category-meta{display:grid;grid-template-columns:minmax(0,1fr) auto 46px;gap:9px;align-items:center;font-size:12px}
+.live-finance-category-meta>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-finance-category-meta strong{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.live-finance-category-meta small{text-align:right;color:#aebcd0;font-size:11px}
+.live-finance-category-track{height:5px;border-radius:99px;background:#ffffff20;overflow:hidden}
+.live-finance-category-track span{display:block;height:100%;background:linear-gradient(90deg,#b46de8,#d2a6ff);border-radius:99px}
+@media(max-width:400px){.live-finance-overview>div strong{font-size:11px}.live-finance-panel{padding:12px}.live-finance-category-tabs button{font-size:10px}}
