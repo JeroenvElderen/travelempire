@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {collectBankRevenue,partnershipOffer,revenueAverage,type BankPartnership} from './bankPartnerships';
+import {collectBankRevenue,bookBankCollection,partnershipOffer,revenueAverage,type BankPartnership} from './bankPartnerships';
 
 const contract=(overrides:Partial<BankPartnership>={}):BankPartnership=>({
  id:'one',bank:'Growth Capital Bank',principal:2000000,revenueShare:18,
@@ -52,6 +52,10 @@ describe('revenue-backed bank partnerships',()=>{
  });
  it('does not pay any revenue share on invalid gross income',()=>{
   expect(collectBankRevenue([contract()],Number.NaN).paid).toBe(0);
+ });
+ it('tracks daily bank payments without overwriting previous days',()=>{
+  expect(bookBankCollection({'2026-11-13':10,'2026-11-14':5},'2026-11-14',2.5))
+   .toEqual({'2026-11-13':10,'2026-11-14':7.5});
  });
  it('calculates daily history revenue average',()=>{
   expect(revenueAverage([{revenue:400},{revenue:600}])).toBe(500);
