@@ -110,10 +110,25 @@ export default function App(){
   const id=company.id;
   let current=loadGameClock(id);
   gameClockRef.current=current;setGameClock(current);
-  const update=()=>{current=advanceGameClock(current);gameClockRef.current=current;setGameClock(current);saveGameClock(id,current);};
+  const update=()=>{
+   if(document.visibilityState!=='visible')return;
+   current=advanceGameClock(current);
+   gameClockRef.current=current;setGameClock(current);saveGameClock(id,current);
+  };
+  const pause=()=>{
+   current={...current,lastRealMs:Date.now()};
+   gameClockRef.current=current;saveGameClock(id,current);
+  };
+  const resume=()=>{
+   current={...current,lastRealMs:Date.now()};
+   gameClockRef.current=current;setGameClock(current);saveGameClock(id,current);
+  };
+  const visibility=()=>{if(document.visibilityState==='visible')resume();else pause();};
   const timer=window.setInterval(update,1000);
-  window.addEventListener('pagehide',update);
-  return()=>{window.clearInterval(timer);window.removeEventListener('pagehide',update);saveGameClock(id,current);};
+  window.addEventListener('visibilitychange',visibility);
+  window.addEventListener('pagehide',pause);
+  window.addEventListener('pageshow',resume);
+  return()=>{window.clearInterval(timer);window.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',pause);window.removeEventListener('pageshow',resume);pause();};
  },[company?.id]);
  // Settle owned ferry fares only when the same game-time boat timetable used
  // by the map completes a crossing, including the return trip.
@@ -1041,33 +1056,18 @@ export default function App(){
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph||!fleet.taxis.length)return;
-  // A browser cannot execute simulation ticks while closed. Persist a real-time
-  // checkpoint and replay missed time through the EXISTING vehicle/economy
-  // integrator when the player returns. Never award fabricated passive fares.
-  // Replay is throttled to protect mobile Safari from long blocking loops.
-  const checkpointKey='travelempire.simulatedThrough.'+company.id;
-  const initialReal=Date.now();
-  let simulatedThrough=initialReal;
-  try {
-   const saved=Number(localStorage.getItem(checkpointKey));
-   if(Number.isFinite(saved)&&saved>0&&saved<=initialReal)
-    simulatedThrough=saved;
-  } catch { /* Storage unavailable: continue live */ }
+  // No offline catch-up: freeze movement and finances while Safari is hidden.
   let previousTick=performance.now();
+  const resetTick=()=>{previousTick=performance.now();};
+  document.addEventListener('visibilitychange',resetTick);
+  window.addEventListener('pageshow',resetTick);
   const timer=window.setInterval(()=>{
-   if(document.visibilityState==='hidden')return;
    const clock=performance.now();
-   const now=Date.now();
-   const liveSeconds=Math.max(0,(clock-previousTick)/1000);
+   if(document.visibilityState!=='visible'){previousTick=clock;return;}
+   const elapsedSeconds=Math.min(2,Math.max(0,(clock-previousTick)/1000));
    previousTick=clock;
-   // Maximum five simulated seconds per frame of the one-second scheduler.
-   // Any remaining offline time stays in the durable checkpoint, rather than
-   // silently disappearing or freezing Safari in one enormous catch-up tick.
-   const outstanding=Math.max(0,(now-simulatedThrough)/1000);
-   const elapsedSeconds=Math.min(5,Math.max(liveSeconds,outstanding));
    if(elapsedSeconds<=0)return;
-   simulatedThrough=Math.min(now,simulatedThrough+elapsedSeconds*1000);
-   try {localStorage.setItem(checkpointKey,String(simulatedThrough));}catch{}
+   const now=Date.now();
    setFleet(old=>{
     const tickStarted=performance.now();
     const savedIds=old.exploredEdgeIds??[];
@@ -1655,7 +1655,7 @@ export default function App(){
       bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:bookBankCollection(old.bankPartnershipPaidByDay,tickDay,partnership.paid),bankPartnershipPaidByLenderByDay:bookBankLenderCollections(old.bankPartnershipPaidByLenderByDay,tickDay,partnership.settlements),loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal+securedTick.repossessions.reduce((sum,event)=>sum+event.value,0),transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:gameNow,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...transactions,...(old.transactions??[])].slice(0,100)};
    });
   },1000);
-  return()=>window.clearInterval(timer);
+  return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',resetTick);window.removeEventListener('pageshow',resetTick);};
  },[company?.id,graph,fleet.taxis.length,research]);
 
  // An untouched company needs one real HQ road before any specialist can
