@@ -42,6 +42,14 @@ describe('finance forecasting',()=>{
   expect(projection.totalOperatingExpenses).toBe(baseline.totalOperatingExpenses);
   expect(projection.closingCash).toBeLessThan(baseline.closingCash);
  });
+ it('projects owned ferry income and costs from the actual timetable',()=>{
+  const withRoute={...company,purchasedFerryRouteIds:['ferry-1'],ferryServiceStartedAt:{'ferry-1':start}};
+  const withFerryHistory={...fleet,ferryRevenueByDay:{'2026-11-01':0},ferryOperatingCostByDay:{'2026-11-01':0}};
+  const noRoutes=forecastBusiness(withRoute,withFerryHistory,plan,start,start,[]);
+  const projected=forecastBusiness(withRoute,withFerryHistory,plan,start,start,[{id:'ferry-1',durationMinutes:60}]);
+  expect(projected.totalRevenue).toBeGreaterThan(noRoutes.totalRevenue);
+  expect(projected.totalOperatingExpenses).toBeGreaterThan(noRoutes.totalOperatingExpenses);
+ });
  it('models savings transfers without counting them as expenses',()=>{
   const saved={...fleet,bank:{savings:0,reserve:0,autoSavePercent:10,minimumOperatingCash:0,entries:[]}};
   const projection=forecastBusiness(company,saved,plan,start,start);
