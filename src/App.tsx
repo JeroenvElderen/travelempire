@@ -1041,13 +1041,33 @@ export default function App(){
  },[company?.id]);
  useEffect(()=>{
   if(!company||!graph||!fleet.taxis.length)return;
+  // A browser cannot execute simulation ticks while closed. Persist a real-time
+  // checkpoint and replay missed time through the EXISTING vehicle/economy
+  // integrator when the player returns. Never award fabricated passive fares.
+  // Replay is throttled to protect mobile Safari from long blocking loops.
+  const checkpointKey='travelempire.simulatedThrough.'+company.id;
+  const initialReal=Date.now();
+  let simulatedThrough=initialReal;
+  try {
+   const saved=Number(localStorage.getItem(checkpointKey));
+   if(Number.isFinite(saved)&&saved>0&&saved<=initialReal)
+    simulatedThrough=saved;
+  } catch { /* Storage unavailable: continue live */ }
   let previousTick=performance.now();
   const timer=window.setInterval(()=>{
+   if(document.visibilityState==='hidden')return;
    const clock=performance.now();
-   // Use measured elapsed time, limiting large jumps after background throttling.
-   const elapsedSeconds=Math.min(5,Math.max(0,(clock-previousTick)/1000));
-   previousTick=clock;
    const now=Date.now();
+   const liveSeconds=Math.max(0,(clock-previousTick)/1000);
+   previousTick=clock;
+   // Maximum five simulated seconds per frame of the one-second scheduler.
+   // Any remaining offline time stays in the durable checkpoint, rather than
+   // silently disappearing or freezing Safari in one enormous catch-up tick.
+   const outstanding=Math.max(0,(now-simulatedThrough)/1000);
+   const elapsedSeconds=Math.min(5,Math.max(liveSeconds,outstanding));
+   if(elapsedSeconds<=0)return;
+   simulatedThrough=Math.min(now,simulatedThrough+elapsedSeconds*1000);
+   try {localStorage.setItem(checkpointKey,String(simulatedThrough));}catch{}
    setFleet(old=>{
     const tickStarted=performance.now();
     const savedIds=old.exploredEdgeIds??[];
