@@ -29,7 +29,7 @@ function nearbyRoads(point:Point):Set<string>{
 }
 let roadCount=0;
 const roleAllowed=(role:Taxi['explorerRole']):Set<string>=>{
- if(role==='poi')return known;
+ if(role==='poi')return roadClasses.get('poi')??new Set<string>();
  if(!role||role==='balanced')return known;
  let result=roadClasses.get(role);
  if(result)return result;
@@ -82,7 +82,7 @@ function addRoads(roads:RoadSegment[]):void{
   };
   if(road.oneway!==-1)add(a,b);
   if(road.oneway!==1)add(b,a);
-  const roles:Taxi['explorerRole'][]=['highway','primary','secondary','residential'];
+  const roles:Taxi['explorerRole'][]=['highway','primary','secondary','residential','poi'];
   for(const role of roles)if(explorerClassEligible(role,road.highway)){
    let set=roadClasses.get(role!);
    if(!set){set=new Set();roadClasses.set(role!,set);}
