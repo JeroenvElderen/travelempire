@@ -76,12 +76,34 @@ export function collectBankRevenue(deals:readonly BankPartnership[],gross:number
 }
 /** Immutable daily cash-flow record: unlike operating profit this includes
  * the automatic revenue-share financing deductions. */
+/** Tracks completed game days even when no repayments occurred, so the
+ * daily report can distinguish a genuine zero from unavailable legacy data.
+ * Existing day records reuse their object when the payment is zero.
+ */
 export function bookBankCollection(byDay:Readonly<Record<string,number>>|undefined,day:string,amount:number):Record<string,number>{
- if(!Number.isFinite(amount)||amount<=0)return {...byDay};
+ if(!Number.isFinite(amount)||amount<0)return byDay as Record<string,number>??{};
+ if(amount===0&&byDay&&Object.prototype.hasOwnProperty.call(byDay,day))return byDay as Record<string,number>;
  const days={...byDay,[day]:cents((byDay?.[day]??0)+amount)};
  const keys=Object.keys(days).sort();
  for(const oldDay of keys.slice(0,-365))delete days[oldDay];
  return days;
+}
+/** Persist exact settlement totals by bank for each game day.
+ * Only actual collections are counted; zero days are explicitly represented.
+ */
+export function bookBankLenderCollections(
+ byDay:Readonly<Record<string,Record<string,number>>>|undefined,
+ day:string,settlements:readonly {bank:string;amount:number}[]
+):Record<string,Record<string,number>>{
+ if(!settlements.length&&byDay&&Object.prototype.hasOwnProperty.call(byDay,day))return byDay as Record<string,Record<string,number>>;
+ const lenders={...(byDay?.[day]??{})};
+ for(const {bank,amount} of settlements){
+  if(!bank||!Number.isFinite(amount)||amount<=0)continue;
+  lenders[bank]=cents((lenders[bank]??0)+amount);
+ }
+ const result={...byDay,[day]:lenders};
+ for(const staleDay of Object.keys(result).sort().slice(0,-365))delete result[staleDay];
+ return result;
 }
 export function revenueAverage(days:readonly {revenue:number}[]):number{
  if(!days.length)return 0;
