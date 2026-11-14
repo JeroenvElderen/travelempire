@@ -1245,6 +1245,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       // Shared directed frontier search spans every connected loaded tile.
       // The specialist fallback handles legal one-way exits and roundabouts.
       const harbourGoal=role==='poi'?
+        msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
        const tiers=specialistFallbackRoles(role);
        let chosenRole=role;
        let chosenAllowed=allowed;
