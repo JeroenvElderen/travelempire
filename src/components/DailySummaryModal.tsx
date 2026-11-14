@@ -6,6 +6,7 @@ import './daily-summary.css';
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(n);
 const compact=(n:number)=>new Intl.NumberFormat('en-IE',{notation:'compact',maximumFractionDigits:1}).format(n);
 const signed=(n:number)=>(n>0?'+':'')+money(n);
+const recorded=(n:number|null|undefined)=>n===null||n===undefined?'Not recorded':money(n);
 const change=(current:number,previous:number|null)=>previous!==null&&Math.abs(previous)>.005?100*(current-previous)/Math.abs(previous):null;
 type Detail='operations'|'exploration'|'fleet'|'maritime';
 const sections=[{id:'operations',name:'Operations',Icon:CarFront},{id:'exploration',name:'Exploration',Icon:Compass},{id:'fleet',name:'Fleet',Icon:CarFront},{id:'maritime',name:'Maritime',Icon:Ship}] as const;
@@ -23,6 +24,11 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
  const profitChange=change(summary.net,summary.previousNet);
  const revenueChange=change(summary.revenue,summary.previousRevenue);
  const margin=summary.revenue>0?100*summary.net/summary.revenue:0;
+ const bankPaid=summary.bankRepayments??null;
+ const afterBanks=summary.cashAfterBankRepayments??null;
+ const otherCashMovements=summary.otherCashMovements??null;
+ const openingCash=summary.openingCash??summary.cash-summary.cashChange;
+ const lenderRows=summary.bankLenderRepayments??[];
  const series=summary.weekly;
  const values=series.map(p=>metric==='revenue'?p.revenue:p.profit);
  const min=Math.min(0,...values),max=Math.max(1,...values),range=max-min;
@@ -51,14 +57,39 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
     </header>
     <section className="te-day-profit" aria-label="Daily profit">
      <div className="te-day-profit-symbol"><Coins size={39}/></div>
-     <div><small>NET PROFIT</small><strong className={summary.net>=0?'positive':'negative'}>{signed(summary.net)}</strong>
+     <div><small>OPERATING PROFIT</small><strong className={summary.net>=0?'positive':'negative'}>{signed(summary.net)}</strong>
       <span className={profitChange===null?'te-day-muted':profitChange>=0?'positive':'negative'}>{profitChange===null?'First recorded comparison':(profitChange>=0?'▲ +':'▼ ')+profitChange.toFixed(1)+'% vs previous day'}</span></div>
     </section>
     <div className="te-day-finance">
      <article><Wallet size={19}/><small>REVENUE</small><strong>{money(summary.revenue)}</strong><span className={revenueChange===null?'te-day-muted':revenueChange>=0?'positive':'negative'}>{revenueChange===null?'Gross income':(revenueChange>=0?'▲ +':'▼ ')+revenueChange.toFixed(1)+'%'}</span></article>
      <article><Layers3 size={19}/><small>EXPENSES</small><strong>{money(summary.expenses)}</strong><span>Operating costs</span></article>
-     <article><Target size={19}/><small>MARGIN</small><strong>{margin.toFixed(1)}%</strong><span className={margin>=0?'positive':'negative'}>{margin>=0?'Profitable day':'Loss-making day'}</span></article>
+     <article><Target size={19}/><small>OPERATING MARGIN</small><strong>{margin.toFixed(1)}%</strong><span>Before bank financing</span></article>
     </div>
+    <section className="te-day-panel te-day-cash-reconciliation" aria-label="Revenue-share repayments and cash reconciliation">
+     <h3><Landmark size={20}/> Bank repayments & cash</h3>
+     <div className="te-day-cash-grid">
+      <div><small>Bank revenue shares · {summary.activeBankShare}% active</small><strong className="negative">{bankPaid===null?'Not recorded':'−'+money(bankPaid)}</strong></div>
+      <div><small>Operating result after bank shares</small><strong className={afterBanks!==null&&afterBanks<0?'negative':'positive'}>{recorded(afterBanks)}</strong></div>
+      <div><small>Closing cash balance</small><strong className={summary.cash<0?'negative':'positive'}>{money(summary.cash)}</strong></div>
+     </div>
+     {lenderRows.length>0&&<div className="te-day-lender-list">
+      {lenderRows.map(row=><div key={row.bank}><span>{row.bank} · {row.sharePercent}% share</span><strong className="negative">−{money(row.amount)}</strong></div>)}
+     </div>}
+     <p className="te-day-muted">Bank repayments are deducted from settled taxi and ferry receipts. They reduce cash, but are not operating expenses. The after-bank result does not include purchases, account transfers or other financing cash flows.</p>
+     {bankPaid===null&&<p className="te-day-muted">Historical bank deductions were not recorded per game day in older saves. Future daily reports will show actual collected amounts; no estimated 41% charge is substituted.</p>}
+     {summary.cash<0&&<p className="te-day-cash-warning" role="alert">Operating cash is negative. The day's positive operating profit does not by itself explain the cash balance. Review the reconciliation below for other cash movements and timing differences.</p>}
+     <div className="te-day-cash-details">
+      <h4>Operating cash reconciliation</h4>
+      <div className="te-day-list">
+       <div><span>Opening operating cash</span><strong>{money(openingCash)}</strong></div>
+       <div><span>Operating profit before bank financing</span><strong>{signed(summary.net)}</strong></div>
+       <div><span>Revenue-share repayments</span><strong className="negative">{bankPaid===null?'Not recorded':'−'+money(bankPaid)}</strong></div>
+       <div><span>Other cash movements / timing adjustments</span><strong>{recorded(otherCashMovements)}</strong></div>
+       <div><span>Closing operating cash</span><strong className={summary.cash<0?'negative':''}>{money(summary.cash)}</strong></div>
+      </div>
+      <p className="te-day-muted">{bankPaid===null?'Complete reconciliation is unavailable for this historical game day.':'The other-movements remainder balances opening and closing cash; it may include vehicle purchases, loan principal, taxes, transfers and unrecorded adjustments. It is not a fully itemised cash ledger.'}</p>
+     </div>
+    </section>
     <nav className="te-day-categories" aria-label="Daily report categories">
      {sections.map(({id,name,Icon})=><button type="button" key={id} className={section===id?'active '+id:id} aria-pressed={section===id} onClick={()=>setSection(id)}>
       <Icon size={23}/><span>{name}</span></button>)}
@@ -107,8 +138,14 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
       <div><span>Ferry revenue</span><strong className="positive">{money(summary.ferryRevenue)}</strong></div>
       <div><span>Other income</span><strong className="positive">{money(summary.otherRevenue)}</strong></div>
       {summary.expenseBreakdown.map(entry=><div key={entry.label}><span>{entry.label}</span><strong className="negative">−{money(entry.amount)}</strong></div>)}
+      <div><span>Operating profit (before bank shares)</span><strong>{signed(summary.net)}</strong></div>
+      <div><span>Bank financing repayments</span><strong className="negative">{bankPaid===null?'Not recorded':'−'+money(bankPaid)}</strong></div>
+      <div><span>Operating result after bank shares</span><strong>{recorded(afterBanks)}</strong></div>
+      <div><span>Opening operating cash</span><strong>{money(openingCash)}</strong></div>
+      <div><span>Other cash movements / timing adjustments</span><strong>{recorded(otherCashMovements)}</strong></div>
+      <div><span>Closing operating cash</span><strong className={summary.cash<0?'negative':''}>{money(summary.cash)}</strong></div>
       <div><span>Closing cash change</span><strong>{signed(summary.cashChange)}</strong></div>
-     </div><p className="te-day-muted">Capital injections and loan principal are excluded from operating profit.</p>
+     </div><p className="te-day-muted">Revenue-share repayments, capital injections and loan principal are excluded from operating profit. 'Other cash movements' is a reconciliation remainder, not an itemised explanation.</p>
     </section>}
     <footer className="te-day-footer"><button type="button" onClick={onClose}><ArrowRight size={19}/> Continue to Next Day</button></footer>
    </div>
