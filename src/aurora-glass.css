@@ -376,3 +376,37 @@ body{
  .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-vehicle{min-height:72px;padding:7px 8px}
  .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-vehicle-icon img{display:block;width:48px;height:48px;object-fit:contain}
 }
+
+/* Fleet-only presentation: hide map HUD and use one lighter glass sheet. */
+.nav-v216.fleet-overlay-mode .topbar.world-minimal-topbar,
+.nav-v216.fleet-overlay-mode .main>.live-finance-wrap,
+.nav-v216.fleet-overlay-mode .world-minimal-date,
+.nav-v216.fleet-overlay-mode .world-minimal-money,
+.nav-v216.fleet-overlay-mode .world-minimal-layers{display:none!important}
+.nav-v216.fleet-overlay-mode .fleet-map-overlay{
+ top:12px!important;bottom:12px!important;
+ background:linear-gradient(155deg,rgba(24,41,70,.29),rgba(9,23,46,.39))!important;
+ border:1px solid rgba(204,186,250,.35)!important;
+ box-shadow:0 14px 40px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.13)!important;
+ -webkit-backdrop-filter:blur(15px) saturate(125%)!important;
+ backdrop-filter:blur(15px) saturate(125%)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom{
+ background:transparent!important;border:0!important;box-shadow:none!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-kpis article,
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-health,
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-profit,
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-list{
+ background:linear-gradient(145deg,rgba(40,58,88,.42),rgba(17,34,62,.48))!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-vehicle{
+ background:linear-gradient(145deg,rgba(63,81,110,.43),rgba(27,47,78,.51))!important;
+}
+@media(max-width:800px){
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay{
+  top:12px!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+  width:calc(100% - 24px)!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-v2{padding:9px 7px 24px!important}
+}
