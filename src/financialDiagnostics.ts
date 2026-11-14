@@ -18,7 +18,7 @@ export function recordFinancialAudit(entry:Input){
  const cashAfter=finite(entry.cashAfter??(entry.cashBefore+entry.pendingAfter));
  // A flush transfers pending cash into committed cash; it is not a new settlement.
  const discrepancy=entry.kind==='cash-flush'
-  ?finite((entry.cashAfter-entry.cashBefore)-entry.other)
+  ?finite((cashAfter-entry.cashBefore)-entry.other)
   :finite((entry.pendingAfter-entry.pendingBefore)-cashDelta);
  const warnings:string[]=[];
  if(Math.abs(discrepancy)>0.02&&entry.kind!=='cash-flush'&&entry.kind!=='property')
