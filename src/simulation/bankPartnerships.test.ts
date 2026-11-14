@@ -45,6 +45,14 @@ describe('revenue-backed bank partnerships',()=>{
   const r=partnershipOffer('empire',2000000,3000000,8000,700,[contract({revenueShare:25})]);
   expect(r.approved).toBe(false);
  });
+ it('never collects more than 45% of gross even for legacy overcommitted contracts',()=>{
+  const result=collectBankRevenue([contract({id:'a',revenueShare:35}),contract({id:'b',revenueShare:20})],100);
+  expect(result.paid).toBeLessThanOrEqual(45);
+  expect(result.deals.reduce((sum,d)=>sum+d.repaid,0)).toBe(result.paid);
+ });
+ it('does not pay any revenue share on invalid gross income',()=>{
+  expect(collectBankRevenue([contract()],Number.NaN).paid).toBe(0);
+ });
  it('calculates daily history revenue average',()=>{
   expect(revenueAverage([{revenue:400},{revenue:600}])).toBe(500);
  });
