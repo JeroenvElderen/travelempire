@@ -351,3 +351,28 @@ body{
  .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom{background:linear-gradient(145deg,rgba(40,60,89,.40),rgba(12,29,54,.52));}
  .nav-v216.fleet-overlay-mode .fleet-map-overlay-close{top:8px;margin:9px 9px -44px 0}
 }
+
+/* Final mobile Fleet HUD stacking: preserve date, balance and Today ticker. */
+@media(max-width:800px){
+ .nav-v216.fleet-overlay-mode .topbar.world-minimal-topbar{
+  position:absolute!important;top:0!important;left:0;right:0;z-index:70!important;
+  pointer-events:none;background:transparent!important;
+ }
+ .nav-v216.fleet-overlay-mode .topbar.world-minimal-topbar>*{pointer-events:auto}
+ .nav-v216.fleet-overlay-mode .main>.live-finance-wrap{
+  position:absolute!important;top:70px!important;left:12px!important;right:auto!important;
+  transform:none!important;z-index:70!important;max-width:calc(100% - 24px);
+ }
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay{
+  top:132px!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+  width:calc(100% - 22px);background:linear-gradient(145deg,rgba(27,43,73,.50),rgba(10,22,46,.61));
+  -webkit-backdrop-filter:blur(21px) saturate(135%);backdrop-filter:blur(21px) saturate(135%);
+ }
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom{background:linear-gradient(145deg,rgba(40,60,89,.34),rgba(12,29,54,.42))}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-kpis{gap:5px;margin-bottom:9px}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-kpis article{min-height:72px}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-health{margin-bottom:9px;padding:10px 8px}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-profit{margin-bottom:9px;padding:11px 13px}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-vehicle{min-height:72px;padding:7px 8px}
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-showroom-vehicle-icon img{display:block;width:48px;height:48px;object-fit:contain}
+}
