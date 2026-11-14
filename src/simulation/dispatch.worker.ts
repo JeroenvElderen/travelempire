@@ -603,7 +603,7 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[];allowTaxiOnly?:boolean};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[];allowTaxiOnly?:boolean};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>};
+type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
@@ -1242,6 +1242,21 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const harbourRoute=role==='poi'
        ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,candidateIndexes)
        :null;
+      // After harbour missions, explore existing POI parking access roads.
+      // Use only already-loaded, directed road edges close to parking POIs.
+      const parkingRoads=new Set<string>();
+      if(role==='poi'&&!harbourRoute)for(const point of (msg.parkingTargets??[]).slice(0,60)){
+       const node=nearest(activeGraph,point);
+       if(!node)continue;
+       const position=activeGraph.nodes.get(node);
+       if(!position||meters(position,point)>110)continue;
+       for(const edge of activeGraph.edges.get(node)??[]){
+        if(!explored.has(edge.id)&&!reservedEdges.has(edge.id))parkingRoads.add(edge.id);
+       }
+      }
+      const parkingPlan=role==='poi'&&!harbourRoute&&parkingRoads.size
+       ?planConnectedFrontier(activeGraph,origin.node,explored,parkingRoads,
+         reservedEdges,reservedTargets,'poi',65000):null;
       // Shared directed frontier search spans every connected loaded tile.
       // The specialist fallback handles legal one-way exits and roundabouts.
       const harbourGoal=role==='poi'?
@@ -1272,14 +1287,16 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        // If destination tiles have not formed a connected route yet, move
       // along legal discoverable roads to expand the road network. Keep the
       // assigned harbour and retry the full road route as tiles are streamed.
-      const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
+      const frontier=role==='poi'&&!harbourRoute&&(candidateIndexes.size>0||parkingRoads.size>0)
        ?connected?.route?connected:useLegacyFallback():null;
-      const route=role==='poi'?harbourRoute??frontier?.route??null:planned?.route??null;
+      const route=role==='poi'?harbourRoute??parkingPlan?.route??frontier?.route??null:planned?.route??null;
+      if(role==='poi'&&parkingPlan?.route&&!harbourRoute)chosenAllowed=parkingRoads;
       const indexedHarbourCandidates=role==='poi'
        ?[...candidateIndexes].filter(i=>nearestHarbourRoads.has(i)).length:0;
       singleWorkerScanResult.set(idleVehicle.id,role==='poi'
        ?(harbourRoute
          ?'reachable-harbour:'+String(msg.poiMissions?.[harbourRoute.portIndex]?.portId)
+         :parkingPlan?.route?'exploring-parking-access'
          :frontier?.route?'expanding-connected-frontier'
          :'no-reachable-harbour-or-road-frontier')+
         ':candidates='+candidateIndexes.size+':loaded='+indexedHarbourCandidates
