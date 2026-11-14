@@ -23,6 +23,44 @@ describe('midnight daily summary',()=>{
    ferryRevenue:1500,taxiRevenue:6000,otherRevenue:500,roadsDiscovered:2,
    harboursDiscovered:1,distanceKm:150,cashChange:4000,loanBalance:800});
  });
+ it('separates both bank shares from operating profit and reconciles negative cash',()=>{
+  const day='2027-01-04';
+  const companies=fleet({
+   financeHistory:[{day,revenue:10000,expenses:1000,trips:3}],
+   bankPartnershipPaidByDay:{[day]:4100},
+   bankPartnershipPaidByLenderByDay:{[day]:{'Empire Investment Group':2500,'Growth Capital Bank':1600}},
+   bankPartnerships:[
+    {id:'empire',bank:'Empire Investment Group',principal:10000,revenueShare:25,repaymentMultiple:1.5,repaymentCap:15000,repaid:2500,startedAt:0},
+    {id:'growth',bank:'Growth Capital Bank',principal:10000,revenueShare:16,repaymentMultiple:1.5,repaymentCap:15000,repaid:1600,startedAt:0}
+   ]
+  });
+  const summary=buildDailySummary(day,companies,dayBaseline(day,companies,2000,0),-392.33,0);
+  expect(summary.net).toBe(9000);
+  expect(summary.bankRepayments).toBe(4100);
+  expect(summary.cashAfterBankRepayments).toBe(4900);
+  expect(summary.activeBankShare).toBe(41);
+  expect(summary.openingCash).toBe(2000);
+  expect(summary.cashChange).toBe(-2392.33);
+  expect(summary.otherCashMovements).toBe(-7292.33);
+  expect(summary.bankLenderRepayments).toEqual([
+   {bank:'Empire Investment Group',amount:2500,sharePercent:25},
+   {bank:'Growth Capital Bank',amount:1600,sharePercent:16}
+  ]);
+  expect(Math.round((summary.openingCash+summary.cashAfterBankRepayments!+summary.otherCashMovements!)*100)/100).toBe(summary.cash);
+ });
+ it('distinguishes unrecorded legacy bank history from a genuine zero',()=>{
+  const day='2027-01-04';
+  const old=fleet({financeHistory:[{day,revenue:200,expenses:100,trips:1}]});
+  const legacy=buildDailySummary(day,old,dayBaseline(day,old,0,0),100,0);
+  expect(legacy.bankRepayments).toBeNull();
+  expect(legacy.cashAfterBankRepayments).toBeNull();
+  expect(legacy.otherCashMovements).toBeNull();
+  const saved=fleet({...old,bankPartnershipPaidByDay:{[day]:0}});
+  const recorded=buildDailySummary(day,saved,dayBaseline(day,saved,0,0),100,0);
+  expect(recorded.bankRepayments).toBe(0);
+  expect(recorded.cashAfterBankRepayments).toBe(100);
+  expect(recorded.otherCashMovements).toBe(0);
+ });
  it('builds chart data, passenger and ferry milestones from recorded game history',()=>{
   const previous={day:'2026-11-23',revenue:2000,expenses:1000,trips:1};
   const current={day:'2026-11-24',revenue:4500,expenses:2000,trips:3};
