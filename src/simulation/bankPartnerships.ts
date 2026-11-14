@@ -16,6 +16,7 @@ export const PARTNERSHIP_BANKS=[
  {id:'empire',name:'Empire Investment Group',share:25,multiple:1.65,appraisal:6},
 ] as const;
 const cents=(v:number)=>Math.round(v*100)/100;
+export const MAX_TOTAL_REVENUE_SHARE=45;
 export function partnershipOffer(bankId:string,request:number,valuation:number,
  averageDailyRevenue:number,creditScore:number,active:readonly BankPartnership[],proposedShare?:number):PartnershipOffer{
  const bank=PARTNERSHIP_BANKS.find(b=>b.id===bankId)??PARTNERSHIP_BANKS[1];
@@ -29,7 +30,7 @@ export function partnershipOffer(bankId:string,request:number,valuation:number,
  const outstanding=active.reduce((sum,d)=>sum+Math.max(0,d.repaymentCap-d.repaid),0);
  const ceiling=Math.max(0,Math.min(10000000,(valuation*bank.appraisal+
   Math.max(0,averageDailyRevenue)*90-outstanding*.25)*(1+Math.max(0,negotiatedShare-bank.share)*.02)));
- const affordableShare=committed+negotiatedShare<=45;
+ const affordableShare=committed+negotiatedShare<=MAX_TOTAL_REVENUE_SHARE;
  const eligible=creditScore>=550&&averageDailyRevenue>=500&&active.filter(d=>d.repaid<d.repaymentCap-.005).length<3&&affordableShare;
  const requested=Number.isFinite(request)?Math.max(0,Math.round(request)):0;
  // Bank may counteroffer a smaller amount rather than silently refuse.
@@ -47,19 +48,40 @@ export function partnershipOffer(bankId:string,request:number,valuation:number,
   repaymentMultiple:negotiatedMultiple,repaymentCap:cents(funding*negotiatedMultiple),
   approved,reason};
 }
+/**
+ * Collect only on actual eligible passenger/ferry receipts. For safety, also
+ * cap the aggregate charge for legacy/imported contracts at 45% of this fare.
+ * Repayments are financing cash flows, not operating expenses.
+ */
 export function collectBankRevenue(deals:readonly BankPartnership[],gross:number):
  {deals:BankPartnership[];paid:number;settlements:{bank:string;amount:number}[]}{
- if(!deals.length||gross<=0)return{deals:[...deals],paid:0,settlements:[]};
- let paid=0;
+ if(!deals.length||!Number.isFinite(gross)||gross<=0)return{deals:[...deals],paid:0,settlements:[]};
+ const activeShare=deals.reduce((sum,d)=>sum+(d.repaymentCap-d.repaid>.005&&Number.isFinite(d.revenueShare)?Math.max(0,d.revenueShare):0),0);
+ const ratio=activeShare>MAX_TOTAL_REVENUE_SHARE?MAX_TOTAL_REVENUE_SHARE/activeShare:1;
+ let remainingCents=Math.max(0,Math.round(gross*MAX_TOTAL_REVENUE_SHARE));
+ let totalCents=0;
  const settlements:{bank:string;amount:number}[]=[];
  const updated=deals.map(d=>{
-  const amount=Math.min(Math.max(0,cents(d.repaymentCap-d.repaid)),Math.max(0,cents(gross*d.revenueShare/100)));
-  if(amount<=0)return d;
-  paid=cents(paid+amount);
+  const owedCents=Number.isFinite(d.repaymentCap-d.repaid)?Math.max(0,Math.round((d.repaymentCap-d.repaid)*100)):0;
+  const share=Number.isFinite(d.revenueShare)?Math.max(0,d.revenueShare):0;
+  const dueCents=Math.min(owedCents,Math.max(0,Math.round(gross*share*ratio)),remainingCents);
+  if(dueCents<=0)return d;
+  remainingCents-=dueCents;
+  totalCents+=dueCents;
+  const amount=dueCents/100;
   settlements.push({bank:d.bank,amount});
   return {...d,repaid:cents(d.repaid+amount)};
  });
- return{deals:updated,paid,settlements};
+ return{deals:updated,paid:totalCents/100,settlements};
+}
+/** Immutable daily cash-flow record: unlike operating profit this includes
+ * the automatic revenue-share financing deductions. */
+export function bookBankCollection(byDay:Readonly<Record<string,number>>|undefined,day:string,amount:number):Record<string,number>{
+ if(!Number.isFinite(amount)||amount<=0)return {...byDay};
+ const days={...byDay,[day]:cents((byDay?.[day]??0)+amount)};
+ const keys=Object.keys(days).sort();
+ for(const oldDay of keys.slice(0,-365))delete days[oldDay];
+ return days;
 }
 export function revenueAverage(days:readonly {revenue:number}[]):number{
  if(!days.length)return 0;
