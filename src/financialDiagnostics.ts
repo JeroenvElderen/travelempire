@@ -16,12 +16,28 @@ const fmt=(n:number)=>finite(n).toFixed(2);
 export function recordFinancialAudit(entry:Input){
  const cashDelta=finite(entry.cashDelta??(entry.gross-entry.operatingCost-entry.bankShare-entry.savings+entry.other));
  const cashAfter=finite(entry.cashAfter??(entry.cashBefore+entry.pendingAfter));
- const discrepancy=finite((entry.pendingAfter-entry.pendingBefore)-cashDelta);
+ // A flush transfers pending cash into committed cash; it is not a new settlement.
+ const discrepancy=entry.kind==='cash-flush'
+  ?finite((entry.cashAfter-entry.cashBefore)-entry.other)
+  :finite((entry.pendingAfter-entry.pendingBefore)-cashDelta);
  const warnings:string[]=[];
  if(Math.abs(discrepancy)>0.02&&entry.kind!=='cash-flush'&&entry.kind!=='property')
   warnings.push('Pending cash changed by '+fmt(entry.pendingAfter-entry.pendingBefore)+' but recorded event delta is '+fmt(cashDelta));
- if(entry.kind==='cash-flush'&&Math.abs(finite(cashAfter-entry.cashBefore)-finite(entry.other))>0.02)
+ if(entry.kind==='cash-flush'&&Math.abs(discrepancy)>0.02)
   warnings.push('Cash flush does not match committed balance difference');
+ // Compare the next event's opening committed/pending balance with the last
+ // event's closing values. A discontinuity can indicate an uninstrumented
+ // purchase, transfer or reload; it is not proof of missing money.
+ const previous=events[events.length-1];
+ if(previous){
+  const committedGap=finite(entry.cashBefore-previous.cashBefore-
+   (previous.kind==='cash-flush'?previous.other:0));
+  const pendingGap=finite(entry.pendingBefore-previous.pendingAfter);
+  if(Math.abs(committedGap)>0.02||Math.abs(pendingGap)>0.02)
+   warnings.push('Untraced balance change since prior audit event: committed '+
+    fmt(committedGap)+', pending '+fmt(pendingGap)+
+    '. Could be a purchase, transfer, reload or another uninstrumented action.');
+ }
  if(entry.kind!=='cash-flush'&&entry.gross>0&&entry.bankShare>entry.gross*0.45001+0.02)
   warnings.push('Bank deduction exceeds 45% of gross receipts');
  if(entry.cashBefore+entry.pendingBefore>=0&&cashAfter<0)
