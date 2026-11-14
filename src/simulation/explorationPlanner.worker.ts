@@ -96,8 +96,6 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  try{
   const reserved=new Set(msg.reservedRoads),reservedDest=new Set(msg.reservedDestinations);
   const role=msg.vehicle.explorerRole;
-  const harbour=role==='poi'
-   ?shortestHarbourRoute(currentNode,explored,msg.poiRoadIds):null;
   // Search preferred road class over the whole reachable purple network
   // before considering ANY lower class. Never mix classes in a discovery
   // assignment. Ferry transfers are handled by the maritime scheduler:
