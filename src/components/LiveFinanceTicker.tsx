@@ -9,14 +9,16 @@ const euros=(value:number)=>new Intl.NumberFormat('en-IE',{
 }).format(Math.abs(value));
 type Filter='all'|ActivityType;
 
-export default function LiveFinanceTicker({history,transactions,gameNow}:{
- history:readonly FinancePeriod[];transactions:readonly FinancialTransaction[];gameNow:number
+export default function LiveFinanceTicker({history,transactions,bankCollectionsByDay,gameNow}:{
+ history:readonly FinancePeriod[];transactions:readonly FinancialTransaction[];bankCollectionsByDay?:Readonly<Record<string,number>>;gameNow:number
 }){
  const [index,setIndex]=useState(0);
  const [expanded,setExpanded]=useState(false);
  const [filter,setFilter]=useState<Filter>('all');
  const entries=recentActivity(transactions,20);
  const totals=dayFinance(history,gameNow);
+ const bankPaid=bankCollectionsByDay?.[new Date(gameNow).toISOString().slice(0,10)]??0;
+ const afterBankCash=totals.net-bankPaid;
  const expenses=expanded?dayExpenseBreakdown(history,gameNow):[];
  useEffect(()=>{
   if(expanded||entries.length<2)return;
@@ -35,7 +37,7 @@ export default function LiveFinanceTicker({history,transactions,gameNow}:{
    <span className="live-finance-totals">
     <span><small>INCOME TODAY</small><strong className="income">+{euros(totals.income)}</strong></span>
     <span><small>EXPENSES TODAY</small><strong className="expense">−{euros(totals.expenses)}</strong></span>
-    <span><small>NET PROFIT</small><strong className={totals.net>=0?'income':'expense'}>{renderAmount(totals.net)}</strong></span>
+    <span><small>NET AFTER BANKS</small><strong className={afterBankCash>=0?'income':'expense'}>{renderAmount(afterBankCash)}</strong></span>
    </span>
    <span className="live-finance-current" aria-live="off">
     <span className="live-finance-current-label" key={current?.id??'none'}>
@@ -70,7 +72,7 @@ export default function LiveFinanceTicker({history,transactions,gameNow}:{
      <span>{expense.label}</span><span className="expense">−{euros(expense.value)}</span>
     </div>)}
    </div>}
-   <p className="live-finance-disclaimer">Today's totals use booked operating finance history. Loan proceeds, equity and capital transfers are not earnings.</p>
+   <p className="live-finance-disclaimer">Operating profit today: {renderAmount(totals.net)} · Bank revenue-share collections: −{euros(bankPaid)} · Cash contribution after bank shares: {renderAmount(afterBankCash)}. This excludes vehicle purchases, other loan principal and savings transfers.</p>
   </div>}
  </div>;
 }
