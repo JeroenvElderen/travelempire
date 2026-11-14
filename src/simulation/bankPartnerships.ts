@@ -81,7 +81,7 @@ export function collectBankRevenue(deals:readonly BankPartnership[],gross:number
  * Existing day records reuse their object when the payment is zero.
  */
 export function bookBankCollection(byDay:Readonly<Record<string,number>>|undefined,day:string,amount:number):Record<string,number>{
- if(!Number.isFinite(amount)||amount<0)return byDay as Record<string,number>??{};
+ if(!Number.isFinite(amount)||amount<0)return byDay?{...byDay}:{};
  if(amount===0&&byDay&&Object.prototype.hasOwnProperty.call(byDay,day))return byDay as Record<string,number>;
  const days={...byDay,[day]:cents((byDay?.[day]??0)+amount)};
  const keys=Object.keys(days).sort();
