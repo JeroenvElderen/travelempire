@@ -2589,8 +2589,10 @@ export default function App(){
     // A Safari restart must not drop a pending dividend after its hour is marked paid.
     const current=companyRef.current;
     if(current&&current.id===companyId){
-     const updated={...current,cash:Math.round((current.cash+pendingCashRef.current+income)*100)/100};
+     const pendingBeforeDividend=pendingCashRef.current;
+     const updated={...current,cash:Math.round((current.cash+pendingBeforeDividend+income)*100)/100};
      pendingCashRef.current=0;
+     recordFinancialAudit({gameTime:new Date(now).toISOString(),kind:'property',description:'Property income '+result.hours+' simulated hour(s), includes pending flush',gross:income,operatingCost:0,bankShare:0,savings:0,other:0,cashBefore:current.cash,cashAfter:updated.cash,pendingBefore:pendingBeforeDividend,pendingAfter:0});
      companyRef.current=updated;saveCompany(updated);setCompany(updated);
     }
     setFleet(old=>{
