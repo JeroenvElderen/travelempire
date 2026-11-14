@@ -44,3 +44,15 @@ export function migrateToGameTime(s:ResearchState,gameNow:number,realNow=Date.no
 export function settle(s:ResearchState,now:number):ResearchState{if(!s.active||s.active.endsAt>now)return s;return {levels:{...s.levels,[s.active.id]:Math.max(level(s,s.active.id),s.active.level)}}}
 export function start(s:ResearchState,id:ResearchId,now:number):ResearchState{const current=settle(s,now);if(current.active)throw Error('Research already running');const l=level(current,id)+1;if(l>maxLevel(id))throw Error('Maximum level reached');return {...current,clockVersion:2,active:{id,level:l,startedAt:now,endsAt:now+duration(current,l,id)}}}
 export function bonus(s:ResearchState, ids:readonly ResearchId[],perLevel:number,cap:number){return Math.min(cap,ids.reduce((sum,id)=>sum+level(s,id)*perLevel,0))}
+
+/** Extra cash to finish a project already paid for. Price falls with time remaining. */
+export function instantCompletionCost(s:ResearchState,now:number):number{
+ const active=s.active;if(!active||active.endsAt<=now)return 0;
+ const total=Math.max(1,active.endsAt-active.startedAt);
+ const remaining=Math.min(1,Math.max(0,(active.endsAt-now)/total));
+ return Math.ceil(price(active.id,active.level)*0.5*remaining);
+}
+export function completeInstantly(s:ResearchState,now:number):ResearchState{
+ if(!s.active)throw Error('No active research project');
+ return settle({...s,active:{...s.active,endsAt:now}},now);
+}
