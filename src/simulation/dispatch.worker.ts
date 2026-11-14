@@ -935,7 +935,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const discoveryRoads=(taxi:Taxi)=>{
     const role=taxi.explorerRole;
     if(role==='balanced'||!role)return allRoads;
-    if(role==='poi')return allRoads;
+    if(role==='poi')return byClass.get('service')??new Set<string>();
     if(role==='completion')return completionRoads;
     // Each specialist discovers ONLY its own road classes, while all may
     // travel along already-purple roads to reach their next target.
@@ -944,7 +944,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const roles=role==='highway'?['motorway','trunk']:
       role==='primary'?['primary']:
       role==='secondary'?['secondary','tertiary']:
-      role==='residential'?['residential','rural','service']:
+      role==='residential'?['residential','rural']:
       ['tertiary','residential','rural','service'];
      const combined=new Set<string>();
      for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
@@ -1237,72 +1237,34 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       if(role==='poi')for(let i=0;i<(msg.poiMissions?.length??0);i++){
        if(msg.poiMissions![i].vehicleId===idleVehicle.id)candidateIndexes.add(i);
       }
-      // First try the actual shortest legal harbour route. Avoid a second
-      // expensive 65k-node frontier search when the harbour is reachable.
-      const harbourRoute=role==='poi'
-       ?shortestHarbourMission(activeGraph,origin.node,explored,reservedEdges,candidateIndexes)
-       :null;
-      // After harbour missions, explore existing POI parking access roads.
-      // Use only already-loaded, directed road edges close to parking POIs.
-      const parkingRoads=new Set<string>();
-      if(role==='poi'&&!harbourRoute)for(const point of (msg.parkingTargets??[]).slice(0,60)){
-       const node=nearest(activeGraph,point);
-       if(!node)continue;
-       const position=activeGraph.nodes.get(node);
-       if(!position||meters(position,point)>110)continue;
-       for(const edge of activeGraph.edges.get(node)??[]){
-        if(!explored.has(edge.id)&&!reservedEdges.has(edge.id))parkingRoads.add(edge.id);
-       }
+      // Saved 'poi' role is the Service Explorer: road-first, no harbour
+      // marker missions or parking-coordinate snapping. The road-class index
+      // provides only service edges, including existing parking access roads.
+      const tiers=specialistFallbackRoles(role);
+      let chosenRole=role;
+      let chosenAllowed=allowed;
+      let connected:ReturnType<typeof planConnectedFrontier>|null=null;
+      for(const tier of tiers.length?tiers:[role]){
+       const tierAllowed=tier===role?allowed:discoveryRoads({...idleVehicle,explorerRole:tier});
+       const result=planConnectedFrontier(activeGraph,origin.node,explored,
+        tierAllowed,reservedEdges,reservedTargets,tier,role==='poi'?65000:95000);
+       connected=result;chosenAllowed=tierAllowed;
+       if(result?.route){chosenRole=tier;break;}
       }
-      const parkingPlan=role==='poi'&&!harbourRoute&&parkingRoads.size
-       ?planConnectedFrontier(activeGraph,origin.node,explored,parkingRoads,
-         reservedEdges,reservedTargets,'poi',65000):null;
-      // Shared directed frontier search spans every connected loaded tile.
-      // The specialist fallback handles legal one-way exits and roundabouts.
-      const harbourGoal=role==='poi'?
-        msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
-       const tiers=specialistFallbackRoles(role);
-       let chosenRole=role;
-       let chosenAllowed=allowed;
-       let connected:ReturnType<typeof planConnectedFrontier>|null=null;
-       // iOS single-worker planner: always try the highest available tier first.
-       for(const tier of tiers.length?tiers:[role]){
-        const tierAllowed=tier===role?allowed:discoveryRoads({...idleVehicle,explorerRole:tier});
-        const result=role==='poi'&&harbourRoute?null:planConnectedFrontier(
-         activeGraph,origin.node,explored,tierAllowed,reservedEdges,reservedTargets,
-         tier,role==='poi'?65000:95000,harbourGoal);
-        connected=result;
-        chosenAllowed=tierAllowed;
-        if(result?.route){chosenRole=tier;break;}
-       }
-       const useLegacyFallback=()=>{
-        const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
-        if(time-last<30000)return null;
-        legacyFallbackAt.set(idleVehicle.id,time);
-        return planReachableExplorerRoad(activeGraph,origin.node,explored,chosenAllowed,
-         reservedEdges,reservedTargets,chosenRole);
-       };
-       const planned=role==='poi'?null:connected?.route?connected:
-        useLegacyFallback()??connected;
-       // If destination tiles have not formed a connected route yet, move
-      // along legal discoverable roads to expand the road network. Keep the
-      // assigned harbour and retry the full road route as tiles are streamed.
-      const frontier=role==='poi'&&!harbourRoute&&(candidateIndexes.size>0||parkingRoads.size>0)
-       ?connected?.route?connected:useLegacyFallback():null;
-      const route=role==='poi'?harbourRoute??parkingPlan?.route??frontier?.route??null:planned?.route??null;
-      if(role==='poi'&&parkingPlan?.route&&!harbourRoute)chosenAllowed=parkingRoads;
-      const indexedHarbourCandidates=role==='poi'
-       ?[...candidateIndexes].filter(i=>nearestHarbourRoads.has(i)).length:0;
-      singleWorkerScanResult.set(idleVehicle.id,role==='poi'
-       ?(harbourRoute
-         ?'reachable-harbour:'+String(msg.poiMissions?.[harbourRoute.portIndex]?.portId)
-         :parkingPlan?.route?'exploring-parking-access'
-         :frontier?.route?'expanding-connected-frontier'
-         :'no-reachable-harbour-or-road-frontier')+
-        ':candidates='+candidateIndexes.size+':loaded='+indexedHarbourCandidates
-       :planned!.diagnostic.reason+':visited='+planned!.diagnostic.visitedPurpleNodes+
-       ':classEdges='+planned!.diagnostic.reachableClassEdges+
-       ':connectedNodes='+(connected?.diagnostic.visitedPurpleNodes??0));
+      const useLegacyFallback=()=>{
+       const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
+       if(time-last<30000)return null;
+       legacyFallbackAt.set(idleVehicle.id,time);
+       return planReachableExplorerRoad(activeGraph,origin.node,explored,chosenAllowed,
+        reservedEdges,reservedTargets,chosenRole);
+      };
+      const planned=connected?.route?connected:useLegacyFallback()??connected;
+      const route=planned?.route??null;
+      singleWorkerScanResult.set(idleVehicle.id,
+       (role==='poi'?'service-roads:':'road-frontier:')+
+       (planned?.diagnostic.reason??'none')+
+       ':visited='+(planned?.diagnostic.visitedPurpleNodes??0)+
+       ':classEdges='+(planned?.diagnostic.reachableClassEdges??0));
       if(route){
        const completed=prependPurpleStart(route,origin);
        const destination=nearest(activeGraph,completed.path.at(-1)!);
@@ -1333,8 +1295,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        if(routeValid){
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
-        const chosenPort=role==='poi'&&'portIndex' in route
-         ?msg.poiMissions?.[route.portIndex]:undefined;
+        const chosenPort=undefined;
         const assignment:Taxi={...idleVehicle,
          ...(chosenPort?{poiTargetId:chosenPort.portId,poiTargetName:undefined}:{}),
          status:'EXPLORING',
