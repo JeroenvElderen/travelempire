@@ -6,8 +6,8 @@ export function loadGameClock(companyId:string, now=Date.now()):GameClock {
   try {
     const saved=JSON.parse(localStorage.getItem(KEY_PREFIX+companyId)??'null') as GameClock|null;
     if(saved && Number.isFinite(saved.epochMs) && Number.isFinite(saved.lastRealMs)) {
-      const elapsed=Math.max(0,now-saved.lastRealMs);
-      return {epochMs:saved.epochMs+elapsed*GAME_TIME_SCALE,lastRealMs:now};
+      // Offline time never advances the game. Migrate older saves without catch-up.
+      return {epochMs:saved.epochMs,lastRealMs:now};
     }
   } catch { /* New clock */ }
   const initial=new Date(now); initial.setUTCHours(8,0,0,0);
