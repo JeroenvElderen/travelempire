@@ -1362,12 +1362,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
     const candidateStarted=performance.now();
     // Do not rescan and sort regional candidates for every incremental slice.
-    // Harbour explorers must never fall back to arbitrary local exploration.
-    // They retry their directed shortest-harbour search as road tiles arrive.
-    if(idleVehicle.explorerRole==='poi'){
-     explorerPlanSkipReason.set(idleVehicle.id,'awaiting-shortest-harbour-route');
-     continue;
-    }
+    // Service explorers now route to connected service-road frontiers.
+    // Never apply the obsolete harbour-only skip to saved POI-role vehicles.
     const candidates=continuingMajorSearch
      ?new Set<string>(existingMajorSearch!.entries.map(entry=>entry.id))
      :preferConnectedCandidates(graph,idleVehicle.position,prioritizeScoutCandidates(graph,idleVehicle.position,regionalCandidates(idleVehicle.position,discoveryRoads(idleVehicle),explored,reservedEdges,SEARCH_RADII_KM[tier],idleVehicle.explorerRole??'balanced')),idleVehicle.explorerRole??'balanced');
