@@ -104,7 +104,7 @@ type Page=(typeof navigation)[number]['name'];
 type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
 
 export default function App(){
- const [page,setPage]=useState<Page>('World');const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [mobileNavOpen,setMobileNavOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
+ const [page,setPage]=useState<Page>('World');const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
  const gameClockRef=useRef(gameClock);gameClockRef.current=gameClock;
  useEffect(()=>{
@@ -2711,7 +2711,7 @@ export default function App(){
   };
   const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
  },[company?.id]);
- const go=(name:Page)=>{setPage(name);setConsoleOpen(false);setDrawerOpen(false);setMobileNavOpen(false);};
+ const go=(name:Page)=>{setPage(name);setConsoleOpen(false);setDrawerOpen(false);};
  const onLocation=(value:Headquarters)=>{if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  const activeResearch=research.active;
  const activeResearchProject=activeResearch?Research.projects.find(project=>project.id===activeResearch.id):undefined;
@@ -2746,15 +2746,5 @@ export default function App(){
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
  </main>
- <div className="mobile-nav-hud">
-  {mobileNavOpen&&<><button type="button" className="mobile-nav-scrim" aria-label="Close navigation" onClick={()=>setMobileNavOpen(false)}/>
-   <nav className="mobile-nav-sheet" aria-label="Mobile navigation">
-    <div className="mobile-nav-sheet-heading"><strong>Navigation</strong><button type="button" aria-label="Close navigation" onClick={()=>setMobileNavOpen(false)}><X size={20}/></button></div>
-    <div className="mobile-nav-grid">
-     {navigation.filter(n=>['World','Fleet','Dealership','Company'].includes(n.name)).map(({name,icon:Icon})=><button key={name} type="button" className={page===name?'active':''} aria-current={page===name?'page':undefined} onClick={()=>go(name)}><Icon size={23}/><span>{name==='World'?'Map':name==='Dealership'?'Dealer':name}</span></button>)}
-     <button type="button" onClick={()=>{setMobileNavOpen(false);setDrawerOpen(true)}}><Menu size={23}/><span>More</span></button>
-    </div>
-   </nav></>}
-  <button type="button" className="mobile-nav-fab" aria-label={mobileNavOpen?'Close navigation':'Open navigation'} aria-expanded={mobileNavOpen} onClick={()=>setMobileNavOpen(v=>!v)}>{mobileNavOpen?<X size={23}/>:<Menu size={23}/>}</button>
- </div></div>;
+ <div className="mobile-nav-hud"><button type="button" className="mobile-nav-fab" aria-label="Open sidebar navigation" aria-expanded={drawerOpen} onClick={()=>setDrawerOpen(true)}><Menu size={23}/></button></div></div>;
 }
