@@ -2470,19 +2470,10 @@ export default function App(){
   for(const taxi of fleet.taxis)for(const id of taxi.ferryVisitedPorts??[])
    if(knownPorts.has(id))earned.add(id);
   const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
-  // Purchases required at least one discovered endpoint. Prefer the
-  // currently verified endpoint (or an existing historical unlock). Only
-  // grandfather the route's origin if the old save lost both endpoint IDs:
-  // the original choice cannot be reconstructed once it was overwritten.
-  const purchased=new Set(company.purchasedFerryRouteIds??[]);
-  for(const route of harbourNetwork.routes){
-   if(!purchased.has(route.id))continue;
-   if(earned.has(route.from)||earned.has(route.to))continue;
-   const verified=[route.from,route.to].find(id=>
-    (harbourEdges?.get(id)??[]).some(edge=>discovered.has(edge)));
-   const recovered=verified??route.from;
-   if(knownPorts.has(recovered))earned.add(recovered);
-  }
+  // A purchased ferry route does not grant harbour access. Do not infer an
+  // unlocked terminal from route endpoints when the road index is incomplete.
+  // Historical achievements remain saved; only real road discovery or ferry
+  // arrivals can grant additional unlocks.
   const newlyUnlocked:string[]=[];
   // A POI mission may physically arrive at its mapped terminal access even
   // when the static OSM harbour-to-road index selected a different berth
