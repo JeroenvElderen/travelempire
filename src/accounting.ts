@@ -5,7 +5,7 @@ export const TAX_JURISDICTIONS:Record<string,TaxJurisdiction>={
  GR:{code:'GR',name:'Greece',corporateRate:22,standardVatRate:24,transportVatRate:13,vatFrequencyMonths:1,vatDueDay:28,corporateDueMonth:7,corporateDueDay:31,source:'AADE / Greek Ministry of Finance'},
  IE:{code:'IE',name:'Ireland',corporateRate:12.5,standardVatRate:23,transportVatRate:0,vatFrequencyMonths:2,vatDueDay:23,corporateDueMonth:9,corporateDueDay:23,source:'Irish Revenue'},
 };
-export const DEFAULT_ACCOUNTING_SETTINGS:AccountingSettings={corporateRate:22,vatRate:13,settlement:'scheduled',countryCode:'GR',vatFrequencyMonths:1,vatDueDay:28,corporateDueMonth:7,corporateDueDay:31};
+export const DEFAULT_ACCOUNTING_SETTINGS:AccountingSettings={corporateRate:0,vatRate:0,settlement:'scheduled',countryCode:'GR',vatFrequencyMonths:1,vatDueDay:28,corporateDueMonth:7,corporateDueDay:31};
 export function jurisdictionFor(code?:string){return TAX_JURISDICTIONS[(code??'GR').toUpperCase()]??TAX_JURISDICTIONS.GR}
 export function accountingSettingsFor(code:string):AccountingSettings{
  const j=jurisdictionFor(code);
@@ -16,7 +16,9 @@ export const roundMoney=(value:number)=>Math.round((value+Number.EPSILON)*100)/1
 export function accountingOf(value?:AccountingState):AccountingState{
  const legacy=!!value&&value.schemaVersion!==2;
  const settings=legacy?accountingSettingsFor(value?.settings?.countryCode??'GR'):{...accountingSettingsFor(value?.settings?.countryCode??'GR'),...value?.settings};
- return {settings,periods:value?.periods??[],lastSettledMonth:value?.lastSettledMonth,schemaVersion:2,legacyTaxReviewRequired:legacy&&!!value?.periods?.length||value?.legacyTaxReviewRequired,lastTaxPaymentDate:value?.lastTaxPaymentDate,taxPaymentHistory:value?.taxPaymentHistory??[]};
+ const archive=value?.archivedTaxPeriods??(value?.periods??[]).filter(p=>p.vatCollected!==0||p.vatInput!==0||p.corporateTax!==0||p.vatPaid!==0||p.corporateTaxPaid!==0).map(p=>({...p}));
+ const periods=(value?.periods??[]).map(p=>({...p,netRevenue:p.grossRevenue,netExpenses:p.grossExpenses,vatCollected:0,vatInput:0,corporateTax:0,vatPaid:0,corporateTaxPaid:0}));
+ return {settings:{...settings,corporateRate:0,vatRate:0},periods,lastSettledMonth:value?.lastSettledMonth,schemaVersion:3,legacyTaxReviewRequired:false,lastTaxPaymentDate:value?.lastTaxPaymentDate,taxPaymentHistory:value?.taxPaymentHistory??[],taxesDisabled:true,archivedTaxPeriods:archive,taxArchivedAt:value?.taxArchivedAt??(archive.length?new Date().toISOString():undefined)};
 }
 export function periodMonth(epochMs:number){return new Date(epochMs).toISOString().slice(0,7);}
 export function vatIncluded(gross:number,rate:number){return gross*rate/(100+rate);}
@@ -28,7 +30,7 @@ export function periodLiability(period:AccountingPeriod){
  return Math.max(0,roundMoney(period.vatCollected-period.vatInput-period.vatPaid))+Math.max(0,roundMoney(period.corporateTax-period.corporateTaxPaid));
 }
 export function bookAccounting(value:AccountingState|undefined,month:string,grossRevenue:number,grossExpenses:number,vatEligibleExpenses:number,depreciation:number){
- const state=accountingOf(value),rate=state.settings.vatRate;
+ const state=accountingOf(value),rate=0;
  const periods=state.periods.map(p=>({...p}));
  let period=periods.find(p=>p.month===month);
  if(!period){period={month,grossRevenue:0,netRevenue:0,grossExpenses:0,netExpenses:0,vatCollected:0,vatInput:0,depreciation:0,corporateTax:0,vatPaid:0,corporateTaxPaid:0,closed:false};periods.push(period);}
@@ -48,6 +50,7 @@ export function bookAccounting(value:AccountingState|undefined,month:string,gros
 /** Date-scoped settlement: never sweep all available cash every simulation tick. */
 export function settleAccounting(value:AccountingState|undefined,currentMonth:string,availableCash:number,gameEpochMs?:number){
  const state=accountingOf(value),periods=state.periods.map(p=>({...p}));
+ if(state.taxesDisabled)return {accounting:state,paidVat:0,paidCorporate:0};
  const now=new Date(gameEpochMs??Date.parse(currentMonth+'-01T00:00:00Z'));
  const date=now.toISOString().slice(0,10);
  const month=now.getUTCMonth()+1,year=now.getUTCFullYear(),day=now.getUTCDate();
