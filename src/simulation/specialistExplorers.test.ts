@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {dispatchScout,tickTaxi,type Point,type RoadGraph,type Taxi} from './taxi';
-import {SPECIALIST_EXPLORERS,explorerClassEligible} from './explorerRoles';
+import {SPECIALIST_EXPLORERS,explorerClassEligible,specialistFallbackRoles} from './explorerRoles';
 
 const nodes=new Map<string,Point>([
  ['A',[0,0]],['B',[0.001,0]],['C',[0.002,0]]
@@ -72,5 +72,19 @@ describe('explorer operational discovery',()=>{
  );
  it('does not reveal routine depot transit',()=>{
   expect(travel('depot').discovered).not.toContain('ab');
+ });
+});
+
+describe('specialist priority fallback',()=>{
+ it('highway explorer descends through every lower class',()=>{
+  expect(specialistFallbackRoles('highway')).toEqual(['highway','primary','secondary','residential']);
+ });
+ it('primary and secondary explorers never climb to higher discovery classes',()=>{
+  expect(specialistFallbackRoles('primary')).toEqual(['primary','secondary','residential']);
+  expect(specialistFallbackRoles('secondary')).toEqual(['secondary','residential']);
+ });
+ it('residential and POI explorers keep their specialist boundaries',()=>{
+  expect(specialistFallbackRoles('residential')).toEqual(['residential']);
+  expect(specialistFallbackRoles('poi')).toEqual(['poi']);
  });
 });
