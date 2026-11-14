@@ -250,6 +250,7 @@ export default function App(){
      const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
      return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:bookBankCollection(old.bankPartnershipPaidByDay,day,partnership.paid),bankPartnershipPaidByLenderByDay:bookBankLenderCollections(old.bankPartnershipPaidByLenderByDay,day,partnership.settlements),revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       ferryRevenueByDay:(()=>{const days={...(old.ferryRevenueByDay??{})};days[day]=Math.round(((days[day]??0)+gross)*100)/100;const keys=Object.keys(days).sort();for(const oldDay of keys.slice(0,-45))delete days[oldDay];return days;})(),
+      ferryOperatingCostByDay:(()=>{const days={...(old.ferryOperatingCostByDay??{})};days[day]=Math.round(((days[day]??0)+costs)*100)/100;for(const oldDay of Object.keys(days).sort().slice(0,-45))delete days[oldDay];return days;})(),
       financeHistory:history.slice(-365),
       transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:nowGame,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...events.map(event=>({id:crypto.randomUUID(),...event})),
        ...(old.transactions??[])].slice(0,100)};
