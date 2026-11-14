@@ -29,6 +29,7 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
  const otherCashMovements=summary.otherCashMovements??null;
  const openingCash=summary.openingCash??summary.cash-summary.cashChange;
  const lenderRows=summary.bankLenderRepayments??[];
+ const unattributedBankRepayments=summary.unattributedBankRepayments??null;
  const series=summary.weekly;
  const values=series.map(p=>metric==='revenue'?p.revenue:p.profit);
  const min=Math.min(0,...values),max=Math.max(1,...values),range=max-min;
@@ -72,8 +73,9 @@ export default function DailySummaryModal({summary,onClose,valuation,creditScore
       <div><small>Operating result after bank shares</small><strong className={afterBanks!==null&&afterBanks<0?'negative':'positive'}>{recorded(afterBanks)}</strong></div>
       <div><small>Closing cash balance</small><strong className={summary.cash<0?'negative':'positive'}>{money(summary.cash)}</strong></div>
      </div>
-     {lenderRows.length>0&&<div className="te-day-lender-list">
+     {(lenderRows.length>0||(unattributedBankRepayments??0)>0)&&<div className="te-day-lender-list">
       {lenderRows.map(row=><div key={row.bank}><span>{row.bank} · {row.sharePercent}% share</span><strong className="negative">−{money(row.amount)}</strong></div>)}
+      {(unattributedBankRepayments??0)>0.005&&<div><span>Earlier collections · lender split not recorded</span><strong className="negative">−{money(unattributedBankRepayments!)}</strong></div>}
      </div>}
      <p className="te-day-muted">Bank repayments are deducted from settled taxi and ferry receipts. They reduce cash, but are not operating expenses. The after-bank result does not include purchases, account transfers or other financing cash flows.</p>
      {bankPaid===null&&<p className="te-day-muted">Historical bank deductions were not recorded per game day in older saves. Future daily reports will show actual collected amounts; no estimated 41% charge is substituted.</p>}
