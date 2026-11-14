@@ -225,7 +225,7 @@ export default function App(){
      const partnership=collectBankRevenue(old.bankPartnerships??[],gross);
      const pendingBeforeFerry=pendingCashRef.current;
      if(partnership.paid>0)pendingCashRef.current-=partnership.paid;
-     if(gross!==0||costs!==0||partnership.paid!==0||savingsAmount!==0)recordFinancialAudit({gameTime:new Date(nowGame).toISOString(),kind:'ferry',description:'Ferry receipts; lenders: '+partnership.settlements.map(x=>x.bank+' '+x.amount.toFixed(2)).join(', '),gross,operatingCost:costs,bankShare:partnership.paid,savings:savingsAmount,other:0,cashBefore:companyRef.current?.cash??0,pendingBefore:pendingBeforeFerry-net+savingsAmount,pendingAfter:pendingCashRef.current});
+     if(gross!==0||costs!==0||partnership.paid!==0||savingsAmount!==0)recordFinancialAudit({gameTime:new Date(nowGame).toISOString(),kind:'ferry',description:'Ferry receipts; lenders: '+partnership.settlements.map(x=>x.bank+' '+x.amount.toFixed(2)).join(', '),gross,operatingCost:costs,bankShare:partnership.paid,savings:savingsAmount,other:0,cashBefore:companyRef.current?.cash??0,pendingBefore:pendingBeforeFerry-net+savingsAmount,pendingAfter:pendingCashRef.current,breakdown:{'Ferry operating costs':costs},bankLenders:Object.fromEntries(partnership.settlements.map(x=>[x.bank,x.amount])),reference:'ferry-arrivals:'+settlement.arrivals.map(x=>x.routeId+':'+x.completedAt).join(',')});
      const partnershipBank=partnership.paid>0?appendBankEntries(bankOf(updatedBank),
       partnership.settlements.map(item=>bankEntry('Revenue partnership · '+item.bank,-item.amount,'operating','repayment'))):updatedBank;
      const day=new Date(settlement.arrivals.at(-1)?.completedAt??nowGame).toISOString().slice(0,10);
@@ -1602,7 +1602,13 @@ export default function App(){
     const taxSettlement=settleAccounting(booked,month,(companyRef.current?.cash??0)+pendingCashRef.current);
     const taxPaid=taxSettlement.paidVat+taxSettlement.paidCorporate;
     if(taxPaid>0)pendingCashRef.current-=taxPaid;
-     if(revenue!==0||operatingNet!==0||partnership.paid!==0||savingsAmount!==0||taxPaid!==0)recordFinancialAudit({gameTime:new Date(gameNow).toISOString(),kind:'taxi-and-operations',description:'Simulation tick; lenders: '+partnership.settlements.map(x=>x.bank+' '+x.amount.toFixed(2)).join(', '),gross:revenue,operatingCost:revenue-operatingNet,bankShare:partnership.paid,savings:savingsAmount,other:-securedTick.payments-taxPaid,cashBefore:companyRef.current?.cash??0,pendingBefore:pendingBeforeSettlement,pendingAfter:pendingCashRef.current});
+     if(revenue!==0||operatingNet!==0||partnership.paid!==0||savingsAmount!==0||taxPaid!==0)recordFinancialAudit({gameTime:new Date(gameNow).toISOString(),kind:'taxi-and-operations',description:'Simulation tick; lenders: '+partnership.settlements.map(x=>x.bank+' '+x.amount.toFixed(2)).join(', '),gross:revenue,operatingCost:revenue-operatingNet,bankShare:partnership.paid,savings:savingsAmount,other:-securedTick.payments-taxPaid,cashBefore:companyRef.current?.cash??0,pendingBefore:pendingBeforeSettlement,pendingAfter:pendingCashRef.current,bankLenders:Object.fromEntries(partnership.settlements.map(x=>[x.bank,x.amount])),breakdown:{
+ 'Fuel':fuelExpense,'Maintenance':maintenanceExpense,'Vehicle service':serviceExpense,
+ 'Exploration':explorationExpense,'Driver wages':driverWages,'Insurance':insuranceExpense,
+ 'Overhead':overhead,'Depot/facility':facilityCost,'Legacy loan instalments':legacyTick.payments,
+ 'Vehicle leases':leaseTick.payments,'Secured loan payments':securedTick.payments,
+ 'VAT settlement':taxSettlement.paidVat,'Corporate tax settlement':taxSettlement.paidCorporate
+ }});
     const expiredLeaseIds=new Set(leaseTick.expired.map(l=>l.vehicleId));
     const updatedIds=discovered.size===initialDiscoveryCount?savedIds:[...discovered];
     discoveredCacheRef.current={ids:updatedIds,set:discovered};
@@ -1739,7 +1745,9 @@ export default function App(){
  const bankTransfer=(from:'operating'|'savings'|'reserve',to:'operating'|'savings'|'reserve',amount:number)=>{
   const current=companyRef.current;if(!current)return;
   try{const result=transferBank(bankOf(fleet.bank),from,to,amount,current.cash+pendingCashRef.current);
+   const pendingBeforeTransfer=pendingCashRef.current;
    pendingCashRef.current+=result.operatingDelta;
+   recordFinancialAudit({gameTime:new Date(gameClockRef.current?.epochMs??Date.now()).toISOString(),kind:'bank-transfer',description:from+' → '+to+' transfer',gross:0,operatingCost:0,bankShare:0,savings:0,other:result.operatingDelta,cashBefore:current.cash,pendingBefore:pendingBeforeTransfer,pendingAfter:pendingCashRef.current,breakdown:{['Transfer '+from+' to '+to]:amount}});
    setFleet(old=>({...old,bank:result.bank}));setSimError('');
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
