@@ -1295,9 +1295,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        if(routeValid){
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
-        const chosenPort=undefined;
         const assignment:Taxi={...idleVehicle,
-         ...(chosenPort?{poiTargetId:chosenPort.portId,poiTargetName:undefined}:{}),
+         ...(role==='poi'?{poiTargetId:undefined,poiTargetName:undefined}:{}),
          status:'EXPLORING',
          path:completed.path,edgeIds:completed.edgeIds,
          discoveryEdgeIds:route.discoveryEdgeIds,
