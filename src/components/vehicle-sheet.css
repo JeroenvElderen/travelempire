@@ -14,3 +14,16 @@
 .te-sheet-job-fill{height:100%;width:0;background:linear-gradient(90deg,#6dcecc,#8bf0c8);border-radius:inherit;transition:width .4s linear}
 .te-sheet-job-foot{font-size:10px;color:#b6d0d3;line-height:1.3;display:block}
 @media(max-width:360px){.te-sheet-job-stats strong{font-size:17px}.te-sheet-job-stats>div+div strong{font-size:14px}}
+
+/* Timed explorer/taxi rest status in the collapsed and expanded sheet. */
+.te-sheet-rest{margin:12px 0 0;padding:12px 13px;border:1px solid #386879;border-radius:12px;background:#143643}
+.te-sheet-rest[hidden]{display:none}
+.te-sheet-rest-header{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.te-sheet-rest-header strong{font-size:12px;color:#b8e9e4}
+.te-sheet-rest-header small{font-size:12px;color:#eaf5f7;font-variant-numeric:tabular-nums}
+.te-sheet-rest-track{height:7px;background:#285364;border-radius:7px;overflow:hidden;margin:10px 0 7px}
+.te-sheet-rest-fill{height:100%;width:0;background:linear-gradient(90deg,#66c7c9,#8af0c6);border-radius:inherit;transition:width .4s linear}
+.te-sheet-rest-track.indeterminate .te-sheet-rest-fill{animation:te-rest-wait 1.8s ease-in-out infinite alternate}
+.te-sheet-rest-info{font-size:10px;color:#a4c7cf}
+@keyframes te-rest-wait{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+@media(prefers-reduced-motion:reduce){.te-sheet-rest-track.indeterminate .te-sheet-rest-fill{animation:none}}
