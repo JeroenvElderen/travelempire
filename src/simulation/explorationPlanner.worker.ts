@@ -113,10 +113,10 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
    planned=candidatePlan;
    if(candidatePlan.route){chosenTier=tier;break;}
   }
-  const candidate=harbour??planned?.route??null;
+  const candidate=planned?.route??null;
   const route=candidate?prependPurpleStart(candidate,origin):null;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
-   vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-harbour',
+   vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-service-road',
    preferredRole:role,discoveryTier:chosenTier,
    taxi:route?{...msg.vehicle,status:'EXPLORING',path:route.path,
     edgeIds:route.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
