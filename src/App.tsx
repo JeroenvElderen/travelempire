@@ -73,6 +73,7 @@ import {RoadNetworkManager} from './data/roadNetworkManager';
 import {isIOSWebKit,dispatchAllowed,IOS_DISPATCH_INTERVAL_MS,DESKTOP_DISPATCH_INTERVAL_MS} from './data/roadMemoryPolicy';
 import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/ferries';
 import {ferryRoutePrice} from './maritime/routePlanning';
+import {ferryVoyageEconomics} from './maritime/ferryEconomics';
 import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,mayBoardPassengerFerry,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
 import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
 import {ferryArrivalRoadIds,ferryArrivalRoadsKey,ferryArrivalRoadsPendingKey} from './maritime/ferryArrivalRoads';
@@ -209,17 +210,7 @@ export default function App(){
    for(const arrival of settlement.arrivals){
     const route=ferryRoutes.get(arrival.routeId);
     if(!route)continue;
-    const duration=arrival.durationMinutes;
-    const hour=new Date(arrival.completedAt).getUTCHours();
-    const demand=hour>=7&&hour<10||hour>=16&&hour<20?1.45:hour>=22||hour<6?0.35:1;
-    const passengers=Math.round((12+Math.min(55,duration*0.22))*demand);
-    const standardFare=4+duration*0.16;
-    const configuredFare=current.ferryTicketPrices?.[arrival.routeId];
-    const ticket=typeof configuredFare==='number'&&Number.isFinite(configuredFare)&&configuredFare>=1&&configuredFare<=100?configuredFare:standardFare;
-    const priceMultiplier=Math.max(0.2,Math.min(1.8,Math.pow(ticket/standardFare,-0.75)));
-    const adjustedPassengers=Math.min(90,Math.max(0,Math.round(passengers*priceMultiplier)));
-    const revenue=Math.round(adjustedPassengers*ticket*100)/100;
-    const cost=Math.round((24+duration*0.9)*100)/100;
+    const {passengers:adjustedPassengers,revenue,cost}=ferryVoyageEconomics(arrival.durationMinutes,arrival.completedAt,current.ferryTicketPrices?.[arrival.routeId]);
     gross+=revenue;costs+=cost;
     // A real-world OSM import direction is the initial outbound orientation.
     // The boat and the revenue model use the same persisted departure epoch.
