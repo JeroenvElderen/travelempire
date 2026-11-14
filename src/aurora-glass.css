@@ -283,7 +283,7 @@ body{
    Keep the map fully visible and use translucent frosted glass on mobile. */
 @media(max-width:800px){
  .nav-v216.nav-map-mode .main>.live-finance-wrap{
-  left:50%;right:auto;transform:translateX(-50%);
+  left:12px;right:auto;transform:none;
   width:max-content;max-width:calc(100% - 24px);
   box-sizing:border-box;
   background:linear-gradient(145deg,rgba(33,35,70,.55),rgba(13,22,46,.48));
