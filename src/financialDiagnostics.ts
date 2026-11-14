@@ -25,18 +25,18 @@ export function recordFinancialAudit(entry:Input){
   warnings.push('Pending cash changed by '+fmt(entry.pendingAfter-entry.pendingBefore)+' but recorded event delta is '+fmt(cashDelta));
  if(entry.kind==='cash-flush'&&Math.abs(discrepancy)>0.02)
   warnings.push('Cash flush does not match committed balance difference');
- // Compare the next event's opening committed/pending balance with the last
- // event's closing values. A discontinuity can indicate an uninstrumented
- // purchase, transfer or reload; it is not proof of missing money.
- const previous=events[events.length-1];
- if(previous){
-  const committedGap=finite(entry.cashBefore-previous.cashBefore-
-   (previous.kind==='cash-flush'?previous.other:0));
-  const pendingGap=finite(entry.pendingBefore-previous.pendingAfter);
-  if(Math.abs(committedGap)>0.02||Math.abs(pendingGap)>0.02)
-   warnings.push('Untraced balance change since prior audit event: committed '+
-    fmt(committedGap)+', pending '+fmt(pendingGap)+
-    '. Could be a purchase, transfer, reload or another uninstrumented action.');
+ // Events from React effects and ferry callbacks may be recorded out of
+ // chronological cash-mutation order. Never infer missing money by comparing
+ // adjacent events' pending snapshots: they are not an atomic ledger.
+ // Instead validate each event's own delta and capture provenance below.
+ if(entry.kind==='cash-flush'&&Math.abs(finite(entry.pendingBefore-entry.other))>0.02)
+  warnings.push('Cash flush amount differs from pending cash snapshot');
+ if(entry.kind==='cash-flush'&&Math.abs(entry.pendingAfter)>0.02)
+  warnings.push('Cash flush left a non-zero pending balance');
+ if(entry.kind==='property'&&entry.cashAfter!==undefined){
+  const expected=finite(entry.cashBefore+entry.pendingBefore+entry.gross-entry.operatingCost-entry.bankShare-entry.savings+entry.other);
+  if(Math.abs(finite(entry.cashAfter-expected))>0.02)
+   warnings.push('Property settlement committed cash differs from income plus pending cash');
  }
  if(entry.kind!=='cash-flush'&&entry.gross>0&&entry.bankShare>entry.gross*0.45001+0.02)
   warnings.push('Bank deduction exceeds 45% of gross receipts');
@@ -66,12 +66,12 @@ export function financialAuditReport(){
  return [
  'TravelEmpire — detailed financial audit (read-only)','Exported UTC: '+new Date().toISOString(),
  'Capture: '+(first?.realTime??'none')+' to '+(last?.realTime??'none'),
- 'Entries: '+events.length+'; warning events: '+totals.warnings,
+ 'Entries: '+events.length+'; warning events: '+totals.warnings,\n 'Audit method: per-event reconciliation. Adjacent snapshots are NOT treated as a sequential ledger; concurrent ferry, tick and cash-flush events can interleave.',
  'Important: this captures instrumented events only, not complete historical bookkeeping. Cash snapshots and flushes are excluded from settlement totals. Never interpret missing categories as zero spending.',
  'Total receipts: EUR '+fmt(totals.gross),'Operating expenses: EUR '+fmt(totals.operatingCost),
  'Bank revenue-share deductions: EUR '+fmt(totals.bankShare),'Savings transfers: EUR '+fmt(totals.savings),
  'Other signed cash movements: EUR '+fmt(totals.other),'Recorded settlement cash delta: EUR '+fmt(totals.cashDelta),
- 'EXPENSE BREAKDOWN: '+stringify(totals.byCategory),'BANK LENDERS: '+stringify(totals.byLender),
+ 'EXPENSE BREAKDOWN: '+stringify(totals.byCategory),'BANK LENDERS: '+stringify(totals.byLender),\n 'EVENT KIND COUNTS: '+stringify(events.reduce((counts,e)=>({...counts,[e.kind]:(counts[e.kind]??0)+1}),{} as Record<string,number>)),\n 'WARNING DETAILS: '+stringify(events.filter(e=>e.warnings?.length).map(e=>({id:e.id,kind:e.kind,reference:e.reference,warnings:e.warnings}))),
  '--- CHRONOLOGICAL EVENT RECORDS (JSONL; amounts EUR) ---',
  ...events.map(e=>stringify(e))
  ].join('\n');
