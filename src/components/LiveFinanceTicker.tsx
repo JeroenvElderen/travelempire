@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import {Activity,ChevronDown,ChevronUp,ArrowDownLeft,ArrowUpRight,Landmark} from 'lucide-react';
 import type {FinancePeriod,FinancialTransaction} from '../simulation/taxi';
 import {dayFinance,dayExpenseBreakdown,recentActivity,type ActivityType} from '../simulation/liveFinance';
@@ -12,7 +12,6 @@ type Filter='all'|ActivityType;
 export default function LiveFinanceTicker({history,transactions,bankCollectionsByDay,gameNow}:{
  history:readonly FinancePeriod[];transactions:readonly FinancialTransaction[];bankCollectionsByDay?:Readonly<Record<string,number>>;gameNow:number
 }){
- const [index,setIndex]=useState(0);
  const [expanded,setExpanded]=useState(false);
  const [filter,setFilter]=useState<Filter>('all');
  const gameDay=new Date(gameNow).toISOString().slice(0,10);
@@ -22,35 +21,36 @@ export default function LiveFinanceTicker({history,transactions,bankCollectionsB
  const bankPaid=bankCollectionsByDay?.[new Date(gameNow).toISOString().slice(0,10)]??0;
  const afterBankCash=totals.net-bankPaid;
  const expenses=expanded?dayExpenseBreakdown(history,gameNow):[];
- useEffect(()=>{
-  if(expanded||entries.length<2)return;
-  const timer=window.setInterval(()=>setIndex(i=>(i+1)%entries.length),4000);
-  return()=>window.clearInterval(timer);
- },[expanded,entries.length]);
- const current=entries[index%Math.max(1,entries.length)];
+ const current=entries[0];
  const recordedCashChange=todayTransactions.reduce((sum,t)=>sum+(Number.isFinite(t.amount)?t.amount:0),0);
  const visible=filter==='all'?entries:entries.filter(entry=>entry.type===filter);
  const renderAmount=(amount:number)=>(amount>=0?'+':'−')+euros(amount);
  return <div className="live-finance-wrap">
   <button type="button" className="live-finance-main" aria-expanded={expanded}
    aria-controls="live-finance-activity" onClick={()=>setExpanded(v=>!v)}>
-   <span className="live-finance-heading"><span><Activity size={13}/> LIVE FINANCES</span>
-    <span>{expanded?'Hide activity':'View activity'} {expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}</span>
-   </span>
-   <span className="live-finance-totals">
-    <span><small>OPERATING PROFIT</small><strong className={totals.net>=0?'income':'expense'}>{renderAmount(totals.net)}</strong></span>
-    <span><small>AFTER BANKS</small><strong className={afterBankCash>=0?'income':'expense'}>{renderAmount(afterBankCash)}</strong></span>
-    <span><small>RECORDED CASH MOVEMENT</small><strong className={recordedCashChange>=0?'income':'expense'}>{renderAmount(recordedCashChange)}</strong></span>
+   <span className="live-finance-summary">
+    <span className="live-finance-summary-title"><Activity size={15} aria-hidden="true"/> Today</span>
+    <strong className={afterBankCash>=0?'income':'expense'}>{renderAmount(afterBankCash)}</strong>
+    <span className="live-finance-summary-label">After banks</span>
+    {expanded?<ChevronUp size={15} aria-hidden="true"/>:<ChevronDown size={15} aria-hidden="true"/>}
    </span>
    <span className="live-finance-current" aria-live="off">
-    <span className="live-finance-current-label" key={current?.id??'none'}>
-     {current?current.description:'No transactions recorded for this game day'}
-    </span>
+    <span className="live-finance-current-prefix">Latest</span>
+    <span className="live-finance-current-label">{current?current.description:'No transactions today'}</span>
     {current&&<strong className={current.type==='income'?'income':current.type==='expense'?'expense':'neutral'}>{renderAmount(current.amount)}</strong>}
    </span>
   </button>
   {expanded&&<div id="live-finance-activity" className="live-finance-panel">
-   <div className="live-finance-panel-heading"><strong>Recent financial activity</strong><small>Today · latest 20 entries</small></div>
+   <div className="live-finance-panel-heading"><strong>Today's finances</strong><small>{gameDay}</small></div>
+   <div className="live-finance-breakdown live-finance-overview">
+    <div><span>Revenue</span><strong className="income">{renderAmount(totals.income)}</strong></div>
+    <div><span>Operating expenses</span><strong className="expense">−{euros(totals.expenses)}</strong></div>
+    <div><span>Operating profit</span><strong className={totals.net>=0?'income':'expense'}>{renderAmount(totals.net)}</strong></div>
+    <div><span>Bank revenue share</span><strong className="expense">−{euros(bankPaid)}</strong></div>
+    <div className="live-finance-net"><span>After banks</span><strong className={afterBankCash>=0?'income':'expense'}>{renderAmount(afterBankCash)}</strong></div>
+    <div><span>Recorded cash movement</span><strong className={recordedCashChange>=0?'income':'expense'}>{renderAmount(recordedCashChange)}</strong></div>
+   </div>
+   <div className="live-finance-panel-heading"><strong>Today's activity</strong><small>Latest 20</small></div>
    <div className="live-finance-filters" role="group" aria-label="Filter finance activity">
     {(['all','income','expense','financing'] as const).map(option=>
      <button type="button" key={option} aria-pressed={filter===option}
