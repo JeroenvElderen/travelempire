@@ -68,8 +68,6 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  const warnings:string[]=[];
  if(history.gameDays===0)warnings.push('No historical operating data: revenue assumptions are zero until the fleet records fares.');
  if(history.realDays<3&&history.realDays>0)warnings.push('Short history: projections are highly sensitive to the first few recorded game days.');
- if((company.purchasedFerryRouteIds?.length??0)>ownedRoutes.length)warnings.push('Some owned ferry routes lack loaded timetable data; their future earnings are estimated from history only.');
- if(modeledFerries&&!fleet.ferryOperatingCostByDay)warnings.push('Historical ferry costs were not separately recorded in this save; forecast may overstate expenses until new ferry cost history accumulates.');
  if(addedCount>capacityAvailable+(plan.depotUpgrade==='capacity'&&canUpgrade?5:0)+(plan.newDepot?5:0))warnings.push('Planned vehicles exceed available depot parking; allocate vehicles or expand capacity first.');
  if(plan.mode==='finance'&&newBorrowing+oldDebt>75000)warnings.push('Planned borrowing exceeds the existing €75,000 financing limit.');
  if(plan.mode==='finance'&&(fleet.loans??[]).length+addedCount>2)warnings.push('Planned vehicle loans exceed the two-active-loan limit.');
@@ -77,6 +75,8 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  if(plan.depotUpgrade&&plan.depotUpgrade!=='none'&&!canUpgrade)warnings.push('Selected depot upgrade is already at its maximum level.');
  const ownedRoutes=ferryRoutes.filter(r=>(company.purchasedFerryRouteIds??[]).includes(r.id)&&Number.isFinite(company.ferryServiceStartedAt?.[r.id]));
  const modeledFerries=ownedRoutes.length>0;
+ if((company.purchasedFerryRouteIds?.length??0)>ownedRoutes.length)warnings.push('Some owned ferry routes lack loaded timetable data; their future earnings are estimated from history only.');
+ if(modeledFerries&&!fleet.ferryOperatingCostByDay)warnings.push('Historical ferry costs were not separately recorded in this save; forecast may overstate expenses until new ferry cost history accumulates.');
  const historyDays=(fleet.financeHistory??[]).filter(h=>h.day>=new Date(gameEpochMs-13*86400000).toISOString().slice(0,10)&&h.day<=new Date(gameEpochMs).toISOString().slice(0,10)).map(h=>h.day);
  const recordedDays=[...new Set(historyDays)];
  const historicalFerryRevenue=recordedDays.reduce((sum,d)=>sum+(fleet.ferryRevenueByDay?.[d]??0),0)/Math.max(1,history.gameDays);
