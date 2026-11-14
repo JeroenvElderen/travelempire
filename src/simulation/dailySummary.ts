@@ -6,7 +6,7 @@ export type DailySummary={
  /** Cash-only revenue financing: never included in operating expenses. */
  bankRepayments:number|null;cashAfterBankRepayments:number|null;
  bankLenderRepayments:{bank:string;amount:number;sharePercent:number}[];
- openingCash:number;otherCashMovements:number|null;
+ openingCash:number;otherCashMovements:number|null;unattributedBankRepayments:number|null;
  ferryRevenue:number;otherRevenue:number;trips:number;distanceKm:number;
  roadsDiscovered:number;harboursDiscovered:number;fleetSize:number;
  activeExplorers:number;activeTaxis:number;cash:number;cashChange:number;
@@ -44,6 +44,7 @@ export function buildDailySummary(day:string,fleet:FleetState,baseline:DayBaseli
   .map(([bank,amount])=>({bank,amount:round(amount),sharePercent:(fleet.bankPartnerships??[])
    .filter(contract=>contract.bank===bank).reduce((total,contract)=>total+contract.revenueShare,0)}))
   .sort((a,b)=>b.amount-a.amount);
+ const unattributedBankRepayments=bankRepayments===null?null:Math.max(0,round(bankRepayments-bankLenderRepayments.reduce((sum,row)=>sum+row.amount,0)));
  // This remainder is intentionally NOT labelled "purchases": it may also
  // include transfers, principal, tax settlements, state timing and missing
  // historical postings. A cash journal is needed to attribute it precisely.
@@ -66,7 +67,7 @@ export function buildDailySummary(day:string,fleet:FleetState,baseline:DayBaseli
  const expenseBreakdown=[...expenseMap].filter(([,amount])=>amount>.005)
   .sort((a,b)=>b[1]-a[1]).map(([label,amount])=>({label:expenseNames[label]??'Other operating costs',amount:round(amount)}));
  return {day,revenue,expenses,net:round(revenue-expenses),taxiRevenue,ferryRevenue,
-  bankRepayments,cashAfterBankRepayments,bankLenderRepayments,openingCash:round(baseline.cash),otherCashMovements,
+  bankRepayments,cashAfterBankRepayments,bankLenderRepayments,openingCash:round(baseline.cash),otherCashMovements,unattributedBankRepayments,
   otherRevenue:round(revenue-taxiRevenue-ferryRevenue),trips,distanceKm,
   roadsDiscovered:Math.max(0,(fleet.exploredEdgeIds??[]).length-baseline.discovered),
   harboursDiscovered:Math.max(0,harbours-baseline.harbours),
