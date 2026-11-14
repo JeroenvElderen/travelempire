@@ -1,4 +1,4 @@
-import {routeToNearestTarget,type Taxi,type RoadGraph,type Point} from './taxi';
+import {type Taxi,type RoadGraph,type Point} from './taxi';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {planConnectedFrontier} from './connectedFrontier';
@@ -38,27 +38,6 @@ const roleAllowed=(role:Taxi['explorerRole']):Set<string>=>{
  roadClasses.set(role,result);
  return result;
 };
-function shortestHarbourRoute(start:string,explored:Set<string>,poiRoadIds:string[]){
- const targets:Array<{node:string;offsetMeters:number}>=[];
- const finalLegs:Array<{to:string;id:string}>=[];
- for(const id of poiRoadIds){
-  if(explored.has(id))continue;
-  const ends=roadEndpoints.get(id);if(!ends)continue;
-  for(const from of ends)for(const edge of graph.edges.get(from)??[]){
-   if(edge.id!==id||edge.taxiOnly)continue;
-   targets.push({node:from,offsetMeters:edge.meters});
-   finalLegs.push({to:edge.to,id});
-  }
- }
- const found=routeToNearestTarget(graph,start,targets,'',150000,undefined,false);
- if(!found)return null;
- const leg=finalLegs[found.targetIndex],point=graph.nodes.get(leg.to);
- if(!point)return null;
- const edgeIds=[...found.edgeIds,leg.id];
- return {path:[...found.path,point],edgeIds,
-  discoveryEdgeIds:[...new Set(edgeIds.filter(id=>!explored.has(id)))],
-  escapeTransitEdgeIds:[] as string[]};
-}
 function addRoads(roads:RoadSegment[]):void{
  for(const road of roads){
   if(known.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
