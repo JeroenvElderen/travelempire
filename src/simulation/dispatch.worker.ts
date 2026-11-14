@@ -1252,7 +1252,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        let connected:ReturnType<typeof planConnectedFrontier>|null=null;
        // iOS single-worker planner: always try the highest available tier first.
        for(const tier of tiers.length?tiers:[role]){
-        const tierAllowed=tier===role?allowed:roadClassCache.get(tier)??new Set<string>();
+        const tierAllowed=tier===role?allowed:discoveryRoads({...idleVehicle,explorerRole:tier});
         const result=role==='poi'&&harbourRoute?null:planConnectedFrontier(
          activeGraph,origin.node,explored,tierAllowed,reservedEdges,reservedTargets,
          tier,role==='poi'?65000:95000,harbourGoal);
@@ -1296,7 +1296,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        const routeValid=completed.edgeIds.length===completed.path.length-1&&
         (allPurpleArrival||!hasInvalidRedApproach(activeGraph,completed.path,completed.edgeIds,
          explored,newEdges))&&
-        [...newEdges].every(id=>allowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
+        [...newEdges].every(id=>chosenAllowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
         [...escapeOnly].every(id=>!explored.has(id)&&!newEdges.has(id)&&!reservedEdges.has(id))&&
         completed.edgeIds.every((id,i)=>{
          if(!allRoads.has(id)||!(explored.has(id)||newEdges.has(id)||escapeOnly.has(id)))return false;
