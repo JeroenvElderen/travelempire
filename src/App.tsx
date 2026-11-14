@@ -36,7 +36,7 @@ import FrontendConsole from "./components/FrontendConsole";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
 import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,UPGRADES} from "./economy";
 import {securedQuote,createSecuredLoan,advanceSecuredLoans} from './simulation/securedLoans';
-import {partnershipOffer,collectBankRevenue,revenueAverage,type BankPartnership} from './simulation/bankPartnerships';
+import {partnershipOffer,collectBankRevenue,bookBankCollection,revenueAverage,type BankPartnership} from './simulation/bankPartnerships';
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
 import {DEPOT_UPGRADES,upgradesFor,depotCapacity,explorerDepotCapacity,depotDailyTotal} from './depotFinance';
 import {equityOf,valueCompany,investorOffers,issueShares,payDividend,buybackShares,distributableProfit,recordValuation} from './equity';
@@ -230,7 +230,7 @@ export default function App(){
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
      const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
-     return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+     return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:partnership.paid>0?bookBankCollection(old.bankPartnershipPaidByDay,day,partnership.paid):old.bankPartnershipPaidByDay,revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       ferryRevenueByDay:(()=>{const days={...(old.ferryRevenueByDay??{})};days[day]=Math.round(((days[day]??0)+gross)*100)/100;const keys=Object.keys(days).sort();for(const oldDay of keys.slice(0,-45))delete days[oldDay];return days;})(),
       financeHistory:history.slice(-365),
       transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:nowGame,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...events.map(event=>({id:crypto.randomUUID(),...event})),
