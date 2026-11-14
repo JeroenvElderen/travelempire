@@ -1599,7 +1599,7 @@ export default function App(){
     const grossOperatingExpenses=fuelExpense+maintenanceExpense+serviceExpense+explorationExpense+driverWages+insuranceExpense+overhead+facilityCost+leaseTick.payments+loanTick.interest;
     const vatEligibleExpenses=fuelExpense+maintenanceExpense+serviceExpense+facilityCost;
     const booked=bookAccounting(old.accounting,month,revenue,grossOperatingExpenses,vatEligibleExpenses,depreciation);
-    const taxSettlement=settleAccounting(booked,month,(companyRef.current?.cash??0)+pendingCashRef.current);
+    const taxSettlement=settleAccounting(booked,month,(companyRef.current?.cash??0)+pendingCashRef.current,gameNow);
     const taxPaid=taxSettlement.paidVat+taxSettlement.paidCorporate;
     if(taxPaid>0)pendingCashRef.current-=taxPaid;
      if(revenue!==0||operatingNet!==0||partnership.paid!==0||savingsAmount!==0||taxPaid!==0)recordFinancialAudit({gameTime:new Date(gameNow).toISOString(),kind:'taxi-and-operations',description:'Simulation tick; lenders: '+partnership.settlements.map(x=>x.bank+' '+x.amount.toFixed(2)).join(', '),gross:revenue,operatingCost:revenue-operatingNet,bankShare:partnership.paid,savings:savingsAmount,other:-securedTick.payments-taxPaid,cashBefore:companyRef.current?.cash??0,pendingBefore:pendingBeforeSettlement,pendingAfter:pendingCashRef.current,bankLenders:Object.fromEntries(partnership.settlements.map(x=>[x.bank,x.amount])),breakdown:{
@@ -1753,7 +1753,7 @@ export default function App(){
  };
  const accountingSettings=(corporateRate:number,vatRate:number)=>{
   if(!Number.isFinite(corporateRate)||!Number.isFinite(vatRate))return;
-  const settings:AccountingSettings={corporateRate:Math.max(0,Math.min(40,corporateRate)),vatRate:Math.max(0,Math.min(25,vatRate)),settlement:'monthly'};
+  const settings:AccountingSettings={...accountingOf(fleetSaveRef.current.accounting).settings,corporateRate:Math.max(0,Math.min(40,corporateRate)),vatRate:Math.max(0,Math.min(25,vatRate)),settlement:'scheduled'};
   setFleet(old=>({...old,accounting:{...accountingOf(old.accounting),settings}}));
  };
  const commitEquity=(next:ReturnType<typeof equityOf>,cashDelta:number,description:string,events:import('./simulation/taxi').EquityEvent[])=>{
