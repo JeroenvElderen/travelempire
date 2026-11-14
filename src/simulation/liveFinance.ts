@@ -28,7 +28,8 @@ export function classifyActivity(transaction:FinancialTransaction):ActivityType{
  return transaction.amount>=0?'income':'expense';
 }
 export function recentActivity(transactions:readonly FinancialTransaction[],limit=20):ActivityEntry[]{
- return transactions.filter(t=>Number.isFinite(t.amount)).slice(0,limit)
+ return transactions.filter(t=>Number.isFinite(t.amount)&&Number.isFinite(t.time))
+  .sort((a,b)=>b.time-a.time).slice(0,limit)
   .map(t=>({...t,type:classifyActivity(t)}));
 }
 
