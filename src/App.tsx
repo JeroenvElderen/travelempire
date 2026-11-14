@@ -2405,9 +2405,9 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.set??new Set(fleetSaveRef.current.exploredEdgeIds??[]);
    const candidates=taxisRef.current.filter(t=>{
     const signal=ferryReadinessRef.current.get(t.id);
-    return t.kind==='explorer'&&t.status==='IDLE'&&!t.ferryTrip&&!t.refillRequested&&
+    return t.kind==='explorer'&&(t.status==='IDLE'||(t.status==='PAUSED'&&!!t.shiftParked))&&!t.ferryTrip&&!t.refillRequested&&
      !t.recoveryPending&&!t.deliveryUntil&&energyPercent(t)>15&&
-     !!signal&&signal.ready&&signal.idleMs>=90000&&!ferryBookingRef.current.has(t.id)&&
+     !!signal&&signal.ready&&(signal.idleMs>=90000||(t.status==='PAUSED'&&!!t.shiftParked))&&!ferryBookingRef.current.has(t.id)&&
      now-(ferryAttemptRef.current.get(t.id)??0)>25000;
    }).slice(0,2);
    for(const scout of candidates){
@@ -2434,13 +2434,13 @@ export default function App(){
     if(!worker)continue;
     ferryBookingRef.current.add(scout.id);
     const requestId=++routeSequenceRef.current;
-    pendingRoutesRef.current.set(requestId,{vehicleId:scout.id,position:[...scout.position],status:'IDLE',
+    pendingRoutesRef.current.set(requestId,{vehicleId:scout.id,position:[...scout.position],status:scout.status,
      onResult:(path,edgeIds)=>{
       ferryBookingRef.current.delete(scout.id);
       if(!path||!edgeIds||!path.length)return;
       const latest=taxisRef.current.find(t=>t.id===scout.id);
       const current=companyRef.current;
-      if(!latest||latest.status!=='IDLE'||latest.ferryTrip||!current||current.id!==companyId)return;
+      if(!latest||(latest.status!=='IDLE'&&!(latest.status==='PAUSED'&&latest.shiftParked))||latest.ferryTrip||!current||current.id!==companyId)return;
       // The visual ferry and passenger ticket must share the exact same
       // ship orientation and clock. Unowned routes use a permanent public
       // timetable; owned routes use the company vessel's saved start.
