@@ -60,18 +60,36 @@ export function financialAuditTotals(input:readonly FinancialAuditEntry[]){
  return {gross:sum('gross'),operatingCost:sum('operatingCost'),bankShare:sum('bankShare'),savings:sum('savings'),other:sum('other'),cashDelta:sum('cashDelta'),byCategory,byLender,warnings:input.filter(e=>(e.warnings?.length??0)>0).length};
 }
 const stringify=(v:unknown)=>JSON.stringify(v);
+export type LedgerTransaction={id:string;time:number;description:string;amount:number;taxiId?:string};
+export function transactionLedgerReport(transactions:readonly LedgerTransaction[]){
+ const ordered=[...transactions].filter(t=>Number.isFinite(t.amount)&&Number.isFinite(t.time))
+  .sort((a,b)=>a.time-b.time||a.id.localeCompare(b.id));
+ const total=ordered.reduce((sum,t)=>sum+t.amount,0);
+ return [
+  '--- TRANSACTION-LEVEL LEDGER (saved fleet transactions; amounts EUR) ---',
+  'Coverage: saved fleet transactions only. Historical entries may be truncated; this is not a complete cash-mutation journal.',
+  'Entries: '+ordered.length+'; signed total: EUR '+fmt(total),
+  'Fields: id, gameTime, description, amount, taxiId, category',
+  ...ordered.map(t=>stringify({id:t.id,gameTime:new Date(t.time).toISOString(),
+   description:t.description,amount:finite(t.amount),taxiId:t.taxiId??null,
+   category:t.amount>=0?'credit':'debit'}))
+ ].join('\\n');
+}
 export function financialAuditReport(){
  const totals=financialAuditTotals(events);
  const first=events[0],last=events[events.length-1];
  return [
  'TravelEmpire — detailed financial audit (read-only)','Exported UTC: '+new Date().toISOString(),
  'Capture: '+(first?.realTime??'none')+' to '+(last?.realTime??'none'),
- 'Entries: '+events.length+'; warning events: '+totals.warnings,\n 'Audit method: per-event reconciliation. Adjacent snapshots are NOT treated as a sequential ledger; concurrent ferry, tick and cash-flush events can interleave.',
+ 'Entries: '+events.length+'; warning events: '+totals.warnings,
+ 'Audit method: per-event reconciliation. Adjacent snapshots are NOT treated as a sequential ledger; concurrent ferry, tick and cash-flush events can interleave.',
  'Important: this captures instrumented events only, not complete historical bookkeeping. Cash snapshots and flushes are excluded from settlement totals. Never interpret missing categories as zero spending.',
  'Total receipts: EUR '+fmt(totals.gross),'Operating expenses: EUR '+fmt(totals.operatingCost),
  'Bank revenue-share deductions: EUR '+fmt(totals.bankShare),'Savings transfers: EUR '+fmt(totals.savings),
  'Other signed cash movements: EUR '+fmt(totals.other),'Recorded settlement cash delta: EUR '+fmt(totals.cashDelta),
- 'EXPENSE BREAKDOWN: '+stringify(totals.byCategory),'BANK LENDERS: '+stringify(totals.byLender),\n 'EVENT KIND COUNTS: '+stringify(events.reduce((counts,e)=>({...counts,[e.kind]:(counts[e.kind]??0)+1}),{} as Record<string,number>)),\n 'WARNING DETAILS: '+stringify(events.filter(e=>e.warnings?.length).map(e=>({id:e.id,kind:e.kind,reference:e.reference,warnings:e.warnings}))),
+ 'EXPENSE BREAKDOWN: '+stringify(totals.byCategory),'BANK LENDERS: '+stringify(totals.byLender),
+ 'EVENT KIND COUNTS: '+stringify(events.reduce((counts,e)=>({...counts,[e.kind]:(counts[e.kind]??0)+1}),{} as Record<string,number>)),
+ 'WARNING DETAILS: '+stringify(events.filter(e=>e.warnings?.length).map(e=>({id:e.id,kind:e.kind,reference:e.reference,warnings:e.warnings}))),
  '--- CHRONOLOGICAL EVENT RECORDS (JSONL; amounts EUR) ---',
  ...events.map(e=>stringify(e))
  ].join('\n');
