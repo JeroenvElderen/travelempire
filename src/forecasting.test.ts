@@ -28,6 +28,20 @@ describe('finance forecasting',()=>{
   expect(finance.totalLoanPayments).toBeGreaterThan(0);
   expect(finance.points[0].capitalSpending).toBeGreaterThan(0);
  });
+ it('uses complete booked ferry expenses even when categories omit them',()=>{
+  const withFerry={...fleet,financeHistory:[{day:'2026-11-01',revenue:1000,expenses:800,trips:0,categories:{fuel:0,maintenance:0,exploration:0,payroll:0,insurance:0,overhead:0,interest:0}}]};
+  const projection=forecastBusiness(company,withFerry,plan,start,start);
+  expect(projection.baselineDailyExpenses).toBe(800);
+  expect(projection.baselineDailyRevenue).toBe(1000);
+ });
+ it('projects contractual bank deductions without counting them as operating expenses',()=>{
+  const withBank={...fleet,bankPartnerships:[{id:'growth',bank:'Growth Capital Bank',principal:10000,revenueShare:18,repaymentMultiple:1.45,repaymentCap:14500,repaid:0,startedAt:start}]};
+  const baseline=forecastBusiness(company,fleet,plan,start,start);
+  const projection=forecastBusiness(company,withBank,plan,start,start);
+  expect(projection.totalBankRevenueShares).toBeGreaterThan(0);
+  expect(projection.totalOperatingExpenses).toBe(baseline.totalOperatingExpenses);
+  expect(projection.closingCash).toBeLessThan(baseline.closingCash);
+ });
  it('models savings transfers without counting them as expenses',()=>{
   const saved={...fleet,bank:{savings:0,reserve:0,autoSavePercent:10,minimumOperatingCash:0,entries:[]}};
   const projection=forecastBusiness(company,saved,plan,start,start);
