@@ -5,6 +5,8 @@ import {depotCapacity,depotDailyTotal,upgradesFor,DEPOT_UPGRADES} from './depotF
 import {OFFERS,type VehicleOffer} from './dealership';
 import {financeQuote,leaseQuote} from './economy';
 import {corporateOf} from './corporate';
+import {ferryPhase} from './maritime/ferryService';
+import {ferryVoyageEconomics} from './maritime/ferryEconomics';
 import {collectBankRevenue} from './simulation/bankPartnerships';
 
 export type ForecastScenario='conservative'|'expected'|'optimistic';
@@ -38,7 +40,7 @@ function dailyLoan(loan:BusinessLoan){
  const paid=Math.min(loan.balance+interest,loan.remainingDays===1?loan.balance+interest:loan.dailyPayment);
  return {paid,interest};
 }
-export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastPlan,gameEpochMs:number,realNow=Date.now()):ForecastResult{
+export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastPlan,gameEpochMs:number,realNow=Date.now(),ferryRoutes:readonly {id:string;durationMinutes:number}[]=[]):ForecastResult{
  void realNow;
  const scenario=SCENARIO[plan.scenario];
  const history=sampleHistory(fleet.financeHistory??[],gameEpochMs);
@@ -66,14 +68,21 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
  const warnings:string[]=[];
  if(history.gameDays===0)warnings.push('No historical operating data: revenue assumptions are zero until the fleet records fares.');
  if(history.realDays<3&&history.realDays>0)warnings.push('Short history: projections are highly sensitive to the first few recorded game days.');
- if((company.purchasedFerryRouteIds?.length??0)>0)warnings.push('Ferry revenue is projected from booked game-day history, not each route timetable; recently purchased routes may be underrepresented.');
+ if((company.purchasedFerryRouteIds?.length??0)>ownedRoutes.length)warnings.push('Some owned ferry routes lack loaded timetable data; their future earnings are estimated from history only.');
+ if(modeledFerries&&!fleet.ferryOperatingCostByDay)warnings.push('Historical ferry costs were not separately recorded in this save; forecast may overstate expenses until new ferry cost history accumulates.');
  if(addedCount>capacityAvailable+(plan.depotUpgrade==='capacity'&&canUpgrade?5:0)+(plan.newDepot?5:0))warnings.push('Planned vehicles exceed available depot parking; allocate vehicles or expand capacity first.');
  if(plan.mode==='finance'&&newBorrowing+oldDebt>75000)warnings.push('Planned borrowing exceeds the existing €75,000 financing limit.');
  if(plan.mode==='finance'&&(fleet.loans??[]).length+addedCount>2)warnings.push('Planned vehicle loans exceed the two-active-loan limit.');
  if(investmentCost>company.cash)warnings.push('Upfront investment exceeds current operating cash.');
  if(plan.depotUpgrade&&plan.depotUpgrade!=='none'&&!canUpgrade)warnings.push('Selected depot upgrade is already at its maximum level.');
- const baseRevenue=history.revenuePerDay*scenario.revenue;
- const baseExpenses=history.expensesPerDay*scenario.variableCosts;
+ const ownedRoutes=ferryRoutes.filter(r=>(company.purchasedFerryRouteIds??[]).includes(r.id)&&Number.isFinite(company.ferryServiceStartedAt?.[r.id]));
+ const modeledFerries=ownedRoutes.length>0;
+ const historyDays=(fleet.financeHistory??[]).filter(h=>h.day>=new Date(gameEpochMs-13*86400000).toISOString().slice(0,10)&&h.day<=new Date(gameEpochMs).toISOString().slice(0,10)).map(h=>h.day);
+ const recordedDays=[...new Set(historyDays)];
+ const historicalFerryRevenue=recordedDays.reduce((sum,d)=>sum+(fleet.ferryRevenueByDay?.[d]??0),0)/Math.max(1,history.gameDays);
+ const historicalFerryCosts=recordedDays.reduce((sum,d)=>sum+(fleet.ferryOperatingCostByDay?.[d]??0),0)/Math.max(1,history.gameDays);
+ const baseRevenue=Math.max(0,history.revenuePerDay-(modeledFerries?historicalFerryRevenue:0))*scenario.revenue;
+ const baseExpenses=Math.max(0,history.expensesPerDay-(modeledFerries?historicalFerryCosts:0))*scenario.variableCosts;
  const perVehicleRevenue=vehicleCount?history.revenuePerDay/vehicleCount*scenario.revenue:0;
  const perVehicleVariableCost=vehicleCount?history.expensesPerDay/vehicleCount*.65*scenario.variableCosts:0;
  const addedDailyRevenue=perVehicleRevenue*addedCount;
@@ -132,15 +141,30 @@ export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastP
    loanPayments+=paid;loanInterest+=interest;corporateLoanPayments+=paid;
   }
   subsidiaryCash+=corporate.subsidiaries.filter(s=>s.active).reduce((a,s)=>a+s.revenuePerDay-s.expensesPerDay-Math.max(0,(s.revenuePerDay-s.expensesPerDay)*(s.foreignTaxRate??settings.corporateRate)/100),0);
-  const revenue=baseRevenue+extraRevenue;
-  const operatingExpenses=baseExpenses+extraCost+loanInterest+leasePayments;
+  let ferryRevenue=0,ferryCosts=0;
+  const dayStart=gameEpochMs+(day-1)*86400000;
+  const dayEnd=dayStart+86400000;
+  for(const route of ownedRoutes){
+   const start=company.ferryServiceStartedAt![route.id];
+   const before=ferryPhase(start,route.durationMinutes,dayStart).completedCount;
+   const after=ferryPhase(start,route.durationMinutes,dayEnd).completedCount;
+   // Mirror live settlement: one payable arrival per update, never backpay
+   // an entire offline catch-up backlog as guaranteed revenue.
+   for(let index=before;index<after&&index<before+96;index++){
+    const completedAt=start+15*60000+(index+1)*Math.max(10,route.durationMinutes)*60000+index*15*60000;
+    const voyage=ferryVoyageEconomics(route.durationMinutes,completedAt,company.ferryTicketPrices?.[route.id]);
+    ferryRevenue+=voyage.revenue;ferryCosts+=voyage.cost;
+   }
+  }
+  const revenue=baseRevenue+extraRevenue+ferryRevenue*scenario.revenue;
+  const operatingExpenses=baseExpenses+extraCost+ferryCosts*scenario.variableCosts+loanInterest+leasePayments;
   const inputVat=vatIncluded(Math.max(0,(baseExpenses+extraCost)*.3),settings.vatRate);
   const outputVat=vatIncluded(revenue,settings.vatRate);
   monthlyRevenue+=revenue;monthlyExpense+=operatingExpenses;monthlyInputVAT+=inputVat;monthlyOutputVAT+=outputVat;
   const bankSettlement=collectBankRevenue(forecastPartnerships,revenue);
   forecastPartnerships=bankSettlement.deals;
   totalBankRevenueShares+=bankSettlement.paid;
-  cash+=revenue-(baseExpenses+extraCost)-loanPayments-leasePayments-bankSettlement.paid;
+  cash+=revenue-(baseExpenses+extraCost+ferryCosts*scenario.variableCosts)-loanPayments-leasePayments-bankSettlement.paid;
   const savingsTransfer=Math.max(0,Math.min(Math.max(0,cash-(bank?.minimumOperatingCash??5000)),revenue*(bank?.autoSavePercent??0)/100));
   cash-=savingsTransfer;savings+=savingsTransfer;
   totalRevenue+=revenue;totalOperatingExpenses+=operatingExpenses;totalLoanPayments+=loanPayments;totalLeasePayments+=leasePayments;totalTaxes+=paidAtBoundary;totalSavingsTransfers+=savingsTransfer;
