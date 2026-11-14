@@ -3,6 +3,10 @@ import type {FleetState} from './taxi';
 export type DayBaseline={day:string;discovered:number;harbours:number;cash:number;fleetSize:number};
 export type DailySummary={
  day:string;revenue:number;expenses:number;net:number;taxiRevenue:number;
+ /** Cash-only revenue financing: never included in operating expenses. */
+ bankRepayments:number|null;cashAfterBankRepayments:number|null;
+ bankLenderRepayments:{bank:string;amount:number;sharePercent:number}[];
+ openingCash:number;otherCashMovements:number|null;
  ferryRevenue:number;otherRevenue:number;trips:number;distanceKm:number;
  roadsDiscovered:number;harboursDiscovered:number;fleetSize:number;
  activeExplorers:number;activeTaxis:number;cash:number;cashChange:number;
@@ -30,6 +34,21 @@ export function buildDailySummary(day:string,fleet:FleetState,baseline:DayBaseli
  const taxiRevenue=round(vehicles.reduce((sum,row)=>sum+row.revenue,0));
  const distanceKm=round(vehicles.reduce((sum,row)=>sum+row.km,0));
  const ferryRevenue=round(Math.min(revenue,Math.max(0,fleet.ferryRevenueByDay?.[day]??0)));
+ // Older saves have no daily collection record. Never pretend that absent
+ // history means the banks took €0: display "not recorded" instead.
+ const bankRecorded=Object.prototype.hasOwnProperty.call(fleet.bankPartnershipPaidByDay??{},day);
+ const bankRepayments=bankRecorded?round(fleet.bankPartnershipPaidByDay![day]):null;
+ const cashAfterBankRepayments=bankRepayments===null?null:round(revenue-expenses-bankRepayments);
+ const bankLenderRepayments=Object.entries(fleet.bankPartnershipPaidByLenderByDay?.[day]??{})
+  .filter(([,amount])=>Number.isFinite(amount)&&amount>0)
+  .map(([bank,amount])=>({bank,amount:round(amount),sharePercent:(fleet.bankPartnerships??[])
+   .filter(contract=>contract.bank===bank).reduce((total,contract)=>total+contract.revenueShare,0)}))
+  .sort((a,b)=>b.amount-a.amount);
+ // This remainder is intentionally NOT labelled "purchases": it may also
+ // include transfers, principal, tax settlements, state timing and missing
+ // historical postings. A cash journal is needed to attribute it precisely.
+ const cashChange=round(cash-baseline.cash);
+ const otherCashMovements=cashAfterBankRepayments===null?null:round(cashChange-cashAfterBankRepayments);
  const expenseMap=new Map<string,number>();
  for(const record of records)for(const [category,amount] of Object.entries(record.categories??{}))
   expenseMap.set(category,(expenseMap.get(category)??0)+amount);
@@ -47,12 +66,13 @@ export function buildDailySummary(day:string,fleet:FleetState,baseline:DayBaseli
  const expenseBreakdown=[...expenseMap].filter(([,amount])=>amount>.005)
   .sort((a,b)=>b[1]-a[1]).map(([label,amount])=>({label:expenseNames[label]??'Other operating costs',amount:round(amount)}));
  return {day,revenue,expenses,net:round(revenue-expenses),taxiRevenue,ferryRevenue,
+  bankRepayments,cashAfterBankRepayments,bankLenderRepayments,openingCash:round(baseline.cash),otherCashMovements,
   otherRevenue:round(revenue-taxiRevenue-ferryRevenue),trips,distanceKm,
   roadsDiscovered:Math.max(0,(fleet.exploredEdgeIds??[]).length-baseline.discovered),
   harboursDiscovered:Math.max(0,harbours-baseline.harbours),
   fleetSize:fleet.taxis.length,activeExplorers:fleet.taxis.filter(t=>t.kind==='explorer').length,
   activeTaxis:fleet.taxis.filter(t=>t.kind!=='explorer').length,
-  cash:round(cash),cashChange:round(cash-baseline.cash),
+  cash:round(cash),cashChange,
   fleetChange:fleet.taxis.length-baseline.fleetSize,
   loanBalance:round((fleet.loans??[]).reduce((sum,loan)=>sum+Math.max(0,loan.balance),0)),
   partnershipRemaining:round((fleet.bankPartnerships??[]).reduce((sum,d)=>sum+Math.max(0,d.repaymentCap-d.repaid),0)),
