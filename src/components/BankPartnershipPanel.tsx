@@ -22,6 +22,7 @@ export default function BankPartnershipPanel({company,fleet,gameEpochMs,onAccept
  return <section className="finance-loan loan-configurator" aria-label="Bank partnerships" style={{marginTop:24}}>
   <div className="finance-section-heading"><h2>Bank partnerships & revenue financing</h2><span>Expansion capital · €500k–€10m</span></div>
   <p>Negotiate funding in exchange for a percentage of gross passenger and owned-ferry revenue. Payments stop automatically at the agreed repayment cap. No permanent equity is transferred.</p>
+   <p>Collections are deducted when each passenger fare or owned-ferry receipt settles, not once per game day. Across your active agreements, up to {Math.min(45,committed)}% of each €100 gross receipt goes to banks ({eur(Math.min(45,committed))}); fuel, wages and other expenses still have to be paid. These financing repayments reduce cash even when the operating-profit total is positive.</p>
   <div className="company-metrics">
    <article><small>EST. DAILY REVENUE</small><strong>{eur(avg)}</strong></article>
    <article><small>ACTIVE REVENUE SHARE</small><strong>{committed}%</strong></article>
