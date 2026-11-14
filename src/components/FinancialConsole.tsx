@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {Download,Trash2,RefreshCw,Activity,AlertTriangle} from 'lucide-react';
-import {financialAuditEntries,financialAuditReport,financialAuditTotals,clearFinancialAudit,type FinancialAuditEntry} from '../financialDiagnostics';
+import {financialAuditEntries,financialAuditReport,financialAuditTotals,clearFinancialAudit,transactionLedgerReport,type LedgerTransaction,type FinancialAuditEntry} from '../financialDiagnostics';
 import './FrontendConsole.css';
 const eur=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(n);
 const stamp=()=>new Date().toISOString().replace(/[:.]/g,'-');
@@ -10,7 +10,7 @@ const exportCsv=(entries:FinancialAuditEntry[])=>{
  const headers=['id','realTime','gameTime','kind','description','reference','gross','operatingCost','bankShare','savings','other','cashDelta','cashBefore','pendingBefore','pendingAfter','cashAfter','discrepancy','warnings','breakdown','bankLenders'];
  return [headers.join(','),...entries.map(e=>headers.map(h=>csvCell((e as unknown as Record<string,unknown>)[h] instanceof Object?JSON.stringify((e as unknown as Record<string,unknown>)[h]):(e as unknown as Record<string,unknown>)[h])).join(','))].join('\n');
 };
-export default function FinancialConsole(){
+export default function FinancialConsole({transactions=[]}:{transactions?:readonly LedgerTransaction[]}){
  const [entries,setEntries]=useState<FinancialAuditEntry[]>(financialAuditEntries);
  const [kind,setKind]=useState('all'),[query,setQuery]=useState(''),[paused,setPaused]=useState(false),[issuesOnly,setIssuesOnly]=useState(false);
  useEffect(()=>{if(paused)return;const id=window.setInterval(()=>setEntries(financialAuditEntries()),1000);return()=>window.clearInterval(id)},[paused]);
@@ -38,7 +38,7 @@ export default function FinancialConsole(){
   <div className="te-console-toolbar"><label>Event type<select value={kind} onChange={e=>setKind(e.target.value)}><option value="all">All financial events</option>{types.map(t=><option key={t} value={t}>{t}</option>)}</select></label><label>Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Ferry, wages, fuel, bank, taxes…"/></label>
    <label className="te-finance-checkbox"><input type="checkbox" checked={issuesOnly} onChange={e=>setIssuesOnly(e.target.checked)}/> Alerts only</label>
    <button onClick={()=>setPaused(v=>!v)}>{paused?'Resume':'Pause'}</button><button onClick={()=>setEntries(financialAuditEntries())}><RefreshCw size={15}/> Refresh</button>
-   <button onClick={()=>save('travelempire-financial-'+stamp()+'.log',financialAuditReport(),'text/plain;charset=utf-8')}><Download size={15}/> Detailed .log</button>
+   <button onClick={()=>save('travelempire-financial-'+stamp()+'.log',financialAuditReport()+'\\n'+transactionLedgerReport(transactions),'text/plain;charset=utf-8')}><Download size={15}/> Detailed .log</button>
    <button onClick={()=>save('travelempire-financial-'+stamp()+'.csv',exportCsv(entries),'text/csv;charset=utf-8')}><Download size={15}/> CSV</button>
    <button onClick={()=>{clearFinancialAudit();setEntries([])}}><Trash2 size={15}/> Clear</button>
   </div>
