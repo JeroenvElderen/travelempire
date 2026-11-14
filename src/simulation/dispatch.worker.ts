@@ -1,3 +1,4 @@
+import {specialistFallbackRoles} from './explorerRoles';
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
@@ -923,7 +924,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i];
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&
-       !specialistCanDepart(t,unlockedRoles)){
+       !specialistCanDepart(t,unlockedRoles)&&specialistFallbackRoles(t.explorerRole).length===0){
      taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],
       discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
       leg:0,distanceIntoLeg:0,speedKph:0,routeInvalid:true};
@@ -1195,7 +1196,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(const index of idleOrder){
     const idleVehicle=taxis[index];
     if(idleVehicle.kind!=='explorer'||idleVehicle.ferryTrip||idleVehicle.status!=='IDLE')continue;
-    if(!specialistCanDepart(idleVehicle,unlockedRoles)){
+    if(!specialistCanDepart(idleVehicle,unlockedRoles)&&specialistFallbackRoles(idleVehicle.explorerRole).length===0){
      explorerPlanSkipReason.set(idleVehicle.id,
       'waiting-for-connected-'+(idleVehicle.explorerRole??'road')+'-frontier');
      continue;
@@ -1244,20 +1245,30 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       // Shared directed frontier search spans every connected loaded tile.
       // The specialist fallback handles legal one-way exits and roundabouts.
       const harbourGoal=role==='poi'?
-       msg.poiMissions?.find(m=>m.vehicleId===idleVehicle.id)?.point:undefined;
-      const connected=role==='poi'&&harbourRoute?null:planConnectedFrontier(
-       activeGraph,origin.node,explored,allowed,reservedEdges,reservedTargets,
-       role,role==='poi'?65000:95000,harbourGoal);
-      const useLegacyFallback=()=>{
-       const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
-       if(time-last<30000)return null;
-       legacyFallbackAt.set(idleVehicle.id,time);
-       return planReachableExplorerRoad(activeGraph,origin.node,explored,allowed,
-        reservedEdges,reservedTargets,role);
-      };
-      const planned=role==='poi'?null:connected!.route?connected!:
-       useLegacyFallback()??connected!;
-      // If destination tiles have not formed a connected route yet, move
+       const tiers=specialistFallbackRoles(role);
+       let chosenRole=role;
+       let chosenAllowed=allowed;
+       let connected:ReturnType<typeof planConnectedFrontier>|null=null;
+       // iOS single-worker planner: always try the highest available tier first.
+       for(const tier of tiers.length?tiers:[role]){
+        const tierAllowed=tier===role?allowed:roadClassCache.get(tier)??new Set<string>();
+        const result=role==='poi'&&harbourRoute?null:planConnectedFrontier(
+         activeGraph,origin.node,explored,tierAllowed,reservedEdges,reservedTargets,
+         tier,role==='poi'?65000:95000,harbourGoal);
+        connected=result;
+        chosenAllowed=tierAllowed;
+        if(result?.route){chosenRole=tier;break;}
+       }
+       const useLegacyFallback=()=>{
+        const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
+        if(time-last<30000)return null;
+        legacyFallbackAt.set(idleVehicle.id,time);
+        return planReachableExplorerRoad(activeGraph,origin.node,explored,chosenAllowed,
+         reservedEdges,reservedTargets,chosenRole);
+       };
+       const planned=role==='poi'?null:connected?.route?connected:
+        useLegacyFallback()??connected;
+       // If destination tiles have not formed a connected route yet, move
       // along legal discoverable roads to expand the road network. Keep the
       // assigned harbour and retry the full road route as tiles are streamed.
       const frontier=role==='poi'&&!harbourRoute&&candidateIndexes.size>0
@@ -1503,7 +1514,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i];
     if(t.kind==='explorer'&&t.status==='EXPLORING'&&
-       !specialistCanDepart(t,unlockedRoles)){
+       !specialistCanDepart(t,unlockedRoles)&&specialistFallbackRoles(t.explorerRole).length===0){
      taxis[i]={...t,status:'IDLE',path:[],edgeIds:[],
       discoveryEdgeIds:[],escapeTransitEdgeIds:[],journeyEdges:[],
       leg:0,distanceIntoLeg:0,speedKph:0,routeInvalid:true};
@@ -1534,7 +1545,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const current=taxis[index];
     if(current.kind!=='explorer')continue;
     const proposal=planningResults.get(current.id);
-    if(!specialistCanDepart(current,unlockedRoles)){
+    if(!specialistCanDepart(current,unlockedRoles)&&specialistFallbackRoles(current.explorerRole).length===0){
      planningResults.delete(current.id);
      explorerPlanSkipReason.set(current.id,
       'waiting-for-connected-'+(current.explorerRole??'road')+'-frontier');
