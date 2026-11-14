@@ -81,7 +81,7 @@ import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFe
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
 import {type PoiHarbourMission} from './maritime/poiMissions';
 import {useRef} from 'react';
-import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
+import {loadGameClock,advanceGameClock,saveGameClock,type GameClock} from './simulation/gameClock';
 
 
 const futureNavigation=[
