@@ -3,7 +3,7 @@ import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {planConnectedFrontier} from './connectedFrontier';
 import type {RoadSegment} from '../data/roadTiles';
-import {explorerClassEligible} from './explorerRoles';
+import {explorerClassEligible,specialistFallbackRoles} from './explorerRoles';
 
 type Init={type:'init';revision:number};
 type Roads={type:'addRoads';revision:number;roads:RoadSegment[]};
@@ -115,19 +115,32 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  }
  const currentNode=origin.node;
  try{
-  const valid=new Set(roleAllowed(msg.vehicle.explorerRole));
   const reserved=new Set(msg.reservedRoads),reservedDest=new Set(msg.reservedDestinations);
-  const connected=planConnectedFrontier(graph,currentNode,explored,valid,
-   reserved,reservedDest,msg.vehicle.explorerRole,75000);
-  const harbour=msg.vehicle.explorerRole==='poi'
+  const role=msg.vehicle.explorerRole;
+  const harbour=role==='poi'
    ?shortestHarbourRoute(currentNode,explored,msg.poiRoadIds):null;
-  const planned=msg.vehicle.explorerRole==='poi'||connected.route?connected:
-   planReachableExplorerRoad(graph,currentNode,explored,valid,
-    reserved,reservedDest,msg.vehicle.explorerRole);
-  const candidate=harbour??planned.route??null;
+  // Search preferred road class over the whole reachable purple network
+  // before considering ANY lower class. Never mix classes in a discovery
+  // assignment. Ferry transfers are handled by the maritime scheduler:
+  // a fallback here must not override a pending higher-class ferry target.
+  const tiers=specialistFallbackRoles(role);
+  let planned:ReturnType<typeof planConnectedFrontier>|null=null;
+  let chosenTier=role;
+  for(const tier of tiers.length?tiers:[role]){
+   const valid=new Set(roleAllowed(tier));
+   const connected=planConnectedFrontier(graph,currentNode,explored,valid,
+    reserved,reservedDest,tier,75000);
+   const candidatePlan=connected.route?connected:
+    planReachableExplorerRoad(graph,currentNode,explored,valid,
+     reserved,reservedDest,tier);
+   planned=candidatePlan;
+   if(candidatePlan.route){chosenTier=tier;break;}
+  }
+  const candidate=harbour??planned?.route??null;
   const route=candidate?prependPurpleStart(candidate,origin):null;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
    vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-harbour',
+   preferredRole:role,discoveryTier:chosenTier,
    taxi:route?{...msg.vehicle,status:'EXPLORING',path:route.path,
     edgeIds:route.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
     escapeTransitEdgeIds:candidate?.escapeTransitEdgeIds??[],
