@@ -1,6 +1,7 @@
 import type {FerryNetwork} from './ferries';
 import type {Point,RoadGraph,Taxi} from '../simulation/taxi';
 import {meters,nearest} from '../simulation/taxi';
+import {specialistFallbackRoles,explorerClassEligible} from '../simulation/explorerRoles';
 
 export type PassengerFerryOffer={
  routeId:string;fromPortId:string;toPortId:string;
@@ -19,10 +20,9 @@ function classOf(highway:string|undefined):string{
 }
 function candidateRoadRole(role:Taxi['explorerRole'],highway:string|undefined):boolean{
  const type=classOf(highway);
- if(role==='balanced'||!role||role==='completion'||role==='poi')return hierarchy.includes(type as typeof hierarchy[number]);
- if(role==='highway')return ['motorway','trunk','primary','secondary'].includes(type);
- if(role==='urban')return ['tertiary','residential','rural','service'].includes(type);
- return role==='rural'?type==='rural':role===type;
+ const fallback=specialistFallbackRoles(role);
+ if(fallback.length)return fallback.some(tier=>explorerClassEligible(tier,highway));
+ return hierarchy.includes(type as typeof hierarchy[number]);
 }
 /** Examine only the local road area near the destination, with strict work limits. */
 function hasDestinationWork(graph:RoadGraph,start:string,role:Taxi['explorerRole'],discovered:ReadonlySet<string>):boolean{
