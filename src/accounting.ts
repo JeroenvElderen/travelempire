@@ -1,8 +1,22 @@
 import type {AccountingPeriod,AccountingSettings,AccountingState,FleetState} from './simulation/taxi';
-export const DEFAULT_ACCOUNTING_SETTINGS:AccountingSettings={corporateRate:22,vatRate:13,settlement:'monthly'};
+export type TaxJurisdiction={code:string;name:string;corporateRate:number;standardVatRate:number;transportVatRate:number;vatFrequencyMonths:number;vatDueDay:number;corporateDueMonth:number;corporateDueDay:number;source:string};
+/** Default profiles for the simulation; specialist exemptions and local registrations require separate classification. */
+export const TAX_JURISDICTIONS:Record<string,TaxJurisdiction>={
+ GR:{code:'GR',name:'Greece',corporateRate:22,standardVatRate:24,transportVatRate:13,vatFrequencyMonths:1,vatDueDay:28,corporateDueMonth:7,corporateDueDay:31,source:'AADE / Greek Ministry of Finance'},
+ IE:{code:'IE',name:'Ireland',corporateRate:12.5,standardVatRate:23,transportVatRate:0,vatFrequencyMonths:2,vatDueDay:23,corporateDueMonth:9,corporateDueDay:23,source:'Irish Revenue'},
+};
+export const DEFAULT_ACCOUNTING_SETTINGS:AccountingSettings={corporateRate:22,vatRate:13,settlement:'scheduled',countryCode:'GR',vatFrequencyMonths:1,vatDueDay:28,corporateDueMonth:7,corporateDueDay:31};
+export function jurisdictionFor(code?:string){return TAX_JURISDICTIONS[(code??'GR').toUpperCase()]??TAX_JURISDICTIONS.GR}
+export function accountingSettingsFor(code:string):AccountingSettings{
+ const j=jurisdictionFor(code);
+ return {corporateRate:j.corporateRate,vatRate:j.transportVatRate,settlement:'scheduled',countryCode:j.code,vatFrequencyMonths:j.vatFrequencyMonths,vatDueDay:j.vatDueDay,corporateDueMonth:j.corporateDueMonth,corporateDueDay:j.corporateDueDay};
+}
+
 export const roundMoney=(value:number)=>Math.round((value+Number.EPSILON)*100)/100;
 export function accountingOf(value?:AccountingState):AccountingState{
- return {settings:{...DEFAULT_ACCOUNTING_SETTINGS,...value?.settings},periods:value?.periods??[],lastSettledMonth:value?.lastSettledMonth};
+ const legacy=!!value&&value.schemaVersion!==2;
+ const settings=legacy?accountingSettingsFor(value?.settings?.countryCode??'GR'):{...accountingSettingsFor(value?.settings?.countryCode??'GR'),...value?.settings};
+ return {settings,periods:value?.periods??[],lastSettledMonth:value?.lastSettledMonth,schemaVersion:2,legacyTaxReviewRequired:legacy&&!!value?.periods?.length||value?.legacyTaxReviewRequired,lastTaxPaymentDate:value?.lastTaxPaymentDate,taxPaymentHistory:value?.taxPaymentHistory??[]};
 }
 export function periodMonth(epochMs:number){return new Date(epochMs).toISOString().slice(0,7);}
 export function vatIncluded(gross:number,rate:number){return gross*rate/(100+rate);}
@@ -31,21 +45,46 @@ export function bookAccounting(value:AccountingState|undefined,month:string,gros
  periods.sort((a,b)=>a.month.localeCompare(b.month));
  return {...state,periods:periods.slice(-120)};
 }
-export function settleAccounting(value:AccountingState|undefined,currentMonth:string,availableCash:number){
+/** Date-scoped settlement: never sweep all available cash every simulation tick. */
+export function settleAccounting(value:AccountingState|undefined,currentMonth:string,availableCash:number,gameEpochMs?:number){
  const state=accountingOf(value),periods=state.periods.map(p=>({...p}));
- let remaining=Math.max(0,availableCash);
- let paidVat=0,paidCorporate=0;
+ const now=new Date(gameEpochMs??Date.parse(currentMonth+'-01T00:00:00Z'));
+ const date=now.toISOString().slice(0,10);
+ const month=now.getUTCMonth()+1,year=now.getUTCFullYear(),day=now.getUTCDate();
+ const frequency=state.settings.vatFrequencyMonths??1;
+ const dueDay=state.settings.vatDueDay??28;
+ const corporateMonth=state.settings.corporateDueMonth??7,corporateDay=state.settings.corporateDueDay??31;
+ const history=[...(state.taxPaymentHistory??[])];
+ // Migration quarantine: existing liability stays on balance sheet but cannot be
+ // silently paid using new rules until an explicit migration review is completed.
+ if(state.legacyTaxReviewRequired)return {accounting:{...state,periods},paidVat:0,paidCorporate:0};
+ if(state.lastTaxPaymentDate===date)return {accounting:{...state,periods},paidVat:0,paidCorporate:0};
+ let remaining=Math.max(0,Math.floor(availableCash*100)/100),paidVat=0,paidCorporate=0;
  for(const period of periods){
-  if(period.month>=currentMonth)continue;
+  const [py,pm]=period.month.split('-').map(Number);
+  if(!py||!pm||period.month>=currentMonth)continue;
   period.closed=true;
-  const vat=Math.max(0,roundMoney(period.vatCollected-period.vatInput-period.vatPaid));
-  const vatPayment=Math.min(vat,Math.floor(remaining*100)/100);
-  period.vatPaid=roundMoney(period.vatPaid+vatPayment);remaining-=vatPayment;paidVat+=vatPayment;
-  const tax=Math.max(0,roundMoney(period.corporateTax-period.corporateTaxPaid));
-  const taxPayment=Math.min(tax,Math.floor(remaining*100)/100);
-  period.corporateTaxPaid=roundMoney(period.corporateTaxPaid+taxPayment);remaining-=taxPayment;paidCorporate+=taxPayment;
+  // VAT return for a completed filing block, due in the following month.
+  const blockEnd=Math.ceil(pm/frequency)*frequency;
+  const dueVatYear=py+Math.floor(blockEnd/12);
+  const dueVatMonth=blockEnd%12+1;
+  const vatIsDue=year>dueVatYear||(year===dueVatYear&&(month>dueVatMonth||(month===dueVatMonth&&day>=dueDay)));
+  if(vatIsDue){
+   const due=Math.max(0,roundMoney(period.vatCollected-period.vatInput-period.vatPaid));
+   const payment=Math.min(due,remaining);
+   if(payment>0){period.vatPaid=roundMoney(period.vatPaid+payment);remaining=roundMoney(remaining-payment);paidVat=roundMoney(paidVat+payment);history.push({date,period:period.month,kind:'vat' as const,amount:payment});}
+  }
+  // Annual corporate tax is assessed on calendar-year trading results. Payments
+  // for the previous tax year are due at the configured annual filing deadline.
+  const corpYear=py+1;
+  const corpDue=year>corpYear||(year===corpYear&&(month>corporateMonth||(month===corporateMonth&&day>=corporateDay)));
+  if(corpDue){
+   const due=Math.max(0,roundMoney(period.corporateTax-period.corporateTaxPaid));
+   const payment=Math.min(due,remaining);
+   if(payment>0){period.corporateTaxPaid=roundMoney(period.corporateTaxPaid+payment);remaining=roundMoney(remaining-payment);paidCorporate=roundMoney(paidCorporate+payment);history.push({date,period:period.month,kind:'corporate' as const,amount:payment});}
+  }
  }
- return {accounting:{...state,periods,lastSettledMonth:currentMonth},paidVat:roundMoney(paidVat),paidCorporate:roundMoney(paidCorporate)};
+ return {accounting:{...state,periods,lastSettledMonth:currentMonth,lastTaxPaymentDate:date,taxPaymentHistory:history.slice(-2000)},paidVat,paidCorporate};
 }
 export function vehicleBookValue(t:FleetState['taxis'][number]){
  if(t.ownership==='leased')return 0;
