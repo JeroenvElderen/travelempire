@@ -219,3 +219,61 @@ body{
  .nav-v216.nav-map-mode .main .world .map-container,
  .nav-v216.nav-map-mode .main .world .map-canvas{inset:0}
 }
+
+
+/* Compact separated map HUD pills, matching the approved mobile mockup. */
+@media(max-width:800px){
+ .nav-v216.nav-map-mode .main>.world-minimal-topbar{
+  top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;
+  width:calc(100% - 24px);height:38px;min-height:38px;
+  padding:0;display:flex;align-items:center;gap:7px;
+  border:0;border-radius:0;background:transparent;box-shadow:none;backdrop-filter:none;
+ }
+ .nav-v216.nav-map-mode .world-minimal-date,
+ .nav-v216.nav-map-mode .world-minimal-money,
+ .nav-v216.nav-map-mode .world-minimal-layers{
+  height:38px;min-height:38px;border-radius:22px;
+  border:1px solid rgba(188,145,243,.52);
+  background:rgba(19,22,45,.94);
+  box-shadow:0 5px 17px #0005;backdrop-filter:blur(17px);
+ }
+ .nav-v216.nav-map-mode .world-minimal-date{
+  display:flex;align-items:center;gap:5px;flex:0 1 auto;min-width:0;
+  padding:0 11px;font-size:11px;font-weight:650;white-space:nowrap;
+ }
+ .nav-v216.nav-map-mode .world-minimal-date svg{width:14px;height:14px;flex-shrink:0}
+ .nav-v216.nav-map-mode .world-minimal-money{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  margin-left:auto;padding:0 10px;font-size:12px;font-weight:700;white-space:nowrap;
+ }
+ .nav-v216.nav-map-mode .world-minimal-money svg{width:15px;height:15px;flex-shrink:0}
+ .nav-v216.nav-map-mode .world-minimal-layers{
+  display:grid;place-items:center;flex:0 0 38px;width:38px;padding:0;
+ }
+ .nav-v216.nav-map-mode .world-minimal-layers svg{width:18px;height:18px}
+ .nav-v216.nav-map-mode .main>.live-finance-wrap{
+  top:calc(55px + env(safe-area-inset-top));left:12px;
+  width:max-content;max-width:calc(100% - 24px);margin:0!important;
+  border-radius:22px;background:rgba(19,22,45,.94);
+  box-shadow:0 6px 18px #0005;
+ }
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-main{
+  min-height:38px;height:38px;width:auto;padding:0 11px;border-radius:22px;
+ }
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-summary{
+  width:auto;display:flex;gap:8px;align-items:center;
+ }
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-summary-title{font-size:12px;gap:5px}
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-summary-title svg{width:15px;height:15px}
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-summary>strong{font-size:14px}
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-summary>svg:last-child{
+  width:15px;height:15px;margin-left:8px;
+ }
+ .nav-v216.nav-map-mode .main>.live-finance-wrap:has(.live-finance-panel){width:calc(100% - 24px)}
+ .nav-v216.nav-map-mode .main>.live-finance-wrap .live-finance-panel{width:100%;box-sizing:border-box}
+}
+@media(max-width:390px){
+ .nav-v216.nav-map-mode .world-minimal-date{font-size:10px;padding:0 8px}
+ .nav-v216.nav-map-mode .world-minimal-money{font-size:11px;padding:0 8px}
+ .nav-v216.nav-map-mode .world-minimal-layers{width:36px;flex-basis:36px}
+}
