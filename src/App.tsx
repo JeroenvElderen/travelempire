@@ -77,7 +77,7 @@ import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,mayBoard
 import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
-import {assignPoiHarbours,poiRouteCandidates,type PoiHarbourMission} from './maritime/poiMissions';
+import {type PoiHarbourMission} from './maritime/poiMissions';
 import {useRef} from 'react';
 import {loadGameClock,advanceGameClock,saveGameClock,formatGameClock,type GameClock} from './simulation/gameClock';
 
