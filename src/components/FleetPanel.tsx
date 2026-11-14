@@ -33,7 +33,7 @@ export default function FleetPanel({company,fleet,graph,error='',onBuyBatch,onBu
  const averageCondition=fleet.taxis.length?Math.round(fleet.taxis.reduce((sum,t)=>sum+(t.vehicleCondition??100),0)/fleet.taxis.length):0;
  const fleetHealth=Math.round((averageFuel+averageCondition)/2);
  const fleetOperatingProfit=fleet.taxis.reduce((n,t)=>n+(t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0),0)-(fleet.serviceExpense??0);
- const ready=fleet.taxis.filter(t=>!t.deliveryUntil||t.deliveryUntil<=now);const roster=fleet.drivers??[];const assignedNames=new Set(fleet.taxis.map(t=>t.driver.toLowerCase()));
+const roster=fleet.drivers??[];const assignedNames=new Set(fleet.taxis.map(t=>t.driver.toLowerCase()));
  return <section className="company-dashboard fleet-v2"><div className="fleet-page-heading"><div><span className="eyebrow">FLEET COMMAND · V2.1.1</span><h1>Fleet</h1><p>Manage vehicles &amp; performance</p></div><div className="fleet-heading-tag">OPERATIONS / FLEET</div></div>
  {!company?<p>Create a company first.</p>:<>
  <div className="fleet-mobile-overview" aria-label="Fleet overview">
