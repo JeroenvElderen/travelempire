@@ -19,6 +19,8 @@ export default function LiveFinanceTicker({history,transactions,bankCollectionsB
  const totals=dayFinance(history,gameNow);
  const bankPaid=bankCollectionsByDay?.[new Date(gameNow).toISOString().slice(0,10)]??0;
  const afterBankCash=totals.net-bankPaid;
+ const gameDay=new Date(gameNow).toISOString().slice(0,10);
+ const entryDay=(time:number)=>new Date(time).toISOString().slice(0,10);
  const expenses=expanded?dayExpenseBreakdown(history,gameNow):[];
  useEffect(()=>{
   if(expanded||entries.length<2)return;
@@ -35,13 +37,13 @@ export default function LiveFinanceTicker({history,transactions,bankCollectionsB
     <span>{expanded?'Hide activity':'View activity'} {expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}</span>
    </span>
    <span className="live-finance-totals">
-    <span><small>INCOME TODAY</small><strong className="income">+{euros(totals.income)}</strong></span>
-    <span><small>EXPENSES TODAY</small><strong className="expense">−{euros(totals.expenses)}</strong></span>
+    <span><small>INCOME · GAME DAY</small><strong className="income">+{euros(totals.income)}</strong></span>
+    <span><small>EXPENSES · GAME DAY</small><strong className="expense">−{euros(totals.expenses)}</strong></span>
     <span><small>NET AFTER BANKS</small><strong className={afterBankCash>=0?'income':'expense'}>{renderAmount(afterBankCash)}</strong></span>
    </span>
    <span className="live-finance-current" aria-live="off">
     <span className="live-finance-current-label" key={current?.id??'none'}>
-     {current?current.description:'No transactions recorded yet'}
+     {current?current.description+' · '+entryDay(current.time)+(entryDay(current.time)===gameDay?'':' · earlier game day'):'No transactions recorded yet'}
     </span>
     {current&&<strong className={current.type==='income'?'income':current.type==='expense'?'expense':'neutral'}>{renderAmount(current.amount)}</strong>}
    </span>
@@ -61,7 +63,7 @@ export default function LiveFinanceTicker({history,transactions,bankCollectionsB
        entry.type==='expense'?<ArrowUpRight size={15} className="expense"/>:
        <Landmark size={15} className="neutral"/>}
       <span className="live-finance-entry-description">{entry.description}
-       <small>{entry.type==='financing'?'Financing / capital':entry.type==='income'?'Operating income':'Operating expense'}</small>
+       <small>{entry.type==='financing'?'Financing / capital':entry.type==='income'?'Operating income':'Operating expense'} · {new Date(entry.time).toISOString().slice(0,16).replace('T',' ')} game UTC{entryDay(entry.time)===gameDay?'':' · earlier game day'}</small>
       </span>
       <strong className={entry.type==='income'?'income':entry.type==='expense'?'expense':'neutral'}>{renderAmount(entry.amount)}</strong>
      </div>)}
@@ -72,7 +74,7 @@ export default function LiveFinanceTicker({history,transactions,bankCollectionsB
      <span>{expense.label}</span><span className="expense">−{euros(expense.value)}</span>
     </div>)}
    </div>}
-   <p className="live-finance-disclaimer">Operating profit today: {renderAmount(totals.net)} · Bank revenue-share collections: −{euros(bankPaid)} · Cash contribution after bank shares: {renderAmount(afterBankCash)}. This excludes vehicle purchases, other loan principal and savings transfers.</p>
+   <p className="live-finance-disclaimer">Game day {gameDay}. Headline totals use booked operating history for this game day; activity includes older transactions and financing flows. Operating profit today: {renderAmount(totals.net)} · Bank revenue-share collections: −{euros(bankPaid)} · Cash contribution after bank shares: {renderAmount(afterBankCash)}. This excludes vehicle purchases, other loan principal and savings transfers.</p>
   </div>}
  </div>;
 }
