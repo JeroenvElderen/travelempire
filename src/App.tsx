@@ -563,6 +563,28 @@ export default function App(){
  // Ferry purchases must not enqueue distant road tiles. Active vehicle journeys
  // request destination roads through the existing on-demand route prefetcher.
  const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<1)throw Error('Requires 5,000 discovered roads and the universal explorer.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
+ const completeResearchNow=()=>{
+  const current=companyRef.current;
+  const now=gameClockRef.current?.epochMs;
+  if(!current||now===undefined){setResearchError('Company or game clock is unavailable');return;}
+  const ready=Research.settle(research,now);
+  if(!ready.active){setResearchError('No active research to complete');return;}
+  const cost=Research.instantCompletionCost(ready,now);
+  if(current.cash<cost){setResearchError('Insufficient funds to finish research');return;}
+  const project=Research.projects.find(p=>p.id===ready.active?.id);
+  if(!window.confirm(`Complete ${project?.name??'research'} · Level ${ready.active.level} immediately for ${new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(cost)}? This charge is non-refundable.`))return;
+  // Recheck before committing so a stale dialog cannot spend twice.
+  const latest=Research.settle(Research.load(current.id),now);
+  if(!latest.active||latest.active.id!==ready.active.id||latest.active.level!==ready.active.level){setResearchError('Research changed. Please try again.');return;}
+  const amount=Research.instantCompletionCost(latest,now);
+  const balance=companyRef.current;
+  if(!balance||balance.id!==current.id||balance.cash<amount){setResearchError('Insufficient funds');return;}
+  const completed=Research.completeInstantly(latest,now);
+  const updated={...balance,cash:Math.round((balance.cash-amount)*100)/100};
+  Research.save(balance.id,completed);
+  saveCompany(updated);companyRef.current=updated;
+  setCompany(updated);setResearch(completed);setResearchError('');
+ };
  const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
  // Grant two additional vehicles of EVERY explorer role when level 1
  // finishes. A legacy research completion only set explorerExpansionApplied
@@ -2714,7 +2736,7 @@ export default function App(){
  {page==='Ferries'&&<FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/>}
  {page==='Investments'&&<InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/>}
  {page==='Finance'&&<FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/>}
- {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch}/>{researchError&&<p role="alert">{researchError}</p>}</>}
+ {page==='Research'&&<><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p role="alert">{researchError}</p>}</>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
  </main><nav className="mobile-tabs" aria-label="Mobile navigation">{navigation.filter(n=>['World','Fleet','Dealership','Company'].includes(n.name)).map(({name,icon:Icon})=><button key={name} className={page===name?'active':''} onClick={()=>go(name)}><Icon size={19}/><span>{name==='World'?'Map':name==='Dealership'?'Dealer':name==='Operations'?'Ops':name}</span></button>)}<button onClick={()=>setDrawerOpen(true)}><Menu size={19}/><span>More</span></button></nav></div>;
