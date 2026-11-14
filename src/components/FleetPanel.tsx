@@ -2,7 +2,7 @@ import {energySpec,energyRemaining,energyPercent,energyRangeKm} from '../simulat
 import {driverLevel,driverSkill} from '../simulation/taxi';
 import {SPECIALIST_EXPLORERS} from '../simulation/explorerRoles';
 import {useEffect,useState} from 'react';
-import {CarFront,CalendarDays,Wrench,Gauge,Search,SlidersHorizontal,Fuel,MapPin,ChevronRight,TrendingUp,Activity} from 'lucide-react';
+import {CarFront,CalendarDays,Wrench,Gauge,Search,SlidersHorizontal,Fuel,MapPin,ChevronRight,TrendingUp} from 'lucide-react';
 import type {Company} from '../company';
 import type {FleetState,RoadGraph} from '../simulation/taxi';
 import {DRIVER_COST} from '../simulation/taxi';
