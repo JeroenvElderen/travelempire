@@ -501,41 +501,6 @@ function updatePoiIndex(g:RoadGraph,targets:Point[]){
 // The POI specialist pursues harbour-access segments by shortest driven distance.
 // Unlike road-class specialists, every previously red road on the chosen route
 // is a discovery edge. The route remains directed and stays on the road graph.
-function shortestHarbourMission(g:RoadGraph,start:string,explored:Set<string>,
- reserved:Set<string>,candidateIndexes:ReadonlySet<number>):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[];portIndex:number}|null{
- const targets:Array<{node:string;offsetMeters:number}>=[];
- const legs:Array<{from:string;to:string;id:string;portIndex:number}>=[];
- for(const [index,best] of nearestHarbourRoads){
-  if(!candidateIndexes.has(index))continue;
-  const local=[best.id,...(harbourAccessCandidates.get(index)??[])
-   .filter(road=>road.distance<=Math.min(HARBOUR_ACCESS_RADIUS_METERS,best.distance+HARBOUR_ACCESS_EXTRA_METERS))
-   .map(road=>road.id)];
-  // Ports still in the candidate list have not been confirmed unlocked.
-  // A discovered harbour approach may be used for a legitimate arrival
-  // mission; skipping it here previously stranded scouts near blue roads.
-  for(const id of new Set(local)){
-   if(reserved.has(id))continue;
-   const pair=roadEndpoints.get(id);if(!pair)continue;
-   for(const from of pair){
-   for(const edge of g.edges.get(from)??[]){
-    if(edge.id!==id||edge.taxiOnly)continue;
-    targets.push({node:from,offsetMeters:edge.meters});
-    legs.push({from,to:edge.to,id,portIndex:index});
-   }
-  }
-  }
- }
- if(!targets.length)return null;
- const result=routeToNearestTarget(g,start,targets,'',150000,undefined,false);
- if(!result)return null;
- const leg=legs[result.targetIndex];
- const destination=g.nodes.get(leg.to);
- if(!destination)return null;
- const edgeIds=[...result.edgeIds,leg.id];
- return {path:[...result.path,destination],edgeIds,
-  discoveryEdgeIds:[...new Set(edgeIds.filter(id=>!explored.has(id)))],
-  escapeTransitEdgeIds:[],portIndex:leg.portIndex};
-}
 const roadRole=(h:string)=>h==='motorway'||h==='motorway_link'?'motorway':h==='trunk'||h==='trunk_link'?'trunk':h==='primary'||h==='primary_link'?'primary':h==='secondary'||h==='secondary_link'?'secondary':h==='tertiary'||h==='tertiary_link'?'tertiary':h==='residential'||h==='living_street'?'residential':h==='unclassified'||h==='track'||h==='road'?'rural':h==='service'?'service':null;
 type Init={type:'init';revision:number;plannerPoolEnabled?:boolean};
 type AddRoads={type:'addRoads';revision:number;roads:import('../data/roadTiles').RoadSegment[]};
