@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {collectBankRevenue,bookBankCollection,partnershipOffer,revenueAverage,type BankPartnership} from './bankPartnerships';
+import {collectBankRevenue,bookBankCollection,bookBankLenderCollections,partnershipOffer,revenueAverage,type BankPartnership} from './bankPartnerships';
 
 const contract=(overrides:Partial<BankPartnership>={}):BankPartnership=>({
  id:'one',bank:'Growth Capital Bank',principal:2000000,revenueShare:18,
@@ -56,6 +56,24 @@ describe('revenue-backed bank partnerships',()=>{
  it('tracks daily bank payments without overwriting previous days',()=>{
   expect(bookBankCollection({'2026-11-13':10,'2026-11-14':5},'2026-11-14',2.5))
    .toEqual({'2026-11-13':10,'2026-11-14':7.5});
+ });
+ it('records zero-repayment days and reuses unchanged history',()=>{
+  const day='2027-01-04';
+  const first=bookBankCollection(undefined,day,0);
+  expect(first).toEqual({[day]:0});
+  expect(bookBankCollection(first,day,0)).toBe(first);
+  expect(bookBankCollection(first,day,41)).toEqual({[day]:41});
+ });
+ it('records exact 25% and 16% bank deductions without overwriting previous settlements',()=>{
+  const day='2027-01-04';
+  const first=bookBankLenderCollections(undefined,day,[
+   {bank:'Empire Investment Group',amount:250},
+   {bank:'Growth Capital Bank',amount:160}
+  ]);
+  const next=bookBankLenderCollections(first,day,[{bank:'Empire Investment Group',amount:25}]);
+  expect(next[day]).toEqual({'Empire Investment Group':275,'Growth Capital Bank':160});
+  expect(first[day]).toEqual({'Empire Investment Group':250,'Growth Capital Bank':160});
+  expect(bookBankLenderCollections(next,day,[])).toBe(next);
  });
  it('calculates daily history revenue average',()=>{
   expect(revenueAverage([{revenue:400},{revenue:600}])).toBe(500);
