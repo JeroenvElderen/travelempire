@@ -42,11 +42,21 @@ describe('midnight daily summary',()=>{
   expect(summary.openingCash).toBe(2000);
   expect(summary.cashChange).toBe(-2392.33);
   expect(summary.otherCashMovements).toBe(-7292.33);
+  expect(summary.unattributedBankRepayments).toBe(0);
   expect(summary.bankLenderRepayments).toEqual([
    {bank:'Empire Investment Group',amount:2500,sharePercent:25},
    {bank:'Growth Capital Bank',amount:1600,sharePercent:16}
   ]);
   expect(Math.round((summary.openingCash+summary.cashAfterBankRepayments!+summary.otherCashMovements!)*100)/100).toBe(summary.cash);
+ });
+ it('exposes previously recorded bank collections without a lender split',()=>{
+  const day='2027-01-04';
+  const state=fleet({bankPartnershipPaidByDay:{[day]:4100},
+   bankPartnershipPaidByLenderByDay:{[day]:{'Growth Capital Bank':1600}}});
+  const report=buildDailySummary(day,state,dayBaseline(day,state,1000,0),1000,0);
+  expect(report.bankRepayments).toBe(4100);
+  expect(report.unattributedBankRepayments).toBe(2500);
+  expect(report.bankLenderRepayments.map(x=>x.amount)).toEqual([1600]);
  });
  it('distinguishes unrecorded legacy bank history from a genuine zero',()=>{
   const day='2027-01-04';
