@@ -34,3 +34,20 @@
 .te-day-footer{padding:12px 0 3px}.te-day-footer button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border-radius:15px;border:1.5px solid #e1a0ff;color:#fff;background:linear-gradient(110deg,#6e2eb5,#b12fe5);font-size:14px;font-weight:750;box-shadow:inset 0 0 15px #d89aff5c,0 0 14px #a93fff66;cursor:pointer}
 @media(max-width:460px){.te-day-overlay{padding:5px}.te-day-dialog{max-height:97dvh;border-radius:22px}.te-day-scroll{padding:0 11px calc(10px + env(safe-area-inset-bottom,0px))}.te-day-hero{margin:0 -11px;height:155px;padding:13px 13px}.te-day-hero-title h2{font-size:20px}.te-day-profit{gap:9px;padding:12px 10px;min-height:109px;border-radius:15px}.te-day-profit-symbol{flex-basis:38px}.te-day-profit-symbol svg{width:33px}.te-day-profit strong{font-size:clamp(22px,6.7vw,31px)}.te-day-profit small{font-size:10px}.te-day-finance{gap:5px}.te-day-finance article{padding:10px 7px}.te-day-finance strong{font-size:clamp(11px,3.45vw,15px)}.te-day-finance small{font-size:8px}.te-day-finance span{font-size:9px}.te-day-categories{gap:5px}.te-day-categories button{font-size:9px;padding:10px 2px}.te-day-panel{padding:11px}.te-day-panel h3{font-size:14px}.te-day-overview-grid{grid-template-columns:1fr}.te-day-list>div{font-size:12px}.te-day-list strong{font-size:12px}.te-day-chart-total strong{font-size:14px}.te-day-bars{height:84px}.te-day-bar-wrap small{font-size:7px}}
 @media(max-height:650px){.te-day-overlay{align-items:stretch}.te-day-dialog{max-height:100dvh}.te-day-hero{height:130px}}
+
+/* Cash-flow reconciliation: distinguish profitable operations from depleted cash. */
+.te-day-cash-reconciliation{margin-top:12px;border-color:#826cb28f;background:linear-gradient(145deg,#202249,#0d1934)}
+.te-day-cash-reconciliation h3{margin-bottom:10px}
+.te-day-cash-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.te-day-cash-grid>div{display:flex;flex-direction:column;gap:5px;padding:10px 8px;border:1px solid #8190b444;border-radius:12px;background:#121b34a8;min-width:0}
+.te-day-cash-grid small{color:#b9c8df;font-size:10px;line-height:1.25}
+.te-day-cash-grid strong{font-size:clamp(11px,2.8vw,17px);overflow-wrap:anywhere;line-height:1.2;font-variant-numeric:tabular-nums}
+.te-day-lender-list{margin-top:10px;padding-top:6px;border-top:1px solid #ffffff27}
+.te-day-lender-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;font-size:11px}
+.te-day-lender-list span{color:#c7d2e7}
+.te-day-lender-list strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.te-day-cash-warning{margin:10px 0 0;padding:9px 10px;border:1px solid #c68b8b7d;border-radius:10px;font-size:11px;line-height:1.5;color:#ffb6c2;background:#3a233355}
+.te-day-cash-details{margin-top:11px;padding-top:10px;border-top:1px solid #ffffff26}
+.te-day-cash-details h4{font-size:12px;margin:0 0 5px;color:#ebe1ff}
+.te-day-cash-details .te-day-list strong{max-width:52%}
+@media(max-width:400px){.te-day-cash-grid{gap:5px}.te-day-cash-grid>div{padding:8px 6px}.te-day-cash-grid small{font-size:9px}.te-day-cash-grid strong{font-size:11px}}
