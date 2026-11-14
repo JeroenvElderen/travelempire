@@ -5,7 +5,7 @@ let sequence=0;
 const cents=(n:number)=>Math.round(n*100)/100;
 export function recordFinancialAudit(entry:Omit<FinancialAuditEntry,'id'|'realTime'|'cashDelta'|'cashAfter'> & {cashDelta?:number;cashAfter?:number}){
  const cashDelta=cents(entry.cashDelta??(entry.gross-entry.operatingCost-entry.bankShare-entry.savings+entry.other));
- const cashAfter=cents(entry.cashAfter??(entry.cashBefore+cashDelta));
+ const cashAfter=cents(entry.cashAfter??(entry.cashBefore+entry.pendingAfter));
  events.push({...entry,id:++sequence,realTime:new Date().toISOString(),cashDelta,cashAfter});
  if(events.length>2000)events.shift();
 }
