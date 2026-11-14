@@ -20,7 +20,7 @@ export function recordFinancialAudit(entry:Input){
  const warnings:string[]=[];
  if(Math.abs(discrepancy)>0.02&&entry.kind!=='cash-flush'&&entry.kind!=='property')
   warnings.push('Pending cash changed by '+fmt(entry.pendingAfter-entry.pendingBefore)+' but recorded event delta is '+fmt(cashDelta));
- if(entry.kind==='cash-flush'&&Math.abs(finite(entry.cashAfter-entry.cashBefore)-finite(entry.other))>0.02)
+ if(entry.kind==='cash-flush'&&Math.abs(finite(cashAfter-entry.cashBefore)-finite(entry.other))>0.02)
   warnings.push('Cash flush does not match committed balance difference');
  if(entry.kind!=='cash-flush'&&entry.gross>0&&entry.bankShare>entry.gross*0.45001+0.02)
   warnings.push('Bank deduction exceeds 45% of gross receipts');
