@@ -183,3 +183,12 @@ body{
  .mobile-nav-hud:has(.mobile-nav-fab[aria-expanded="true"]){z-index:8}
  .nav-v216.nav-map-mode .mobile-nav-hud{pointer-events:none}
 }
+
+
+/* Keep the mobile sidebar and its scrim above all map HUD overlays. */
+@media(max-width:800px){
+ .nav-v216 .sidebar,
+ .nav-v216 .sidebar.open{z-index:1001!important}
+ .nav-v216 .backdrop{z-index:1000!important}
+ .nav-v216 .mobile-nav-hud:has(.mobile-nav-fab[aria-expanded="true"]){z-index:8!important}
+}
