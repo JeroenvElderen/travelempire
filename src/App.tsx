@@ -75,6 +75,7 @@ import {loadFerryNetwork,englishFerryName,type FerryNetwork} from './maritime/fe
 import {ferryRoutePrice} from './maritime/routePlanning';
 import {completedFerryArrivals,ferryStartsAtFrom,nextPassengerDeparture,mayBoardPassengerFerry,PUBLIC_PASSENGER_FERRY_EPOCH_MS} from './maritime/ferryService';
 import {arrivedHarbourIds,mergeUnlockedHarbours} from './maritime/ferryArrivalUnlocks';
+import {ferryArrivalRoadIds,ferryArrivalRoadsKey,ferryArrivalRoadsPendingKey} from './maritime/ferryArrivalRoads';
 import {choosePassengerFerry,ferryPosition} from './maritime/explorerPassengerFerry';
 import {harbourRoadEdges,harbourStorageKey} from './maritime/harbourUnlocks';
 import {type PoiHarbourMission} from './maritime/poiMissions';
@@ -193,6 +194,13 @@ export default function App(){
     const merged=mergeUnlockedHarbours(saved,destinations);
     try{localStorage.setItem(key,JSON.stringify(merged));}catch{}
     setUnlockedHarbours(previous=>mergeUnlockedHarbours(previous,destinations));
+    // Queue once per actually reached harbour, independently of unlocks.
+    try{
+     const done=new Set(JSON.parse(localStorage.getItem(ferryArrivalRoadsKey(current.id))??'[]') as string[]);
+     const pending=new Set(JSON.parse(localStorage.getItem(ferryArrivalRoadsPendingKey(current.id))??'[]') as string[]);
+     for(const id of destinations)if(!done.has(id))pending.add(id);
+     localStorage.setItem(ferryArrivalRoadsPendingKey(current.id),JSON.stringify([...pending]));
+    }catch(error){diagnostic('ferry:arrival-road-queue-error',String(error));}
     diagnostic('ferry:harbours-unlocked',destinations.join(','));
    }
    busy=true;
@@ -260,6 +268,55 @@ export default function App(){
   };
   const timer=window.setInterval(settle,5000);
   return()=>{cancelled=true;window.clearInterval(timer)};
+ },[company?.id]);
+ // Ferry arrivals grant a small purple starting network once per harbour.
+ // Wait until the road graph has streamed the destination's OSM tiles.
+ useEffect(()=>{
+  if(!company?.id)return;
+  const companyId=company.id;
+  let working=false;
+  const apply=async()=>{
+   if(working||!graphRef.current)return;
+   let pending:string[]=[];
+   let completed:string[]=[];
+   try{
+    const p=JSON.parse(localStorage.getItem(ferryArrivalRoadsPendingKey(companyId))??'[]') as unknown;
+    const d=JSON.parse(localStorage.getItem(ferryArrivalRoadsKey(companyId))??'[]') as unknown;
+    if(Array.isArray(p))pending=p.filter((x):x is string=>typeof x==='string');
+    if(Array.isArray(d))completed=d.filter((x):x is string=>typeof x==='string');
+   }catch{return;}
+   if(!pending.length)return;
+   working=true;
+   try{
+    const network=await loadFerryNetwork();
+    const done=new Set(completed),waiting=new Set(pending);
+    for(const portId of pending){
+     if(done.has(portId)){waiting.delete(portId);continue;}
+     const port=network.ports.find(p=>p.id===portId);
+     if(!port){waiting.delete(portId);continue;}
+     const point=port.roadAccess??port.position;
+     networkRef.current?.considerHarbour(point);
+     const graph=graphRef.current;
+     if(!graph)continue;
+     const ids=ferryArrivalRoadIds(graph,point);
+     if(!ids.length)continue;
+     const current=fleetSaveRef.current;
+     const merged=[...new Set([...(current.exploredEdgeIds??[]),...(discoveredCacheRef.current?.ids??[]),...ids])];
+     discoveredCacheRef.current={ids:merged,set:new Set(merged)};
+     fleetSaveRef.current={...current,exploredEdgeIds:merged};
+     setFleet(old=>({...old,exploredEdgeIds:[...new Set([...(old.exploredEdgeIds??[]),...ids])]}));
+     await writeExploration(companyId,{ids,segments:{}});
+     done.add(portId);waiting.delete(portId);
+     diagnostic('ferry:arrival-road-seed',portId+' edges='+ids.length+' radius=50m');
+    }
+    localStorage.setItem(ferryArrivalRoadsKey(companyId),JSON.stringify([...done]));
+    localStorage.setItem(ferryArrivalRoadsPendingKey(companyId),JSON.stringify([...waiting]));
+   }catch(error){diagnostic('ferry:arrival-road-seed-error',String(error));}
+   finally{working=false;}
+  };
+  void apply();
+  const timer=window.setInterval(()=>{void apply()},5000);
+  return()=>window.clearInterval(timer);
  },[company?.id]);
  // Diagnose stalls that occur after graph publication, including Safari scheduling pauses.
  useEffect(()=>{
