@@ -2293,26 +2293,19 @@ export default function App(){
   setHarbourNetwork(data);
  };
  const [unlockedHarbours,setUnlockedHarbours]=useState<string[]>([]);
+ // Service Explorers no longer chase harbour markers. Preserve the saved
+ // vehicle and discovered roads, but clear obsolete POI mission assignments.
  useEffect(()=>{
-  harbourMissionsRef.current=[];harbourCandidatesRef.current=[];harbourPrefetchProgressRef.current.clear();
-  if(!company||!harbourNetwork)return;
-  const update=()=>{
-   const current=fleetSaveRef.current;
-   const result=assignPoiHarbours(current.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
-   harbourMissionsRef.current=result.missions;
-   harbourCandidatesRef.current=poiRouteCandidates(result.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
-   if(result.changed){
-    diagnostic('poi:assign',result.missions.map(m=>m.vehicleId+' → '+m.portId).join(', '));
-    setFleet(old=>{
-     const latest=assignPoiHarbours(old.taxis,harbourNetwork.ports,new Set(unlockedHarbours));
-     return latest.changed?{...old,taxis:latest.taxis}:old;
-    });
-   }
-  };
-  update();
-  const timer=window.setInterval(update,12000);
-  return()=>window.clearInterval(timer);
- },[company?.id,harbourNetwork,unlockedHarbours]);
+  harbourMissionsRef.current=[];
+  harbourCandidatesRef.current=[];
+  harbourPrefetchProgressRef.current.clear();
+  if(!company)return;
+  setFleet(old=>{
+   if(!old.taxis.some(t=>t.explorerRole==='poi'&&(t.poiTargetId||t.poiTargetName)))return old;
+   return {...old,taxis:old.taxis.map(t=>t.explorerRole==='poi'
+    ?{...t,poiTargetId:undefined,poiTargetName:undefined}:t)};
+  });
+ },[company?.id]);
  const [harbourNotice,setHarbourNotice]=useState<{id:string;name:string}|null>(null);
  const harbourSeenRef=useRef(false);
  useEffect(()=>{let cancelled=false;void loadFerryNetwork().then(data=>{if(!cancelled){harbourPoiRef.current=data.ports.map(p=>p.roadAccess??p.position);setHarbourNetwork(data)}}).catch(console.warn);return()=>{cancelled=true}},[]);
