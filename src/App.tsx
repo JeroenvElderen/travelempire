@@ -828,8 +828,7 @@ export default function App(){
     // A timed explorer rest belongs to the game clock. Async dispatch results
     // cannot cancel it before its deadline.
     if(t.kind==='explorer'&&t.status==='PAUSED'&&t.shiftParked&&
-       t.restUntilGameMs!==undefined&&
-       (gameClockRef.current?.epochMs??0)<t.restUntilGameMs)return t;
+       !t.ferryTrip&&!t.recoveryPending)return t;
     // Worker state is authoritative for automatic Explorer parking. A stale
     // PAUSED snapshot must not survive after the worker clears that state.
     if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&
