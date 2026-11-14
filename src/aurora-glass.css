@@ -175,3 +175,11 @@ body{
  .nav-v216.nav-map-mode .live-finance-panel{border-radius:0 0 16px 16px}
 }
 @media(max-width:390px){.mobile-nav-sheet{left:8px;right:8px;padding:15px 10px}.mobile-nav-grid{gap:5px}.mobile-nav-grid button{font-size:10px}}
+
+
+/* Single mobile navigation entry point: existing sidebar, bottom-left. */
+@media(max-width:800px){
+ .mobile-nav-fab{left:calc(18px + env(safe-area-inset-left));right:auto;bottom:calc(22px + env(safe-area-inset-bottom))}
+ .mobile-nav-hud:has(.mobile-nav-fab[aria-expanded="true"]){z-index:8}
+ .nav-v216.nav-map-mode .mobile-nav-hud{pointer-events:none}
+}
