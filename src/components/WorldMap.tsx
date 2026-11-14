@@ -19,7 +19,8 @@ import {syncRoadLevelsDebug,removeRoadLevelsDebug,ROAD_LEVEL_DEBUG_LAYER_IDS,typ
 import MobilityMapLayer from './MobilityMapLayer';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
-import {advanceTaxi,type Taxi,type RoadGraph} from '../simulation/taxi';
+import {driverSchedule} from '../simulation/driverSchedule';
+import {advanceTaxi,type Taxi,type DriverRecord,type RoadGraph} from '../simulation/taxi';
 import {vehicleActivity} from '../simulation/vehicleActivity';
 import {liveJobMeter} from '../simulation/liveJobMeter';
 import {deliveryPosition} from '../dealership';
@@ -176,10 +177,11 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];ownedProperties?:PropertyHolding[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],ownedProperties=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+ const driversRef=useRef(drivers);driversRef.current=drivers;
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
  useEffect(()=>{
@@ -607,10 +609,25 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       const gameNow=clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();
       const overnight=vehicle.restStopId?.startsWith('hotel:')||vehicle.restStopId?.startsWith('overnight:');
       const duration=(overnight?540:30)*60000;
-      const until=vehicle.restUntilGameMs;
-      restTitle.textContent=overnight?'Overnight rest':'Rest / break';
+      let until=vehicle.restUntilGameMs;
+      let scheduledDuration=duration;
+      let scheduleLabel=overnight?'Overnight rest':'Rest / break';
+      if(vehicle.kind!=='explorer'&&typeof until!=='number'){
+       const schedule=driverSchedule(vehicle,driversRef.current,gameNow);
+       if(!schedule.onDuty){
+        const remainingHours=(24-schedule.elapsed)%24;
+        until=gameNow+remainingHours*3600000;
+        scheduledDuration=12*3600000;
+        scheduleLabel='Off-duty rest';
+       }else if(schedule.onBreak){
+        until=schedule.breakEndsAt;
+        scheduledDuration=30*60000;
+        scheduleLabel='Scheduled break';
+       }
+      }
+      restTitle.textContent=scheduleLabel;
       if(typeof until==='number'&&Number.isFinite(until)){
-       const remaining=Math.max(0,until-gameNow),progress=Math.max(0,Math.min(100,(1-remaining/duration)*100));
+       const remaining=Math.max(0,until-gameNow),progress=Math.max(0,Math.min(100,(1-remaining/scheduledDuration)*100));
        restFill.style.width=progress.toFixed(1)+'%';restTrack.classList.remove('indeterminate');
        const minutes=Math.ceil(remaining/60000);
        restRemaining.textContent=minutes>=60?Math.floor(minutes/60)+'h '+String(minutes%60).padStart(2,'0')+'m left':minutes+'m left';
