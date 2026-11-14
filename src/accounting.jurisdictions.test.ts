@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {accountingOf,accountingSettingsFor,bookAccounting,settleAccounting,periodLiability,balanceSheet} from './accounting';
+import {accountingOf,accountingSettingsFor,bookAccounting,settleAccounting,periodLiability} from './accounting';
 describe('tax-free economy and historical archive',()=>{
  it('retains future jurisdiction profiles for eventual reactivation',()=>{
   expect(accountingSettingsFor('GR').corporateRate).toBe(22);
