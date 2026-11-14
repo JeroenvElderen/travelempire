@@ -1,8 +1,9 @@
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import type {Company} from '../company';
 import type {FleetState} from '../simulation/taxi';
 import {OFFERS} from '../dealership';
 import {DEPOT_UPGRADES,depotCapacity,upgradesFor} from '../depotFinance';
+import {loadFerryNetwork,type FerryRoute} from '../maritime/ferries';
 import {forecastBusiness,type ForecastPlan,type ForecastHorizon,type ForecastScenario,type ExpansionMode} from '../forecasting';
 import './forecasting-panel.css';
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
@@ -10,8 +11,10 @@ const initialPlan:ForecastPlan={scenario:'expected',days:90,vehicleId:OFFERS[0].
 type Props={company:Company|null;fleet:FleetState;gameEpochMs:number};
 export default function ForecastingPanel({company,fleet,gameEpochMs}:Props){
  const [plan,setPlan]=useState<ForecastPlan>(initialPlan);
+ const [routes,setRoutes]=useState<FerryRoute[]>([]);
+ useEffect(()=>{let active=true;loadFerryNetwork().then(network=>{if(active)setRoutes(network.routes)}).catch(()=>{if(active)setRoutes([])});return()=>{active=false}},[]);
  const change=<K extends keyof ForecastPlan>(key:K,value:ForecastPlan[K])=>setPlan(old=>({...old,[key]:value}));
- const result=useMemo(()=>company?forecastBusiness(company,fleet,plan,gameEpochMs):null,[company,fleet,plan,gameEpochMs]);
+ const result=useMemo(()=>company?forecastBusiness(company,fleet,plan,gameEpochMs,Date.now(),routes):null,[company,fleet,plan,gameEpochMs,routes]);
  if(!company||!result)return <p>Create a company to unlock business forecasts.</p>;
  const points=result.points;
  const minimum=Math.min(...points.map(p=>p.cash),0);
