@@ -39,6 +39,7 @@ function dailyLoan(loan:BusinessLoan){
  return {paid,interest};
 }
 export function forecastBusiness(company:Company,fleet:FleetState,plan:ForecastPlan,gameEpochMs:number,realNow=Date.now()):ForecastResult{
+ void realNow;
  const scenario=SCENARIO[plan.scenario];
  const history=sampleHistory(fleet.financeHistory??[],gameEpochMs);
  const vehicleCount=Math.max(1,fleet.taxis.filter(t=>t.kind===undefined||t.kind==='taxi').length);
