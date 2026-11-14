@@ -21,6 +21,18 @@ describe('financial audit',()=>{
   expect(financialAuditTotals(financialAuditEntries()).gross).toBe(1600);
   expect(financialAuditTotals(financialAuditEntries()).cashDelta).toBe(590.6);
  });
+ it('does not report a cash flush as a pending-cash discrepancy',()=>{
+  recordFinancialAudit(entry());
+  recordFinancialAudit(entry({kind:'cash-flush',description:'Flush',gross:0,operatingCost:0,bankShare:0,savings:0,other:590.6,cashBefore:-4,cashAfter:586.6,pendingBefore:590.6,pendingAfter:0}));
+  const flush=financialAuditEntries()[1];
+  expect(flush.discrepancy).toBe(0);
+  expect(flush.warnings).toEqual([]);
+ });
+ it('flags a committed cash change not accounted for by the prior event',()=>{
+  recordFinancialAudit(entry());
+  recordFinancialAudit(entry({cashBefore:-42089,pendingBefore:590.6,pendingAfter:1181.2}));
+  expect(financialAuditEntries()[1].warnings?.join(' ')).toContain('Untraced balance change');
+ });
  it('flags unexplained pending balance changes and exports itemized records',()=>{
   recordFinancialAudit(entry({pendingAfter:100}));
   expect(financialAuditEntries()[0].warnings?.length).toBeGreaterThan(0);
