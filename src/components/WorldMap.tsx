@@ -591,6 +591,36 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
        'Quoted fare '+euro(job.expectedFare)+' · pickup travel not charged':
        'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off';
      };
+     const restPanel=document.createElement('div');restPanel.className='te-sheet-rest';
+     const restHeader=document.createElement('div');restHeader.className='te-sheet-rest-header';
+     const restTitle=document.createElement('strong'),restRemaining=document.createElement('small');
+     restHeader.append(restTitle,restRemaining);
+     const restTrack=document.createElement('div');restTrack.className='te-sheet-rest-track';
+     const restFill=document.createElement('div');restFill.className='te-sheet-rest-fill';restTrack.append(restFill);
+     const restInfo=document.createElement('small');restInfo.className='te-sheet-rest-info';
+     restPanel.append(restHeader,restTrack,restInfo);
+     const refreshRest=()=>{
+      const vehicle=taxiStateRef.current.find(t=>t.id===current.id);
+      const resting=vehicle?.status==='PAUSED'&&!!vehicle.shiftParked&&!vehicle.ferryTrip&&!vehicle.recoveryPending;
+      restPanel.hidden=!resting;if(!vehicle||!resting)return;
+      const clock=gameClockNowRef.current;
+      const gameNow=clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();
+      const overnight=vehicle.restStopId?.startsWith('hotel:')||vehicle.restStopId?.startsWith('overnight:');
+      const duration=(overnight?540:30)*60000;
+      const until=vehicle.restUntilGameMs;
+      restTitle.textContent=overnight?'Overnight rest':'Rest / break';
+      if(typeof until==='number'&&Number.isFinite(until)){
+       const remaining=Math.max(0,until-gameNow),progress=Math.max(0,Math.min(100,(1-remaining/duration)*100));
+       restFill.style.width=progress.toFixed(1)+'%';restTrack.classList.remove('indeterminate');
+       const minutes=Math.ceil(remaining/60000);
+       restRemaining.textContent=minutes>=60?Math.floor(minutes/60)+'h '+String(minutes%60).padStart(2,'0')+'m left':minutes+'m left';
+       restInfo.textContent=Math.round(progress)+'% complete · game time';
+      }else{
+       restTrack.classList.add('indeterminate');restFill.style.width='35%';
+       restRemaining.textContent='Waiting for schedule';
+       restInfo.textContent='No confirmed end time';
+      }
+     };
      const toggle=document.createElement('button');toggle.type='button';toggle.className='te-sheet-toggle';toggle.textContent='More details ↑';
      const details=document.createElement('div');details.className='te-sheet-details';details.hidden=true;
      const addRow=(label:string,value:string)=>{const row=document.createElement('div');row.className='te-sheet-row';const a=document.createElement('span');a.textContent=label;const b=document.createElement('strong');b.textContent=value;row.append(a,b);details.appendChild(row);};
@@ -629,11 +659,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const setExpanded=(value:boolean)=>{sheet.classList.toggle('expanded',value);details.hidden=!value;toggle.textContent=value?'Less details ↓':'More details ↑';};
      toggle.addEventListener('click',()=>setExpanded(details.hidden));grab.addEventListener('click',()=>setExpanded(details.hidden));
      let touchStartY=0;sheet.addEventListener('touchstart',e=>{touchStartY=e.touches[0]?.clientY??0},{passive:true});sheet.addEventListener('touchend',e=>{const delta=(e.changedTouches[0]?.clientY??touchStartY)-touchStartY;if(delta < -45)setExpanded(true);else if(delta>45&&(!sheet.classList.contains('expanded')||details.scrollTop===0))setExpanded(false);},{passive:true});
-     sheet.append(grab,header,stats,jobPanel,toggle,details);document.body.appendChild(sheet);
-     refreshJobMeter();
+     sheet.append(grab,header,stats,jobPanel,restPanel,toggle,details);document.body.appendChild(sheet);
+     refreshJobMeter();refreshRest();
      const jobRefresh=window.setInterval(()=>{
       if(!sheet.isConnected){window.clearInterval(jobRefresh);return;}
-      refreshJobMeter();
+      refreshJobMeter();refreshRest();
      },500);
     };
     el.addEventListener('click',openControls);
