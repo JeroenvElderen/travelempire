@@ -1661,14 +1661,16 @@ export default function App(){
   if(localStorage.getItem(key)!=='pending')return;
   const hq:[number,number]=[company.headquarters.lng,company.headquarters.lat];
   const node=nearest(graph,hq);if(!node)return;
-  const position=graph.nodes.get(node);if(!position)return;
+  const position=graph.nodes.get(node);if(!position||meters(position,hq)>500)return;
+  const launchRoad=(graph.edges.get(node)??[]).find(e=>e.meters>0&&!e.taxiOnly);
+  if(!launchRoad)return;
   const roles:NonNullable<Taxi['explorerRole']>[]=['highway','primary','secondary','residential','poi'];
   const now=Date.now();
   const explorers:Taxi[]=roles.map(role=>({id:crypto.randomUUID(),kind:'explorer',explorerRole:role,name:role==='highway'?'Highway Explorer':role==='primary'?'Primary Explorer':role==='secondary'?'Secondary Explorer':role==='residential'?'Local Street Explorer':'POI Explorer',driver:'Autonomous',position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:role==='highway'?'Highway Explorer':role==='primary'?'Primary Explorer':role==='secondary'?'Secondary Explorer':role==='residential'?'Local Street Explorer':'POI Explorer',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'}));
   const driver={id:crypto.randomUUID(),name:'Alex Morgan',hiredAt:now};
   const taxi:Taxi={id:crypto.randomUUID(),kind:'taxi',name:'Taxi 1',driver:driver.name,position:[...position],status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,ownership:'owned',purchasePrice:0,vehicleModel:'Starter Taxi',vehicleYear:2026,vehicleFuel:'Petrol',vehicleClass:'Economy',vehicleCondition:100,vehicleMileage:0,energyRemaining:energySpec({vehicleFuel:'Petrol'}).capacity,depotId:'main'};
   const current=loadFleet(company.id);
-  if(current.taxis.length===0){const updated={...current,taxis:[taxi,...explorers],drivers:[...(current.drivers??[]),driver]};saveFleet(company.id,updated);fleetSaveRef.current=updated;setFleet(updated);}
+  if(current.taxis.length===0){const seeded=[...new Set([...(current.exploredEdgeIds??[]),launchRoad.id])];const updated={...current,taxis:[taxi,...explorers],drivers:[...(current.drivers??[]),driver],exploredEdgeIds:seeded};saveFleet(company.id,{...updated,exploredEdgeIds:[]});fleetSaveRef.current=updated;discoveredCacheRef.current={ids:seeded,set:new Set(seeded)};setFleet(updated);void writeExploration(company.id,{ids:[launchRoad.id],segments:{}}).catch(error=>diagnostic('explorers:initial-seed-save-failed',String(error)));diagnostic('explorers:initial-launch',`road=${launchRoad.id} vehicles=${explorers.length}`);}
   localStorage.setItem(key,'done');
  },[company?.id,graph]);
  // Five specialists are free and always start at a purple-discovered node.
