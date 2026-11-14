@@ -64,3 +64,8 @@
 .research-progress-list b{color:#b8f1e3;font-size:14px;white-space:nowrap}
 @media(max-width:1050px){.research-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.research-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.research-v215{padding:20px 14px 110px}.research-heading{flex-direction:column;align-items:flex-start;gap:12px}.research-real-time{font-size:9px}.research-tabs button{padding:11px 12px;font-size:12px}.research-kpis{gap:9px}.research-kpis article{padding:15px}.research-kpis strong{font-size:20px}.research-grid{grid-template-columns:1fr}.research-project{padding:18px}.research-active-card{flex-wrap:wrap;padding:18px;gap:13px}.research-active-body{flex-basis:calc(100% - 70px)}.research-active-card button{width:100%}.research-section-heading>span{font-size:10px}.research-progress-list article{padding:14px;gap:11px}.research-progress-list .research-project-icon{width:36px;height:36px}}
+
+/* Immediate completion appears directly beneath the active progress bar. */
+.research-active-card .research-instant-button{margin-top:13px;background:#246d5d;border-color:#58baa0;color:#eafff5;min-height:40px;width:100%;white-space:normal}
+.research-active-card .research-instant-button:disabled{opacity:.5;cursor:not-allowed}
+.research-instant-note{display:block;color:#91aebb;font-size:11px;margin-top:7px}
