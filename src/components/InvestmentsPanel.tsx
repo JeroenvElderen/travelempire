@@ -114,7 +114,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
       <small className="investment-unit-note">Capacity and rates are gameplay estimates, not verified real-world room or parking-space counts. Hotel nightly revenue is spread over 24 game hours.</small>
      </div>
       </details>
-     <div className="investment-poi-amount">
+     {remaining>0&&<div className="investment-poi-amount">
       <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{exactEuro(charge)}</strong></div>
       <input className="investment-poi-slider" type="range"
        aria-label={`Choose investment for ${p.name||p.kind}`}
@@ -136,9 +136,9 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        (remaining===0?'This property is fully owned':'No available cash'):
        inputError?'Enter an amount within your available cash and remaining shares':
        `${euro(remaining)} in shares available · ${euro(Math.round(companyCash*100))} company cash`}</small>
-     </div>
-     <div className="investment-earnings-preview"><span>Projected income after investment</span><strong>{euro(projection.hourAfter)}/h</strong></div>
-     <details className="investment-details-toggle"><summary>Full income forecast <ChevronDown size={15}/></summary><div className="investment-preview">
+     </div>}
+     {remaining>0&&<div className="investment-earnings-preview"><span>Projected income after investment</span><strong>{euro(projection.hourAfter)}/h</strong></div>}
+     {remaining>0&&<details className="investment-details-toggle"><summary>Full income forecast <ChevronDown size={15}/></summary><div className="investment-preview">
       <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {exactEuro(charge)} · simulated forecast</small></div>
       <div className="investment-preview-metrics">
        <div><span>ADDITIONAL STAKE</span><strong>+{(projection.additionalShare*100).toFixed(2)}%</strong></div>
@@ -149,8 +149,8 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        <div><span>EXTRA PER HOUR</span><strong>+{euro(Math.max(0,projection.hourAfter-projection.hourBefore))}</strong></div>
       </div>
       <small>Forecast uses estimated room or space occupancy and unit prices over the next 24 game hours, less fixed and usage-based costs. Income is proportional to your projected ownership share.</small>
-     </div></details>
-     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{remaining<=0?'100% Owned':limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${exactEuro(charge)}`}</button></div>
+     </div></details>}
+     <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span>{remaining>0&&<button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${exactEuro(charge)}`}</button>}</div>
      </div>}
     </article>;
    })}
