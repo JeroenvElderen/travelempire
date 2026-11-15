@@ -1,6 +1,7 @@
 /** Internal hotel development: blueprints, procurement, works and game-clock settlement.
  * Keeps passive property shares untouched. External tendering is intentionally out of scope.
  */
+import type {HotelOperations} from './hotelOperations';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting';
 export type BuilderTool='room'|'wall'|'door'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
@@ -38,6 +39,7 @@ export type HotelSite={
  longitude:number;latitude:number;width:number;height:number;
  draft:HotelFloor[];built:HotelFloor[];projects:ConstructionProject[];createdHour:number;
  supplyOrders?:SupplyOrder[];stock?:Partial<Record<SupplyCode,StockBatch[]>>;
+ operations?:HotelOperations;
 };
 export type ConstructionState={version:1;sites:Record<string,HotelSite>;workers:number;lastPayrollHour:number};
 export const HOTEL_GRID_WIDTH=24;
@@ -207,9 +209,7 @@ export function beginConstruction(site:HotelSite,method:TradeMode,workers:number
   target:JSON.parse(JSON.stringify(site.draft)) as HotelFloor[],status:'active'};
  return {site:{...site,projects:[...site.projects,project]},quote};
 }
-/** Deliveries are simulated against the company clock. Stock only enters storage after arrival.
- * Kitchen/bar sales and recipe consumption are not yet simulated here.
- */
+/** Deliveries are simulated against the company clock. Actual hotel services consume purchased stock via hotelOperations.ts. */
 export function supplyStock(site:HotelSite,code:SupplyCode,hour:number):number{
  return (site.stock?.[code]??[]).filter(batch=>batch.expiresHour>hour).reduce((total,batch)=>total+batch.quantity,0);
 }
@@ -267,7 +267,7 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
 export function roomIssues(floor:HotelFloor,room:Room):string[]{
  const codes=new Set(floor.objects.filter(o=>o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height).map(o=>o.code));
  const needs:Partial<Record<RoomType,FurnitureCode[][]>>={
-  guest:[['bed','single-bed']],bathroom:[['toilet'],['sink']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
+  guest:[['bed','single-bed']],bathroom:[['toilet'],['sink'],['shower']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
   bar:[['bar-counter']],restaurant:[['table'],['chair']],lobby:[['reception']],storage:[['shelves']]
  };
  return (needs[room.type]??[]).filter(group=>!group.some(code=>codes.has(code))).map(group=>'Missing '+group.join(' or '));
