@@ -13,8 +13,7 @@ import {loadRestStopTile} from './data/restStops';
 import InvestmentsPanel from './components/InvestmentsPanel';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
-import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
-import {OFFICE_DEPARTMENTS,officeLevel,officeCost,hotelRenovationLevel,hotelRenovationCost,MAX_HOTEL_RENOVATIONS,type OfficeDepartment,type HotelPolicy} from './propertyManagement';
+import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useMemo, useState, startTransition } from "react";
@@ -411,7 +410,7 @@ export default function App(){
  const roadLengthByIdRef=useRef<Map<string,number>>(new Map());
  const simulationPerfRef=useRef({samples:0,totalMs:0,maxMs:0,lastReport:0});
  const fuelPlanCacheRef=useRef(new Map<string,{at:number;position:[number,number];graph:RoadGraph|null;stationCount:number;target:{point:[number,number];depot:boolean;roadKm:number;path:ReturnType<typeof route>}|null}>());
- const [companyTab,setCompanyTab]=useState<'overview'|'headquarters'|'depots'|'vehicles'|'settings'>('overview');
+ const [companyTab,setCompanyTab]=useState<'overview'|'depots'|'vehicles'|'settings'>('overview');
  // Preserve existing specialists, progress and discovered roads.
  const universalFleet=(loaded:FleetState):FleetState=>loaded;
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
@@ -2650,63 +2649,6 @@ export default function App(){
  },[company?.id,graph,harbourNetwork,harbourEdges,fleet.taxis,fleet.exploredEdgeIds]);
  const setFerryTicketPrice=(routeId:string,fare:number)=>{const current=companyRef.current;if(!current||!(current.purchasedFerryRouteIds??[]).includes(routeId)||!Number.isFinite(fare))return;const value=Math.max(1,Math.min(100,Math.round(fare*2)/2));const updated={...current,ferryTicketPrices:{...(current.ferryTicketPrices??{}),[routeId]:value}};companyRef.current=updated;saveCompany(updated);setCompany(updated);};
  const purchaseFerryRoute=(routeId:string,_displayedPrice:number)=>{const current=companyRef.current;const price=ferryRoutePrice(routeId);if(!current||!Number.isFinite(price)||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId],ferryServiceStartedAt:{...(current.ferryServiceStartedAt??{}),[routeId]:gameClockRef.current?.epochMs??Date.now()},ferryLastPaidVoyage:{...(current.ferryLastPaidVoyage??{}),[routeId]:0}};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
- const upgradeHeadquarters=(department:OfficeDepartment)=>{
-  const current=companyRef.current;
-  if(!current)return;
-  const option=OFFICE_DEPARTMENTS.find(o=>o.id===department);
-  if(!option)return;
-  const nextLevel=officeLevel(current.officeUpgrades,department)+1;
-  if(nextLevel>option.max){setSimError('Headquarters department is fully upgraded.');return;}
-  const cost=officeCost(department,nextLevel);
-  const available=current.cash+pendingCashRef.current;
-  if(available<cost){setSimError('Insufficient company cash for this headquarters upgrade.');return;}
-  const clock=gameClockRef.current?.epochMs;
-  if(clock===undefined){setSimError('Game clock is not ready.');return;}
-  const upgrade={id:department,level:nextLevel,effectiveHour:Math.floor(clock/3600000)+1};
-  const updated={...current,cash:Math.round((available-cost)*100)/100,officeUpgrades:[...(current.officeUpgrades??[]),upgrade]};
-  pendingCashRef.current=0;
-  companyRef.current=updated;saveCompany(updated);setCompany(updated);
-  setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:clock,description:'Headquarters · '+option.title,amount:-cost},...(old.transactions??[])].slice(0,100)}));
-  setSimError('');
- };
- const changeHotelPolicy=(holdingId:string,policy:HotelPolicy):string|null=>{
-  const current=companyRef.current;
-  const holding=portfolioRef.current.holdings[holdingId];
-  if(!current||!holding||holding.kind!=='hotel')return 'Hotel not found.';
-  if(ownership(holding)<0.5)return 'At least 50% ownership is required to manage the hotel.';
-  if(!['value','standard','premium'].includes(policy.rate)||!['lean','balanced','full'].includes(policy.staffing))return 'Invalid hotel policy.';
-  const clock=gameClockRef.current?.epochMs;
-  if(clock===undefined)return 'Game clock is not ready.';
-  const fromHour=Math.floor(clock/3600000)+1;
-  const history=holding.hotelPolicyHistory??[];
-  const next={...portfolioRef.current,holdings:{...portfolioRef.current.holdings,[holdingId]:{...holding,hotelPolicyHistory:[...history.filter(p=>p.fromHour!==fromHour),{fromHour,policy}]}}};
-  try{savePortfolio(current.id,next);}catch{return 'Could not save hotel settings.';}
-  portfolioRef.current=next;setPortfolio(next);
-  return null;
- };
- const renovateHotel=(holdingId:string):string|null=>{
-  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
-  const holding=portfolioRef.current.holdings[holdingId];
-  if(!current||!holding||holding.kind!=='hotel')return 'Hotel not found.';
-  if(clock===undefined)return 'Game clock is not ready.';
-  if(ownership(holding)<0.5)return 'At least 50% ownership is needed to renovate.';
-  const nextLevel=hotelRenovationLevel(holding.hotelRenovations)+1;
-  if(nextLevel>MAX_HOTEL_RENOVATIONS)return 'Hotel renovation is fully upgraded.';
-  const cost=hotelRenovationCost(nextLevel),cash=current.cash+pendingCashRef.current;
-  if(cash<cost)return 'Insufficient cash for hotel renovation.';
-  const fromHour=Math.floor(clock/3600000)+1;
-  const next={...portfolioRef.current,holdings:{...portfolioRef.current.holdings,[holdingId]:{
-   ...holding,hotelRenovations:[...(holding.hotelRenovations??[]),{effectiveHour:fromHour,level:nextLevel}]
-  }}};
-  try{savePortfolio(current.id,next);}catch{return 'Could not save hotel renovation.';}
-  portfolioRef.current=next;setPortfolio(next);
-  const updated={...current,cash:Math.round((cash-cost)*100)/100};
-  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
-  setFleet(old=>({...old,transactions:[{
-   id:crypto.randomUUID(),time:clock,description:'Hotel renovation · '+holding.name,amount:-cost
-  },...(old.transactions??[])].slice(0,100)}));
-  return null;
- };
  const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
   const current=companyRef.current,clock=gameClockRef.current;
   if(!current||!clock)return 'Create a company before buying property shares.';
@@ -2738,7 +2680,7 @@ export default function App(){
   const settle=()=>{
    if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
    const now=gameClockRef.current?.epochMs;if(now===undefined)return;
-   const result=settlePropertyDividends(portfolioRef.current,now,companyRef.current?.officeUpgrades);
+   const result=settlePropertyDividends(portfolioRef.current,now);
    if(result.portfolio===portfolioRef.current)return;
    try{savePortfolio(companyId,result.portfolio)}catch(error){diagnostic('investments:save-error',String(error));return;}
    portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
@@ -2797,7 +2739,7 @@ export default function App(){
  {page==='Company'&&company&&!showSetup&&<div className="company-map-overlay" role="dialog" aria-label="Company management"><button type="button" className="company-map-close" aria-label="Close Company and return to map" onClick={()=>go('World')}><X size={20}/></button><section className="company-dashboard company-v213 company-v3">
  <header className="company-v3-header"><span className="company-v3-icon"><Building2 size={23}/></span><div><h1>Company</h1><p>Business &amp; depots</p></div></header>
  <nav className="company-v3-nav" aria-label="Company sections">
- {([['overview','Overview',Building2],['headquarters','HQ',Landmark],['depots','Depots',Warehouse],['vehicles','Assignments',CarFront],['settings','Settings',SlidersHorizontal]] as const).map(([key,label,Icon])=><button type="button" key={key} className={companyTab===key?'active':''} aria-label={label} aria-current={companyTab===key?'page':undefined} onClick={()=>setCompanyTab(key)}><Icon size={19}/><span>{companyTab===key?label:''}</span></button>)}
+ {([['overview','Overview',Building2],['depots','Depots',Warehouse],['vehicles','Assignments',CarFront],['settings','Settings',SlidersHorizontal]] as const).map(([key,label,Icon])=><button type="button" key={key} className={companyTab===key?'active':''} aria-label={label} aria-current={companyTab===key?'page':undefined} onClick={()=>setCompanyTab(key)}><Icon size={19}/><span>{companyTab===key?label:''}</span></button>)}
  </nav>
  <div className="company-v3-identity"><span className="company-v3-company-icon"><Building2 size={19}/></span><div className="company-v3-company-name"><strong>{company.name}</strong><small>{company.headquarters.label}</small></div><span className="company-v3-active">Active</span></div>
 {companyTab==='overview'&&<section className="company-v3-content">
@@ -2817,26 +2759,8 @@ export default function App(){
    <div className="company-v3-row"><span>Idle vehicles</span><strong>{fleet.taxis.filter(t=>t.status==='IDLE').length} / {fleet.taxis.length}</strong></div>
   </article>
  </div>
- <div className="company-v3-toolbar"><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('headquarters')}>HQ upgrades</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('depots')}>Depots</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('vehicles')}>Assignments</button><button type="button" className="company-v3-button" onClick={()=>setPage('Finance')}>Finance</button></div>
+ <div className="company-v3-toolbar"><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('depots')}>Depots</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('vehicles')}>Assignments</button><button type="button" className="company-v3-button" onClick={()=>setPage('Finance')}>Finance</button></div>
 </section>}
-{companyTab==='headquarters'&&<section className="company-v3-content">
- <div className="company-v3-section-heading"><h2>Headquarters</h2><small>{company.headquarters.label}</small></div>
- <div className="company-v3-summary"><span><Landmark size={15}/><strong>{(company.officeUpgrades??[]).length}</strong> upgrades</span><span><strong>3</strong> departments</span><span><strong>{new Set(Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&h.investedCents>0).map(h=>h.id)).size}</strong> hotels</span></div>
- <p className="company-v3-note">Develop your headquarters to improve occupancy, room pricing and operating efficiency at every hotel you own. Each improvement becomes active next game hour.</p>
- <div className="company-v3-office-list">
- {OFFICE_DEPARTMENTS.map(dept=>{
-  const level=officeLevel(company.officeUpgrades,dept.id);
-  const isMax=level>=dept.max;
-  const cost=isMax?0:officeCost(dept.id,level+1);
-  return <article key={dept.id} className="company-v3-card company-v3-office-card">
-   <div className="company-v3-office-top"><span className="company-v3-company-icon"><Landmark size={18}/></span><div><strong>{dept.title}</strong><small>{dept.subtitle}</small></div><span className="company-v3-status">{level} / {dept.max}</span></div>
-   <div className="company-v3-progress"><span style={{width:(100*level/dept.max)+'%'}}/></div>
-   <div className="company-v3-row"><span>Benefit</span><strong>{dept.bonus}</strong></div>
-   <button type="button" className="company-v3-button company-v3-button-primary" disabled={isMax||company.cash+pendingCashRef.current<cost} onClick={()=>upgradeHeadquarters(dept.id)}>{isMax?'Fully upgraded':company.cash+pendingCashRef.current<cost?'Insufficient funds':'Upgrade · €'+cost.toLocaleString('en-IE')}</button>
-  </article>;
- })}
- </div>
- </section>}
 {companyTab==='depots'&&<section className="company-v3-content">
  <div className="company-v3-section-heading"><h2>Depots</h2><small>{1+(company.depots??[]).length} locations</small></div>
  <div className="company-v3-toolbar"><button type="button" className="company-v3-button" disabled={company.cash<2500} onClick={()=>{if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<2500){setSimError('Insufficient funds for depot expansion (€2,500).');return;}pendingCashRef.current-=2500;setFleet(old=>({...old,upgrades:[...(old.upgrades??[]),'depot-capacity'],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Main depot expansion (+5 spaces)',amount:-2500},...(old.transactions??[])].slice(0,100)}));setSimError('');}}>Expand main depot (+5 spaces) · €2,500</button><button type="button" className="company-v3-button company-v3-button-primary" onClick={()=>{setPlacingDepot(true);setSelecting(true);setPage('World');setSimError('');}}>+ Place new depot on map · €10,000</button></div>
@@ -2883,7 +2807,7 @@ export default function App(){
  {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/></div>}
  {page==='Ferries'&&<div className="ferries-map-overlay" role="dialog" aria-label="Ferry management"><button type="button" className="ferries-map-close" aria-label="Close Ferries and return to map" onClick={()=>go('World')}><X size={20}/></button><FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/></div>}
- {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} onHotelPolicyChange={changeHotelPolicy} onHotelRenovate={renovateHotel} officeUpgrades={company?.officeUpgrades} error={investmentError}/></div>}
+ {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/></div>}
  {page==='Finance'&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
  {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
