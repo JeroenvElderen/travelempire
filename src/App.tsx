@@ -13,7 +13,7 @@ import {loadRestStopTile} from './data/restStops';
 import InvestmentsPanel from './components/InvestmentsPanel';
 import InternalBuilderPanel from './components/InternalBuilderPanel';
 import {setHotelOperating,changeHotelSetting,hotelActiveAt,activeHotelPeriods,settleHotelOperations,type HotelRole} from './hotelOperations';
-import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,orderSupplies,hotelPlotCostCents,validHotelPlotSize,LAND_PRICE_CENTS,RECRUITMENT_CENTS,HOUR_MS,type HotelPlotSize,type HotelSite,type TradeMode,type SupplyCode} from './internalConstruction';
+import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,orderSupplies,hotelPlotCostCents,validHotelPlotSize,RECRUITMENT_CENTS,HOUR_MS,type HotelPlotSize,type HotelSite,type TradeMode,type SupplyCode} from './internalConstruction';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
