@@ -30,7 +30,9 @@ describe('ambient NPC movement',()=>{
  it('never spawns on undiscovered roads or against a one-way',()=>{
   expect(spawnAmbientCar(road,graph,new Set())).toBeNull();
   const wrong={...road,properties:{...road.properties,fromNode:'b',toNode:'a'}};
-  expect(spawnAmbientCar(wrong,graph,new Set(['ab']))).toBeNull();
+  const safelyDirected=spawnAmbientCar(wrong,graph,new Set(['ab']));
+  expect(safelyDirected?.fromNode).toBe('a');
+  expect(safelyDirected?.toNode).toBe('b');
  });
  it('moves smoothly without teleporting, continues to connected segments, and stops at a dead end',()=>{
   const known=new Set(['ab','bc','cd']);
