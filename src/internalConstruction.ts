@@ -46,6 +46,21 @@ export const HOTEL_GRID_WIDTH=24;
 export const HOTEL_GRID_HEIGHT=16;
 export const MAX_FLOORS=5;
 export const LAND_PRICE_CENTS=4500000;
+export const MIN_HOTEL_PLOT_SIDE=12;
+export const MAX_HOTEL_PLOT_SIDE=64;
+export const HOTEL_PLOT_SIZE_STEP=2;
+export type HotelPlotSize={width:number;height:number};
+/** Plot prices scale with purchased land area; the historic 24×16 m plot remains €45,000. */
+export function validHotelPlotSize(size:HotelPlotSize):boolean{
+ return Number.isInteger(size.width)&&Number.isInteger(size.height)&&
+  size.width>=MIN_HOTEL_PLOT_SIDE&&size.width<=MAX_HOTEL_PLOT_SIDE&&
+  size.height>=MIN_HOTEL_PLOT_SIDE&&size.height<=MAX_HOTEL_PLOT_SIDE&&
+  size.width%HOTEL_PLOT_SIZE_STEP===0&&size.height%HOTEL_PLOT_SIZE_STEP===0;
+}
+export function hotelPlotCostCents(size:HotelPlotSize):number{
+ if(!validHotelPlotSize(size))throw new Error('Plot width and length must be even numbers between 12 and 64 metres.');
+ return Math.round(LAND_PRICE_CENTS*(size.width*size.height)/(HOTEL_GRID_WIDTH*HOTEL_GRID_HEIGHT));
+}
 export const HOUR_MS=3600000;
 export const WORKER_HOURLY_CENTS=1800;
 export const RECRUITMENT_CENTS=125000;
@@ -108,8 +123,14 @@ export function loadConstruction(companyId:string|undefined,hour:number):Constru
 export function saveConstruction(companyId:string,state:ConstructionState):void{
  localStorage.setItem(storagePrefix+companyId,JSON.stringify(state));
 }
-export function newHotelSite(id:string,name:string,kind:'new'|'existing'|'headquarters',lat:number,lng:number,hour:number,sourceHoldingId?:string):HotelSite{
- return {id,name,kind,sourceHoldingId,latitude:lat,longitude:lng,width:HOTEL_GRID_WIDTH,height:HOTEL_GRID_HEIGHT,draft:[blankFloor(0)],built:[blankFloor(0)],projects:[],createdHour:hour,supplyOrders:[],stock:{}};
+export function newHotelSite(
+ id:string,name:string,kind:'new'|'existing'|'headquarters',lat:number,lng:number,hour:number,
+ sourceHoldingId?:string,plotSize?:HotelPlotSize
+):HotelSite{
+ if(kind==='new'&&plotSize&&!validHotelPlotSize(plotSize))throw new Error('Invalid development plot dimensions.');
+ const width=kind==='new'&&plotSize?plotSize.width:HOTEL_GRID_WIDTH;
+ const height=kind==='new'&&plotSize?plotSize.height:HOTEL_GRID_HEIGHT;
+ return {id,name,kind,sourceHoldingId,latitude:lat,longitude:lng,width,height,draft:[blankFloor(0)],built:[blankFloor(0)],projects:[],createdHour:hour,supplyOrders:[],stock:{}};
 }
 export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
  if(!Number.isInteger(room.x)||!Number.isInteger(room.y)||!Number.isInteger(room.width)||!Number.isInteger(room.height))throw Error('Room coordinates must use the building grid.');
