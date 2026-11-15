@@ -7,6 +7,7 @@ import EuropeanDealership from './EuropeanDealership';
 import type {DepotParking} from '../simulation/depotParking';
 import './DealershipPage.css';
 import './dealership-floating.css';
+import './dealership-fleet-match.css';
 
 type Props={cash:number;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
 const photoFiles:Record<string,string>={
