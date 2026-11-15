@@ -19,6 +19,7 @@ const HOUR=3600000;
 const EMPTY_STATE:WorldState={lastBucket:-1,incidents:[]};
 const HOUR_FORMAT=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'});
 const WEEKDAY_FORMAT=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',weekday:'short'});
+let cachedTrafficMinute=NaN,cachedHour=0,cachedWeekday='';
 export const newWorldState=():WorldState=>({lastBucket:-1,incidents:[]});
 function hash(s:string):number{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
 function key(point:Point):string{return point[0].toFixed(6)+','+point[1].toFixed(6);}
@@ -45,8 +46,13 @@ export function weatherAt(point:Point,at:number):WorldWeather{
  return 'clear';
 }
 export function trafficLoadAt(point:Point,at:number):number{
- const hour=Number(HOUR_FORMAT.format(new Date(at)));
- const weekday=WEEKDAY_FORMAT.format(new Date(at));
+ const minute=Math.floor(at/60000);
+ if(minute!==cachedTrafficMinute){
+  const date=new Date(at);
+  cachedTrafficMinute=minute;cachedHour=Number(HOUR_FORMAT.format(date));
+  cachedWeekday=WEEKDAY_FORMAT.format(date);
+ }
+ const hour=cachedHour,weekday=cachedWeekday;
  const weekend=weekday==='Sat'||weekday==='Sun';
  const rush=!weekend&&(hour>=7&&hour<10||hour>=16&&hour<19);
  const daytime=hour>=10&&hour<21;
@@ -87,7 +93,7 @@ export function dispatchResponders(
  const ends=roadEnds(road);
  if(!ends)return [];
  const targetKeys=ends.map(key);
- const ordered=roads.filter(validRoad).slice(0,800)
+ const ordered=roads.filter(validRoad)
   .map(r=>({r,d:Math.min(...(roadEnds(r)??ends).map(p=>meters(p,ends[0])))}))
   .filter(item=>item.d>=120&&item.d<=2600)
   .sort((a,b)=>a.d-b.d).slice(0,8);
@@ -143,7 +149,11 @@ export function advanceWorldState(state:WorldState|undefined,now:number,
  const bucket=Math.floor(now/(4*HOUR));
  if(bucket<=current.lastBucket)return {lastBucket:current.lastBucket,incidents};
  if(!graph||discovered.size<5||roads.length<5)return {lastBucket:current.lastBucket,incidents};
- const candidates=roads.filter(validRoad);
+ const candidates=roads.filter(road=>{
+  if(!validRoad(road))return false;
+  const ends=roadEnds(road)!;
+  return graph.nodes.has(key(ends[0]))&&graph.nodes.has(key(ends[1]));
+ });
  if(candidates.length<5)return {lastBucket:current.lastBucket,incidents};
  const next:WorldState={lastBucket:bucket,incidents};
  const roll=hash(seed+':'+bucket);
