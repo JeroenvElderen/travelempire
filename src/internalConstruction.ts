@@ -2,6 +2,7 @@
  * Keeps passive property shares untouched. External tendering is intentionally out of scope.
  */
 import type {HotelOperations} from './hotelOperations';
+import type {ConstructionFreight} from './constructionLogistics';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting';
 export type BuilderTool='room'|'wall'|'door'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
@@ -12,7 +13,7 @@ export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rota
 export type HotelFloor={id:string;label:string;rooms:Room[];walls:Wall[];objects:ObjectPlacement[]};
 export type MaterialLine={id:string;name:string;unit:string;quantity:number;unitCents:number;totalCents:number};
 export type BuildQuote={materials:MaterialLine[];materialCents:number;furnitureCents:number;labourCents:number;totalCents:number;workUnits:number;deliveryHours:number;constructionHours:number;changes:number};
-export type ConstructionProject={id:string;method:TradeMode;startHour:number;deliveryHour:number;finishHour:number;budgetCents:number;materials:MaterialLine[];furnitureCents:number;labourCents:number;target:HotelFloor[];status:'active'|'complete'};
+export type ConstructionProject={id:string;method:TradeMode;startHour:number;deliveryHour:number;finishHour:number;budgetCents:number;materials:MaterialLine[];furnitureCents:number;labourCents:number;target:HotelFloor[];freight?:ConstructionFreight;status:'active'|'complete'};
 export type SupplyCode='eggs'|'milk'|'bread'|'coffee-beans'|'fruit'|'vegetables'|'chicken'|'water'|'soft-drinks'|'wine'|'beer'|'spirits'|'cleaner'|'linen'|'toiletries';
 export type SupplyCategory='kitchen'|'bar'|'housekeeping';
 export type SupplyOrder={id:string;code:SupplyCode;quantity:number;unitCents:number;orderedHour:number;deliveryHour:number;status:'ordered'|'delivered'};
@@ -221,11 +222,13 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
  const constructionHours=changes?Math.max(8,Math.ceil(workUnits/(method==='contractor'?4.8:Math.max(2,workers)*0.8))):0;
  return {materials,materialCents,furnitureCents:objectsCents,labourCents,totalCents:materialCents+objectsCents+labourCents,workUnits,deliveryHours,constructionHours,changes};
 }
-export function beginConstruction(site:HotelSite,method:TradeMode,workers:number,nowHour:number,id:string):{site:HotelSite;quote:BuildQuote}{
+export function beginConstruction(site:HotelSite,method:TradeMode,workers:number,nowHour:number,id:string,freight?:ConstructionFreight):{site:HotelSite;quote:BuildQuote}{
  const quote=constructionQuote(site,method,workers);
  if(quote.changes===0)throw Error('Draw a room, place furniture or add a floor before starting construction.');
- const project:ConstructionProject={id,method,startHour:nowHour,deliveryHour:nowHour+quote.deliveryHours,
-  finishHour:nowHour+quote.deliveryHours+quote.constructionHours,budgetCents:quote.totalCents,
+ if(freight&&freight.deliveryHour<nowHour+quote.deliveryHours)throw Error('Cargo delivery cannot arrive before the original materials lead time.');
+ const deliveryHour=freight?.deliveryHour??nowHour+quote.deliveryHours;
+ const project:ConstructionProject={id,method,startHour:nowHour,deliveryHour,
+  finishHour:deliveryHour+quote.constructionHours,budgetCents:quote.totalCents,freight,
   materials:quote.materials,furnitureCents:quote.furnitureCents,labourCents:quote.labourCents,
   target:JSON.parse(JSON.stringify(site.draft)) as HotelFloor[],status:'active'};
  return {site:{...site,projects:[...site.projects,project]},quote};
