@@ -1,5 +1,5 @@
 import {useMemo,useState} from 'react';
-import {CarFront,Search,Wallet,Warehouse,ChevronRight,SlidersHorizontal} from 'lucide-react';
+import {CarFront,Search,Wallet,Warehouse,ChevronRight,SlidersHorizontal,PackageCheck} from 'lucide-react';
 import {EUROPEAN_MODELS,BRANDS,type VehicleModel} from '../europeanVehicleCatalog';
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
@@ -26,6 +26,7 @@ function VehiclePhoto({model}:{model:VehicleModel}){
 }
 export default function DealershipPage({cash,ready,depots,error='',onDepotChange,onOrder}:Props){
  const [selected,setSelected]=useState<VehicleModel|null>(null);
+ const [stage,setStage]=useState<'browse'|'build'|'review'>('browse');
  const [search,setSearch]=useState('');
  const [brand,setBrand]=useState('All');
  const [sort,setSort]=useState('price');
@@ -45,21 +46,50 @@ export default function DealershipPage({cash,ready,depots,error='',onDepotChange
   <small>{selectedDepot?`${selectedDepot.available} taxi spaces available · ${selectedDepot.occupied} reserved or assigned`:'Choose a depot'}</small>
  </label>;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>(brand==='All'||m.brand===brand)&&(m.brand+' '+m.name).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>sort==='price'?a.basePrice-b.basePrice:sort==='price-desc'?b.basePrice-a.basePrice:a.brand.localeCompare(b.brand)||a.name.localeCompare(b.name)),[brand,search,sort]);
- if(selected)return <div className="dealer-page dealer-page-config">
-  <details className="dealer-order-settings">
-    <summary><span>Delivery &amp; payment</span><small>{selectedDepot?selectedDepot.available+' parking spaces free':'Choose depot'} · {mode}</small><span className="dealer-order-settings-chevron" aria-hidden="true">⌄</span></summary>
-    <div className="dealer-toolbar">{depotSelector}<label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Number(e.target.value)||25)))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option></select></label>}</div>
-   </details>{capacityError&&<p className="dealer-parking-error" role="alert">{capacityError}</p>}{error&&<p className="dealer-parking-error" role="alert">{error}</p>}
-  <EuropeanDealership key={selected.brand+'|'+selected.name} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setSelected(null)} cash={cash} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
- </div>;
- return <section className="dealer-page dealer-page-catalogue"><header className="dealer-page-header"><span className="dealer-page-header-icon"><CarFront size={25}/></span><div className="dealer-page-header-copy"><span>TRAVELEMPIRE MOTORS</span><h1>Dealership</h1><p>Browse and configure real European vehicle models</p></div></header>
- <div className="dealer-overview-metrics"><div className="dealer-overview-metric"><Wallet size={18}/><span>Available funds</span><strong>{eur(cash)}</strong></div><div className="dealer-overview-metric"><Warehouse size={18}/><span>Free parking</span><strong>{depots.reduce((sum,d)=>sum+d.available,0)} spaces</strong></div></div>
- <details className="dealer-depot-quick"><summary>Delivery depot <span>{selectedDepot?selectedDepot.name:"Choose a depot"}</span></summary><div className="dealer-toolbar">{depotSelector}</div></details>
- <div className="dealer-searchbar"><label className="dealer-search-field"><Search size={18} aria-hidden="true"/><input type="search" aria-label="Search vehicles" placeholder="Search manufacturer or model…" value={search} onChange={e=>setSearch(e.target.value)}/></label><label className="dealer-sort-field"><SlidersHorizontal size={17} aria-hidden="true"/><select aria-label="Sort vehicles" value={sort} onChange={e=>setSort(e.target.value)}><option value="price">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="name">Manufacturer</option></select></label></div>
- <div className="dealer-brand-tabs" aria-label="Manufacturers">{['All',...BRANDS].map(b=><button key={b} type="button" className={brand===b?'active':''} onClick={()=>setBrand(b)}>{b}</button>)}</div>
- <p className="dealer-results"><strong>{models.length} models</strong><span>Starting prices · Final price in configurator</span></p>
- <div className="dealer-model-grid">{models.map(m=><article key={m.brand+'|'+m.name} className="dealer-model-card"><VehiclePhoto model={m}/><div className="dealer-card-body"><div className="dealer-card-title"><div><small>{m.brand}</small><h2>{m.name}</h2></div><div className="dealer-card-price"><small>From</small><strong>{eur(m.basePrice)}</strong></div></div><p>{m.fuel} · {m.seats} seats · {m.years.join(' / ')}</p><button type="button" onClick={()=>setSelected(m)}>Configure <ChevronRight size={16} aria-hidden="true"/></button></div></article>)}</div>
- {!models.length&&<p>No matching vehicles. Try another manufacturer or search term.</p>}
- <p className="dealer-footnote">Starting prices exclude configuration options. Driver hire costs {eur(DRIVER_COST)} per vehicle.</p>
+
+ const openModel=(m:VehicleModel)=>{setSelected(m);setStage('build');};
+ const switchStage=(next:'browse'|'build'|'review')=>{
+  if(next==='browse'){setStage('browse');return;}
+  if(selected)setStage(next);
+ };
+ const remainingSlots=depots.reduce((total,depot)=>total+depot.available,0);
+ return <section className="dealer-page dealer-fleet-page">
+  <header className="dealer-fleet-header">
+   <span className="dealer-fleet-header-icon"><CarFront size={25}/></span>
+   <div><h1>Dealership</h1><p>Manage vehicle purchases &amp; configuration</p></div>
+  </header>
+  <nav className="dealer-stage-nav" aria-label="Dealership sections">
+   {([['browse','Models',CarFront],['build','Configure',SlidersHorizontal],['review','Checkout',PackageCheck]] as const).map(([name,label,Icon])=><button type="button" key={name} className={stage===name?'active':''} aria-current={stage===name?'step':undefined} aria-label={label} disabled={name!=='browse'&&!selected} onClick={()=>switchStage(name)}><Icon size={19}/><span>{stage===name?label:''}</span></button>)}
+  </nav>
+  <div className="dealer-fleet-kpis">
+   <article><Wallet size={19}/><span>Balance</span><strong>{eur(cash)}</strong></article>
+   <article><Warehouse size={19}/><span>Parking</span><strong>{remainingSlots}</strong></article>
+   <article><CarFront size={19}/><span>Models</span><strong>{EUROPEAN_MODELS.length}</strong></article>
+   <article><SlidersHorizontal size={19}/><span>Brands</span><strong>{BRANDS.length}</strong></article>
+  </div>
+  {stage==='browse'||!selected?
+   <div className="dealer-fleet-catalogue">
+    <div className="dealer-fleet-section-heading"><h2>Available vehicles</h2><small>{models.length} models</small></div>
+    <div className="dealer-searchbar"><label className="dealer-search-field"><Search size={18} aria-hidden="true"/><input type="search" aria-label="Search vehicles" placeholder="Search manufacturer or model…" value={search} onChange={e=>setSearch(e.target.value)}/></label><label className="dealer-sort-field"><SlidersHorizontal size={17} aria-hidden="true"/><select aria-label="Sort vehicles" value={sort} onChange={e=>setSort(e.target.value)}><option value="price">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="name">Manufacturer</option></select></label></div>
+    <div className="dealer-brand-tabs" aria-label="Manufacturers">{['All',...BRANDS].map(b=><button key={b} type="button" className={brand===b?'active':''} aria-pressed={brand===b} onClick={()=>setBrand(b)}>{b}</button>)}</div>
+    <div className="dealer-fleet-model-list">
+     {models.map(m=><button type="button" key={m.brand+'|'+m.name} className="dealer-fleet-model-row" onClick={()=>openModel(m)}>
+      <span className="dealer-fleet-model-image"><VehiclePhoto model={m}/></span>
+      <span className="dealer-fleet-model-details"><small>{m.brand} · {m.years.join(' / ')}</small><strong>{m.name}</strong><small>{m.fuel} · {m.seats} seats</small></span>
+      <span className="dealer-fleet-model-price"><small>From</small><strong>{eur(m.basePrice)}</strong></span>
+      <ChevronRight size={17} aria-hidden="true"/>
+     </button>)}
+     {!models.length&&<p className="dealer-fleet-empty">No matching vehicles. Try another brand or search.</p>}
+    </div>
+    <p className="dealer-footnote">Starting prices exclude configuration options. Driver hire costs {eur(DRIVER_COST)} per vehicle.</p>
+   </div>:
+   <div className="dealer-fleet-configure">
+    <details key={stage} className="dealer-order-settings" open={stage==='review'?true:undefined}>
+     <summary><span>Delivery &amp; payment</span><small>{selectedDepot?selectedDepot.available+' parking spaces free':'Choose depot'} · {mode}</small><span className="dealer-order-settings-chevron" aria-hidden="true">⌄</span></summary>
+     <div className="dealer-toolbar">{depotSelector}<label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Number(e.target.value)||25)))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option></select></label>}</div>
+    </details>
+    {error&&<p className="dealer-parking-error" role="alert">{error}</p>}
+    <EuropeanDealership key={selected.brand+'|'+selected.name} reviewing={stage==='review'} onReviewChange={reviewing=>setStage(reviewing?'review':'build')} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setStage('browse')} cash={cash} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
+   </div>}
  </section>;
 }
