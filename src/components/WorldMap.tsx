@@ -177,10 +177,10 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];constructionSites?:Array<{id:string;name:string;longitude:number;latitude:number}>;exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],constructionSites=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const driversRef=useRef(drivers);driversRef.current=drivers;
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
@@ -317,6 +317,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  const visiblePoi=useMemo(()=>visibleOperationalPois(stations,restStops,
   ownedProperties,taxis),[stations,restStops,ownedProperties,destinationKey]);
  const deliveryMarkers=useRef(new Map<string,maplibregl.Marker>());
+ const constructionMarkers=useRef(new Map<string,maplibregl.Marker>());
  const initialHeadquarters=useRef(headquarters);
  const firstHeadquartersPositioned=useRef(false);
  const container=useRef<HTMLDivElement>(null);const map=useRef<maplibregl.Map|null>(null);const marker=useRef<maplibregl.Marker|null>(null);const onLocationRef=useRef(onLocationSelected);onLocationRef.current=onLocationSelected;
@@ -362,6 +363,26 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{if(!map.current)return;map.current.getCanvas().style.cursor=selecting?'crosshair':'';},[selecting]);
  useEffect(()=>{if(!map.current)return;marker.current?.remove();marker.current=null;if(headquarters){marker.current=new maplibregl.Marker({color:'#4bd9ac'}).setLngLat([headquarters.lng,headquarters.lat]).setPopup(new maplibregl.Popup({offset:20}).setText(`${headquarters.label} — ${headquarters.country}`)).addTo(map.current);marker.current.getElement().style.zIndex='3';if(!firstHeadquartersPositioned.current){firstHeadquartersPositioned.current=true;map.current.jumpTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}else{map.current.flyTo({center:[headquarters.lng,headquarters.lat],zoom:Math.max(map.current.getZoom(),11)});}}},[headquarters]);
  useEffect(()=>{if(!map.current)return;const ids=new Set(depots.map(d=>d.id));for(const [id,m] of depotMarkers.current)if(!ids.has(id)){m.remove();depotMarkers.current.delete(id);}for(const d of depots){const existing=depotMarkers.current.get(d.id);if(existing){existing.setLngLat([d.lng,d.lat]);continue;}const marker=new maplibregl.Marker({color:'#f7ae43'}).setLngLat([d.lng,d.lat]).setPopup(new maplibregl.Popup({offset:18}).setText(`${d.name} · ${d.capacity} spaces`)).addTo(map.current);depotMarkers.current.set(d.id,marker);}},[depots]);
+ // Owned internal building sites, separate from explored-road and taxi markers.
+ useEffect(()=>{
+  const instance=map.current;
+  if(!instance||!ready)return;
+  const ids=new Set(constructionSites.map(site=>site.id));
+  for(const [id,marker] of constructionMarkers.current){
+   if(!ids.has(id)){marker.remove();constructionMarkers.current.delete(id);}
+  }
+  for(const site of constructionSites){
+   const existing=constructionMarkers.current.get(site.id);
+   if(existing){existing.setLngLat([site.longitude,site.latitude]);continue;}
+   const marker=new maplibregl.Marker({color:'#c5a0f2'})
+    .setLngLat([site.longitude,site.latitude])
+    .setPopup(new maplibregl.Popup({offset:16}).setText(site.name+' · Internal construction site'))
+    .addTo(instance);
+   marker.getElement().style.zIndex='6';
+   constructionMarkers.current.set(site.id,marker);
+  }
+ },[ready,constructionSites]);
+ useEffect(()=>()=>{for(const marker of constructionMarkers.current.values())marker.remove();constructionMarkers.current.clear();},[]);
  // Load POI tiles only where a vehicle has an actual operational
  // destination. Fleet routing loads its own data independently of the map.
  useEffect(()=>{
