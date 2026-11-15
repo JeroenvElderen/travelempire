@@ -1,10 +1,11 @@
 import {useMemo,useState} from 'react';
-import {Anchor,ArrowLeftRight,CheckCircle2,Clock3,Coins,Compass,LockKeyhole,MapPin,RefreshCw,Search,Ship,Ticket,TrendingUp,UsersRound,Waves} from 'lucide-react';
+import {Anchor,ArrowLeftRight,CheckCircle2,ChevronDown,Clock3,LockKeyhole,MapPin,RefreshCw,Search,Ship,Ticket,TrendingUp,UsersRound} from 'lucide-react';
 import type {Company,Headquarters} from '../company';
 import type {FerryNetwork,FerryRoute,FerryPort} from '../maritime/ferries';
 import {ferryRoutePrice} from '../maritime/routePlanning';
 import {ferryPhase} from '../maritime/ferryService';
 import './ferry-routes.css';
+import './ferry-floating.css';
 
 type FerryTab='routes'|'harbours'|'fleet';
 type RouteOwnershipFilter='all'|'unowned'|'purchased';
@@ -86,7 +87,7 @@ export default function FerryRoutesPanel({
   const incoming=connections.some(r=>purchased.has(r.id)&&!unlocked);
   return <article className="ferry-port-card" key={port.id}>
    <span className={'ferry-port-symbol '+(unlocked?'is-discovered':'')}>{unlocked?<Anchor size={22}/>:<LockKeyhole size={20}/>}</span>
-   <div className="ferry-port-copy"><strong>{port.name}</strong><small>{connections.length} ferry connection{connections.length===1?'':'s'} · {port.position[1].toFixed(3)}°, {port.position[0].toFixed(3)}°</small></div>
+   <div className="ferry-port-copy"><strong>{port.name}</strong><small>{connections.length} connection{connections.length===1?'':'s'}</small></div>
    <span className={'ferry-state '+(unlocked?'is-unlocked':incoming?'is-approaching':'is-locked')}>
     {unlocked?<><CheckCircle2 size={14}/> Discovered</>:incoming?'Unlock on arrival':<><LockKeyhole size={13}/> Locked</>}
    </span>
@@ -94,26 +95,24 @@ export default function FerryRoutesPanel({
  };
  return <section className="ferry-routes-panel">
   <header className="ferry-hero">
-   <div className="ferry-hero-identity"><span className="ferry-hero-symbol"><Ship size={30}/></span>
-    <div><span className="ferry-overline">TRAVELEMPIRE · MARITIME OPERATIONS</span><h2>Ferries</h2><p>Routes, harbours and fleet activity across Greece</p></div>
+   <div className="ferry-hero-identity"><span className="ferry-hero-symbol"><Ship size={23}/></span>
+    <div><h2>Ferries</h2><p>Routes &amp; services</p></div>
    </div>
-   <div className="ferry-hero-decoration"><Waves size={100} strokeWidth={.8}/><Ship size={62} strokeWidth={1}/></div>
   </header>
   <nav className="ferry-tabs" aria-label="Ferries sections">
    {([['routes','Routes',ArrowLeftRight],['harbours','Harbours',Anchor],['fleet','Fleet',Ship]] as const).map(([key,label,Icon])=>
-    <button key={key} type="button" className={tab===key?'active':''} aria-current={tab===key?'page':undefined} onClick={()=>{setTab(key);setShowAll(false);setQuery('')}}><Icon size={19}/>{label}</button>)}
+    <button key={key} type="button" className={tab===key?'active':''} aria-current={tab===key?'page':undefined} onClick={()=>{setTab(key);setShowAll(false);setQuery('')}}><Icon size={19}/><span>{tab===key?label:''}</span></button>)}
   </nav>
-  <div className="ferry-stats">
-   <article><Ship size={22}/><strong>{boughtRoutes.length}</strong><span>Purchased routes</span></article>
-   <article><Anchor size={22}/><strong>{discovered.size} / {network?.ports.length??0}</strong><span>Discovered harbours</span></article>
-   <article><Coins size={22}/><strong>{euros(todayReceipts)}</strong><span>Today's ferry receipts</span></article>
-   <article><Waves size={22}/><strong>{sailing}</strong><span>Currently sailing</span></article>
+  <div className="ferry-mini-summary" aria-label="Ferry operations summary">
+   <span><strong>{boughtRoutes.length}</strong> routes</span>
+   <span><strong>{sailing}</strong> sailing</span>
+   <span><strong>{euros(todayReceipts)}</strong> today</span>
   </div>
   {error&&<p className="ferry-alert" role="alert">{error}</p>}
   {lastReloaded&&<p role="status" className="ferry-reload-status">{lastReloaded}</p>}
   <div className="ferry-toolbar">
    <label className="ferry-search"><Search size={17}/><input value={query} onChange={e=>{setQuery(e.target.value);setShowAll(false)}} placeholder={tab==='harbours'?'Search harbours':'Search ferry routes'} aria-label={tab==='harbours'?'Search harbours':'Search ferry routes'}/></label>
-   <button type="button" className="ferry-reload" disabled={reloading} onClick={()=>{void reloadData()}}><RefreshCw size={16}/>{reloading?'Refreshing…':'Refresh data'}</button>
+   <button type="button" className="ferry-reload" aria-label={reloading?'Refreshing ferry data':'Refresh ferry data'} title="Refresh ferry data" disabled={reloading} onClick={()=>{void reloadData()}}><RefreshCw size={17}/></button>
   </div>
   {tab==='routes'&&<>
    <div className="ferry-route-filters" role="group" aria-label="Filter ferry routes by ownership">
@@ -123,7 +122,7 @@ export default function FerryRoutesPanel({
       {label}<span>{count}</span>
      </button>)}
    </div>
-   <div className="ferry-section-heading"><div><h3>Ferry connections</h3><p>Buy a route once to operate one automatic ferry in both directions.</p></div><span>{filteredRoutes.length} available</span></div>
+   <div className="ferry-section-heading"><div><h3>Connections</h3></div><span>{filteredRoutes.length} routes</span></div>
    {visibleRoutes.length===0&&<div className="ferry-empty"><Anchor size={25}/><strong>{network?(routeFilter==='unowned'?'No unowned routes match your filters':routeFilter==='purchased'?'No purchased routes match your filters':'No routes currently available'):'Loading ferry network…'}</strong><p>{routeFilter==='purchased'?'Purchase a route from the Unowned filter to start ferry operations.':'Discover a harbour access road or reach a destination by ferry to reveal more routes.'}</p></div>}
    <div className="ferry-routes-grid">{visibleRoutes.map(route=>{
     const owned=purchased.has(route.id),origin=orientation(route),from=displayName(ports.get(origin.from),origin.from),to=displayName(ports.get(origin.to),origin.to);
@@ -137,29 +136,46 @@ export default function FerryRoutesPanel({
     const price=ferryRoutePrice(route.id),accessible=discovered.has(route.from)||discovered.has(route.to);
     const phaseText=phase?.phase==='sailing'?'En route':phase?.phase==='turnaround'?'Docked · turnaround':phase?'Boarding':'Not started';
     return <article className="ferry-route-card" key={route.id}>
-     <div className="ferry-route-top"><span className="ferry-card-icon"><Ship size={23}/></span><div className="ferry-route-name"><strong>{from} <ArrowLeftRight size={16} aria-label="and"/> {to}</strong><small>{route.name??'Aegean ferry connection'} · {route.id}</small></div><span className={'ferry-state '+(owned?'is-unlocked':'is-locked')}>{owned?<><span className="ferry-green-dot"/> {phaseText}</>:'Available'}</span></div>
-     <div className="ferry-route-progress">
-      <div className="ferry-route-terminals"><div><MapPin size={16}/><strong>{originName}</strong><span>{goingBack?'Return departure':'Departure'}</span></div><div><MapPin size={16}/><strong>{destinationName}</strong><span>{discovered.has(goingBack?origin.from:origin.to)?'Discovered':'Unlock on arrival'}</span></div></div>
-      <div className="ferry-progress-line"><div className="ferry-progress-fill" style={{width:`${progress*100}%`}}/><span className="ferry-progress-boat" style={{left:`${Math.max(3,Math.min(97,progress*100))}%`}}><Ship size={22}/></span></div>
-      <div className="ferry-journey-caption"><Clock3 size={14}/>{phase?.phase==='sailing'?`About ${minuteText(route.durationMinutes*(1-phase.progress))} remaining (game time)`:phase?.phase==='turnaround'?'Arrived at destination · preparing next sailing':owned?'Waiting for departure':'Purchase to start automatic sailings'}</div>
+     <div className="ferry-route-top">
+      <span className="ferry-card-icon"><Ship size={20}/></span>
+      <div className="ferry-route-name"><strong>{from} <ArrowLeftRight size={13} aria-label="and"/> {to}</strong><small>{minuteText(route.durationMinutes)} crossing</small></div>
+      <span className={'ferry-state '+(owned?'is-unlocked':'is-locked')}>{owned?phaseText:'Unowned'}</span>
      </div>
-     <div className="ferry-route-details"><div><Ticket size={17}/><span>Ticket fare</span><strong>€{fare.toFixed(2)}</strong></div><div><Clock3 size={17}/><span>Crossing time</span><strong>{minuteText(route.durationMinutes)}</strong></div><div><UsersRound size={17}/><span>Est. passengers</span><strong>{estimatedPassengers}</strong></div></div>
-     {owned&&<div className="ferry-fare-control"><label htmlFor={'ferry-fare-'+route.id}><span>Passenger ticket price</span><strong>€{fare.toFixed(2)}</strong></label><input id={'ferry-fare-'+route.id} type="range" min="1" max="100" step="0.5" value={Math.max(1,Math.min(100,Math.round(fare*2)/2))} onChange={e=>onTicketPriceChange(route.id,Number(e.target.value))}/><small>Estimated ticket income per crossing: {euros(estimatedPassengers*fare)} before operating costs.</small></div>}
-     <footer><span>{owned?'Route purchased':euros(price)}</span>{!owned&&<button type="button" disabled={!company||company.cash<price||!accessible} onClick={()=>onPurchase(route.id,price)}>{!company?'Create a company':!accessible?'Discover a harbour':company.cash<price?'Insufficient funds':'Buy route'}</button>}{owned&&<span className="ferry-owned-label"><CheckCircle2 size={16}/> Automatic service active</span>}</footer>
-    </article>;
+     {owned&&phase?.phase==='sailing'&&<div className="ferry-mini-progress" aria-label={`Sailing progress ${Math.round(progress*100)}%`}><div style={{width:`${progress*100}%`}}/></div>}
+     <div className="ferry-route-bottom">
+      <div><small>{owned?'Fare':'Route price'}</small><strong>{owned?`€${fare.toFixed(2)}`:euros(price)}</strong></div>
+      {!owned&&<button type="button" className="ferry-buy" disabled={!company||company.cash<price||!accessible} onClick={()=>onPurchase(route.id,price)}>{!company?'Create company':!accessible?'Discover harbour':company.cash<price?'Not enough funds':'Buy route'}</button>}
+      {owned&&<span className="ferry-route-owned"><CheckCircle2 size={14}/> Owned</span>}
+     </div>
+     <details className="ferry-route-expanded">
+      <summary>Route details <ChevronDown size={15}/></summary>
+      <div className="ferry-route-expanded-content">
+       {owned&&<div className="ferry-route-progress">
+        <div className="ferry-route-terminals"><div><MapPin size={14}/><strong>{originName}</strong></div><div><MapPin size={14}/><strong>{destinationName}</strong></div></div>
+        <div className="ferry-progress-line"><div className="ferry-progress-fill" style={{width:`${progress*100}%`}}/><span className="ferry-progress-boat" style={{left:`${Math.max(3,Math.min(97,progress*100))}%`}}><Ship size={18}/></span></div>
+        <div className="ferry-journey-caption">{phase?.phase==='sailing'?`About ${minuteText(route.durationMinutes*(1-phase.progress))} remaining (game time)`:phase?.phase==='turnaround'?'Docked · preparing return trip':'Waiting for departure'}</div>
+       </div>}
+       <div className="ferry-route-details">
+        <div><Ticket size={15}/><span>Fare</span><strong>€{fare.toFixed(2)}</strong></div>
+        <div><Clock3 size={15}/><span>Crossing</span><strong>{minuteText(route.durationMinutes)}</strong></div>
+        <div><UsersRound size={15}/><span>Est. passengers</span><strong>{estimatedPassengers}</strong></div>
+       </div>
+       {owned&&<div className="ferry-fare-control"><label htmlFor={'ferry-fare-'+route.id}><span>Ticket price</span><strong>€{fare.toFixed(2)}</strong></label><input id={'ferry-fare-'+route.id} type="range" min="1" max="100" step="0.5" value={Math.max(1,Math.min(100,Math.round(fare*2)/2))} onChange={e=>onTicketPriceChange(route.id,Number(e.target.value))}/><small>Estimated crossing income: {euros(estimatedPassengers*fare)} before costs</small></div>}
+      </div>
+     </details>
    })}</div>
    {filteredRoutes.length>visibleRoutes.length&&<button type="button" className="ferry-show-more" onClick={()=>setShowAll(true)}>Show all {filteredRoutes.length} connections</button>}
-   <div className="ferry-discovery-panel"><span><Compass size={25}/></span><div><strong>Harbours unlock when your ferry docks</strong><p>Purchased ferries sail automatically. When a boat reaches its destination, that harbour becomes permanently discovered and its connecting routes become available. Return trips unlock their destination too.</p></div></div>
+
   </>}
   {tab==='harbours'&&<>
-   <div className="ferry-section-heading"><div><h3>Harbour network</h3><p>Unlock terminals by road exploration or by docking a ferry.</p></div><span>{discovered.size} discovered</span></div>
+   <div className="ferry-section-heading"><div><h3>Harbours</h3></div><span>{discovered.size} discovered</span></div>
    <div className="ferry-harbour-grid">{visiblePorts.map(portCard)}</div>
    {matchingPorts.length===0&&<div className="ferry-empty">No harbours match this search.</div>}
    {matchingPorts.length>visiblePorts.length&&<button type="button" className="ferry-show-more" onClick={()=>setShowAll(true)}>Show all {matchingPorts.length} harbours</button>}
-   <div className="ferry-discovery-panel"><span><Anchor size={25}/></span><div><strong>Expand your maritime empire</strong><p>Ferries unlock their actual arrival harbour when they dock. Already discovered harbours remain available after a reload.</p></div></div>
+
   </>}
   {tab==='fleet'&&<>
-   <div className="ferry-section-heading"><div><h3>Automatic ferry fleet</h3><p>One service vessel operates every purchased route, alternating outward and return sailings.</p></div><span>{boughtRoutes.length} vessels</span></div>
+   <div className="ferry-section-heading"><div><h3>My ferries</h3></div><span>{boughtRoutes.length} services</span></div>
    {boughtRoutes.length===0&&<div className="ferry-empty"><Ship size={26}/><strong>No ferries in service</strong><p>Purchase a ferry connection in Routes to start its automatic service.</p><button type="button" onClick={()=>setTab('routes')}>Browse routes</button></div>}
    <div className="ferry-fleet-grid">{boughtRoutes.filter(r=>!normalizedQuery||`${r.name??''} ${displayName(ports.get(r.from),r.from)} ${displayName(ports.get(r.to),r.to)}`.toLowerCase().includes(normalizedQuery)).map(route=>{
     const phase=service(route),orientationIds=orientation(route);
