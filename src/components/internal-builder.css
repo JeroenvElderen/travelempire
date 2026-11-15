@@ -533,3 +533,34 @@
  .internal-builder .ib-plot-dimensions input{width:85px}
  .internal-builder .ib-tools button svg{width:15px;height:15px}
 }
+
+
+/* Contracted hotel material shipments, with mobile-friendly staged progress. */
+.internal-builder .ib-cargo-panel{
+ display:flex;flex-direction:column;gap:10px;padding:12px;
+ border:1px solid rgba(89,170,201,.36);border-radius:11px;
+ background:linear-gradient(140deg,rgba(22,57,78,.55),rgba(31,37,66,.68));
+}
+.internal-builder .ib-cargo-head{display:flex;gap:10px;align-items:center;color:#b9e6f1}
+.internal-builder .ib-cargo-head>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.internal-builder .ib-cargo-head strong{color:#f6fcff;font-size:13px}
+.internal-builder .ib-cargo-head small,.internal-builder .ib-cargo-panel>small{font-size:10px;color:#b5cddd}
+.internal-builder .ib-cargo-route{
+ display:flex;align-items:center;flex-wrap:wrap;gap:5px;
+ font-weight:650;font-size:11px;color:#d9e9ff;
+}
+.internal-builder .ib-cargo-route span:nth-child(even){color:#83c7d7}
+.internal-builder .ib-cargo-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.internal-builder .ib-cargo-stages>div{
+ display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;
+ padding:8px 5px;border:1px solid var(--ib-line);border-radius:9px;
+ background:rgba(24,40,65,.72);opacity:.62;
+}
+.internal-builder .ib-cargo-stages>div.reached{
+ opacity:1;border-color:rgba(119,214,179,.5);background:rgba(24,73,65,.48);
+}
+.internal-builder .ib-cargo-stages span{font-size:10px;line-height:1.3}
+.internal-builder .ib-cargo-stages strong{font-size:10px;font-variant-numeric:tabular-nums}
+@media(max-width:480px){
+ .internal-builder .ib-cargo-stages{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
