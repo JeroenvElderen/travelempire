@@ -20,6 +20,7 @@ const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'
 const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',kitchen:'Kitchen',restaurant:'Restaurant',bar:'Bar',lobby:'Lobby',storage:'Storage',staff:'Staff room',corridor:'Corridor',office:'Office',meeting:'Meeting room'};
 type Cell={x:number;y:number;fx:number;fy:number};
 const id=()=>crypto.randomUUID();
+const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -211,7 +212,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    <div className="ib-supplies">
     <div className="ib-heading"><div><h2>{site.name}</h2><small>Stock is purchased from the same company treasury</small></div></div>
     <div className="ib-inventory-grid">
-     {supplies.map(item=><div key={item.code} className="ib-inventory-row"><div><strong>{item.name}</strong><small>{item.category} · {euros(item.unitCents)} / {item.unit}</small></div><span>{supplyStock(site,item.code,gameHour)} {item.unit}</span></div>)}
+     {supplies.map(item=><div key={item.code} className="ib-inventory-row"><div><strong>{item.name}</strong><small>{item.category} · {exactEuro(item.unitCents)} / {item.unit}</small></div><span>{supplyStock(site,item.code,gameHour)} {item.unit}</span></div>)}
     </div>
     <div className="ib-supply-order">
      <div><strong><ShoppingCart size={15}/> New supplier order</strong><small>Goods arrive after the listed number of simulated hours.</small></div>
@@ -219,11 +220,11 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
       <label>Product<select value={supplyCode} onChange={e=>setSupplyCode(e.target.value as SupplyCode)}>{supplies.map(i=><option value={i.code} key={i.code}>{i.name} · {i.category}</option>)}</select></label>
       <label>Quantity<input type="number" inputMode="numeric" min="1" max="200" step="1" value={supplyQuantity} onChange={e=>setSupplyQuantity(Number(e.target.value))}/></label>
      </div>
-     <div className="ib-stat-row"><span><strong>{euros(selectedSupply.unitCents*supplyQuantity)}</strong> total</span><span><Clock3 size={14}/> {selectedSupply.deliveryHours} game hours delivery</span><span>Perishable life {Math.round(selectedSupply.expiryHours/24)} game days</span></div>
+     <div className="ib-stat-row"><span><strong>{exactEuro(selectedSupply.unitCents*supplyQuantity)}</strong> total</span><span><Clock3 size={14}/> {selectedSupply.deliveryHours} game hours delivery</span><span>Perishable life {Math.round(selectedSupply.expiryHours/24)} game days</span></div>
      <button className="ib-primary ib-full" disabled={!Number.isInteger(supplyQuantity)||supplyQuantity<1||supplyQuantity>200||cash*100<selectedSupply.unitCents*supplyQuantity} onClick={()=>{const msg=onOrderSupplies(site.id,supplyCode,supplyQuantity);setStatus(msg??'Order placed. Items will arrive on the game clock.');}}><ShoppingCart size={15}/> Place supply order</button>
     </div>
     <div className="ib-heading"><div><h2>Deliveries</h2><small>Only completed deliveries enter your physical inventory</small></div></div>
-    {(site.supplyOrders??[]).length?<div className="ib-cards">{[...(site.supplyOrders??[])].reverse().slice(0,30).map(order=><div className="ib-history-row" key={order.id}><span>{order.status==='delivered'?<CheckCircle2 size={16}/>:<Clock3 size={16}/>}</span><div><strong>{supplies.find(item=>item.code===order.code)?.name??order.code} × {order.quantity}</strong><small>{order.status==='delivered'?'Delivered':'In transit'} · Arrival game hour {order.deliveryHour}</small></div><strong>{euros(order.quantity*order.unitCents)}</strong></div>)}</div>:<p className="ib-muted">No supply orders yet.</p>}
+    {(site.supplyOrders??[]).length?<div className="ib-cards">{[...(site.supplyOrders??[])].reverse().slice(0,30).map(order=><div className="ib-history-row" key={order.id}><span>{order.status==='delivered'?<CheckCircle2 size={16}/>:<Clock3 size={16}/>}</span><div><strong>{supplies.find(item=>item.code===order.code)?.name??order.code} × {order.quantity}</strong><small>{order.status==='delivered'?'Delivered':'In transit'} · Arrival game hour {order.deliveryHour}</small></div><strong>{exactEuro(order.quantity*order.unitCents)}</strong></div>)}</div>:<p className="ib-muted">No supply orders yet.</p>}
     <p className="ib-note">Kitchen items require a constructed kitchen, bar items a bar, and housekeeping goods a storage room. Storage capacity is limited. Food expires. Guest consumption, recipes and restaurant sales will be added in a later operating stage.</p>
    </div>}
   </div>}
