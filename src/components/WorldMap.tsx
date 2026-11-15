@@ -956,7 +956,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      Math.min(road.a[0],road.b[0])<=bounds.east&&
      Math.max(road.a[1],road.b[1])>=bounds.south&&
      Math.min(road.a[1],road.b[1])<=bounds.north){
-     feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,
+     feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,fromNode:road.aNode,toNode:road.bNode,forward:road.forward,reverse:road.reverse,tunnel:road.tunnel===true,
       bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},
       geometry:{type:'LineString',coordinates:[road.a,road.b]}});
      visible.set(id,feature);
@@ -1056,7 +1056,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      if(showParkedCars&&road.highway==='service'&&parkingRoads.length<2500)
       parkingRoads.push(road);
      if(!explored)continue;
-     const feature:RoadFeature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}});
+     const feature:RoadFeature=withRoadFeatureId({type:'Feature',properties:{roadId:id,fromNode:road.aNode,toNode:road.bNode,forward:road.forward,reverse:road.reverse,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[a,b]}});
      exploredFeatures.push(feature);
     }
     if(!done){scanTimer=window.setTimeout(scan,0);return;}
@@ -1079,7 +1079,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      const road=spatial.byId.get(id);
      if(road&&!(Math.max(road.a[0],road.b[0])<west||Math.min(road.a[0],road.b[0])>east||
       Math.min(road.a[1],road.b[1])>north||Math.max(road.a[1],road.b[1])<south)){
-      feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[road.a,road.b]}});
+      feature=withRoadFeatureId({type:'Feature',properties:{roadId:id,fromNode:road.aNode,toNode:road.bNode,forward:road.forward,reverse:road.reverse,tunnel:road.tunnel===true,bridge:road.bridge===true,layer:road.layer??0,level:road.level??null},geometry:{type:'LineString',coordinates:[road.a,road.b]}});
       index.set(id,feature);
       recoveredPurple++;
      }
