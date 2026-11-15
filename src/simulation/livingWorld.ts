@@ -124,8 +124,11 @@ export function dispatchResponders(
      if(meters(origin,targetPoint)>1800)continue;
      routeAttempts++;
      const routed=routeDiscovered(graph,from,target,discovered);
-     if(routed&&!routed.edgeIds.includes(String(road.id??road.properties?.roadId))&&routed.path.length>=2&&routed.length>80&&(!best||routed.length<best.distance))
-      best={path:routed.path,distance:routed.length};
+     if(!routed||routed.edgeIds.includes(String(road.id??road.properties?.roadId))||routed.path.length<2)continue;
+     // routeDiscovered returns travel-time cost, not physical metres.
+     const roadMeters=routed.path.slice(1).reduce((total,p,i)=>total+meters(routed.path[i],p),0);
+     if(roadMeters>80&&(!best||roadMeters<best.distance))
+      best={path:routed.path,distance:roadMeters};
     }
    }
    if(best)break;
