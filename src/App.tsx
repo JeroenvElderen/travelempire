@@ -2809,7 +2809,15 @@ export default function App(){
   constructionRef.current=next;setConstruction(next);
   const updated={...current,cash:Math.round((available-cost)*100)/100};
   pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
-  setFleet(oldFleet=>({...oldFleet,transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)}));
+  setFleet(oldFleet=>{
+   const date=new Date(clock).toISOString().slice(0,10),history=[...(oldFleet.financeHistory??[])];
+   const previous=history[history.length-1];
+   if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
+   else history.push({day:date,revenue:0,expenses:cost,trips:0});
+   return {...oldFleet,financeHistory:history.slice(-365),
+    accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
+    transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
+  });
   setConstructionError('');
   return null;
  };
@@ -2831,9 +2839,15 @@ export default function App(){
   if(cost>0){
    const updated={...current,cash:Math.round((available-cost)*100)/100};
    pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
-   setFleet(oldFleet=>({...oldFleet,transactions:[{
-    id:crypto.randomUUID(),time:clock,description:'Hotel staffing · '+site.name,amount:-cost
-   },...(oldFleet.transactions??[])].slice(0,100)}));
+   setFleet(oldFleet=>{
+    const date=new Date(clock).toISOString().slice(0,10),history=[...(oldFleet.financeHistory??[])];
+    const previous=history[history.length-1];
+    if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
+    else history.push({day:date,revenue:0,expenses:cost,trips:0});
+    return {...oldFleet,financeHistory:history.slice(-365),
+     accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
+     transactions:[{id:crypto.randomUUID(),time:clock,description:'Hotel staffing · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
+   });
   }
   setConstructionError('');
   return null;
