@@ -68,6 +68,7 @@ import "./map-update.css";
 import "./company.css";
 import "./midnight-glass.css";
 import "./aurora-glass.css";
+import "./components/fleet-unified.css";
 
 import {RoadNetworkManager} from './data/roadNetworkManager';
 import {isIOSWebKit,dispatchAllowed,IOS_DISPATCH_INTERVAL_MS,DESKTOP_DISPATCH_INTERVAL_MS} from './data/roadMemoryPolicy';
