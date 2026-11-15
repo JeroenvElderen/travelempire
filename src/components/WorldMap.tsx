@@ -330,6 +330,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{startupTrace('Road graph changed',graph?('nodes='+graph.nodeKeys.length):'not ready');},[graph]);
  useEffect(()=>{startupTrace('Exploration changed','roads='+exploredEdgeIds.length);},[exploredEdgeIds.length]);
  const [showMobilityExploration,setShowMobilityExploration]=useState(false);
+
+ const [worldStatus,setWorldStatus]=useState<WorldActivitySnapshot|null>(null);
+ const [showRoadLevelsDebug,setShowRoadLevelsDebug]=useState(false);
+ const [roadLevelsStats,setRoadLevelsStats]=useState('Zoom in to inspect road connectivity');
+ const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
+ const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  const freightRef=useRef(constructionFreight);freightRef.current=constructionFreight;
  const [trackedCargo,setTrackedCargo]=useState<{id:string;token:number}|null>(null);
  const [trackedCargoLabel,setTrackedCargoLabel]=useState('');
@@ -372,11 +378,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    instance.off('dragstart',stopOnDrag);
   };
  },[ready,trackedCargo?.id,trackedCargo?.token]);
- const [worldStatus,setWorldStatus]=useState<WorldActivitySnapshot|null>(null);
- const [showRoadLevelsDebug,setShowRoadLevelsDebug]=useState(false);
- const [roadLevelsStats,setRoadLevelsStats]=useState('Zoom in to inspect road connectivity');
- const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
- const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
  // Tap a diagnostic road or endpoint to inspect actual OSM identifiers.
  useEffect(()=>{
   const instance=map.current;
