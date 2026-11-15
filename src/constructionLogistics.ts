@@ -6,6 +6,7 @@ import type {FerryNetwork,FerryPort,FerryRoute} from './maritime/ferries';
 import {englishFerryName} from './maritime/ferries';
 import type {Point,RoadGraph} from './simulation/taxi';
 import {nearest,route,meters} from './simulation/taxi';
+import type {ConstructionProject,HotelSite} from './internalConstruction';
 
 export type CargoLeg='preparing'|'at-sea'|'unloading'|'trucking'|'delivered';
 export type ConstructionFreight={
@@ -35,6 +36,33 @@ export function freightProgress(freight:ConstructionFreight,hour:number):number{
  if(hour<=freight.shippingHour)return 0;
  return Math.max(0,Math.min(100,(hour-freight.shippingHour)/
   Math.max(1,freight.deliveryHour-freight.shippingHour)*100));
+}
+
+/** Existing saved projects originally had only a countdown, no cargo itinerary.
+ * Only retrofit jobs that are STILL waiting for their first delivery. Completed
+ * or already-building work keeps its original schedule and is never restarted.
+ */
+export function legacyFreightEligible(project:ConstructionProject,nowHour:number):boolean{
+ return project.status==='active'&&!project.freight&&Number.isFinite(project.deliveryHour)&&nowHour<project.deliveryHour;
+}
+/** Adds a traceable ship -> harbour -> truck itinerary to a paid legacy job.
+ * No new invoice, budget change, duplicate project or room-plan change.
+ * The original build duration is preserved; if the real transport needs more
+ * time than the old countdown, only the delivery/completion deadlines shift.
+ * Starting from NOW makes the boat observable instead of pretending it sailed
+ * in the past while an older game version was running.
+ */
+export function retrofitLegacyProjectFreight(
+ project:ConstructionProject,site:Pick<HotelSite,'longitude'|'latitude'>,
+ network:FerryNetwork,graph:RoadGraph,nowHour:number,
+):ConstructionProject{
+ if(!legacyFreightEligible(project,nowHour))return project;
+ const remainingDeliveryHours=Math.max(1,project.deliveryHour-nowHour);
+ const freight=planConstructionFreight([site.longitude,site.latitude],
+  network,graph,nowHour,remainingDeliveryHours);
+ const buildHours=Math.max(0,project.finishHour-project.deliveryHour);
+ return {...project,freight,deliveryHour:freight.deliveryHour,
+  finishHour:freight.deliveryHour+buildHours};
 }
 function connectedPortNode(port:FerryPort,graph:RoadGraph):string|null{
  const position=port.roadAccess??port.position;
