@@ -360,3 +360,108 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.finance-overlay-mode .finance-v3 *{transition:none!important;animation:none!important}
 }
+
+/* Connected finance modules use the same cards and controls. */
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance,.accounting-panel,.forecasting-panel,.equity-panel,.corporate-panel
+){display:grid;gap:10px;min-width:0;color:var(--fin-fg)}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-header,.accounting-heading,.forecasting-header,.equity-header,.corporate-header
+){gap:8px;margin:0}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-header,.accounting-heading,.forecasting-header,.equity-header,.corporate-header
+) h2{font-size:17px;line-height:1.3;color:var(--fin-fg)}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-header,.accounting-heading,.forecasting-header,.equity-header,.corporate-header
+) p{font-size:11px;line-height:1.4;color:var(--fin-muted)}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-metrics,.accounting-metrics,.forecasting-metrics,.equity-metrics,.corporate-metrics
+){
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:8px;margin:0;
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-metrics article,.accounting-metrics article,.forecasting-metrics article,
+ .equity-metrics article,.corporate-metrics article,.corporate-metrics>div,
+ .depot-finance-detail,.depot-finance-upgrades article,
+ .accounting-columns article,.accounting-periods article,
+ .forecasting-chart,.forecasting-planner,.forecasting-columns section,
+ .equity-grid article,.equity-history,
+ .corporate-grid article,.corporate-subsidiary
+){
+ min-width:0;margin:0;padding:11px;
+ border:1px solid var(--fin-line);border-radius:14px;
+ background:var(--fin-card);color:var(--fin-fg);
+ box-shadow:inset 0 1px rgba(255,255,255,.08);
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-metrics,.accounting-metrics,.forecasting-metrics,.equity-metrics,.corporate-metrics
+) small{font-size:9px;letter-spacing:0;color:var(--fin-muted);opacity:1;margin:0 0 4px}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-metrics,.accounting-metrics,.forecasting-metrics,.equity-metrics,.corporate-metrics
+) strong{font-size:15px;color:var(--fin-fg);line-height:1.3}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-ranking button,.equity-nav button,.corporate-tabs button,.corporate-offer
+){
+ min-height:34px;padding:7px 10px;
+ border:1px solid var(--fin-line);border-radius:11px;
+ color:var(--fin-muted);background:var(--fin-glass);
+ box-shadow:none;font-size:11px;cursor:pointer;
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-ranking button.selected,.equity-nav button.active,
+ .corporate-tabs button.active,.corporate-offer.selected
+){
+ color:var(--fin-fg);background:var(--fin-soft)!important;
+ border-color:rgba(197,160,242,.56);
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance button:not(.depot-finance-ranking button),
+ .accounting-panel button,.forecasting-panel button,
+ .equity-panel button:not(.equity-nav button),.corporate-panel button:not(.corporate-tabs button)
+){
+ min-height:38px;padding:8px 11px;border-radius:11px;
+ border:1px solid rgba(197,160,242,.47);
+ background:var(--fin-soft);color:var(--fin-fg);
+ font-size:11px;box-shadow:none;
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance select,.accounting-panel select,.accounting-panel input,
+ .forecasting-panel select,.forecasting-panel input:not([type=checkbox]),
+ .equity-panel select,.equity-panel input,
+ .corporate-panel select,.corporate-panel input:not([type=range])
+){
+ min-width:0;max-width:100%;
+ border-color:var(--fin-line);border-radius:10px;
+ background:rgba(13,24,45,.83);color:var(--fin-fg);
+}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .accounting-columns,.forecasting-columns,.equity-grid,.corporate-grid
+){gap:9px;min-width:0}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-costs>div,.depot-finance-history>div,
+ .accounting-columns article>div,
+ .equity-grid article>div,.corporate-grid article>div
+){border-color:var(--fin-line);font-size:11px}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .depot-finance-note,.accounting-note,.forecasting-note,.equity-note,.corporate-note
+){font-size:10px;line-height:1.45;color:var(--fin-subtle)}
+.nav-v216.finance-overlay-mode .finance-v3 :is(
+ .forecasting-panel input[type=range],.equity-ownership-bar,.corporate-panel input[type=range]
+){accent-color:var(--fin-accent)}
+@media(max-width:800px){
+ .nav-v216.finance-overlay-mode .finance-v3 :is(
+  input:not([type=range]),select,textarea
+ ){font-size:16px!important}
+ .nav-v216.finance-overlay-mode .finance-v3 :is(
+  .accounting-columns,.forecasting-columns,.equity-grid,.corporate-grid
+ ){grid-template-columns:minmax(0,1fr)}
+ .nav-v216.finance-overlay-mode .finance-v3 :is(
+  .depot-finance-metrics,.accounting-metrics,.forecasting-metrics,
+  .equity-metrics,.corporate-metrics
+ ){grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .nav-v216.finance-overlay-mode .finance-v3 :is(
+  .depot-finance-metrics article,.accounting-metrics article,.forecasting-metrics article,
+  .equity-metrics article,.corporate-metrics article
+ ){padding:9px}
+}
