@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -35,6 +35,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
  const pointer=useRef<Cell|null>(null);
+ const history=useRef<{siteId:string|null;undo:HotelSite[];redo:HotelSite[]}>({siteId:null,undo:[],redo:[]});
  const sites=Object.values(state.sites);
  const site=selectedId?state.sites[selectedId]??null:null;
  const floor=site?.draft[Math.min(floorIndex,site.draft.length-1)]??null;
@@ -44,10 +45,29 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const selectedSupply=supplies.find(f=>f.code===supplyCode)!;
  const available=Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&ownership(h)>=0.5&&!sites.some(site=>site.sourceHoldingId===h.id));
  useEffect(()=>{if(!site&&sites.length&&selectedId===null){setSelectedId(sites[0].id);}},[site,sites.length,selectedId]);
- const choose=(idValue:string)=>{setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');};
+ const choose=(idValue:string)=>{history.current={siteId:idValue,undo:[],redo:[]};setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');};
+ const recordEdit=(old:HotelSite)=>{
+  if(history.current.siteId!==old.id)history.current={siteId:old.id,undo:[],redo:[]};
+  history.current.undo.push(old);
+  if(history.current.undo.length>35)history.current.undo.shift();
+  history.current.redo=[];
+ };
+ const restoreHistory=(direction:'undo'|'redo')=>{
+  if(!site||active)return;
+  const h=history.current;
+  if(h.siteId!==site.id)return;
+  const stack=direction==='undo'?h.undo:h.redo;
+  const restore=stack.pop();
+  if(!restore)return;
+  const issue=onChangeSite(restore);
+  if(issue){stack.push(restore);setStatus(issue);return;}
+  (direction==='undo'?h.redo:h.undo).push(site);
+  setStatus(direction==='undo'?'Last blueprint change undone.':'Blueprint change redone.');
+  setAnchor(null);
+ };
  const modify=(fn:(old:HotelFloor)=>HotelFloor)=>{
   if(!site||!floor)return;
-  try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
+  try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
  };
  const cellFromEvent=(e:PointerEvent<SVGSVGElement>):Cell|null=>{
   if(!site)return null;
@@ -93,6 +113,26 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    setStatus('Nothing to remove at this position.');
   }
  };
+ const duplicateRoom=(roomId:string)=>{
+  if(!site||!floor||active)return;
+  const original=floor.rooms.find(r=>r.id===roomId);
+  if(!original)return;
+  const originals=floor.objects.filter(o=>o.x>=original.x&&o.y>=original.y&&o.x<original.x+original.width&&o.y<original.y+original.height);
+  for(let y=0;y<=site.height-original.height;y++){
+   for(let x=0;x<=site.width-original.width;x++){
+    const room={...original,id:id(),name:category[original.type]+' '+(floor.rooms.filter(r=>r.type===original.type).length+1),x,y};
+    let updated:HotelFloor;
+    try{
+     updated=drawRoom(floor,room,site);
+     for(const o of originals)updated=placeFurniture(updated,{...o,id:id(),x:o.x-original.x+x,y:o.y-original.y+y},site);
+    }catch{continue;}
+    modify(()=>updated);
+    setStatus('Room layout and furnishings duplicated. Approve construction to purchase the additional items.');
+    return;
+   }
+  }
+  setStatus('No space for another room of this size on this floor.');
+ };
  const projectStart=()=>{
   if(!site)return;
   const feedback=onStartProject(site.id,method);
@@ -103,7 +143,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   if(!site)return;
   try{
    const next=addFloor(site);const msg=onChangeSite(next);
-   setStatus(msg??'New floor added to the blueprint.');if(!msg)setFloorIndex(next.draft.length-1);
+   setStatus(msg??'New floor added to the blueprint.');if(!msg){recordEdit(site);setFloorIndex(next.draft.length-1);}
   }catch(e){setStatus(e instanceof Error?e.message:'Could not add floor.');}
  };
  return <section className="internal-builder">
@@ -127,7 +167,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
    <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
-   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-zoom"><button onClick={()=>setZoom(v=>Math.max(.7,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button></div></div>
+   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button onClick={()=>setZoom(v=>Math.max(.7,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
     {([['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
@@ -146,7 +186,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
     </svg></div>
    <div className="ib-plan-footer"><span>{floor.rooms.length} rooms · {floor.objects.length} objects · {floor.walls.length} custom walls</span><span>Grid: 1 m · {floor.label}</span></div>
    <div className="ib-heading"><div><h2>Room requirements</h2><small>Check equipment before opening your hotel</small></div></div>
-   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.width}×{r.height} m · {r.type}</small></div><span className={issues.length?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:'Equipped'}</span></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
+   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.width}×{r.height} m · {r.type}</small></div><span className={issues.length?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:'Equipped'}</span><button className="ib-room-duplicate" aria-label={'Duplicate '+r.name} title={'Duplicate '+r.name} disabled={!!active} onClick={()=>duplicateRoom(r.id)}><Copy size={16}/></button></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
    <div className="ib-build-actions"><div><strong>Approve the blueprint</strong><small>Check a material quote, choose workers and start a timed project.</small></div><button className="ib-primary" disabled={!!active} onClick={()=>setTab('projects')}><HardHat size={15}/> View quote</button></div>
   </div>}
   {company&&tab==='projects'&&<div className="ib-section">
