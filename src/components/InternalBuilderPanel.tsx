@@ -1,5 +1,5 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -12,6 +12,7 @@ import {
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
  type HotelRole} from '../hotelOperations';
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
+import {freightStage,freightStatusLabel,freightProgress} from '../constructionLogistics';
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
@@ -290,7 +291,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const projectStart=()=>{
   if(!site)return;
   const feedback=onStartProject(site.id,method);
-  setStatus(feedback??'Construction approved. Materials ordered and work scheduled.');
+  setStatus(feedback??'Construction freight booked. Ship arrival, harbour unloading and truck delivery are scheduled before building begins.');
   if(!feedback){history.current={siteId:site.id,undo:[],redo:[]};setTab('projects');}
  };
  const addBuildingFloor=()=>{
@@ -363,13 +364,28 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   {company&&tab==='projects'&&<div className="ib-section">
    <div className="ib-heading"><div><h2>Construction projects</h2><small>Material deliveries, work schedules and budgets</small></div></div>
    {site&&<div className="ib-project-shell"><div className="ib-heading"><div><h2>{site.name}</h2><small>{active?'Construction in progress':'New work proposal'}</small></div><button className="ib-secondary" onClick={()=>setTab('blueprint')}>Floor plan</button></div>
-    {active?<div className="ib-progress-panel"><div className="ib-project-row"><strong>{gameHour<active.deliveryHour?'Materials in transit':'Construction underway'}</strong><span>{progressProject(active,gameHour).toFixed(0)}%</span></div><div className="ib-meter"><span style={{width:progressProject(active,gameHour)+'%'}}/></div><div className="ib-project-row"><small>Delivery at game hour {active.deliveryHour}</small><small>Completion hour {active.finishHour}</small></div><p className="ib-note">Materials and project charges were paid when work was approved. Own crews also draw hourly wages.</p></div>:
+    {active?<div className="ib-progress-panel">
+     {active.freight&&gameHour<active.deliveryHour&&<div className="ib-cargo-panel">
+      <div className="ib-cargo-head"><Ship size={17}/><div><strong>{freightStatusLabel[freightStage(active.freight,gameHour)]}</strong><small>Contracted ship and truck delivery · materials & furniture</small></div></div>
+      <div className="ib-meter"><span style={{width:freightProgress(active.freight,gameHour)+'%'}}/></div>
+      <div className="ib-cargo-route"><span>{active.freight.originPortName}</span><span>→</span><span>{active.freight.destinationPortName}</span><span>→</span><span>{site.name}</span></div>
+      <div className="ib-cargo-stages">
+       <div className={gameHour>=active.freight.shippingHour?'reached':''}><Ship size={15}/><span>Ship departs</span><strong>Hour {active.freight.shippingHour}</strong></div>
+       <div className={gameHour>=active.freight.seaArrivalHour?'reached':''}><Package size={15}/><span>Harbour arrival</span><strong>Hour {active.freight.seaArrivalHour}</strong></div>
+       <div className={gameHour>=active.freight.truckDepartureHour?'reached':''}><Truck size={15}/><span>Truck dispatch</span><strong>Hour {active.freight.truckDepartureHour}</strong></div>
+       <div className={gameHour>=active.freight.deliveryHour?'reached':''}><CheckCircle2 size={15}/><span>Site delivery</span><strong>Hour {active.freight.deliveryHour}</strong></div>
+      </div>
+      <small>{Math.round(active.freight.roadDistanceMeters/1000)} km road journey · cargo follows loaded ferry corridors and drivable roads. No teleporting.</small>
+     </div>}
+     <div className="ib-project-row"><strong>{gameHour<active.deliveryHour?'Waiting for building materials':'Construction underway'}</strong><span>{progressProject(active,gameHour).toFixed(0)}%</span></div><div className="ib-meter"><span style={{width:progressProject(active,gameHour)+'%'}}/></div><div className="ib-project-row"><small>Delivered game hour {active.deliveryHour}</small><small>Completion game hour {active.finishHour}</small></div>
+     <p className="ib-note">Construction can only progress after the ship unloads and the truck reaches the hotel site. Materials and project charges were paid when approved. Own crews also draw hourly wages.</p>
+    </div>:
     <>
      <div className="ib-methods"><label>Construction method<select value={method} onChange={e=>setMethod(e.target.value as TradeMode)}><option value="contractor">Hire external contractor</option><option value="own">Use my construction crew ({state.workers} workers)</option></select></label></div>
      {quote&&quote.changes>0?<><div className="ib-costs"><div><span>Materials & groundworks</span><strong>{euros(quote.materialCents)}</strong></div><div><span>Furniture & equipment</span><strong>{euros(quote.furnitureCents)}</strong></div><div><span>{method==='own'?'Site tools / equipment':'Contractor labour'}</span><strong>{euros(quote.labourCents)}</strong></div><div className="ib-total"><span>Pay now</span><strong>{euros(quote.totalCents)}</strong></div></div>
       <details className="ib-material-details"><summary><Package size={16}/> Material order · {quote.materials.length} items</summary><div>{quote.materials.map(m=><div key={m.id}><span>{m.name} · {m.quantity} {m.unit}</span><strong>{euros(m.totalCents)}</strong></div>)}</div></details>
-      <div className="ib-stat-row"><span><Clock3 size={14}/> {quote.deliveryHours}h delivery</span><span><HardHat size={14}/> {quote.constructionHours}h work</span><span><ShoppingCart size={14}/> {euros(quote.totalCents)}</span></div>
-      <button type="button" className="ib-primary ib-full" disabled={cash*100<quote.totalCents} onClick={projectStart}>{cash*100<quote.totalCents?'Insufficient cash':'Order materials & start construction'}</button>
+      <div className="ib-stat-row"><span><Clock3 size={14}/> {quote.deliveryHours}h baseline procurement + sea & road freight</span><span><HardHat size={14}/> {quote.constructionHours}h work</span><span><ShoppingCart size={14}/> {euros(quote.totalCents)}</span></div>
+      <button type="button" className="ib-primary ib-full" disabled={cash*100<quote.totalCents} onClick={projectStart}>{cash*100<quote.totalCents?'Insufficient cash':'Book cargo ship, truck & construction'}</button>
      </>:<div className="ib-empty"><HardHat size={23}/><strong>{method==='own'&&state.workers<2?'Hire at least two workers':'No pending construction work'}</strong><p>{method==='own'&&state.workers<2?'Your own crew requires at least two employees.':'Draw rooms, place furniture or add a new floor to create a project quote.'}</p></div>}
     </>}
    </div>}
