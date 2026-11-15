@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,BriefcaseBusiness,Moon,PanelTop} from 'lucide-react';
+import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,BriefcaseBusiness,Moon} from 'lucide-react';
 import type {FleetState,Taxi} from '../simulation/taxi';
 import type {GameClock} from '../simulation/gameClock';
 import {driverLevel} from '../simulation/taxi';
