@@ -71,7 +71,7 @@ function buildingAt(site:HotelSite,hour:number):HotelFloor[]{
  // This prevents retroactive guest revenue after long tab suspensions.
  const finished=site.projects.filter(p=>p.finishHour<=hour).sort((a,b)=>a.finishHour-b.finishHour);
  if(finished.length)return finished[finished.length-1].target;
- if(site.projects.length)return site.built.some(f=>f.rooms.length>0)?site.built:[site.built[0]];
+ if(site.projects.length)return [{id:'floor-0',label:'Ground floor',rooms:[],walls:[],objects:[]}];
  return site.built;
 }
 export type RoomInventory={readyRooms:Array<{room:Room;floor:HotelFloor}>;bathrooms:number;
@@ -232,25 +232,19 @@ export function settleHotelOperations(state:ConstructionState,nowHour:number,own
    const inventory=roomInventory(site,hour);
    const validRooms=inventory.readyRooms.map(e=>e.room);
    const validIds=new Set(validRooms.map(r=>r.id));
+   // Once a stay ends, housekeeping must prepare the room before it can sell again.
+   for(const guest of guests){
+    if(guest.checkOutHour<=hour)dirty.add(guest.roomId);
+   }
    guests=guests.filter(g=>validIds.has(g.roomId)&&g.checkOutHour>hour);
    const delta=emptyTotals();
-   // Checkouts leave the room dirty until staff have cleaning products and time.
-   if(time===11){
-    const checkingOut=original.guests.length===-1?[]:guests.filter(g=>g.checkOutHour<=hour);
-    // The preceding filter removes checked-out guests. Use the prior list instead.
-    void checkingOut;
-   }
-   // Checkout removal must happen before booking or cleaning.
-   const departed=(site.operations?.guests??[]).length===-1?[]:[] as HotelGuest[];
-   void departed;
-   // All guests are updated below, with departures captured in a stable snapshot.
    if(time===14){
     const occupied=new Set(guests.map(g=>g.roomId));
     // Target room demand is bounded by existing room inventory and staffed reception.
     const dayKey=site.id+':'+day;
     const season=new Date(day*24*3600000).getUTCMonth();
     const seasonal=season>=5&&season<=8?0.12:season>=10||season<=2?-0.12:0;
-    const quality=clamp((site.built.flatMap(f=>f.objects).length/Math.max(1,validRooms.length)-2)*0.025,-0.05,0.12);
+    const quality=clamp((inventory.readyRooms.reduce((sum,item)=>sum+item.floor.objects.filter(obj=>inRoom(item.room,obj)).length,0)/Math.max(1,validRooms.length)-2)*0.025,-0.05,0.12);
     const pricing=clamp((11000-original.rateCents)/18000,-0.26,0.26);
     const occupancy=clamp(0.60+seasonal+quality+pricing+(random01(dayKey)-.5)*.20,.08,.96);
     const linen=Math.floor(supplyStock(site,'linen',hour));
