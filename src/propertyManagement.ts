@@ -7,6 +7,17 @@ export type HotelStaff='lean'|'balanced'|'full';
 export type HotelPolicy={rate:HotelRate;staffing:HotelStaff};
 export const DEFAULT_HOTEL_POLICY:HotelPolicy={rate:'standard',staffing:'balanced'};
 export type HotelPolicyChange={fromHour:number;policy:HotelPolicy};
+export type HotelRenovation={effectiveHour:number;level:number};
+export const MAX_HOTEL_RENOVATIONS=3;
+export function hotelRenovationLevel(changes:readonly HotelRenovation[]|undefined,hour=Infinity):number{
+ let level=0;
+ for(const change of changes??[]){
+  if(change&&Number.isFinite(change.effectiveHour)&&change.effectiveHour<=hour)
+   level=Math.max(level,Math.max(0,Math.min(MAX_HOTEL_RENOVATIONS,Math.trunc(change.level)||0)));
+ }
+ return level;
+}
+export const hotelRenovationCost=(nextLevel:number):number=>20000*nextLevel;
 export type OfficeDepartment='reservations'|'marketing'|'facilities';
 export type OfficeUpgrade={id:OfficeDepartment;level:number;effectiveHour:number};
 export const OFFICE_DEPARTMENTS=[
