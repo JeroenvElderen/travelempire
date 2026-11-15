@@ -11,9 +11,11 @@ import {energySpec,energyRemaining,energyUsed,energyPercent,energyRangeKm} from 
 import {loadStationTile,type Station} from './data/stations';
 import {loadRestStopTile} from './data/restStops';
 import InvestmentsPanel from './components/InvestmentsPanel';
+import InternalBuilderPanel from './components/InternalBuilderPanel';
+import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,LAND_PRICE_CENTS,RECRUITMENT_CENTS,HOUR_MS,type HotelSite,type TradeMode} from './internalConstruction';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
-import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,type InvestablePOI} from './investments';
+import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useMemo, useState, startTransition } from "react";
@@ -101,12 +103,12 @@ const futureNavigation=[
  {name:'Contracts',icon:BriefcaseBusiness},
  {name:'Workforce',icon:GraduationCap}
 ] as const;
-const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Dealership",icon:Building2},{name:"Drivers",icon:CalendarClock},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Investments",icon:Hotel},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Research",icon:FlaskConical},...futureNavigation] as const;
+const navigation=[{name:"World",icon:MapIcon},{name:"Fleet",icon:CarFront},{name:"Dealership",icon:Building2},{name:"Drivers",icon:CalendarClock},{name:"Operations",icon:Compass},{name:"Ferries",icon:Ship},{name:"Investments",icon:Hotel},{name:"Hotels",icon:Building2},{name:"Company",icon:Building2},{name:"Finance",icon:Landmark},{name:"Research",icon:FlaskConical},...futureNavigation] as const;
 type Page=(typeof navigation)[number]['name'];
 type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
 
 export default function App(){
- const [page,setPage]=useState<Page>('World');const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);
+ const [page,setPage]=useState<Page>('World');const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);const [placingHotelLand,setPlacingHotelLand]=useState(false);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
  const gameClockRef=useRef(gameClock);gameClockRef.current=gameClock;
  useEffect(()=>{
@@ -368,6 +370,10 @@ export default function App(){
  const [investmentPois,setInvestmentPois]=useState<InvestablePOI[]>([]);
  const [portfolio,setPortfolio]=useState(()=>loadPortfolio(company?.id));
  const portfolioRef=useRef(portfolio);portfolioRef.current=portfolio;
+ const [construction,setConstruction]=useState(()=>loadConstruction(company?.id,Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)));
+ const constructionRef=useRef(construction);constructionRef.current=construction;
+ const [constructionError,setConstructionError]=useState('');
+ useEffect(()=>{const next=loadConstruction(company?.id,Math.floor((gameClockRef.current?.epochMs??Date.now())/HOUR_MS));constructionRef.current=next;setConstruction(next);setConstructionError('');},[company?.id]);
  const [investmentError,setInvestmentError]=useState('');
  useEffect(()=>{const next=loadPortfolio(company?.id);portfolioRef.current=next;setPortfolio(next);setInvestmentPois([]);restStopsRef.current.clear();restLoadedRef.current.clear();setInvestmentError('');},[company?.id]);
  const restLoadedRef=useRef<Set<string>>(new Set());
@@ -2713,8 +2719,104 @@ export default function App(){
   };
   const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
  },[company?.id]);
+ const applyConstructionSite=(site:HotelSite):string|null=>{
+  const current=companyRef.current,old=constructionRef.current;
+  if(!current||!old.sites[site.id])return 'Building site not found.';
+  const next={...old,sites:{...old.sites,[site.id]:site}};
+  try{saveConstruction(current.id,next);}catch{return 'Unable to save the blueprint to this browser.';}
+  constructionRef.current=next;setConstruction(next);setConstructionError('');
+  return null;
+ };
+ const adoptExistingHotel=(holdingId:string):string|null=>{
+  const current=companyRef.current,holding=portfolioRef.current.holdings[holdingId];
+  if(!current||!holding||holding.kind!=='hotel'||ownership(holding)<.5)return 'You need at least 50% ownership of this hotel.';
+  const old=constructionRef.current;
+  if(Object.values(old.sites).some(s=>s.sourceHoldingId===holdingId))return 'This hotel is already in your development portfolio.';
+  const hour=Math.floor((gameClockRef.current?.epochMs??Date.now())/HOUR_MS);
+  const site=newHotelSite('hotel:'+holdingId,holding.name,'existing',holding.position[1],holding.position[0],hour,holdingId);
+  const next={...old,sites:{...old.sites,[site.id]:site}};
+  try{saveConstruction(current.id,next);}catch{return 'Could not store this hotel project.';}
+  constructionRef.current=next;setConstruction(next);setConstructionError('');
+  return null;
+ };
+ const purchaseHotelPlot=(location:Headquarters)=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  setSelecting(false);setPlacingHotelLand(false);setPage('Hotels');
+  if(!current||clock===undefined){setConstructionError('Company or game clock is not ready.');return;}
+  const amount=LAND_PRICE_CENTS/100,available=current.cash+pendingCashRef.current;
+  if(available<amount){setConstructionError('Insufficient cash to purchase a development plot.');return;}
+  const roadNode=graph?nearest(graph,[location.lng,location.lat]):null;
+  if(!graph||!roadNode||meters(graph.nodes.get(roadNode)!,[location.lng,location.lat])>1500){
+   setConstructionError('Select a plot within 1.5 km of a loaded, connected road.');return;
+  }
+  if(Object.values(constructionRef.current.sites).some(site=>meters([site.longitude,site.latitude],[location.lng,location.lat])<90)){
+   setConstructionError('You already have a construction site too close to this location.');return;
+  }
+  const site=newHotelSite('plot:'+crypto.randomUUID(),'New hotel · '+(location.label||'Development plot'),'new',location.lat,location.lng,Math.floor(clock/HOUR_MS));
+  const next={...constructionRef.current,sites:{...constructionRef.current.sites,[site.id]:site}};
+  try{saveConstruction(current.id,next);}catch{setConstructionError('Could not save the new plot in your browser.');return;}
+  constructionRef.current=next;setConstruction(next);
+  const updated={...current,cash:Math.round((available-amount)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:clock,description:'Hotel development land · '+site.name,amount:-amount},...(old.transactions??[])].slice(0,100)}));
+  setConstructionError('');
+ };
+ const startInternalBuild=(siteId:string,method:TradeMode):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs,old=constructionRef.current;
+  if(!current||clock===undefined)return 'Company clock is not ready.';
+  const site=old.sites[siteId];if(!site)return 'Select a hotel site.';
+  let started;
+  try{started=beginConstruction(site,method,old.workers,Math.floor(clock/HOUR_MS),crypto.randomUUID());}
+  catch(e){return e instanceof Error?e.message:'Could not start this construction project.';}
+  const price=started.quote.totalCents/100;
+  const available=current.cash+pendingCashRef.current;
+  if(available+0.001<price)return 'Insufficient company funds for materials, furniture and the work package.';
+  const next={...old,sites:{...old.sites,[siteId]:started.site}};
+  try{saveConstruction(current.id,next);}catch{return 'Could not save the construction project.';}
+  constructionRef.current=next;setConstruction(next);
+  const updated={...current,cash:Math.round((available-price)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(state=>({...state,transactions:[{id:crypto.randomUUID(),time:clock,description:'Hotel construction · '+site.name,amount:-price},...(state.transactions??[])].slice(0,100)}));
+  setConstructionError('');
+  return null;
+ };
+ const recruitConstructionWorker=():string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  if(!current||clock===undefined)return 'Company clock is not ready.';
+  const price=RECRUITMENT_CENTS/100,available=current.cash+pendingCashRef.current;
+  if(available<price)return 'Insufficient funds to recruit a construction worker.';
+  const old=constructionRef.current,next={...old,workers:old.workers+1};
+  try{saveConstruction(current.id,next);}catch{return 'Could not save the new employee.';}
+  constructionRef.current=next;setConstruction(next);
+  const updated={...current,cash:Math.round((available-price)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(oldFleet=>({...oldFleet,transactions:[{id:crypto.randomUUID(),time:clock,description:'Construction recruitment',amount:-price},...(oldFleet.transactions??[])].slice(0,100)}));
+  setConstructionError('');
+  return null;
+ };
+ useEffect(()=>{
+  if(!company?.id)return;
+  const companyId=company.id;
+  const settle=()=>{
+   if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
+   const epoch=gameClockRef.current?.epochMs;if(epoch===undefined)return;
+   const result=settleConstruction(constructionRef.current,Math.floor(epoch/HOUR_MS));
+   if(result.state===constructionRef.current)return;
+   try{saveConstruction(companyId,result.state);}catch(error){diagnostic('construction:save-error',String(error));return;}
+   constructionRef.current=result.state;setConstruction(result.state);
+   if(result.wageCents>0){
+    const current=companyRef.current;if(!current)return;
+    const expense=result.wageCents/100;
+    const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-expense)*100)/100};
+    pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+    setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:epoch,description:'Construction crew wages',amount:-expense},...(old.transactions??[])].slice(0,100)}));
+   }
+   if(result.completed.length)diagnostic('construction:projects-completed',result.completed.join('; '));
+  };
+  const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
+ },[company?.id]);
  const go=(name:Page)=>{setPage(name);setConsoleOpen(false);setDrawerOpen(false);};
- const onLocation=(value:Headquarters)=>{if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
+ const onLocation=(value:Headquarters)=>{if(placingHotelLand){purchaseHotelPlot(value);return;}if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  const activeResearch=research.active;
  const activeResearchProject=activeResearch?Research.projects.find(project=>project.id===activeResearch.id):undefined;
  const researchGameNow=gameClock?.epochMs??Date.now();
