@@ -320,3 +320,180 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.drivers-overlay-mode .drivers-v2 *{transition:none!important;animation:none!important}
 }
+
+/* Drivers minimal pass — quiet navigation, one summary strip, compact schedules. */
+.nav-v216.drivers-overlay-mode .drivers-v2{
+ --drv-card:rgba(24,35,61,.74);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-head{
+ margin-bottom:10px;gap:9px;min-height:42px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-head-icon{
+ width:39px;height:39px;flex-basis:39px;border-radius:12px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-head h1{font-size:20px}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-head p{
+ margin:2px 0 0;color:var(--drv-muted);font-size:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-nav{
+ margin-bottom:10px;gap:4px;min-height:40px;
+ background:rgba(22,32,56,.62);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-nav button{
+ height:34px;min-height:34px;border-radius:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-nav button.active{
+ box-shadow:none;flex:1.45;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:8px;min-width:0;padding:10px 12px;margin-bottom:14px;
+ border:1px solid var(--drv-line);border-radius:14px;
+ background:rgba(24,35,61,.68);color:var(--drv-muted);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status span{
+ display:flex;align-items:center;gap:5px;min-width:0;
+ font-size:11px;white-space:nowrap;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status svg{
+ color:var(--drv-accent);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status strong{
+ font-size:13px;color:var(--drv-fg);font-weight:750;
+ font-variant-numeric:tabular-nums;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-section{gap:9px}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-section-compact{
+ margin:0 0 2px;align-items:center;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-section-compact>div{
+ display:flex;flex-direction:column;gap:2px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-section-compact h2{
+ font-size:17px;letter-spacing:-.02em;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-section-compact small{
+ font-size:10px;color:var(--drv-muted);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools-toggle{
+ display:flex;align-items:center;justify-content:center;gap:6px;
+ flex:0 0 auto;min-height:34px;padding:6px 10px;
+ border:1px solid var(--drv-line);border-radius:11px;
+ color:var(--drv-muted);background:rgba(24,35,61,.68);
+ font-size:11px;font-weight:700;cursor:pointer;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools-toggle.active{
+ color:var(--drv-fg);background:var(--drv-highlight);
+ border-color:rgba(197,160,242,.56);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools{
+ display:flex;flex-direction:column;gap:8px;
+ padding:10px;border:1px solid var(--drv-line);border-radius:14px;
+ background:rgba(24,35,61,.64);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools .drivers-search{
+ min-height:37px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools .drivers-search input{
+ height:35px;min-height:35px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools .drivers-filters{
+ gap:6px;margin:0;padding:0;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-tools .drivers-filters button{
+ min-height:30px;padding:5px 11px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-list{
+ gap:8px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-schedule-card{
+ gap:7px;padding:11px 12px;border-radius:15px;
+ box-shadow:inset 0 1px rgba(255,255,255,.075);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-head{gap:8px}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-avatar{
+ flex:0 0 34px;width:34px;height:34px;border-radius:11px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-avatar svg{
+ width:17px;height:17px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-info{gap:1px}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-info strong{
+ font-size:13px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-info small{
+ font-size:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-status{
+ align-self:center;padding:4px 7px;border-radius:9px;
+ font-size:10px;font-weight:650;
+ color:var(--drv-accent);background:rgba(173,121,230,.14);
+ border:1px solid rgba(197,160,242,.20);
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-status-off{
+ color:var(--drv-muted);
+ background:rgba(213,205,243,.08);
+ border-color:var(--drv-line);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-shift-meta{
+ font-size:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-shift-meta strong{
+ font-size:11px;color:var(--drv-fg);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-timeline{padding:5px 0 0}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-timeline-track{
+ height:8px;border-radius:6px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-timeline-now{
+ top:-4px;bottom:-4px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-timeline-hours{
+ font-size:9px;margin-top:5px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-schedule-actions{
+ margin:1px 0 0;padding-top:7px;border-top:1px solid rgba(202,194,235,.14);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-schedule-actions>span{
+ font-size:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-schedule-actions button{
+ border:1px solid transparent;background:transparent;
+ padding:4px 2px;min-height:28px;border-radius:8px;
+ font-size:11px;color:var(--drv-accent);
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-expanded{
+ gap:9px;padding-top:9px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-expanded small{
+ font-size:10px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-card-expanded strong{
+ font-size:11px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-team-card{
+ padding:10px 11px;border-radius:15px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-performance-card,
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-stats-card{
+ padding:11px;border-radius:15px;
+}
+.nav-v216.drivers-overlay-mode .drivers-v2 .drivers-performance-grid{gap:8px}
+@media(max-width:800px){
+ .nav-v216.drivers-overlay-mode .drivers-v2{padding:10px 10px 22px}
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-head{margin-bottom:9px}
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status{
+  margin-bottom:11px;padding:9px 10px;
+ }
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-schedule-card{
+  padding:10px 11px;gap:6px;
+ }
+}
+@media(max-width:350px){
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status span{
+  font-size:10px;gap:3px;
+ }
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-quick-status svg{display:none}
+ .nav-v216.drivers-overlay-mode .drivers-v2 .drivers-status{max-width:82px}
+}
