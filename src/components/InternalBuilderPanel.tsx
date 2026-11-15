@@ -137,7 +137,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   if(!site)return;
   const feedback=onStartProject(site.id,method);
   setStatus(feedback??'Construction approved. Materials ordered and work scheduled.');
-  if(!feedback)setTab('projects');
+  if(!feedback){history.current={siteId:site.id,undo:[],redo:[]};setTab('projects');}
  };
  const addBuildingFloor=()=>{
   if(!site)return;
