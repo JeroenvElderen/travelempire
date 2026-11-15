@@ -7,20 +7,20 @@ import {
  type HotelSite,type HotelFloor,type RoomType,type BuilderTool,type FurnitureCode,type TradeMode,type ConstructionState,
  type Wall,
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
- roomIssues,furnitureSize,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS,LAND_PRICE_CENTS
+ roomIssues,furnitureSize,supplies,supplyStock,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS,LAND_PRICE_CENTS
 } from '../internalConstruction';
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
  onSelectLand:()=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
- onStartProject:(id:string,method:TradeMode)=>string|null;onHireWorker:()=>string|null;
+ onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;
 };
-type Tab='sites'|'blueprint'|'projects'|'crew';
+type Tab='sites'|'blueprint'|'projects'|'supplies'|'crew';
 const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'#65516f',restaurant:'#695d81',bar:'#66486b',lobby:'#3f6672',storage:'#4c5d65',staff:'#4d5a79',corridor:'#414c64',office:'#445a7a',meeting:'#535079'};
 const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',kitchen:'Kitchen',restaurant:'Restaurant',bar:'Bar',lobby:'Lobby',storage:'Storage',staff:'Staff room',corridor:'Corridor',office:'Office',meeting:'Meeting room'};
 type Cell={x:number;y:number;fx:number;fy:number};
 const id=()=>crypto.randomUUID();
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onHireWorker}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -29,6 +29,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const [itemCode,setItemCode]=useState<FurnitureCode>('bed');
  const [rotate,setRotate]=useState(false);
  const [method,setMethod]=useState<TradeMode>('contractor');
+ const [supplyCode,setSupplyCode]=useState<SupplyCode>('eggs');
+ const [supplyQuantity,setSupplyQuantity]=useState(10);
  const [zoom,setZoom]=useState(1);
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
@@ -39,6 +41,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const active=site?.projects.find(p=>p.status==='active');
  const quote=useMemo(()=>{if(!site||active)return null;try{return constructionQuote(site,method,state.workers);}catch{return null;}},[site,method,state.workers,active]);
  const selectedFurniture=furniture.find(f=>f.code===itemCode)!;
+ const selectedSupply=supplies.find(f=>f.code===supplyCode)!;
  const available=Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&ownership(h)>=0.5&&!sites.some(site=>site.sourceHoldingId===h.id));
  useEffect(()=>{if(!site&&sites.length&&selectedId===null){setSelectedId(sites[0].id);}},[site,sites.length,selectedId]);
  const choose=(idValue:string)=>{setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');};
@@ -106,7 +109,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  return <section className="internal-builder">
   <header className="ib-header"><span className="ib-header-icon"><Building2 size={22}/></span><div><h1>Building Development</h1><p>Your hotels, headquarters &amp; construction</p></div></header>
   <nav className="ib-tabs" aria-label="Hotel development sections">
-   {([['sites','Properties',Building2],['blueprint','2D builder',Grid2X2],['projects','Construction',HardHat],['crew','My crew',Users]] as const).map(([idValue,label,Icon])=><button type="button" key={idValue} className={tab===idValue?'selected':''} aria-current={tab===idValue?'page':undefined} onClick={()=>{setTab(idValue);setStatus('');setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
+   {([['sites','Properties',Building2],['blueprint','2D builder',Grid2X2],['projects','Construction',HardHat],['supplies','Supplies',Package],['crew','My crew',Users]] as const).map(([idValue,label,Icon])=><button type="button" key={idValue} className={tab===idValue?'selected':''} aria-current={tab===idValue?'page':undefined} onClick={()=>{setTab(idValue);setStatus('');setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
   </nav>
   {(status||error)&&<div className="ib-feedback" role="status"><AlertCircle size={15}/>{error||status}</div>}
   {!company&&<div className="ib-empty"><Landmark size={22}/><strong>Create a company to develop hotels.</strong><p>Your building projects use the company treasury and game clock.</p></div>}
@@ -161,6 +164,28 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    </div>}
    {!site&&<div className="ib-empty"><Building2 size={23}/><strong>Choose a property to manage construction</strong><button onClick={()=>setTab('sites')} className="ib-secondary">My properties</button></div>}
    {site&&site.projects.length>0&&<><div className="ib-heading"><h2>Project history</h2></div><div className="ib-cards">{[...site.projects].reverse().slice(0,12).map(p=><div key={p.id} className="ib-history-row"><span>{p.status==='complete'?<CheckCircle2 size={17}/>:<Clock3 size={17}/>}</span><div><strong>{p.method==='own'?'Own construction crew':'Contracted construction'}</strong><small>{p.status==='complete'?'Completed':'In progress'} · Game hour {p.startHour}</small></div><strong>{euros(p.budgetCents)}</strong></div>)}</div></>}
+  </div>}
+  {company&&tab==='supplies'&&<div className="ib-section">
+   <div className="ib-heading"><div><h2>Kitchen, bar &amp; housekeeping</h2><small>Order products, receive deliveries and maintain separate building stock</small></div></div>
+   {!site?<div className="ib-empty"><Package size={23}/><strong>Select a building first</strong><button type="button" className="ib-secondary" onClick={()=>setTab('sites')}>My buildings</button></div>:
+   <div className="ib-supplies">
+    <div className="ib-heading"><div><h2>{site.name}</h2><small>Stock is purchased from the same company treasury</small></div></div>
+    <div className="ib-inventory-grid">
+     {supplies.map(item=><div key={item.code} className="ib-inventory-row"><div><strong>{item.name}</strong><small>{item.category} · {euros(item.unitCents)} / {item.unit}</small></div><span>{supplyStock(site,item.code,gameHour)} {item.unit}</span></div>)}
+    </div>
+    <div className="ib-supply-order">
+     <div><strong><ShoppingCart size={15}/> New supplier order</strong><small>Goods arrive after the listed number of simulated hours.</small></div>
+     <div className="ib-controls">
+      <label>Product<select value={supplyCode} onChange={e=>setSupplyCode(e.target.value as SupplyCode)}>{supplies.map(i=><option value={i.code} key={i.code}>{i.name} · {i.category}</option>)}</select></label>
+      <label>Quantity<input type="number" inputMode="numeric" min="1" max="200" step="1" value={supplyQuantity} onChange={e=>setSupplyQuantity(Number(e.target.value))}/></label>
+     </div>
+     <div className="ib-stat-row"><span><strong>{euros(selectedSupply.unitCents*supplyQuantity)}</strong> total</span><span><Clock3 size={14}/> {selectedSupply.deliveryHours} game hours delivery</span><span>Perishable life {Math.round(selectedSupply.expiryHours/24)} game days</span></div>
+     <button className="ib-primary ib-full" disabled={!Number.isInteger(supplyQuantity)||supplyQuantity<1||supplyQuantity>200||cash*100<selectedSupply.unitCents*supplyQuantity} onClick={()=>{const msg=onOrderSupplies(site.id,supplyCode,supplyQuantity);setStatus(msg??'Order placed. Items will arrive on the game clock.');}}><ShoppingCart size={15}/> Place supply order</button>
+    </div>
+    <div className="ib-heading"><div><h2>Deliveries</h2><small>Only completed deliveries enter your physical inventory</small></div></div>
+    {(site.supplyOrders??[]).length?<div className="ib-cards">{[...(site.supplyOrders??[])].reverse().slice(0,30).map(order=><div className="ib-history-row" key={order.id}><span>{order.status==='delivered'?<CheckCircle2 size={16}/>:<Clock3 size={16}/>}</span><div><strong>{supplies.find(item=>item.code===order.code)?.name??order.code} × {order.quantity}</strong><small>{order.status==='delivered'?'Delivered':'In transit'} · Arrival game hour {order.deliveryHour}</small></div><strong>{euros(order.quantity*order.unitCents)}</strong></div>)}</div>:<p className="ib-muted">No supply orders yet.</p>}
+    <p className="ib-note">Kitchen items require a constructed kitchen, bar items a bar, and housekeeping goods a storage room. Storage capacity is limited. Food expires. Guest consumption, recipes and restaurant sales will be added in a later operating stage.</p>
+   </div>}
   </div>}
   {company&&tab==='crew'&&<div className="ib-section">
    <div className="ib-heading"><div><h2>Internal construction team</h2><small>Hire workers to build your own developments</small></div></div>
