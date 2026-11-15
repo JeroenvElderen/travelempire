@@ -29,6 +29,12 @@ function roadEnds(road:RoadFeature):[Point,Point]|null{
  if(points.length<2)return null;
  return [points[0] as Point,points[points.length-1] as Point];
 }
+function roadNodeKeys(road:RoadFeature):[string,string]|null{
+ const from=road.properties?.fromNode,to=road.properties?.toNode;
+ if(typeof from==='string'&&typeof to==='string'&&from&&to)return [from,to];
+ const ends=roadEnds(road);
+ return ends?[key(ends[0]),key(ends[1])]:null;
+}
 function validRoad(road:RoadFeature):boolean{
  const ends=roadEnds(road);
  return !!ends&&!road.properties?.tunnel&&meters(ends[0],ends[1])>16&&meters(ends[0],ends[1])<1200;
@@ -92,7 +98,8 @@ export function dispatchResponders(
 ):WorldResponder[]{
  const ends=roadEnds(road);
  if(!ends)return [];
- const targetKeys=ends.map(key);
+ const targetKeys=roadNodeKeys(road);
+ if(!targetKeys)return [];
  const ordered=roads.filter(validRoad)
   .map(r=>({r,d:Math.min(...(roadEnds(r)??ends).map(p=>meters(p,ends[0])))}))
   .filter(item=>item.d>=120&&item.d<=2600)
@@ -103,12 +110,12 @@ export function dispatchResponders(
   let routeAttempts=0;
   let best:{path:Point[];distance:number}|null=null;
   for(const candidate of ordered){
-   const fromEnds=roadEnds(candidate.r);
-   if(!fromEnds)continue;
-   for(const origin of fromEnds){
+   const fromKeys=roadNodeKeys(candidate.r);
+   if(!fromKeys)continue;
+   for(const from of fromKeys){
     if(routeAttempts>=6)break;
-    const from=key(origin);
-    if(!graph.nodes.has(from))continue;
+    const origin=graph.nodes.get(from);
+    if(!origin)continue;
     for(const target of targetKeys){
      if(routeAttempts>=6)break;
      if(!graph.nodes.has(target))continue;
@@ -151,8 +158,8 @@ export function advanceWorldState(state:WorldState|undefined,now:number,
  if(!graph||discovered.size<5||roads.length<5)return {lastBucket:current.lastBucket,incidents};
  const candidates=roads.filter(road=>{
   if(!validRoad(road))return false;
-  const ends=roadEnds(road)!;
-  return graph.nodes.has(key(ends[0]))&&graph.nodes.has(key(ends[1]));
+  const nodes=roadNodeKeys(road);
+  return !!nodes&&graph.nodes.has(nodes[0])&&graph.nodes.has(nodes[1]);
  });
  if(candidates.length<5)return {lastBucket:current.lastBucket,incidents};
  const next:WorldState={lastBucket:bucket,incidents};
@@ -174,19 +181,21 @@ export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGrap
   for(let i=0;i<roads.length&&output.length<max;i+=stride){
    const road=roads[i],ends=roadEnds(road),id=String(road.id??road.properties?.roadId??i);
    if(!ends||!validRoad(road)||!discovered.has(id)||hash(id)%100>=density*0.58)continue;
-   const ak=key(ends[0]),bk=key(ends[1]);
+   const nodes=roadNodeKeys(road);
+   if(!nodes)continue;
+   const [ak,bk]=nodes;
    const fwd=(graph.edges.get(ak)??[]).some(e=>e.to===bk&&e.id===id&&!e.taxiOnly);
    const rev=(graph.edges.get(bk)??[]).some(e=>e.to===ak&&e.id===id&&!e.taxiOnly);
    if(!fwd&&!rev)continue;
    const reverse=!fwd||rev&&hash(id+'reverse')%2===0;
    const path:Point[]=reverse?[ends[1],ends[0]]:[ends[0],ends[1]];
-   let previous=path[0],cursor=path[1];
+   let previousKey=reverse?bk:ak,cursorKey=reverse?ak:bk;
    for(let j=0;j<3;j++){
-    const options=(graph.edges.get(key(cursor))??[]).filter(e=>
-     discovered.has(e.id)&&!e.taxiOnly&&e.to!==key(previous)&&graph.nodes.has(e.to)&&e.id!==id);
+    const options=(graph.edges.get(cursorKey)??[]).filter(e=>
+     discovered.has(e.id)&&!e.taxiOnly&&e.to!==previousKey&&graph.nodes.has(e.to)&&e.id!==id);
     if(!options.length)break;
     const chosen=options[hash(id+':'+j)%options.length];
-    previous=cursor;cursor=graph.nodes.get(chosen.to)!;path.push(cursor);
+    previousKey=cursorKey;cursorKey=chosen.to;path.push(graph.nodes.get(cursorKey)!);
    }
    const length=path.slice(1).reduce((sum,p,j)=>sum+meters(path[j],p),0);
    if(length<20)continue;
