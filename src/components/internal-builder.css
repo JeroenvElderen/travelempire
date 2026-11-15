@@ -246,3 +246,10 @@
 @media(max-width:680px){
  .nav-v216 .hotel-land-pick{top:calc(6px + env(safe-area-inset-top));}
 }
+
+.internal-builder .ib-heading-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:680px){
+ .internal-builder .ib-heading-actions{justify-content:flex-start}
+ .internal-builder .ib-section>.ib-heading:first-child{align-items:flex-start;flex-direction:column}
+ .internal-builder .ib-heading-actions button{min-height:38px}
+}
