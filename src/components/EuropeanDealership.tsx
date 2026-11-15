@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {CarFront,ChevronDown,ChevronRight} from 'lucide-react';
-import {BRANDS,EUROPEAN_MODELS,configuredOffer,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
+import {EUROPEAN_MODELS,configuredOffer,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
@@ -8,7 +8,7 @@ import './EuropeanDealership.css';
 
 type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
 export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
- const [brand,setBrand]=useState(initialBrand);
+ const brand=initialBrand;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
  const [selected,setSelected]=useState(initialModel??'Toyota Corolla Saloon');
  const model:VehicleModel=models.find(m=>m.brand+' '+m.name===selected)??models[0];
@@ -19,10 +19,8 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const [wheelId,setWheelId]=useState('');
  const [selectedExtras,setSelectedExtras]=useState<string[]>([]);
  const [variantId,setVariantId]=useState('');
- const [search,setSearch]=useState('');
  const summaryRef=useRef<HTMLElement>(null);
  useEffect(()=>{if(reviewing)summaryRef.current?.scrollIntoView({behavior:'smooth',block:'start'});},[reviewing]);
- const filteredBrands=BRANDS.filter(b=>b.toLowerCase().includes(search.toLowerCase()));
  const choices=trimChoices(model,year);
  const currentTrim=choices.includes(trim)?trim:choices[0];
  const variants=verifiedVariants(model,year);
@@ -59,8 +57,6 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
    {!reviewing&&<div className="eu-dealer-controls">
     <section className="eu-config-group">
       <div className="eu-config-group-heading"><span className="eu-step-number">01</span><h3>Vehicle</h3></div>
-      <label className="eu-manufacturer-search">Manufacturer<input type="search" placeholder="Find a manufacturer…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-      <div className="eu-brand-grid" aria-label="Manufacturers">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} aria-pressed={brand===b} onClick={()=>{setBrand(b);setSelected('');setYear(EUROPEAN_MODELS.find(m=>m.brand===b)?.years[0]??2026);setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
       <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setYear(models.find(m=>m.name===e.target.value)?.years[0]??2026);setSelectedExtras([]);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}>{model.years.map(y=><option key={y} value={y}>{y}</option>)}</select></label></div>
       <label>Trim<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('');setSelectedExtras([])}}>{choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}</select></label>
       {availableVariants.length>0&&<label>Engine &amp; transmission<select value={activeVariant?.id??''} onChange={e=>setVariantId(e.target.value)}>{availableVariants.map(v=><option key={v.id} value={v.id}>{v.engine} · {v.transmission}</option>)}</select></label>}
