@@ -19,6 +19,7 @@ import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
+import {worldTaxiSpeedFactor} from './simulation/livingWorld';
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, Hotel, X, PanelLeftClose, PanelLeftOpen, Warehouse, SlidersHorizontal, CircleDollarSign, CalendarClock, Layers3, ScrollText, Plane, Truck, BusFront, Car, Anchor, Zap, ChartNoAxesCombined, HardHat, Palmtree, BriefcaseBusiness, GraduationCap } from "lucide-react";
 import WorldMap from "./components/WorldMap";
@@ -1573,7 +1574,8 @@ export default function App(){
      }
      routingMs+=performance.now()-routeStarted;
      const integratorStarted=performance.now();
-     const next=tickTaxi(working,graph,elapsedSeconds,discovered);
+     const trafficSeconds=elapsedSeconds*((working.kind??'taxi')==='taxi'?worldTaxiSpeedFactor(working.position,gameNow):1);
+     const next=tickTaxi(working,graph,trafficSeconds,discovered);
      integratorMs+=performance.now()-integratorStarted;
      // The movement integrator reports the exact distance travelled this tick,
      // including junction crossings and the final step before route reset.
