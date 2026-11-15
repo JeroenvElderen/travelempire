@@ -195,7 +195,7 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
   const completedJobs=site.projects.filter(p=>p.status==='active'&&p.finishHour<=hour);
   if(!completedJobs.length)continue;
   const latest=completedJobs[completedJobs.length-1];
-  sites[id]={...site,built:latest.target,projects:site.projects.map(p=>p.status==='active'&&p.finishHour<=hour?{...p,status:'complete'}:p)};
+  sites[id]={...site,built:latest.target,projects:site.projects.map(p=>p.status==='active'&&p.finishHour<=hour?{...p,status:'complete' as const}:p)};
   completed.push(site.name);
   changed=true;
  }
