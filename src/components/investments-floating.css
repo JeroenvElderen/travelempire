@@ -426,3 +426,59 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.investments-overlay-mode .investment-v2 *{transition:none!important;animation:none!important}
 }
+
+/* Hotel management appears only for controlling hotel shareholders. */
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-manager{
+ display:flex;flex-direction:column;gap:10px;
+ margin:0;padding:11px;
+ border:1px solid rgba(197,160,242,.32);border-radius:13px;
+ background:rgba(29,39,68,.78);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-heading{
+ display:flex;align-items:center;gap:7px;min-width:0;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-heading svg{
+ color:var(--investment-accent);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-heading strong{
+ color:var(--investment-foreground);font-size:12px;flex:1;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-heading span{
+ color:var(--investment-accent);font-size:10px;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-manager p,
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-hint{
+ color:var(--investment-muted);font-size:10px;line-height:1.5;
+ margin:0;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-controls{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-controls label{
+ display:flex;flex-direction:column;gap:6px;min-width:0;
+ font-size:10px;color:var(--investment-muted);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-controls select{
+ width:100%;min-width:0;min-height:39px;padding:9px 10px;
+ border:1px solid var(--investment-line);border-radius:10px;
+ background:rgba(13,24,45,.83);color:var(--investment-foreground);
+ font-size:12px;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-profit{
+ display:flex;align-items:center;justify-content:space-between;gap:8px;
+ padding-top:9px;border-top:1px solid var(--investment-line);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-profit span{
+ color:var(--investment-muted);font-size:11px;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-profit strong{
+ color:var(--investment-accent);font-size:13px;font-variant-numeric:tabular-nums;
+}
+@media(max-width:600px){
+ .nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-controls{
+  grid-template-columns:minmax(0,1fr);
+ }
+ .nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-controls select{
+  font-size:16px;
+ }
+}
