@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -9,19 +9,38 @@ import {
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
  roomIssues,furnitureSize,supplies,supplyStock,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS,LAND_PRICE_CENTS
 } from '../internalConstruction';
+import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
+ type HotelRole} from '../hotelOperations';
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
  onSelectLand:()=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
  onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
+ onHotelSetting:(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>string|null;
+ onHotelOpening:(siteId:string,open:boolean)=>string|null;
 };
-type Tab='sites'|'blueprint'|'projects'|'supplies'|'crew';
+type Tab='sites'|'blueprint'|'projects'|'operations'|'supplies'|'crew';
 const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'#65516f',restaurant:'#695d81',bar:'#66486b',lobby:'#3f6672',storage:'#4c5d65',staff:'#4d5a79',corridor:'#414c64',office:'#445a7a',meeting:'#535079'};
 const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',kitchen:'Kitchen',restaurant:'Restaurant',bar:'Bar',lobby:'Lobby',storage:'Storage',staff:'Staff room',corridor:'Corridor',office:'Office',meeting:'Meeting room'};
 type Cell={x:number;y:number;fx:number;fy:number};
 const id=()=>crypto.randomUUID();
 const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker,onDismissWorker}:Props){
+function PriceInput({title,cents,minimum,maximum,onSave}:{
+ title:string;cents:number;minimum:number;maximum:number;onSave:(cents:number)=>void;
+}){
+ const [draft,setDraft]=useState(String(cents/100));
+ useEffect(()=>setDraft(String(cents/100)),[cents]);
+ const commit=()=>{
+  const value=Number(draft);
+  if(!Number.isFinite(value)||value<minimum||value>maximum){setDraft(String(cents/100));return;}
+  const next=Math.round(value*100);
+  if(next!==cents)onSave(next);
+ };
+ return <label className="ib-hotel-price">
+  <span>{title}</span><div><span>€</span><input aria-label={title+' price in euro'} type="number" inputMode="decimal" min={minimum} max={maximum} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></div>
+ </label>;
+}
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -44,6 +63,24 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const quote=useMemo(()=>{if(!site||active)return null;try{return constructionQuote(site,method,state.workers);}catch{return null;}},[site,method,state.workers,active]);
  const selectedFurniture=furniture.find(f=>f.code===itemCode)!;
  const selectedSupply=supplies.find(f=>f.code===supplyCode)!;
+ const operations=site?.operations??defaultHotelOperations(gameHour);
+ const currentlyOpen=hotelActiveAt(site?.operations,gameHour);
+ const preparedRooms=site&&site.kind!=='headquarters'?roomInventory(site,gameHour):null;
+ const openProblems=site&&site.kind!=='headquarters'?openingIssues(site,gameHour):[];
+ const operatedTotals=operations.totals;
+ const operatedGross=operatedTotals.roomCents+operatedTotals.foodCents+operatedTotals.barCents;
+ const operatedExpenses=operatedTotals.wagesCents+operatedTotals.utilitiesCents;
+ const applyHotelSetting=(key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>{
+  if(!site)return;
+  const problem=onHotelSetting(site.id,key,value);
+  setStatus(problem??'Hotel operating settings saved.');
+ };
+ const applyHotelStatus=()=>{
+  if(!site)return;
+  const problem=onHotelOpening(site.id,!currentlyOpen);
+  setStatus(problem??(!currentlyOpen?'Hotel opened. Guest bookings begin on the next check-in cycle.':'Hotel closed to new guests. Your passive holdings resume their dividend model.'));
+ };
+
  const available=Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&ownership(h)>=0.5&&!sites.some(site=>site.sourceHoldingId===h.id));
  useEffect(()=>{if(!site&&sites.length&&selectedId===null){setSelectedId(sites[0].id);}},[site,sites.length,selectedId]);
  const choose=(idValue:string)=>{history.current={siteId:idValue,undo:[],redo:[]};setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');};
@@ -150,7 +187,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  return <section className="internal-builder">
   <header className="ib-header"><span className="ib-header-icon"><Building2 size={22}/></span><div><h1>Building Development</h1><p>Your hotels, headquarters &amp; construction</p></div></header>
   <nav className="ib-tabs" aria-label="Hotel development sections">
-   {([['sites','Properties',Building2],['blueprint','2D builder',Grid2X2],['projects','Construction',HardHat],['supplies','Supplies',Package],['crew','My crew',Users]] as const).map(([idValue,label,Icon])=><button type="button" key={idValue} className={tab===idValue?'selected':''} aria-current={tab===idValue?'page':undefined} onClick={()=>{setTab(idValue);setStatus('');setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
+   {([['sites','Properties',Building2],['blueprint','2D builder',Grid2X2],['projects','Construction',HardHat],['operations','Operations',UserCheck],['supplies','Supplies',Package],['crew','My crew',Users]] as const).map(([idValue,label,Icon])=><button type="button" key={idValue} className={tab===idValue?'selected':''} aria-current={tab===idValue?'page':undefined} onClick={()=>{setTab(idValue);setStatus('');setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
   </nav>
   {(status||error)&&<div className="ib-feedback" role="status"><AlertCircle size={15}/>{error||status}</div>}
   {!company&&<div className="ib-empty"><Landmark size={22}/><strong>Create a company to develop hotels.</strong><p>Your building projects use the company treasury and game clock.</p></div>}
@@ -205,6 +242,80 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    </div>}
    {!site&&<div className="ib-empty"><Building2 size={23}/><strong>Choose a property to manage construction</strong><button onClick={()=>setTab('sites')} className="ib-secondary">My properties</button></div>}
    {site&&site.projects.length>0&&<><div className="ib-heading"><h2>Project history</h2></div><div className="ib-cards">{[...site.projects].reverse().slice(0,12).map(p=><div key={p.id} className="ib-history-row"><span>{p.status==='complete'?<CheckCircle2 size={17}/>:<Clock3 size={17}/>}</span><div><strong>{p.method==='own'?'Own construction crew':'Contracted construction'}</strong><small>{p.status==='complete'?'Completed':'In progress'} · Game hour {p.startHour}</small></div><strong>{euros(p.budgetCents)}</strong></div>)}</div></>}
+  </div>}
+  {company&&tab==='operations'&&<div className="ib-section ib-hotel-operations">
+   <div className="ib-heading"><div><h2>Hotel operations</h2><small>Live bookings, staff, guest services and operating profit</small></div></div>
+   {!site||site.kind==='headquarters'?<div className="ib-empty"><BedDouble size={22}/><strong>Choose a hotel to operate</strong><p>Buy a development plot or take control of an existing hotel, then construct guest rooms and a reception.</p><button className="ib-secondary" onClick={()=>setTab('sites')}>My buildings</button></div>:
+   <>
+    <div className="ib-hotel-head">
+     <div><span className="ib-mini-label">OPERATED PROPERTY</span><h2>{site.name}</h2><small>{site.kind==='existing'?'Existing hotel · Managed operating share':'New hotel · Owned business'}</small></div>
+     <span className={currentlyOpen?'ib-hotel-open':'ib-hotel-closed'}>{currentlyOpen?'Open for guests':'Not operating'}</span>
+    </div>
+    <div className="ib-hotel-kpis">
+     <div><BedDouble size={16}/><small>Ready rooms</small><strong>{preparedRooms?.readyRooms.length??0}</strong></div>
+     <div><UserCheck size={16}/><small>Guests staying</small><strong>{operations.guests.length}</strong></div>
+     <div><TrendingUp size={16}/><small>Room occupancy</small><strong>{preparedRooms?.readyRooms.length?Math.round(100*operations.guests.length/preparedRooms.readyRooms.length):0}%</strong></div>
+     <div><CalendarClock size={16}/><small>Total check-ins</small><strong>{operatedTotals.guests}</strong></div>
+    </div>
+    {!currentlyOpen&&<div className="ib-hotel-checklist"><strong><ShieldCheck size={16}/> Opening checklist</strong>
+     {openProblems.length?openProblems.map((issue,i)=><div className="ib-hotel-issue" key={i}><AlertCircle size={14}/>{issue}</div>):<p><CheckCircle2 size={15}/> Requirements met. Your hotel is ready to receive guests.</p>}
+    </div>}
+    <div className="ib-hotel-open-actions">
+     <button type="button" className={currentlyOpen?'ib-secondary':'ib-primary'} disabled={!currentlyOpen&&openProblems.length>0} onClick={applyHotelStatus}>{currentlyOpen?'Close hotel to new bookings':'Open hotel for guests'}</button>
+     <span>Bookings settle on the simulated game clock · Check-in 14:00 · Checkout 11:00</span>
+    </div>
+    <div className="ib-hotel-section-heading"><h3>Room pricing &amp; menus</h3><small>Charge guests for each occupied night and completed service</small></div>
+    <div className="ib-hotel-price-grid">
+     {([
+      ['rateCents','Room / night',operations.rateCents,50,500],
+      ['breakfastPriceCents','Breakfast',operations.breakfastPriceCents,3,80],
+      ['dinnerPriceCents','Dinner',operations.dinnerPriceCents,3,80],
+      ['drinkPriceCents','Bar drink',operations.drinkPriceCents,3,80]
+     ] as const).map(([key,label,price,min,max])=><PriceInput key={site.id+key} title={label} cents={price} minimum={min} maximum={max} onSave={v=>applyHotelSetting(key,v)}/>)}
+    </div>
+    <div className="ib-hotel-section-heading"><h3>Employees</h3><small>Wages are charged when their department is on duty</small></div>
+    <div className="ib-hotel-staff-grid">
+     {hotelRoles.map(role=><div className="ib-hotel-staff" key={role.id}>
+      <div><strong>{role.label}</strong><small>{role.shift} · {exactEuro(role.wageCents)}/hour per worker</small></div>
+      <div className="ib-hotel-counter">
+       <button type="button" aria-label={'Reduce '+role.label} disabled={!operations.staff[role.id]||(currentlyOpen&&(role.id==='housekeeping'||role.id==='reception')&&operations.staff[role.id]===1)} onClick={()=>applyHotelSetting(role.id,operations.staff[role.id]-1)}>−</button>
+       <strong>{operations.staff[role.id]}</strong>
+       <button type="button" aria-label={'Hire '+role.label} disabled={operations.staff[role.id]>=15||cash*100<HOTEL_STAFF_HIRING_CENTS} onClick={()=>applyHotelSetting(role.id,operations.staff[role.id]+1)}>+</button>
+      </div>
+     </div>)}
+    </div>
+    <p className="ib-note">Each hire costs {euros(HOTEL_STAFF_HIRING_CENTS)} once. Reception and housekeeping are mandatory to open. Kitchen and bar services only sell when equipped, staffed and stocked.</p>
+    <div className="ib-hotel-section-heading"><h3>Operating performance</h3><small>Lifetime totals since opening</small></div>
+    <div className="ib-hotel-income">
+     <div><span>Room revenue</span><strong>{euros(operatedTotals.roomCents)}</strong></div>
+     <div><span>Food revenue · {operatedTotals.breakfasts+operatedTotals.dinners} meals</span><strong>{euros(operatedTotals.foodCents)}</strong></div>
+     <div><span>Bar revenue · {operatedTotals.drinks} drinks</span><strong>{euros(operatedTotals.barCents)}</strong></div>
+     <div><span>Wages &amp; utilities</span><strong>−{euros(operatedExpenses)}</strong></div>
+     <div className="ib-hotel-income-total"><span>Operating result</span><strong className={operatedGross-operatedExpenses>=0?'ib-positive':'ib-negative'}>{euros(operatedGross-operatedExpenses)}</strong></div>
+    </div>
+    <p className="ib-note">Stock purchases, staff recruitment and construction are paid separately when ordered. For an acquired hotel, company cash receives only your ownership share of its operating result. Passive dividends stop during operated hours.</p>
+    {operations.recentDays.length>0&&<div className="ib-hotel-chart">
+     <strong>Daily operating result · recent days</strong>
+     {operations.recentDays.slice(-7).map(day=>{
+      const net=day.roomCents+day.foodCents+day.barCents-day.wagesCents-day.utilitiesCents;
+      const max=Math.max(1,...operations.recentDays.slice(-7).map(d=>Math.abs(d.roomCents+d.foodCents+d.barCents-d.wagesCents-d.utilitiesCents)));
+      return <div className="ib-hotel-day" key={day.day}><small>{new Date(day.day*86400000).toLocaleDateString('en-IE',{day:'2-digit',month:'short',timeZone:'UTC'})}</small><div className="ib-hotel-bar-track"><div className={net>=0?'ib-hotel-bar-positive':'ib-hotel-bar-negative'} style={{width:Math.max(1,100*Math.abs(net)/max)+'%'}}/></div><strong>{euros(net)}</strong></div>;
+     })}
+    </div>}
+    <div className="ib-hotel-section-heading"><h3>Rooms &amp; housekeeping</h3><small>Guest stays occupy rooms until checkout; cleaners reset dirty rooms</small></div>
+    <div className="ib-room-list">
+     {(preparedRooms?.readyRooms??[]).map(({room})=>{
+      const guest=operations.guests.find(g=>g.roomId===room.id);
+      const dirty=operations.dirtyRoomIds.includes(room.id);
+      return <div key={room.id} className="ib-room"><span className="ib-room-dot" style={{background:guest?'#9372cf':dirty?'#dcab72':'#4a9c80'}}/><div><strong>{room.name}</strong><small>{guest?'Guest staying · checkout '+new Date(guest.checkOutHour*3600000).toLocaleString('en-IE',{weekday:'short',hour:'2-digit',hour12:false,timeZone:'UTC'}):dirty?'Needs housekeeping':'Ready for next guest'}</small></div><span className={guest?'ib-hotel-tag occupied':dirty?'ib-hotel-tag dirty':'ib-hotel-tag'}>{guest?'Occupied':dirty?'Dirty':'Ready'}</span></div>;
+     })}
+     {(preparedRooms?.readyRooms.length??0)===0&&<p className="ib-muted">Construct and furnish rooms and bathrooms to unlock guest bookings.</p>}
+    </div>
+    <div className="ib-hotel-service-summary">
+     <div><UtensilsCrossed size={17}/><strong>Restaurant</strong><small>{preparedRooms?.hasKitchen&&preparedRooms.hasRestaurant?'Equipped':'Kitchen + restaurant required'} · {operatedTotals.unserved} unavailable orders</small></div>
+     <div><Wine size={17}/><strong>Bar</strong><small>{preparedRooms?.hasBar?'Equipped':'Bar counter required'} · {operatedTotals.drinks} drinks sold</small></div>
+    </div>
+   </>}
   </div>}
   {company&&tab==='supplies'&&<div className="ib-section">
    <div className="ib-heading"><div><h2>Kitchen, bar &amp; housekeeping</h2><small>Order products, receive deliveries and maintain separate building stock</small></div></div>
