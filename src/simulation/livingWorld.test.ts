@@ -9,7 +9,7 @@ const roads:RoadFeature[]=points.slice(1).map((p,i)=>({
  type:'Feature',id:'road-'+i,properties:{roadId:'road-'+i},
  geometry:{type:'LineString',coordinates:[points[i],p]},
 }));
-const edges=new Map<string,RoadGraph['edges'] extends Map<string,infer E>?E:never>();
+const edges:RoadGraph['edges']=new Map();
 for(let i=0;i<points.length;i++){
  const e:Array<{to:string;id:string;meters:number;speedKph:number}>=[];
  if(i>0)e.push({to:key(points[i-1]),id:'road-'+(i-1),meters:180,speedKph:40});
@@ -17,7 +17,7 @@ for(let i=0;i<points.length;i++){
  edges.set(key(points[i]),e);
 }
 const graph:RoadGraph={
- nodes:new Map(points.map(p=>[key(p),p])),
+ nodes:new Map<string,Point>(points.map(p=>[key(p),p] as [string,Point])),
  edges,
  nodeKeys:points.map(key),
 };
