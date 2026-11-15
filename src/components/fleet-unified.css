@@ -1,0 +1,347 @@
+/* TravelEmpire Fleet — single visual system, shared by every Fleet tab.
+   Loaded after legacy styles. Keep palette restrained: navy glass, lavender,
+   off-white. Purple is the sole accent for active, positive and progress states. */
+.nav-v216.fleet-overlay-mode .fleet-v2{
+ --fleet-accent:#c5a0f2;
+ --fleet-accent-strong:#b683eb;
+ --fleet-accent-soft:rgba(173,121,230,.22);
+ --fleet-fg:#f5f2ff;
+ --fleet-muted:#c5cadb;
+ --fleet-subtle:#aab3c9;
+ --fleet-line:rgba(202,194,235,.22);
+ --fleet-surface:rgba(22,32,56,.68);
+ --fleet-card:rgba(24,35,61,.79);
+ --fleet-card-hover:rgba(34,45,76,.82);
+ --fleet-radius:16px;
+ --fleet-gap:12px;
+ --fleet-pad:14px;
+ color:var(--fleet-fg);
+ font-size:13px;
+ line-height:1.45;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 *,
+.nav-v216.fleet-overlay-mode .fleet-v2 *::before,
+.nav-v216.fleet-overlay-mode .fleet-v2 *::after{box-sizing:border-box}
+.nav-v216.fleet-overlay-mode .fleet-map-overlay{
+ background:linear-gradient(145deg,rgba(12,22,45,.44),rgba(15,24,45,.50))!important;
+ border-color:rgba(202,184,237,.27)!important;
+ box-shadow:0 14px 38px rgba(3,9,23,.19),inset 0 1px rgba(255,255,255,.10)!important;
+ -webkit-backdrop-filter:blur(17px) saturate(113%)!important;
+ backdrop-filter:blur(17px) saturate(113%)!important;
+ scrollbar-width:thin;
+ scrollbar-color:rgba(197,160,242,.4) transparent;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(h1,h2,h3,strong){letter-spacing:-.018em}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(p,small){line-height:1.4}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(button,input,select){font:inherit}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(button,summary):focus-visible{
+ outline:2px solid var(--fleet-accent);outline-offset:2px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(input,select):focus-visible{
+ outline:2px solid var(--fleet-accent);outline-offset:2px;
+}
+/* Single surface, border, and shadow treatment across all cards. */
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-kpis article,.fleet-showroom-health,.fleet-showroom-profit,
+ .fleet-showroom-list,.fleet-showroom-vehicle,.fleet-vehicle-mini,
+ .fleet-compact-card,.fleet-driver-mini,.fleet-drivers-hire-form,
+ .fleet-analytics-main-metrics article,.fleet-analytics-kpis article,
+ .fleet-analytics-exploration article,.fleet-analytics-utilization,
+ .fleet-analytics-vehicle,.fleet-analytics-advanced,
+ .fleet-service-summary article,.fleet-service-item,.fleet-empty-state,
+ .fleet-offer,.fleet-offers,.fleet-stat-grid article,.fleet-stat-table,
+ .fleet-deliveries
+ ){
+ background:var(--fleet-card)!important;
+ border:1px solid var(--fleet-line)!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.095),0 5px 16px rgba(4,9,27,.12)!important;
+ -webkit-backdrop-filter:blur(12px) saturate(105%);
+ backdrop-filter:blur(12px) saturate(105%);
+ border-radius:var(--fleet-radius)!important;
+ color:var(--fleet-fg);
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-vehicle,.fleet-vehicle-mini,.fleet-driver-mini,
+ .fleet-analytics-vehicle,.fleet-service-item
+ ){transition:background .16s ease,border-color .16s ease}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-vehicle,.fleet-analytics-vehicle
+ ):hover{background:var(--fleet-card-hover)!important;border-color:rgba(197,160,242,.46)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-driver-mini-avatar,.fleet-vehicle-mini-art,
+ .fleet-showroom-icon,.fleet-showroom-vehicle-icon,
+ .fleet-analytics-rank
+ ){
+ background:var(--fleet-accent-soft)!important;
+ border-color:rgba(197,160,242,.35)!important;
+ color:var(--fleet-accent)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-kpis svg,.fleet-showroom-health-bars svg,
+ .fleet-showroom-profit>svg,.fleet-showroom-vehicle-stats svg,
+ .fleet-vehicle-mini-stats svg,.fleet-driver-mini-avatar svg,
+ .fleet-analytics-metric-label svg,.fleet-analytics-kpis svg,
+ .fleet-analytics-exploration svg,.fleet-analytics-rank,
+ .fleet-driver-mini-level,.fleet-analytics-vehicle>svg
+ ){color:var(--fleet-accent)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-profit strong,.fleet-showroom-vehicle-revenue,
+ .fleet-vehicle-mini-footer>div strong,.fleet-driver-mini-bottom>div strong,
+ .fleet-driver-mini-identity>small,.fleet-analytics-main-metrics .positive,
+ .fleet-analytics-vehicle-money strong,.fleet-analytics-utilization-note,
+ .fleet-analytics-main-metrics .negative,.fleet-analytics-vehicle-money .negative,
+ .fleet-analytics-kpis strong.warning,.fleet-vehicle-mini-status,
+ .fleet-vehicle-mini-status.is-paused,.fleet-vehicle-mini-status.is-warning
+ ){color:var(--fleet-accent)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-vehicle-mini-status i,.fleet-driver-mini-identity>small i,
+ .fleet-showroom-vehicle-body i
+ ){background:var(--fleet-accent)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-kpis article:nth-child(2) svg,
+ .fleet-showroom-kpis article:nth-child(3) svg,
+ .fleet-showroom-kpis article:nth-child(4) svg
+ ){color:var(--fleet-accent)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-showroom-ring,.fleet-mobile-health-ring
+ ){
+ background:radial-gradient(closest-side,#1b2949 76%,transparent 79%),
+ conic-gradient(var(--fleet-accent) var(--fleet-health),rgba(197,160,242,.17) 0)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 progress{
+ appearance:none;-webkit-appearance:none;border:0;height:6px;
+ border-radius:99px;background:rgba(213,210,239,.16);overflow:hidden;
+ color:var(--fleet-accent);accent-color:var(--fleet-accent)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 progress::-webkit-progress-bar{
+ background:rgba(213,210,239,.16);border-radius:99px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 progress::-webkit-progress-value{
+ background:var(--fleet-accent);border-radius:99px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 progress::-moz-progress-bar{
+ background:var(--fleet-accent);border-radius:99px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-category-track span,.fleet-condition-bar i,
+ .fleet-vehicle-mini-stats progress,.fleet-health-bars progress
+ ){accent-color:var(--fleet-accent)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-driver-mini-progression progress,.fleet-analytics-utilization progress
+ ){accent-color:var(--fleet-accent)!important}
+/* Shared interactive style, consistent radii, sizes and focus */
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-vehicle-mini-footer>button,.fleet-drivers-hire-toggle,
+ .fleet-driver-mini-bottom>button,.fleet-analytics-sort button.active,
+ .fleet-showroom-nav button.active,.fleet-filter-pills button.active,
+ .fleet-drivers-filters button.active,.fleet-compact-service,
+ .fleet-profile-actions button,.fleet-back-button,
+ .fleet-service-buttons button:not(:disabled),.fleet-hire button:not(:disabled)
+ ){
+ background:linear-gradient(125deg,rgba(123,81,169,.71),rgba(102,71,149,.77))!important;
+ color:var(--fleet-fg)!important;
+ border:1px solid rgba(197,160,242,.47)!important;
+ box-shadow:none!important;
+ border-radius:12px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-analytics-sort button,.fleet-filter-pills button,
+ .fleet-drivers-filters button,.fleet-showroom-nav button,
+ .fleet-showroom-list header button,.fleet-vehicle-mini-open,
+ .fleet-analytics-show-all,.fleet-analytics-advanced summary,
+ .fleet-driver-mini-dismiss,.fleet-drivers-hire-form button
+ ){border-radius:12px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-analytics-sort,.fleet-showroom-nav,.fleet-primary-tabs,
+ .fleet-compact-details,.fleet-driver-mini-bonuses span,
+ .fleet-driver-mini-level,.fleet-filter-pills button,
+ .fleet-drivers-filters button,.fleet-showroom-list header button,
+ .fleet-vehicle-mini-open,.fleet-count-label
+ ){border-color:var(--fleet-line)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-filter-pills button,.fleet-drivers-filters button,
+ .fleet-analytics-sort button,.fleet-analytics-show-all,
+ .fleet-showroom-nav,.fleet-showroom-list header button,
+ .fleet-vehicle-mini-open,.fleet-compact-details
+ ){
+ background:var(--fleet-surface)!important;
+ color:var(--fleet-muted)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-filter-pills button.active,.fleet-drivers-filters button.active,
+ .fleet-analytics-sort button.active,.fleet-showroom-nav button.active
+ ){
+ background:var(--fleet-accent-soft)!important;
+ color:var(--fleet-fg)!important;
+ border-color:rgba(197,160,242,.6)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(input,select,textarea){
+ min-height:42px;background:rgba(14,24,46,.80)!important;
+ border:1px solid var(--fleet-line)!important;border-radius:12px!important;
+ color:var(--fleet-fg)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(input,textarea)::placeholder{color:var(--fleet-subtle)!important}
+/* Stable 8/12/16 rhythm. No oversized gaps or double frames. */
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom{
+ padding:var(--fleet-pad)!important;margin:0 0 var(--fleet-gap)!important;
+ border:none!important;box-shadow:none!important;background:transparent!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-head{
+ gap:12px;margin:0 36px var(--fleet-gap) 0!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-icon{
+ width:44px;height:44px;flex-basis:44px;border-radius:14px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-head h2{font-size:21px;margin:0}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-head p{
+ margin:2px 0 0!important;font-size:11px;color:var(--fleet-muted)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-nav{
+ margin:0 0 var(--fleet-gap)!important;padding:4px!important;gap:4px!important;
+ border-radius:14px!important;min-height:45px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-nav button{
+ height:36px;min-height:36px;border-radius:10px!important;padding:0 5px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-nav button.active{
+ flex:1.7;box-shadow:none!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-kpis{
+ gap:8px!important;margin:0 0 var(--fleet-gap)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-kpis article{
+ gap:4px!important;min-height:77px;padding:8px 3px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-kpis strong{font-size:19px}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-health{
+ gap:12px!important;padding:12px!important;margin:0 0 var(--fleet-gap)!important;
+ border-radius:var(--fleet-radius)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-health-bars{gap:10px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-health-bars>div{row-gap:3px}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-ring{width:104px;height:104px}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-profit{
+ padding:13px!important;margin:0 0 var(--fleet-gap)!important;gap:10px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-profit strong{font-size:23px}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-list{
+ padding:12px!important;margin:0!important;gap:10px;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-list header{margin:0 0 10px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-vehicle{
+ padding:10px!important;margin:0 0 8px!important;min-height:70px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-vehicle:last-child{margin-bottom:0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-section-heading,.fleet-drivers-heading,.fleet-analytics-heading
+ ){margin:0 0 12px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-section-heading h2,.fleet-drivers-heading h2,.fleet-analytics-heading h2,
+ .fleet-service-center header h2
+ ){font-size:20px!important;margin:0!important;color:var(--fleet-fg)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-section-heading p,.fleet-drivers-heading>div>span,
+ .fleet-analytics-heading p,.fleet-service-center header p
+ ){font-size:11px!important;line-height:1.45;color:var(--fleet-muted)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-toolbar,.fleet-driver-grid,.fleet-drivers-grid,.fleet-drivers-modern,
+ .fleet-analytics-modern,.fleet-analytics-section,.fleet-cards-compact,
+ .fleet-vehicle-list,.fleet-service-center
+ ){gap:var(--fleet-gap)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-toolbar{margin:0 0 var(--fleet-gap)!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-vehicle-mini{padding:var(--fleet-pad)!important;gap:10px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-vehicle-mini-footer{gap:10px}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-vehicle-mini-stats{padding:10px 0}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-drivers-modern{
+ padding:0 0 16px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-drivers-heading{margin:0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-driver-mini{padding:var(--fleet-pad)!important;gap:10px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-driver-mini-progress{margin:0}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-modern{padding:0 0 16px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-heading{margin:0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-analytics-main-metrics,.fleet-analytics-kpis,
+ .fleet-analytics-exploration,.fleet-analytics-vehicle-list,
+ .fleet-analytics-section,.fleet-analytics-sort
+ ){gap:8px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-analytics-main-metrics article,.fleet-analytics-exploration article,
+ .fleet-analytics-utilization,.fleet-service-summary article
+ ){padding:12px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-kpis article{padding:10px 5px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-utilization{margin:0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-center{padding:0 0 16px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-center>header{margin:0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-center>header p{margin:5px 0 0!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary{
+ gap:8px!important;margin:0!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary article{
+ border-radius:var(--fleet-radius)!important;gap:5px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary strong{font-size:21px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-item{
+ margin:0!important;padding:13px!important;gap:10px!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-item small{
+ opacity:1!important;color:var(--fleet-muted)!important;
+}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-buttons{gap:7px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-buttons button{min-height:37px;padding:8px 10px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-buttons button:disabled{opacity:.43}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-compact-card{padding:14px!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 :is(
+ .fleet-compact-heading small,.fleet-compact-stats small,
+ .fleet-driver-mini-metrics small,.fleet-driver-mini-progression small,
+ .fleet-analytics-kpis small,.fleet-analytics-vehicle-info small,
+ .fleet-showroom-vehicle-body small,.fleet-vehicle-mini-info>span
+ ){color:var(--fleet-muted)!important;opacity:1!important}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-stat-table{max-width:100%;overflow-x:auto}
+.nav-v216.fleet-overlay-mode .fleet-v2 .fleet-empty-state{padding:18px!important}
+/* New theme only applies to Fleet; map and other tabs remain unchanged. */
+@media(max-width:800px){
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay{
+  width:calc(100% - 20px)!important;top:10px!important;
+  bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-map-overlay .fleet-v2{
+  --fleet-gap:10px;--fleet-pad:12px;
+  padding:5px 6px 18px!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom{padding:12px 10px 6px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-head{margin-bottom:10px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-nav{margin-bottom:8px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom:has(.fleet-showroom-nav button:not(:first-child).active){
+  margin-bottom:4px!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-kpis article{min-height:70px}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-health{
+  grid-template-columns:104px minmax(0,1fr);padding:10px!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-profit{padding:11px 12px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-showroom-list{padding:10px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-section-heading{margin-bottom:9px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-drivers-heading{margin-bottom:0!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-analytics-kpis article{min-height:67px!important}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary article{
+  padding:10px 6px!important;min-width:0;text-align:center;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-summary small{
+  font-size:10px!important;white-space:normal;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-service-item{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-filter-pills{
+  gap:7px!important;padding:0 0 2px!important;
+ }
+ .nav-v216.fleet-overlay-mode .fleet-v2 .fleet-vehicle-mini{
+  padding:12px!important;
+ }
+}
+@media(prefers-reduced-motion:reduce){
+ .nav-v216.fleet-overlay-mode .fleet-v2 *{transition:none!important;animation:none!important}
+}
