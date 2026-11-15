@@ -14,7 +14,7 @@ import InvestmentsPanel from './components/InvestmentsPanel';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
-import {OFFICE_DEPARTMENTS,officeLevel,officeCost,type OfficeDepartment,type HotelPolicy} from './propertyManagement';
+import {OFFICE_DEPARTMENTS,officeLevel,officeCost,hotelRenovationLevel,hotelRenovationCost,MAX_HOTEL_RENOVATIONS,type OfficeDepartment,type HotelPolicy} from './propertyManagement';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import { useEffect, useMemo, useState, startTransition } from "react";
@@ -2684,6 +2684,29 @@ export default function App(){
   portfolioRef.current=next;setPortfolio(next);
   return null;
  };
+ const renovateHotel=(holdingId:string):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  const holding=portfolioRef.current.holdings[holdingId];
+  if(!current||!holding||holding.kind!=='hotel')return 'Hotel not found.';
+  if(clock===undefined)return 'Game clock is not ready.';
+  if(ownership(holding)<0.5)return 'At least 50% ownership is needed to renovate.';
+  const nextLevel=hotelRenovationLevel(holding.hotelRenovations)+1;
+  if(nextLevel>MAX_HOTEL_RENOVATIONS)return 'Hotel renovation is fully upgraded.';
+  const cost=hotelRenovationCost(nextLevel),cash=current.cash+pendingCashRef.current;
+  if(cash<cost)return 'Insufficient cash for hotel renovation.';
+  const fromHour=Math.floor(clock/3600000)+1;
+  const next={...portfolioRef.current,holdings:{...portfolioRef.current.holdings,[holdingId]:{
+   ...holding,hotelRenovations:[...(holding.hotelRenovations??[]),{effectiveHour:fromHour,level:nextLevel}]
+  }}};
+  try{savePortfolio(current.id,next);}catch{return 'Could not save hotel renovation.';}
+  portfolioRef.current=next;setPortfolio(next);
+  const updated={...current,cash:Math.round((cash-cost)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(old=>({...old,transactions:[{
+   id:crypto.randomUUID(),time:clock,description:'Hotel renovation · '+holding.name,amount:-cost
+  },...(old.transactions??[])].slice(0,100)}));
+  return null;
+ };
  const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
   const current=companyRef.current,clock=gameClockRef.current;
   if(!current||!clock)return 'Create a company before buying property shares.';
@@ -2860,7 +2883,7 @@ export default function App(){
  {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/></div>}
  {page==='Ferries'&&<div className="ferries-map-overlay" role="dialog" aria-label="Ferry management"><button type="button" className="ferries-map-close" aria-label="Close Ferries and return to map" onClick={()=>go('World')}><X size={20}/></button><FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/></div>}
- {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} onHotelPolicyChange={changeHotelPolicy} officeUpgrades={company?.officeUpgrades} error={investmentError}/></div>}
+ {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} onHotelPolicyChange={changeHotelPolicy} onHotelRenovate={renovateHotel} officeUpgrades={company?.officeUpgrades} error={investmentError}/></div>}
  {page==='Finance'&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
  {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
