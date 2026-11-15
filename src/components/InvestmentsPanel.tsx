@@ -61,9 +61,9 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
    <button type="button" aria-current={view==='owned'?'page':undefined} className={view==='owned'?'active':''} onClick={()=>{setView('owned');setExpanded(null)}}><Building2 size={18}/><span>{view==='owned'?'Owned':''}</span></button>
   </nav>
   <div className="investment-mini-summary" aria-label="Investment portfolio summary">
-   <span><Building2 size={14}/><strong>{holdings.length}</strong> owned</span>
+   <span><Building2 size={14}/><strong>{view==='owned'?euro(invested):holdings.length}</strong> {view==='owned'?'invested':'owned'}</span>
    <span><TrendingUp size={14}/><strong>{euro(expectedHourly)}</strong>/hour</span>
-   <span><Wallet size={14}/><strong>{euro(Math.round(companyCash*100))}</strong> cash</span>
+   <span><Wallet size={14}/><strong>{view==='owned'?euro(dividends):euro(Math.round(companyCash*100))}</strong> {view==='owned'?'earned':'cash'}</span>
   </div>
   <div className="investment-section-heading"><div><h2>{view==='owned'?'My properties':'Properties'}</h2><small>{view==='owned'?'Owned portfolio':'Hotels &amp; parking facilities'}</small></div><button type="button" className={filtersOpen||category!=='all'||filter?'investment-filter-toggle active':'investment-filter-toggle'} aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={16}/>{filtersOpen?'Hide filters':'Filter'}</button></div>
   {filtersOpen&&<div className="investment-toolbar">
