@@ -20,7 +20,7 @@ import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,own
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
-import {planConstructionFreight} from './constructionLogistics';
+import {legacyFreightEligible,planConstructionFreight,retrofitLegacyProjectFreight} from './constructionLogistics';
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { BarChart3, Building2, CarFront, Compass, FlaskConical, Landmark, Map as MapIcon, Ship, Menu, Hotel, X, PanelLeftClose, PanelLeftOpen, Warehouse, SlidersHorizontal, CircleDollarSign, CalendarClock, Layers3, ScrollText, Plane, Truck, BusFront, Car, Anchor, Zap, ChartNoAxesCombined, HardHat, Palmtree, BriefcaseBusiness, GraduationCap } from "lucide-react";
 import WorldMap from "./components/WorldMap";
@@ -2812,6 +2812,68 @@ export default function App(){
   setConstructionError('');
   return null;
  };
+ /** Upgrade already-paid pre-shipping jobs. This never touches cash, finance,
+  * contractor method, blueprint or project ID; save once to survive Safari reload.
+  */
+ const attachLegacyConstructionFreight=(requestedProjectId?:string):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  if(!current||clock===undefined)return 'The company game clock is not ready.';
+  const hour=Math.floor(clock/HOUR_MS);
+  const previous=constructionRef.current;
+  const waiting=Object.values(previous.sites).flatMap(site=>
+   site.projects.filter(project=>legacyFreightEligible(project,hour)&&
+    (!requestedProjectId||project.id===requestedProjectId)));
+  if(!waiting.length){
+   if(!requestedProjectId)return null;
+   const requested=Object.values(previous.sites).flatMap(site=>site.projects).find(p=>p.id===requestedProjectId);
+   return requested?.freight?'This project already has a cargo ship and truck route.':
+    requested?.status==='active'?'Materials have already arrived under the original construction schedule.':
+    requested?'This project is already complete.':'Construction project not found.';
+  }
+  const network=constructionFerryNetwork,roads=graphRef.current;
+  if(!network)return 'Harbour routes are loading. Open the map and try again.';
+  if(!roads||!roads.nodeKeys.length)return 'Road data for the hotel and harbour are still loading. Open the world map and retry.';
+  let updated=previous,assigned=0,firstError:string|null=null;
+  for(const [siteId,site] of Object.entries(previous.sites)){
+   let siteUpdated=false;
+   const projects=site.projects.map(project=>{
+    if(!legacyFreightEligible(project,hour)||
+     (requestedProjectId&&project.id!==requestedProjectId))return project;
+    try{
+     const upgraded=retrofitLegacyProjectFreight(project,site,network,roads,hour);
+     if(upgraded!==project){siteUpdated=true;assigned++;}
+     return upgraded;
+    }catch(error){
+     firstError??=error instanceof Error?error.message:'Unable to plan harbour delivery.';
+     return project;
+    }
+   });
+   if(siteUpdated)updated={...updated,sites:{...updated.sites,[siteId]:{...site,projects}}};
+  }
+  if(assigned){
+   try{saveConstruction(current.id,updated);}
+   catch{return 'Could not save the construction delivery. No changes or additional charges were made.';}
+   constructionRef.current=updated;
+   setConstruction(updated);
+   diagnostic('construction:legacy-freight-upgraded',assigned+' shipment(s), no extra charge');
+   setConstructionError('');
+  }
+  if(requestedProjectId&&assigned===0)return firstError??'A road-connected harbour is not available yet.';
+  return null;
+ };
+ // Automatically upgrade waiting legacy projects once both ferry and road data
+ // are ready. Reconsider as new road tiles load, without repeatedly saving.
+ useEffect(()=>{
+  if(!company?.id||!constructionFerryNetwork||!graphRef.current)return;
+  const hasPending=Object.values(constructionRef.current.sites).some(site=>
+   site.projects.some(p=>legacyFreightEligible(p,
+    Math.floor((gameClockRef.current?.epochMs??Date.now())/HOUR_MS))));
+  if(!hasPending)return;
+  const timer=window.setTimeout(()=>{
+   if(companyRef.current?.id===company.id)attachLegacyConstructionFreight();
+  },1000);
+  return()=>window.clearTimeout(timer);
+ },[company?.id,constructionFerryNetwork,graph,roadGraphVersion]);
  const orderInternalHotelSupplies=(siteId:string,code:SupplyCode,quantity:number):string|null=>{
   const current=companyRef.current,clock=gameClockRef.current?.epochMs,old=constructionRef.current;
   if(!current||clock===undefined)return 'Company clock is not ready.';
@@ -3049,7 +3111,7 @@ export default function App(){
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/></div>}
  {page==='Ferries'&&<div className="ferries-map-overlay" role="dialog" aria-label="Ferry management"><button type="button" className="ferries-map-close" aria-label="Close Ferries and return to map" onClick={()=>go('World')}><X size={20}/></button><FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/></div>}
  {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} operatedHotelIds={Object.values(construction.sites).filter(site=>site.sourceHoldingId&&hotelActiveAt(site.operations,Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS))).map(site=>site.sourceHoldingId!)} error={investmentError}/></div>}
- {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={size=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}if(!validHotelPlotSize(size)){setConstructionError('Select valid plot dimensions.');return;}setHotelPlotSize(size);setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onTrackFreight={id=>{setFreightFocus(old=>({id,token:(old?.token??0)+1}));setPage('World');setDrawerOpen(false);}} onOrderSupplies={orderInternalHotelSupplies} onHotelSetting={configureHotel} onHotelOpening={changeHotelOpening} onHireWorker={recruitConstructionWorker} onDismissWorker={dismissConstructionWorker}/></div>}
+ {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={size=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}if(!validHotelPlotSize(size)){setConstructionError('Select valid plot dimensions.');return;}setHotelPlotSize(size);setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onAssignFreight={projectId=>attachLegacyConstructionFreight(projectId)} onTrackFreight={id=>{setFreightFocus(old=>({id,token:(old?.token??0)+1}));setPage('World');setDrawerOpen(false);}} onOrderSupplies={orderInternalHotelSupplies} onHotelSetting={configureHotel} onHotelOpening={changeHotelOpening} onHireWorker={recruitConstructionWorker} onDismissWorker={dismissConstructionWorker}/></div>}
  {page==='Finance'&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
  {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}

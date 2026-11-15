@@ -17,7 +17,7 @@ import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
  onSelectLand:(size:HotelPlotSize)=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
- onStartProject:(id:string,method:TradeMode)=>string|null;onTrackFreight:(projectId:string)=>void;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
+ onStartProject:(id:string,method:TradeMode)=>string|null;onAssignFreight:(projectId:string)=>string|null;onTrackFreight:(projectId:string)=>void;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
  onHotelSetting:(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>string|null;
  onHotelOpening:(siteId:string,open:boolean)=>string|null;
 };
@@ -42,7 +42,7 @@ function PriceInput({title,cents,minimum,maximum,onSave}:{
   <span>{title}</span><div><span>€</span><input aria-label={title+' price in euro'} type="number" inputMode="decimal" min={minimum} max={maximum} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></div>
  </label>;
 }
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onTrackFreight,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onAssignFreight,onTrackFreight,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -365,6 +365,12 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    <div className="ib-heading"><div><h2>Construction projects</h2><small>Material deliveries, work schedules and budgets</small></div></div>
    {site&&<div className="ib-project-shell"><div className="ib-heading"><div><h2>{site.name}</h2><small>{active?'Construction in progress':'New work proposal'}</small></div><button className="ib-secondary" onClick={()=>setTab('blueprint')}>Floor plan</button></div>
     {active?<div className="ib-progress-panel">
+     {!active.freight&&gameHour<active.deliveryHour&&<div className="ib-cargo-panel" role="region" aria-label="Upgrade existing building material delivery">
+      <div className="ib-cargo-head"><Ship size={18}/><div><strong>Assign a ship and truck to this existing project</strong><small>Materials were already paid for. No additional charge.</small></div></div>
+      <p className="ib-note">This project was started before cargo shipping was added. We automatically schedule its delivery when harbour and road data are ready. If the route has not appeared, open the world map to load nearby roads and try again.</p>
+      <button type="button" className="ib-primary ib-full" onClick={()=>{const issue=onAssignFreight(active.id);setStatus(issue??'Cargo ship and road delivery assigned. Open the tracking button below to follow the vessel.');}}><Ship size={16}/> Assign cargo delivery · free</button>
+     </div>}
+     {!active.freight&&gameHour>=active.deliveryHour&&<p className="ib-note">This project was started before ship deliveries existed. Its materials have already arrived under the original schedule; construction continues without resetting your progress.</p>}
      {active.freight&&gameHour<active.deliveryHour&&<div className="ib-cargo-panel">
       <div className="ib-cargo-head"><Ship size={17}/><div><strong>{freightStatusLabel[freightStage(active.freight,gameHour)]}</strong><small>Contracted ship and truck delivery · materials & furniture</small></div></div>
       <div className="ib-meter"><span style={{width:freightProgress(active.freight,gameHour)+'%'}}/></div>

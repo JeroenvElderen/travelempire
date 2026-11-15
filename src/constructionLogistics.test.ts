@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest';
 import type {FerryNetwork} from './maritime/ferries';
 import type {RoadGraph,Point} from './simulation/taxi';
 import {meters} from './simulation/taxi';
-import {planConstructionFreight,freightStage,freightPosition} from './constructionLogistics';
+import {planConstructionFreight,freightStage,freightPosition,legacyFreightEligible,retrofitLegacyProjectFreight} from './constructionLogistics';
 import {blankFloor,beginConstruction,constructionQuote,newHotelSite,settleConstruction} from './internalConstruction';
 
 const p:Point=[23.7000,37.9000],h:Point=[23.7040,37.9000],s:Point=[23.7080,37.9000];
@@ -72,5 +72,59 @@ describe('hotel materials from cargo vessel to hotel construction',()=>{
   const after=settleConstruction(before,built.site.projects[0].finishHour).state;
   expect(after.sites.hotel.built[0].rooms).toHaveLength(1);
   expect(after.sites.hotel.projects[0].status).toBe('complete');
+ });
+});
+
+describe('upgrade previously paid hotel projects to cargo shipping',()=>{
+ const existing=()=>{
+  const site=newHotelSite('existing-hotel','Paid hotel','new',s[1],s[0],start);
+  site.draft=[{...blankFloor(0),rooms:[{id:'guest-a',type:'guest',name:'Paid room',x:1,y:1,width:4,height:4}]}];
+  const project=beginConstruction(site,'contractor',0,start,'paid-project').site.projects[0];
+  return {site,project};
+ };
+ it('assigns ship/truck to a waiting legacy job without a second payment or progress reset',()=>{
+  const {site,project}=existing();
+  const migrationHour=start+2;
+  expect(legacyFreightEligible(project,migrationHour)).toBe(true);
+  const updated=retrofitLegacyProjectFreight(project,site,network,graph,migrationHour);
+  expect(updated).not.toBe(project);
+  expect(updated.freight?.seaRouteId).toBe('coastal');
+  expect(updated.freight?.shippingHour).toBeGreaterThan(migrationHour);
+  expect(updated.freight?.roadPath).toEqual([p,h,s]);
+  expect(updated.deliveryHour).toBeGreaterThanOrEqual(project.deliveryHour);
+  expect(updated.finishHour-updated.deliveryHour).toBe(project.finishHour-project.deliveryHour);
+  expect(updated.startHour).toBe(project.startHour);
+  expect(updated.budgetCents).toBe(project.budgetCents);
+  expect(updated.id).toBe(project.id);
+  expect(updated.method).toBe(project.method);
+  expect(updated.materials).toBe(project.materials);
+  expect(updated.target).toEqual(project.target);
+  expect(updated.status).toBe('active');
+  const beginning={version:1 as const,sites:{hotel:{...site,projects:[updated]}},
+   workers:0,lastPayrollHour:migrationHour};
+  const before=settleConstruction(beginning,updated.deliveryHour-1).state;
+  expect(before.sites.hotel.built[0].rooms).toHaveLength(0);
+  const settled=settleConstruction(before,updated.finishHour).state;
+  expect(settled.sites.hotel.built[0].rooms).toHaveLength(1);
+  expect(settled.sites.hotel.projects[0].status).toBe('complete');
+ });
+ it('is idempotent and preserves jobs already underway or finished',()=>{
+  const {site,project}=existing();
+  const upgraded=retrofitLegacyProjectFreight(project,site,network,graph,start+1);
+  expect(legacyFreightEligible(upgraded,start+2)).toBe(false);
+  expect(retrofitLegacyProjectFreight(upgraded,site,network,graph,start+2)).toBe(upgraded);
+  // Never rewind a job whose original materials have already arrived.
+  expect(retrofitLegacyProjectFreight(project,site,network,graph,project.deliveryHour)).toBe(project);
+  const complete={...project,status:'complete' as const};
+  expect(retrofitLegacyProjectFreight(complete,site,network,graph,start+1)).toBe(complete);
+ });
+ it('does not change the paid job if road/harbour routing is unavailable',()=>{
+  const {site,project}=existing();
+  const broken:RoadGraph={...graph,edges:new Map([
+   ['port',[]],['junction',[]],['site',[]],
+  ])};
+  expect(()=>retrofitLegacyProjectFreight(project,site,network,broken,start+1)).toThrow(/road-connected harbour/i);
+  expect(project.freight).toBeUndefined();
+  expect(project.budgetCents).toBeGreaterThan(0);
  });
 });
