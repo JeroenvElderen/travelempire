@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import type {RoadGraph,Point} from './taxi';
 import type {RoadFeature} from '../components/purpleRoadDiff';
-import {advanceWorldState,dispatchResponders,newWorldState,pointOnPath,trafficLoadAt,visibleWorldVehicles,weatherAt,worldTaxiSpeedFactor} from './livingWorld';
+import {advanceWorldState,dispatchResponders,newWorldState,pointOnPath,weatherAt,weatherTaxiSpeedFactor,incidentStatus} from './livingWorld';
 
 const points:Point[]=Array.from({length:7},(_,i)=>[23+i*0.002,38]);
 const key=(p:Point)=>p[0].toFixed(6)+','+p[1].toFixed(6);
@@ -27,16 +27,13 @@ describe('living world hybrid simulation',()=>{
   const time=Date.parse('2026-11-16T08:00:00Z');
   expect(weatherAt(points[0],time)).toBe(weatherAt(points[0],time));
  });
- it('models rush-hour traffic as greater than early morning',()=>{
-  const rush=Date.parse('2026-11-16T06:00:00Z'); // 08:00 in Athens
-  const quiet=Date.parse('2026-11-16T01:00:00Z');
-  expect(trafficLoadAt(points[0],rush)).toBeGreaterThan(trafficLoadAt(points[0],quiet));
- });
- it('slows taxis more in heavy traffic than at quiet hours',()=>{
-  const busy=Date.parse('2026-11-16T06:00:00Z');
-  const quiet=Date.parse('2026-11-16T01:00:00Z');
-  expect(worldTaxiSpeedFactor(points[0],busy)).toBeLessThan(worldTaxiSpeedFactor(points[0],quiet));
-  expect(worldTaxiSpeedFactor(points[0],busy)).toBeGreaterThanOrEqual(0.58);
+ it('retains weather-only speed effects without a civilian traffic model',()=>{
+  for(const date of ['2026-11-16','2026-11-17','2026-11-18']){
+   const time=Date.parse(date+'T08:00:00Z');
+   const condition=weatherAt(points[0],time);
+   const expected={clear:1,rain:0.90,storm:0.80,wind:0.98,snow:0.70}[condition];
+   expect(weatherTaxiSpeedFactor(points[0],time)).toBe(expected);
+  }
  });
  it('interpolates emergency routes along the polyline and points north',()=>{
   const p=pointOnPath([[23,38],[23,38.002]],0.5);
@@ -60,8 +57,12 @@ describe('living world hybrid simulation',()=>{
   const next=advanceWorldState(newWorldState(),now,roads,graph,new Set(),'test');
   expect(next.incidents).toEqual([]);
  });
- it('does not render ordinary traffic on undiscovered roads',()=>{
-  const out=visibleWorldVehicles(roads,graph,new Set(),Date.now(),1000,[],60);
-  expect(out).toEqual([]);
+ it('tracks responding emergency units without rendering them',()=>{
+  const now=Date.parse('2026-11-16T08:00:00Z');
+  const incident={id:'incident',kind:'collision' as const,roadId:'road-4',point:points[4],startedAt:now,endsAt:now+45*60000,
+   responders:[{id:'police',kind:'police' as const,path:[points[0],points[4]],departAt:now,arriveAt:now+8*60000}]};
+  expect(incidentStatus(incident,now+2*60000)).toBe('responding');
+  expect(incidentStatus(incident,now+10*60000)).toBe('on-scene');
+  expect(incidentStatus(incident,now+42*60000)).toBe('clearing');
  });
 });
