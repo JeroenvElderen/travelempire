@@ -44,7 +44,7 @@ function Timeline({schedule,driverName}:{schedule:Schedule;driverName:string}){
    {segmentsForDay(schedule.start).map((segment,index)=><span key={index} className={`drivers-timeline-segment ${segment.kind}`} style={{left:`${segment.from/24*100}%`,width:`${(segment.to-segment.from)/24*100}%`}}/>)}
    <span className="drivers-timeline-now" style={{left:`${schedule.current/24*100}%`}}/>
   </div>
-  <div className="drivers-timeline-hours"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+  <div className="drivers-timeline-hours"><span>00:00</span><span>12:00</span><span>24:00</span></div>
  </div>;
 }
 export default function DriversPanel({fleet,gameClock}:Props){
@@ -62,7 +62,6 @@ export default function DriversPanel({fleet,gameClock}:Props){
   return {taxi:t,schedule,driver,status:statusOf(t,schedule)};
  });
  const active=entries.filter(e=>e.schedule.onDuty&&!e.schedule.onBreak&&!e.taxi.shiftParked).length;
- const resting=entries.filter(e=>!e.schedule.onDuty).length;
  const breaks=entries.filter(e=>e.schedule.onBreak).length;
  const assignedNames=new Set(taxis.map(t=>t.driver.toLowerCase()));
  const unassigned=roster.filter(d=>!assignedNames.has(d.name.toLowerCase()));
@@ -86,7 +85,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
    <section className="drivers-section">
     <div className="drivers-section-header drivers-section-compact">
      <div><h2>Schedules</h2><small>{time(((current/3600000)%24+24)%24)} game time · 12h shifts</small></div>
-     <button type="button" className={filtersOpen||filter!=='all'?'drivers-tools-toggle active':'drivers-tools-toggle'} aria-expanded={filtersOpen} aria-label="Search and filter schedules" onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={17}/>{filter==='all'?'Filter':filter==='duty'?'On duty':filter==='break'?'Breaks':'Off duty'}</button>
+     <button type="button" className={filtersOpen||filter!=='all'?'drivers-tools-toggle active':'drivers-tools-toggle'} aria-expanded={filtersOpen} aria-label="Search and filter schedules" onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={17}/>{filter==='all'?(query.trim()?'Search active':'Filter'):filter==='duty'?'On duty':filter==='break'?'Breaks':'Off duty'}</button>
     </div>
     {filtersOpen&&<div className="drivers-tools">
      <label className="drivers-search"><Search size={17}/><input type="search" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search drivers or taxis" placeholder="Find driver or taxi…"/></label>
