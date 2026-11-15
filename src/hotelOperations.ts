@@ -207,7 +207,7 @@ const addTotals=(a:HotelTotals,b:HotelTotals):HotelTotals=>{
 const wageForHour=(staff:HotelStaff,hourOfDay:number):number=>{
  let wages=staff.reception*hotelRoles[0].wageCents;
  if(hourOfDay>=9&&hourOfDay<17)wages+=staff.housekeeping*hotelRoles[1].wageCents;
- if(hourOfDay>=7&&hourOfDay<11||hourOfDay>=18&&hourOfDay<22)wages+=staff.kitchen*hotelRoles[2].wageCents;
+ if((hourOfDay>=7&&hourOfDay<11)||(hourOfDay>=18&&hourOfDay<22))wages+=staff.kitchen*hotelRoles[2].wageCents;
  if(hourOfDay>=18&&hourOfDay<24)wages+=staff.bar*hotelRoles[3].wageCents;
  return wages;
 };
@@ -221,7 +221,7 @@ export function settleHotelOperations(state:ConstructionState,nowHour:number,own
   const from=Math.max(original.lastSettledHour,end-HOTEL_MAX_SETTLEMENT_HOURS);
   if(from>=end)continue;
   let site=source;
-  let guests=[...original.guests],dirty=new Set(original.dirtyRoomIds);
+  let guests=original.guests.map(g=>({...g})),dirty=new Set(original.dirtyRoomIds);
   let totals=original.totals??emptyTotals();
   let days=[...(original.recentDays??[])];
   let localGross=0,localExpense=0;
