@@ -1,5 +1,5 @@
 import {useMemo,useState} from 'react';
-import {Activity,Compass,Route,Settings2,TrendingUp,Users,Wallet,CarFront,Layers3,ChevronDown,ChevronUp} from 'lucide-react';
+import {Activity,Compass,Route,Settings2,TrendingUp,Users,CarFront,Layers3,ChevronDown,ChevronUp} from 'lucide-react';
 import {demandAt} from '../simulation/demand';
 import type {FleetState,RoadGraph} from '../simulation/taxi';
 import './operations.css';
