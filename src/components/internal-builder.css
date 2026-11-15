@@ -149,11 +149,31 @@
  background:rgba(42,54,81,.8);border-radius:9px;font-size:11px;color:var(--ib-muted);
 }
 .internal-builder .ib-plan-scroller{
- overflow:auto;max-width:100%;max-height:min(57vh,640px);
+ position:relative;width:100%;height:clamp(290px,56dvh,640px);
+ overflow:auto;max-width:100%;
  border:1px solid rgba(196,175,237,.26);border-radius:12px;
  background:#111c31;
  scrollbar-width:thin;scrollbar-color:rgba(196,175,237,.45) transparent;
- overscroll-behavior:contain;
+ overscroll-behavior:contain;touch-action:none;
+ -webkit-overflow-scrolling:auto;
+}
+.internal-builder .ib-navigation-row{
+ display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+ gap:8px;padding:7px 8px;border:1px solid var(--ib-line);
+ border-radius:9px;background:rgba(20,32,56,.72);
+}
+.internal-builder .ib-navigation-row>span{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-pan-arrows{
+ display:flex;align-items:center;gap:5px;flex-wrap:nowrap;
+}
+.internal-builder .ib-pan-arrows button{
+ width:34px;height:34px;display:grid;place-items:center;
+ padding:0;border-radius:8px;border:1px solid var(--ib-line);
+ background:rgba(45,58,91,.95);color:var(--ib-fg);touch-action:manipulation;
+}
+.internal-builder .ib-pan-arrows button:active{background:rgba(124,92,170,.62)}
+.internal-builder .ib-pan-arrows button[aria-label="Centre floor plan"]{
+ border-color:rgba(197,160,242,.45);background:rgba(104,78,149,.46);
 }
 .internal-builder .ib-floor-canvas{
  display:block;max-width:none;user-select:none;-webkit-user-select:none;
@@ -225,7 +245,10 @@
  .internal-builder .ib-tools{gap:4px}
  .internal-builder .ib-tools button{min-height:53px;font-size:9px}
  .internal-builder .ib-controls select,.internal-builder .ib-methods select{font-size:16px}
- .internal-builder .ib-plan-scroller{max-height:48vh}
+ .internal-builder .ib-plan-scroller{height:clamp(280px,48dvh,510px)}
+ .internal-builder .ib-navigation-row>span{flex-basis:100%;text-align:center}
+ .internal-builder .ib-pan-arrows{width:100%;justify-content:center}
+ .internal-builder .ib-pan-arrows button{flex:1;max-width:64px;min-height:40px}
 }
 
 /* World-map handoff when choosing a plot for an internal hotel development. */

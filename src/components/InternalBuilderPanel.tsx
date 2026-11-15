@@ -1,5 +1,5 @@
-import {useEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -11,6 +11,7 @@ import {
 } from '../internalConstruction';
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
  type HotelRole} from '../hotelOperations';
+import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
@@ -58,8 +59,40 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
  const scrollerRef=useRef<HTMLDivElement|null>(null);
- type DragPointer={startX:number;startY:number;lastX:number;lastY:number;cell:Cell|null;moved:boolean;gesture:boolean};
+ const zoomRef=useRef(zoom);zoomRef.current=zoom;
+ const pendingScroll=useRef<PlanScroll|null>(null);
+ const pinchOrigin=useRef<PinchOrigin|null>(null);
+ type DragPointer={startX:number;startY:number;lastX:number;lastY:number;cell:Cell|null;moved:boolean;gesture:boolean;panOverride:boolean};
  const pointers=useRef(new Map<number,DragPointer>());
+ // Apply the scroll offset only once the SVG's new dimensions have committed.
+ // Otherwise Safari clamps it to the old (smaller) scrollable area on zoom-in.
+ useLayoutEffect(()=>{
+  const next=pendingScroll.current,scroller=scrollerRef.current;
+  if(!next||!scroller)return;
+  pendingScroll.current=null;
+  scroller.scrollLeft=next.left;
+  scroller.scrollTop=next.top;
+ },[zoom]);
+ const zoomTo=(value:number,focus?:{x:number;y:number})=>{
+  const scroller=scrollerRef.current;
+  const next=planZoom(value);
+  if(!scroller||next===zoomRef.current)return;
+  pendingScroll.current=zoomScrollAt(
+   {left:scroller.scrollLeft,top:scroller.scrollTop},zoomRef.current,next,
+   focus??{x:scroller.clientWidth/2,y:scroller.clientHeight/2},
+  );
+  setZoom(next);
+ };
+ const panBy=(x:number,y:number)=>{
+  scrollerRef.current?.scrollBy({left:x,top:y,behavior:'smooth'});
+ };
+ const centerPlan=()=>{
+  const node=scrollerRef.current;
+  if(!node)return;
+  node.scrollTo({left:(node.scrollWidth-node.clientWidth)/2,
+   top:(node.scrollHeight-node.clientHeight)/2,behavior:'smooth'});
+ };
+
  const history=useRef<{siteId:string|null;undo:HotelSite[];redo:HotelSite[]}>({siteId:null,undo:[],redo:[]});
  const sites=Object.values(state.sites);
  const site=selectedId?state.sites[selectedId]??null:null;
@@ -90,7 +123,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  useEffect(()=>{if(!site&&sites.length&&selectedId===null){setSelectedId(sites[0].id);}},[site,sites.length,selectedId]);
  const choose=(idValue:string)=>{
   history.current={siteId:idValue,undo:[],redo:[]};
-  pointers.current.clear();
+  pointers.current.clear();pinchOrigin.current=null;pendingScroll.current=null;
   setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');
   setTool('pan');setZoom(1);
  };
@@ -128,10 +161,26 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const onPlanPointerDown=(e:PointerEvent<SVGSVGElement>)=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
   const cell=cellFromEvent(e);
-  const point:DragPointer={startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,cell,moved:false,gesture:false};
+  const point:DragPointer={startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,
+   cell,moved:false,gesture:false,panOverride:e.shiftKey};
   pointers.current.set(e.pointerId,point);
-  if(pointers.current.size>1)for(const p of pointers.current.values())p.gesture=true;
-  try{e.currentTarget.setPointerCapture(e.pointerId);}catch{/* Capture can fail after a Safari tab gesture. */}
+  if(pointers.current.size>1){
+   for(const p of pointers.current.values())p.gesture=true;
+   const [first,second]=[...pointers.current.values()];
+   const box=scrollerRef.current;
+   if(first&&second&&box){
+    const bounds=box.getBoundingClientRect();
+    pinchOrigin.current={
+     zoom:zoomRef.current,
+     distance:Math.hypot(first.lastX-second.lastX,first.lastY-second.lastY),
+     scroll:{left:box.scrollLeft,top:box.scrollTop},
+     center:{x:(first.lastX+second.lastX)/2-bounds.left,
+      y:(first.lastY+second.lastY)/2-bounds.top},
+    };
+   }
+  }
+  try{e.currentTarget.setPointerCapture(e.pointerId);}
+  catch{/* iOS may cancel capture during app switching. */}
  };
  const onPlanPointerMove=(e:PointerEvent<SVGSVGElement>)=>{
   const point=pointers.current.get(e.pointerId),scroller=scrollerRef.current;
@@ -139,14 +188,35 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   const dx=e.clientX-point.lastX,dy=e.clientY-point.lastY;
   point.lastX=e.clientX;point.lastY=e.clientY;
   if(Math.hypot(e.clientX-point.startX,e.clientY-point.startY)>7)point.moved=true;
-  // For every tool except Room, swiping pans and tapping performs the edit.
-  // During Room drawing, select Pan to drag the floor or use two fingers.
-  const multi=pointers.current.size>1;
-  if(multi)for(const p of pointers.current.values())p.gesture=true;
-  if(multi||tool!=='room'){
-   if(multi||point.moved||tool==='pan'){
-    scroller.scrollLeft-=dx/(multi?pointers.current.size:1);
-    scroller.scrollTop-=dy/(multi?pointers.current.size:1);
+  if(pointers.current.size>1){
+   for(const p of pointers.current.values())p.gesture=true;
+   const [first,second]=[...pointers.current.values()];
+   const origin=pinchOrigin.current;
+   if(first&&second&&origin){
+    const bounds=scroller.getBoundingClientRect();
+    const view=pinchViewport(origin,{
+     distance:Math.hypot(first.lastX-second.lastX,first.lastY-second.lastY),
+     center:{x:(first.lastX+second.lastX)/2-bounds.left,
+      y:(first.lastY+second.lastY)/2-bounds.top},
+    });
+    if(view.zoom!==zoomRef.current){
+     pendingScroll.current=view.scroll;
+     setZoom(view.zoom);
+    }else{
+     // Two-finger scrolling also works at maximum/minimum zoom.
+     pendingScroll.current=null;
+     scroller.scrollLeft=view.scroll.left;scroller.scrollTop=view.scroll.top;
+    }
+   }
+   return;
+  }
+  // After a pinch, ignore the remaining pointer until it has been lifted.
+  if(point.gesture)return;
+  // Room drawing uses one finger to draw. In every other tool, swiping
+  // moves the viewport instead of accidentally placing multiple objects.
+  if(tool!=='room'||point.panOverride){
+   if(point.moved||tool==='pan'||point.panOverride){
+    scroller.scrollLeft-=dx;scroller.scrollTop-=dy;
    }
   }
  };
@@ -154,8 +224,10 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   const point=pointers.current.get(e.pointerId);
   if(!point)return;
   pointers.current.delete(e.pointerId);
-  try{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}catch{/* Cancelled capture. */}
-  if(cancel||point.gesture||tool==='pan'||(point.moved&&tool!=='room'))return;
+  if(pointers.current.size<2)pinchOrigin.current=null;
+  try{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}
+  catch{/* Cancelled capture. */}
+  if(cancel||point.gesture||point.panOverride||tool==='pan'||(point.moved&&tool!=='room'))return;
   const at=cellFromEvent(e);
   if(at)interact(at,point.cell);
  };
@@ -264,11 +336,12 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
    <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
-   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>setZoom(v=>Math.max(.25,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>setZoom(v=>Math.min(2.5,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-8)/(site.width*30),(box.clientHeight-8)/(site.height*30),2.5):1;setZoom(Math.max(.25,Math.floor(fit*100)/100));if(box){box.scrollLeft=0;box.scrollTop=0;}}}>Fit</button></div></div>
+   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
     {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
-   <div className="ib-hint ib-pan-guide"><Hand size={14}/> {tool==='room'?'To move around while drawing rooms, switch to Move. Drag to draw a room or tap two corners.':'Swipe or drag to move the plan. Tap to '+(tool==='furniture'?'place furniture':tool==='select'?'inspect':tool==='pan'?'switch tools to build':'edit')+'.'} Use +/− to zoom.</div>
+   <div className="ib-hint ib-pan-guide"><Hand size={14}/> {tool==='room'?'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.':'Swipe the plan to move without placing objects. Tap to '+(tool==='furniture'?'place furniture':tool==='select'?'inspect':tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
+   <div className="ib-navigation-row"><span>Move around your plan — works while furnishing</span><div className="ib-pan-arrows" role="group" aria-label="Move floor plan"><button type="button" onClick={()=>panBy(-160,0)} aria-label="Pan left"><ArrowLeft size={16}/></button><button type="button" onClick={()=>panBy(0,-160)} aria-label="Pan up"><ArrowUp size={16}/></button><button type="button" onClick={centerPlan} aria-label="Centre floor plan" title="Centre floor plan"><Crosshair size={16}/></button><button type="button" onClick={()=>panBy(0,160)} aria-label="Pan down"><ArrowDown size={16}/></button><button type="button" onClick={()=>panBy(160,0)} aria-label="Pan right"><ArrowRight size={16}/></button></div></div>
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
    {tool==='furniture'&&<div className="ib-controls"><label>Furniture<select value={itemCode} disabled={!!active} onChange={e=>setItemCode(e.target.value as FurnitureCode)}>{furniture.map(f=><option key={f.code} value={f.code}>{f.name} · {euros(f.priceCents)}</option>)}</select></label><button type="button" onClick={()=>setRotate(v=>!v)} className={rotate?'selected ib-secondary':'ib-secondary'}><RotateCw size={15}/> {rotate?'Rotated':'Rotate'}</button><span className="ib-muted">{selectedFurniture.width} × {selectedFurniture.height} cells</span></div>}
    {(tool==='wall'||tool==='door')&&<div className="ib-hint">Tap near the edge of a grid cell to {tool==='door'?'add or remove a doorway':'draw or remove a wall segment'}.</div>}
