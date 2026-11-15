@@ -7,8 +7,8 @@ import './InvestmentsPanel.css';
 import './investments-floating.css';
 const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 
-type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;error:string};
-export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,error}:Props){
+type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;operatedHotelIds?:readonly string[];error:string};
+export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,operatedHotelIds=[],error}:Props){
  const [category,setCategory]=useState<'all'|'hotel'|'parking'>('all');
  const [view,setView]=useState<'explore'|'owned'>('explore');
  const [expanded,setExpanded]=useState<string|null>(null);
@@ -17,6 +17,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const [amounts,setAmounts]=useState<Record<string,string>>({});
  const [message,setMessage]=useState('');
  const holdings=Object.values(portfolio.holdings);
+ const managedHotels=new Set(operatedHotelIds);
  const holdingsIds=new Set(holdings.map(h=>h.id));
  const entries=useMemo(()=>{
   const byId=new Map<string,InvestablePOI>();
@@ -27,7 +28,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const invested=holdings.reduce((sum,h)=>sum+h.investedCents,0);
  const dividends=holdings.reduce((sum,h)=>sum+h.dividendsCents,0);
  const gameHour=Math.floor(gameNow/3600000);
- const expectedHourly=holdings.reduce((sum,h)=>sum+Math.round(propertyOperations(h,gameHour).netCents*ownership(h)),0);
+ const expectedHourly=holdings.reduce((sum,h)=>sum+(managedHotels.has(h.id)?0:Math.round(propertyOperations(h,gameHour).netCents*ownership(h))),0);
  const forecast=(p:InvestablePOI,valuationCents:number,ownedCents:number,additionalCents:number)=>{
   const existingShare=Math.min(1,ownedCents/valuationCents);
   const newShare=Math.min(1,(ownedCents+additionalCents)/valuationCents);
@@ -76,6 +77,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
   <div className="investment-properties">
    {entries.map(p=>{
     const owned=portfolio.holdings[p.id];
+    const operating=managedHotels.has(p.id);
     const value=owned?.valuationCents??propertyValuationCents(p);
     const remaining=Math.max(0,value-(owned?.investedCents??0));
     const percent=ownership(owned)*100;
@@ -88,10 +90,10 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     const inputError=rawAmount.trim()!==''&&!canBuy&&limit>0;
     return <article className="investment-property" key={p.id}>
      <div className="investment-property-top"><span className="investment-property-icon">{p.kind==='hotel'?<Hotel size={23}/>:<CarFront size={23}/>}</span><div className="investment-property-name"><strong>{p.name|| (p.kind==='hotel'?'Unnamed hotel':'Parking facility')}</strong><span>{p.kind==='hotel'?'Hotel':'Parking'}</span></div><span className="investment-tag">{percent===100?'Fully owned':percent>0?'Part owned':'Available'}</span></div>
-     <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>YOUR HOURLY INCOME</small><strong>{euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
+     <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>{operating?'MANAGED IN HOTELS':'PASSIVE HOURLY INCOME'}</small><strong>{operating?'Operations':euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
      <div className="investment-track" role="progressbar" aria-label="Ownership share" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{width:`${percent}%`}}/></div>
      <button type="button" className="investment-expand-toggle" aria-expanded={expanded===p.id} onClick={()=>setExpanded(expanded===p.id?null:p.id)}>{expanded===p.id?'Hide details':remaining<=0?'View details':owned?'Manage investment':'View & invest'} <ChevronDown size={16}/></button>
-     {expanded===p.id&&<div className="investment-property-expanded">
+     {expanded===p.id&&<div className="investment-property-expanded">{operating&&<p className="investment-feedback">This hotel is operated directly. Its real room, food and bar income is tracked in Hotels → Operations instead of earning passive dividends.</p>}
       <details className="investment-details-toggle">
        <summary>Occupancy &amp; operating costs <ChevronDown size={15}/></summary>
      <div className="investment-unit-economics">
@@ -137,8 +139,8 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        inputError?'Enter an amount within your available cash and remaining shares':
        `${euro(remaining)} in shares available · ${euro(Math.round(companyCash*100))} company cash`}</small>
      </div>}
-     {remaining>0&&<div className="investment-earnings-preview"><span>Projected income after investment</span><strong>{euro(projection.hourAfter)}/h</strong></div>}
-     {remaining>0&&<details className="investment-details-toggle"><summary>Full income forecast <ChevronDown size={15}/></summary><div className="investment-preview">
+     {remaining>0&&!operating&&<div className="investment-earnings-preview"><span>Projected income after investment</span><strong>{euro(projection.hourAfter)}/h</strong></div>}
+     {remaining>0&&!operating&&<details className="investment-details-toggle"><summary>Full income forecast <ChevronDown size={15}/></summary><div className="investment-preview">
       <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {exactEuro(charge)} · simulated forecast</small></div>
       <div className="investment-preview-metrics">
        <div><span>ADDITIONAL STAKE</span><strong>+{(projection.additionalShare*100).toFixed(2)}%</strong></div>
