@@ -12,10 +12,32 @@ export type HotelFloor={id:string;label:string;rooms:Room[];walls:Wall[];objects
 export type MaterialLine={id:string;name:string;unit:string;quantity:number;unitCents:number;totalCents:number};
 export type BuildQuote={materials:MaterialLine[];materialCents:number;furnitureCents:number;labourCents:number;totalCents:number;workUnits:number;deliveryHours:number;constructionHours:number;changes:number};
 export type ConstructionProject={id:string;method:TradeMode;startHour:number;deliveryHour:number;finishHour:number;budgetCents:number;materials:MaterialLine[];furnitureCents:number;labourCents:number;target:HotelFloor[];status:'active'|'complete'};
+export type SupplyCode='eggs'|'milk'|'bread'|'coffee-beans'|'fruit'|'vegetables'|'chicken'|'water'|'soft-drinks'|'wine'|'beer'|'spirits'|'cleaner'|'linen'|'toiletries';
+export type SupplyCategory='kitchen'|'bar'|'housekeeping';
+export type SupplyOrder={id:string;code:SupplyCode;quantity:number;unitCents:number;orderedHour:number;deliveryHour:number;status:'ordered'|'delivered'};
+export type StockBatch={id:string;quantity:number;expiresHour:number};
+export const supplies:ReadonlyArray<{code:SupplyCode;name:string;category:SupplyCategory;unit:string;unitCents:number;deliveryHours:number;expiryHours:number}>=[
+ {code:'eggs',name:'Eggs',category:'kitchen',unit:'pcs',unitCents:35,deliveryHours:6,expiryHours:14*24},
+ {code:'milk',name:'Milk',category:'kitchen',unit:'L',unitCents:150,deliveryHours:6,expiryHours:7*24},
+ {code:'bread',name:'Bread',category:'kitchen',unit:'loaves',unitCents:230,deliveryHours:4,expiryHours:4*24},
+ {code:'coffee-beans',name:'Coffee beans',category:'kitchen',unit:'kg',unitCents:1400,deliveryHours:8,expiryHours:90*24},
+ {code:'fruit',name:'Fresh fruit',category:'kitchen',unit:'kg',unitCents:350,deliveryHours:8,expiryHours:9*24},
+ {code:'vegetables',name:'Vegetables',category:'kitchen',unit:'kg',unitCents:400,deliveryHours:8,expiryHours:7*24},
+ {code:'chicken',name:'Chicken',category:'kitchen',unit:'kg',unitCents:920,deliveryHours:8,expiryHours:4*24},
+ {code:'water',name:'Water bottles',category:'bar',unit:'bottles',unitCents:85,deliveryHours:7,expiryHours:365*24},
+ {code:'soft-drinks',name:'Soft drinks',category:'bar',unit:'cans',unitCents:115,deliveryHours:7,expiryHours:180*24},
+ {code:'wine',name:'Wine',category:'bar',unit:'bottles',unitCents:900,deliveryHours:12,expiryHours:365*24},
+ {code:'beer',name:'Beer',category:'bar',unit:'bottles',unitCents:220,deliveryHours:12,expiryHours:180*24},
+ {code:'spirits',name:'Spirits',category:'bar',unit:'bottles',unitCents:1450,deliveryHours:16,expiryHours:365*24},
+ {code:'cleaner',name:'Cleaning supplies',category:'housekeeping',unit:'units',unitCents:480,deliveryHours:8,expiryHours:365*24},
+ {code:'linen',name:'Linen sets',category:'housekeeping',unit:'sets',unitCents:2900,deliveryHours:20,expiryHours:1000*24},
+ {code:'toiletries',name:'Guest toiletries',category:'housekeeping',unit:'packs',unitCents:340,deliveryHours:8,expiryHours:365*24}
+];
 export type HotelSite={
  id:string;name:string;kind:'new'|'existing'|'headquarters';sourceHoldingId?:string;
  longitude:number;latitude:number;width:number;height:number;
  draft:HotelFloor[];built:HotelFloor[];projects:ConstructionProject[];createdHour:number;
+ supplyOrders?:SupplyOrder[];stock?:Partial<Record<SupplyCode,StockBatch[]>>;
 };
 export type ConstructionState={version:1;sites:Record<string,HotelSite>;workers:number;lastPayrollHour:number};
 export const HOTEL_GRID_WIDTH=24;
@@ -85,7 +107,7 @@ export function saveConstruction(companyId:string,state:ConstructionState):void{
  localStorage.setItem(storagePrefix+companyId,JSON.stringify(state));
 }
 export function newHotelSite(id:string,name:string,kind:'new'|'existing'|'headquarters',lat:number,lng:number,hour:number,sourceHoldingId?:string):HotelSite{
- return {id,name,kind,sourceHoldingId,latitude:lat,longitude:lng,width:HOTEL_GRID_WIDTH,height:HOTEL_GRID_HEIGHT,draft:[blankFloor(0)],built:[blankFloor(0)],projects:[],createdHour:hour};
+ return {id,name,kind,sourceHoldingId,latitude:lat,longitude:lng,width:HOTEL_GRID_WIDTH,height:HOTEL_GRID_HEIGHT,draft:[blankFloor(0)],built:[blankFloor(0)],projects:[],createdHour:hour,supplyOrders:[],stock:{}};
 }
 export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
  if(!Number.isInteger(room.x)||!Number.isInteger(room.y)||!Number.isInteger(room.width)||!Number.isInteger(room.height))throw Error('Room coordinates must use the building grid.');
@@ -185,6 +207,25 @@ export function beginConstruction(site:HotelSite,method:TradeMode,workers:number
   target:JSON.parse(JSON.stringify(site.draft)) as HotelFloor[],status:'active'};
  return {site:{...site,projects:[...site.projects,project]},quote};
 }
+/** Deliveries are simulated against the company clock. Stock only enters storage after arrival.
+ * Kitchen/bar sales and recipe consumption are not yet simulated here.
+ */
+export function supplyStock(site:HotelSite,code:SupplyCode,hour:number):number{
+ return (site.stock?.[code]??[]).filter(batch=>batch.expiresHour>hour).reduce((total,batch)=>total+batch.quantity,0);
+}
+export function orderSupplies(site:HotelSite,code:SupplyCode,quantity:number,hour:number,id:string):{site:HotelSite;costCents:number}{
+ const item=supplies.find(s=>s.code===code);if(!item)throw Error('Unknown supply item.');
+ if(!Number.isInteger(quantity)||quantity<1||quantity>200)throw Error('Order 1–200 units at a time.');
+ const builtRooms=site.built.flatMap(f=>f.rooms);
+ const facility=item.category==='kitchen'?'kitchen':item.category==='bar'?'bar':'storage';
+ if(!builtRooms.some(r=>r.type===facility))throw Error('Finish constructing a '+facility+' before ordering these supplies.');
+ const capacity=builtRooms.reduce((sum,room)=>sum+(room.type==='storage'?200:room.type==='kitchen'?100:room.type==='bar'?120:0),0);
+ const already=supplies.reduce((total,supply)=>total+supplyStock(site,supply.code,hour),0)+
+ (site.supplyOrders??[]).filter(o=>o.status==='ordered').reduce((total,o)=>total+o.quantity,0);
+ if(already+quantity>capacity)throw Error('Not enough storage capacity. Build more storage or reduce this order.');
+ const order:SupplyOrder={id,code,quantity,unitCents:item.unitCents,orderedHour:hour,deliveryHour:hour+item.deliveryHours,status:'ordered'};
+ return {site:{...site,supplyOrders:[...(site.supplyOrders??[]),order]},costCents:item.unitCents*quantity};
+}
 export function progressProject(project:ConstructionProject,hour:number):number{
  if(hour<=project.deliveryHour)return 0;
  return Math.max(0,Math.min(100,100*(hour-project.deliveryHour)/Math.max(1,project.finishHour-project.deliveryHour)));
@@ -198,10 +239,26 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
  let changed=paidHours>0;
  const sites={...state.sites};
  for(const [id,site] of Object.entries(sites)){
+  let updatedSite=site;
+  const arriving=(site.supplyOrders??[]).filter(order=>order.status==='ordered'&&order.deliveryHour<=hour);
+  if(arriving.length){
+   const stock={...(site.stock??{})};
+   for(const order of arriving){
+    const item=supplies.find(item=>item.code===order.code);
+    if(!item)continue;
+    stock[order.code]=[...(stock[order.code]??[]),{id:order.id,quantity:order.quantity,expiresHour:order.deliveryHour+item.expiryHours}];
+   }
+   updatedSite={...updatedSite,stock,supplyOrders:(site.supplyOrders??[]).map(order=>order.status==='ordered'&&order.deliveryHour<=hour?{...order,status:'delivered' as const}:order)};
+   changed=true;
+  }
+  const unexpiredStock=Object.fromEntries(Object.entries(updatedSite.stock??{}).map(([code,batches])=>[code,(batches??[]).filter(batch=>batch.expiresHour>hour)])) as HotelSite['stock'];
+  if(Object.values(updatedSite.stock??{}).some(batches=>batches?.some(batch=>batch.expiresHour<=hour))){
+   updatedSite={...updatedSite,stock:unexpiredStock};changed=true;
+  }
   const completedJobs=site.projects.filter(p=>p.status==='active'&&p.finishHour<=hour);
-  if(!completedJobs.length)continue;
+  if(!completedJobs.length){if(updatedSite!==site)sites[id]=updatedSite;continue;}
   const latest=completedJobs[completedJobs.length-1];
-  sites[id]={...site,built:latest.target,projects:site.projects.map(p=>p.status==='active'&&p.finishHour<=hour?{...p,status:'complete' as const}:p)};
+  sites[id]={...updatedSite,built:latest.target,projects:site.projects.map(p=>p.status==='active'&&p.finishHour<=hour?{...p,status:'complete' as const}:p)};
   completed.push(site.name);
   changed=true;
  }
