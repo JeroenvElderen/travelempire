@@ -130,11 +130,12 @@ export function dispatchResponders(
    }
    if(best)break;
   }
-  if(!best)continue; // No illegal straight-line or teleport fallback.
-  const distance=best.distance;
+  const chosen=best as {path:Point[];distance:number}|null;
+  if(!chosen)continue; // No illegal straight-line or teleport fallback.
+  const distance=chosen.distance;
   const travelGameMs=Math.max(2*60000,Math.min(15*60000,distance/12*1000));
   const departAt=at+(emergencyKind==='police'?30000:90000);
-  responders.push({id:id+':'+emergencyKind,kind:emergencyKind,path:best.path,departAt,arriveAt:departAt+travelGameMs});
+  responders.push({id:id+':'+emergencyKind,kind:emergencyKind,path:chosen.path,departAt,arriveAt:departAt+travelGameMs});
  }
  return responders;
 }
