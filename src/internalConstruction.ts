@@ -1,10 +1,10 @@
 /** Internal hotel development: blueprints, procurement, works and game-clock settlement.
  * Keeps passive property shares untouched. External tendering is intentionally out of scope.
  */
-export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor';
+export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting';
 export type BuilderTool='room'|'wall'|'door'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
-export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves';
+export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table';
 export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number};
 export type Wall={id:string;x:number;y:number;orientation:'h'|'v';type:'wall'|'door'};
 export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rotated:boolean};
@@ -13,7 +13,7 @@ export type MaterialLine={id:string;name:string;unit:string;quantity:number;unit
 export type BuildQuote={materials:MaterialLine[];materialCents:number;furnitureCents:number;labourCents:number;totalCents:number;workUnits:number;deliveryHours:number;constructionHours:number;changes:number};
 export type ConstructionProject={id:string;method:TradeMode;startHour:number;deliveryHour:number;finishHour:number;budgetCents:number;materials:MaterialLine[];furnitureCents:number;labourCents:number;target:HotelFloor[];status:'active'|'complete'};
 export type HotelSite={
- id:string;name:string;kind:'new'|'existing';sourceHoldingId?:string;
+ id:string;name:string;kind:'new'|'existing'|'headquarters';sourceHoldingId?:string;
  longitude:number;latitude:number;width:number;height:number;
  draft:HotelFloor[];built:HotelFloor[];projects:ConstructionProject[];createdHour:number;
 };
@@ -34,14 +34,16 @@ export const roomTypes:ReadonlyArray<{id:RoomType;label:string;minWidth:number;m
  {id:'lobby',label:'Reception / lobby',minWidth:3,minHeight:3},
  {id:'storage',label:'Storage',minWidth:2,minHeight:2},
  {id:'staff',label:'Staff room',minWidth:2,minHeight:2},
- {id:'corridor',label:'Corridor',minWidth:2,minHeight:2}
+ {id:'corridor',label:'Corridor',minWidth:2,minHeight:2},
+ {id:'office',label:'Office',minWidth:3,minHeight:3},
+ {id:'meeting',label:'Meeting room',minWidth:3,minHeight:3}
 ];
 export const furniture:ReadonlyArray<{code:FurnitureCode;name:string;priceCents:number;width:number;height:number;requires?:RoomType[]}>=[
  {code:'bed',name:'Double bed',priceCents:105000,width:2,height:2,requires:['guest']},
  {code:'single-bed',name:'Single bed',priceCents:62000,width:1,height:2,requires:['guest']},
  {code:'wardrobe',name:'Wardrobe',priceCents:38000,width:1,height:1,requires:['guest','staff']},
  {code:'television',name:'Television',priceCents:49000,width:1,height:1,requires:['guest','bar','lobby']},
- {code:'desk',name:'Desk',priceCents:42000,width:2,height:1,requires:['guest','staff','lobby']},
+ {code:'desk',name:'Desk',priceCents:42000,width:2,height:1,requires:['guest','staff','lobby','office']},
  {code:'lamp',name:'Floor lamp',priceCents:9000,width:1,height:1},
  {code:'sofa',name:'Sofa',priceCents:63000,width:2,height:1,requires:['lobby','guest','staff']},
  {code:'reception',name:'Reception desk',priceCents:145000,width:2,height:1,requires:['lobby']},
@@ -53,10 +55,14 @@ export const furniture:ReadonlyArray<{code:FurnitureCode;name:string;priceCents:
  {code:'freezer',name:'Freezer',priceCents:207000,width:1,height:1,requires:['kitchen','storage']},
  {code:'prep',name:'Preparation table',priceCents:89000,width:2,height:1,requires:['kitchen']},
  {code:'table',name:'Dining table',priceCents:39000,width:2,height:1,requires:['restaurant','bar','staff']},
- {code:'chair',name:'Dining chair',priceCents:12500,width:1,height:1,requires:['restaurant','bar','staff','lobby']},
+ {code:'chair',name:'Dining chair',priceCents:12500,width:1,height:1,requires:['restaurant','bar','staff','lobby','meeting']},
  {code:'bar-counter',name:'Bar counter',priceCents:218000,width:3,height:1,requires:['bar']},
  {code:'coffee',name:'Coffee machine',priceCents:87000,width:1,height:1,requires:['bar','kitchen','lobby']},
- {code:'shelves',name:'Shelving',priceCents:48000,width:1,height:1,requires:['storage','bar','kitchen']}
+ {code:'shelves',name:'Shelving',priceCents:48000,width:1,height:1,requires:['storage','bar','kitchen','office']},
+ {code:'computer',name:'Office computer',priceCents:78000,width:1,height:1,requires:['office','meeting','lobby']},
+ {code:'printer',name:'Printer',priceCents:28000,width:1,height:1,requires:['office','staff']},
+ {code:'office-chair',name:'Office chair',priceCents:19000,width:1,height:1,requires:['office','meeting']},
+ {code:'conference-table',name:'Conference table',priceCents:150000,width:3,height:2,requires:['meeting']}
 ];
 const storagePrefix='travelempire.internal-buildings.v1.';
 const rectOverlaps=(a:{x:number;y:number;width:number;height:number},b:{x:number;y:number;width:number;height:number})=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
@@ -78,7 +84,7 @@ export function loadConstruction(companyId:string|undefined,hour:number):Constru
 export function saveConstruction(companyId:string,state:ConstructionState):void{
  localStorage.setItem(storagePrefix+companyId,JSON.stringify(state));
 }
-export function newHotelSite(id:string,name:string,kind:'new'|'existing',lat:number,lng:number,hour:number,sourceHoldingId?:string):HotelSite{
+export function newHotelSite(id:string,name:string,kind:'new'|'existing'|'headquarters',lat:number,lng:number,hour:number,sourceHoldingId?:string):HotelSite{
  return {id,name,kind,sourceHoldingId,latitude:lat,longitude:lng,width:HOTEL_GRID_WIDTH,height:HOTEL_GRID_HEIGHT,draft:[blankFloor(0)],built:[blankFloor(0)],projects:[],createdHour:hour};
 }
 export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
@@ -204,7 +210,7 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
 export function roomIssues(floor:HotelFloor,room:Room):string[]{
  const codes=new Set(floor.objects.filter(o=>o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height).map(o=>o.code));
  const needs:Partial<Record<RoomType,FurnitureCode[][]>>={
-  guest:[['bed','single-bed']],bathroom:[['toilet'],['sink']],kitchen:[['oven'],['fridge'],['sink']],
+  guest:[['bed','single-bed']],bathroom:[['toilet'],['sink']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
   bar:[['bar-counter']],restaurant:[['table'],['chair']],lobby:[['reception']],storage:[['shelves']]
  };
  return (needs[room.type]??[]).filter(group=>!group.some(code=>codes.has(code))).map(group=>'Missing '+group.join(' or '));
