@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import {
  newHotelSite,drawRoom,placeFurniture,updateFloor,constructionQuote,beginConstruction,
- settleConstruction,emptyConstruction,roomIssues,addFloor,MAX_FLOORS,HOUR_MS,
+ settleConstruction,emptyConstruction,roomIssues,addFloor,orderSupplies,supplyStock,MAX_FLOORS,HOUR_MS,
  type Room
 } from './internalConstruction';
 
@@ -67,6 +67,30 @@ describe('internal property construction',()=>{
   for(let i=1;i<MAX_FLOORS;i++)floors=addFloor(floors);
   expect(floors.draft.length).toBe(MAX_FLOORS);
   expect(()=>addFloor(floors)).toThrow('Maximum');
+ });
+ it('requires a constructed kitchen or bar for stock orders',()=>{
+  const s=site();
+  expect(()=>orderSupplies(s,'eggs',10,100,'eggs-1')).toThrow('Finish constructing');
+  const kitchen:Room={id:'kitchen',name:'Kitchen',type:'kitchen',x:0,y:0,width:5,height:5};
+  const withKitchen={...s,built:[{...s.built[0],rooms:[kitchen]}]};
+  const order=orderSupplies(withKitchen,'eggs',10,100,'order-1');
+  expect(order.costCents).toBe(350);
+  expect(supplyStock(order.site,'eggs',100)).toBe(0);
+  const next={...emptyConstruction(100),sites:{[s.id]:order.site}};
+  const delivered=settleConstruction(next,107);
+  expect(supplyStock(delivered.state.sites[s.id],'eggs',107)).toBe(10);
+  expect(delivered.state.sites[s.id].supplyOrders?.[0].status).toBe('delivered');
+  const spoiled=settleConstruction(delivered.state,107+14*24);
+  expect(supplyStock(spoiled.state.sites[s.id],'eggs',107+14*24)).toBe(0);
+ });
+ it('limits order quantities and storage capacity',()=>{
+  const s=site();
+  const storage:Room={id:'storage',name:'Storage',type:'storage',x:0,y:0,width:6,height:6};
+  const equipped={...s,built:[{...s.built[0],rooms:[storage]}]};
+  expect(()=>orderSupplies(equipped,'linen',201,100,'x')).toThrow('1–200');
+  expect(()=>orderSupplies(equipped,'wine',5,100,'x')).toThrow('bar');
+  const once=orderSupplies(equipped,'linen',200,100,'first');
+  expect(()=>orderSupplies(once.site,'linen',1,100,'second')).toThrow('storage');
  });
  it('keeps time and project estimates in game hours',()=>{
   expect(HOUR_MS).toBe(3600000);
