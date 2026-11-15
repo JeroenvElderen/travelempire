@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -7,14 +7,14 @@ import {
  type HotelSite,type HotelFloor,type RoomType,type BuilderTool,type FurnitureCode,type TradeMode,type ConstructionState,
  type Wall,
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
- roomIssues,furnitureSize,supplies,supplyStock,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS,LAND_PRICE_CENTS
+ roomIssues,furnitureSize,supplies,supplyStock,hotelPlotCostCents,validHotelPlotSize,type HotelPlotSize,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS
 } from '../internalConstruction';
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
  type HotelRole} from '../hotelOperations';
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
- onSelectLand:()=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
+ onSelectLand:(size:HotelPlotSize)=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
  onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
  onHotelSetting:(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>string|null;
  onHotelOpening:(siteId:string,open:boolean)=>string|null;
@@ -44,7 +44,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
- const [tool,setTool]=useState<BuilderTool|'select'>('room');
+ const [tool,setTool]=useState<BuilderTool|'select'|'pan'>('pan');
  const [roomType,setRoomType]=useState<RoomType>('guest');
  const [itemCode,setItemCode]=useState<FurnitureCode>('bed');
  const [rotate,setRotate]=useState(false);
@@ -52,9 +52,14 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
  const [supplyCode,setSupplyCode]=useState<SupplyCode>('eggs');
  const [supplyQuantity,setSupplyQuantity]=useState(10);
  const [zoom,setZoom]=useState(1);
+ const [plotSize,setPlotSize]=useState<HotelPlotSize>({width:24,height:16});
+ const plotValid=validHotelPlotSize(plotSize);
+ const plotPrice=plotValid?hotelPlotCostCents(plotSize):0;
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
- const pointer=useRef<Cell|null>(null);
+ const scrollerRef=useRef<HTMLDivElement|null>(null);
+ type DragPointer={startX:number;startY:number;lastX:number;lastY:number;cell:Cell|null;moved:boolean;gesture:boolean};
+ const pointers=useRef(new Map<number,DragPointer>());
  const history=useRef<{siteId:string|null;undo:HotelSite[];redo:HotelSite[]}>({siteId:null,undo:[],redo:[]});
  const sites=Object.values(state.sites);
  const site=selectedId?state.sites[selectedId]??null:null;
@@ -83,7 +88,12 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
 
  const available=Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&ownership(h)>=0.5&&!sites.some(site=>site.sourceHoldingId===h.id));
  useEffect(()=>{if(!site&&sites.length&&selectedId===null){setSelectedId(sites[0].id);}},[site,sites.length,selectedId]);
- const choose=(idValue:string)=>{history.current={siteId:idValue,undo:[],redo:[]};setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');};
+ const choose=(idValue:string)=>{
+  history.current={siteId:idValue,undo:[],redo:[]};
+  pointers.current.clear();
+  setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');
+  setTool('pan');setZoom(1);
+ };
  const recordEdit=(old:HotelSite)=>{
   if(history.current.siteId!==old.id)history.current={siteId:old.id,undo:[],redo:[]};
   history.current.undo.push(old);
@@ -114,6 +124,40 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   const y=(e.clientY-rect.top)/rect.height*site.height;
   if(x<0||y<0||x>=site.width||y>=site.height)return null;
   return {x:Math.floor(x),y:Math.floor(y),fx:x-Math.floor(x),fy:y-Math.floor(y)};
+ };
+ const onPlanPointerDown=(e:PointerEvent<SVGSVGElement>)=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const cell=cellFromEvent(e);
+  const point:DragPointer={startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,cell,moved:false,gesture:false};
+  pointers.current.set(e.pointerId,point);
+  if(pointers.current.size>1)for(const p of pointers.current.values())p.gesture=true;
+  try{e.currentTarget.setPointerCapture(e.pointerId);}catch{/* Capture can fail after a Safari tab gesture. */}
+ };
+ const onPlanPointerMove=(e:PointerEvent<SVGSVGElement>)=>{
+  const point=pointers.current.get(e.pointerId),scroller=scrollerRef.current;
+  if(!point||!scroller)return;
+  const dx=e.clientX-point.lastX,dy=e.clientY-point.lastY;
+  point.lastX=e.clientX;point.lastY=e.clientY;
+  if(Math.hypot(e.clientX-point.startX,e.clientY-point.startY)>7)point.moved=true;
+  // For every tool except Room, swiping pans and tapping performs the edit.
+  // During Room drawing, select Pan to drag the floor or use two fingers.
+  const multi=pointers.current.size>1;
+  if(multi)for(const p of pointers.current.values())p.gesture=true;
+  if(multi||tool!=='room'){
+   if(multi||point.moved||tool==='pan'){
+    scroller.scrollLeft-=dx/(multi?pointers.current.size:1);
+    scroller.scrollTop-=dy/(multi?pointers.current.size:1);
+   }
+  }
+ };
+ const onPlanPointerEnd=(e:PointerEvent<SVGSVGElement>,cancel=false)=>{
+  const point=pointers.current.get(e.pointerId);
+  if(!point)return;
+  pointers.current.delete(e.pointerId);
+  try{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}catch{/* Cancelled capture. */}
+  if(cancel||point.gesture||tool==='pan'||(point.moved&&tool!=='room'))return;
+  const at=cellFromEvent(e);
+  if(at)interact(at,point.cell);
  };
  const makeRoom=(a:Cell,b:Cell)=>{
   if(!site||!floor)return;
@@ -192,10 +236,25 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   {(status||error)&&<div className="ib-feedback" role="status"><AlertCircle size={15}/>{error||status}</div>}
   {!company&&<div className="ib-empty"><Landmark size={22}/><strong>Create a company to develop hotels.</strong><p>Your building projects use the company treasury and game clock.</p></div>}
   {company&&tab==='sites'&&<div className="ib-section">
-   <div className="ib-heading"><div><h2>My development sites</h2><small>Construct, renovate and furnish your own buildings</small></div><div className="ib-heading-actions"><button type="button" className="ib-secondary" onClick={()=>{const msg=onAddHeadquarters();if(msg)setStatus(msg);else{setSelectedId('hq:'+company.id);setFloorIndex(0);setTab('blueprint');setStatus('HQ building blueprint opened.');}}}><Landmark size={15}/> Headquarters</button><button type="button" className="ib-primary" disabled={cash*100<LAND_PRICE_CENTS} onClick={onSelectLand}><MapPin size={16}/> {cash*100<LAND_PRICE_CENTS?"Insufficient land funds":"Buy plot · "+euros(LAND_PRICE_CENTS)}</button></div></div>
+   <div className="ib-heading"><div><h2>My development sites</h2><small>Construct, renovate and furnish your own buildings</small></div><div className="ib-heading-actions"><button type="button" className="ib-secondary" onClick={()=>{const msg=onAddHeadquarters();if(msg)setStatus(msg);else{setSelectedId('hq:'+company.id);setFloorIndex(0);setTab('blueprint');setStatus('HQ building blueprint opened.');}}}><Landmark size={15}/> Headquarters</button><button type="button" className="ib-primary" disabled={!plotValid||cash*100<plotPrice} onClick={()=>onSelectLand(plotSize)}><MapPin size={16}/> {plotValid?"Place plot · "+euros(plotPrice):"Invalid plot size"}</button></div></div>
+   <div className="ib-plot-planner">
+    <div className="ib-plot-heading"><div><strong>Starting development plot</strong><small>Choose the size before picking its location on the world map.</small></div><span>{plotValid?euros(plotPrice):'Invalid dimensions'}</span></div>
+    <div className="ib-plot-presets">
+     {([
+      ['Compact',12,12],['Small',18,16],['Standard',24,16],['Large',32,24],['Estate',48,32]
+     ] as const).map(([label,width,height])=><button type="button" key={label} className={plotSize.width===width&&plotSize.height===height?'selected':''} onClick={()=>setPlotSize({width,height})}>{label}<small>{width} × {height} m</small></button>)}
+    </div>
+    <div className="ib-plot-dimensions">
+     <label>Width (metres)<input type="number" inputMode="numeric" step="2" min="12" max="64" value={plotSize.width} onChange={e=>setPlotSize(p=>({...p,width:Number(e.target.value)}))}/></label>
+     <span aria-hidden="true">×</span>
+     <label>Length (metres)<input type="number" inputMode="numeric" step="2" min="12" max="64" value={plotSize.height} onChange={e=>setPlotSize(p=>({...p,height:Number(e.target.value)}))}/></label>
+     <div className="ib-plot-area"><strong>{plotValid?(plotSize.width*plotSize.height).toLocaleString('en-IE')+' m²':'Use even numbers from 12 to 64 m'}</strong><small>Land price scales with total area</small></div>
+    </div>
+    <p className="ib-note">This changes the actual building grid you can design on. Existing hotels and headquarters retain their original footprints.</p>
+   </div>
    <div className="ib-stat-row"><span><strong>{sites.length}</strong> sites</span><span><strong>{sites.filter(s=>s.projects.some(p=>p.status==='active')).length}</strong> under construction</span><span><strong>{euros(Math.round(cash*100))}</strong> cash</span></div>
    <div className="ib-cards">
-    {sites.map(s=><article key={s.id} className="ib-site-card"><span className="ib-site-icon"><Building2 size={20}/></span><div><strong>{s.name}</strong><small>{s.kind==='new'?'Own development plot':s.kind==='headquarters'?'Company headquarters':'Existing hotel renovation'} · {s.draft.length} floor(s)</small><small>{s.projects.some(p=>p.status==='active')?'Construction underway':s.projects.length?'Built / ready for further work':'Blueprint planning'}</small></div><div className="ib-site-actions">{s.kind!=='headquarters'&&<button type="button" className="ib-secondary" onClick={()=>{choose(s.id);setTab('operations');}}>Manage</button>}<button className="ib-primary" onClick={()=>choose(s.id)}>Build <ChevronLeft size={15}/></button></div></article>)}
+    {sites.map(s=><article key={s.id} className="ib-site-card"><span className="ib-site-icon"><Building2 size={20}/></span><div><strong>{s.name}</strong><small>{s.kind==='new'?'Own development plot':s.kind==='headquarters'?'Company headquarters':'Existing hotel renovation'} · {s.width} × {s.height} m · {s.draft.length} floor(s)</small><small>{s.projects.some(p=>p.status==='active')?'Construction underway':s.projects.length?'Built / ready for further work':'Blueprint planning'}</small></div><div className="ib-site-actions">{s.kind!=='headquarters'&&<button type="button" className="ib-secondary" onClick={()=>{choose(s.id);setTab('operations');}}>Manage</button>}<button className="ib-primary" onClick={()=>choose(s.id)}>Build <ChevronLeft size={15}/></button></div></article>)}
     {sites.length===0&&<div className="ib-empty"><Building2 size={23}/><strong>No construction sites yet</strong><p>Open your headquarters, buy a simulated development plot or renovate a hotel you control.</p></div>}
    </div>
    <div className="ib-heading"><div><h2>Hotels you control</h2><small>At least 50% ownership required to plan a renovation</small></div></div>
@@ -205,15 +264,16 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
    <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
-   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button onClick={()=>setZoom(v=>Math.max(.7,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button></div></div>
+   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>setZoom(v=>Math.max(.25,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>setZoom(v=>Math.min(2.5,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-8)/(site.width*30),(box.clientHeight-8)/(site.height*30),2.5):1;setZoom(Math.max(.25,Math.floor(fit*100)/100));if(box){box.scrollLeft=0;box.scrollTop=0;}}}>Fit</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
-    {([['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
+    {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
+   <div className="ib-hint ib-pan-guide"><Hand size={14}/> {tool==='room'?'To move around while drawing rooms, switch to Move. Drag to draw a room or tap two corners.':'Swipe or drag to move the plan. Tap to '+(tool==='furniture'?'place furniture':tool==='select'?'inspect':tool==='pan'?'switch tools to build':'edit')+'.'} Use +/− to zoom.</div>
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
    {tool==='furniture'&&<div className="ib-controls"><label>Furniture<select value={itemCode} disabled={!!active} onChange={e=>setItemCode(e.target.value as FurnitureCode)}>{furniture.map(f=><option key={f.code} value={f.code}>{f.name} · {euros(f.priceCents)}</option>)}</select></label><button type="button" onClick={()=>setRotate(v=>!v)} className={rotate?'selected ib-secondary':'ib-secondary'}><RotateCw size={15}/> {rotate?'Rotated':'Rotate'}</button><span className="ib-muted">{selectedFurniture.width} × {selectedFurniture.height} cells</span></div>}
    {(tool==='wall'||tool==='door')&&<div className="ib-hint">Tap near the edge of a grid cell to {tool==='door'?'add or remove a doorway':'draw or remove a wall segment'}.</div>}
    {active&&<div className="ib-hint">The blueprint is locked while construction is underway. Inspection is still available.</div>}
-   <div className="ib-plan-scroller"><svg className="ib-floor-canvas" width={Math.round(site.width*30*zoom)} height={Math.round(site.height*30*zoom)} viewBox={`0 0 ${site.width} ${site.height}`} aria-label={floor.label+' building plan'} onPointerDown={e=>{pointer.current=cellFromEvent(e);}} onPointerUp={e=>{const end=cellFromEvent(e);if(end)interact(end,pointer.current);pointer.current=null;}} onPointerCancel={()=>{pointer.current=null;}} style={{touchAction:tool==='select'?'pan-x pan-y':'none'}}>
+   <div className="ib-plan-scroller" ref={scrollerRef}><svg className="ib-floor-canvas" width={Math.round(site.width*30*zoom)} height={Math.round(site.height*30*zoom)} viewBox={`0 0 ${site.width} ${site.height}`} aria-label={floor.label+' building plan'} onPointerDown={onPlanPointerDown} onPointerMove={onPlanPointerMove} onPointerUp={e=>onPlanPointerEnd(e)} onPointerCancel={e=>onPlanPointerEnd(e,true)} style={{touchAction:'none',cursor:tool==='pan'?'grab':tool==='room'?'crosshair':'pointer'}}>
      <rect width={site.width} height={site.height} fill="#111c31"/>
      {Array.from({length:site.width+1},(_,i)=><line key={'x'+i} x1={i} y1={0} x2={i} y2={site.height} stroke="#42506c" strokeWidth=".025"/>)}
      {Array.from({length:site.height+1},(_,i)=><line key={'y'+i} x1={0} y1={i} x2={site.width} y2={i} stroke="#42506c" strokeWidth=".025"/>)}
