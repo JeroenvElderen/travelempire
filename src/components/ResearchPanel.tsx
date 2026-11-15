@@ -1,47 +1,129 @@
 import {useState} from 'react';
-import {Beaker,Clock3,FlaskConical,Coins,TrendingUp,CheckCircle2,ArrowUpRight,ShieldCheck} from 'lucide-react';
+import {FlaskConical,Beaker,TrendingUp,Coins,Clock3,CheckCircle2,ArrowUpRight,ChevronDown,Compass,Search,SlidersHorizontal,Wallet} from 'lucide-react';
 import type {Company} from '../company';
 import {projects,categories,level,maxLevel,price,duration,instantCompletionCost,type ResearchId,type ResearchState} from '../research';
 import '../research.css';
+import './research-floating.css';
 
 type Tab='overview'|'projects'|'progress';
-const icons:Record<ResearchId,typeof TrendingUp>=Object.fromEntries(projects.map(p=>[p.id,p.category===0?TrendingUp:p.category===7?Coins:Beaker])) as Record<ResearchId,typeof TrendingUp>;
+type Props={
+ company:Company|null;state:ResearchState;discoveredRoads:number;explorerSpecializations:number;gameNow:number;
+ onStart:(id:ResearchId)=>void;onCancel:()=>void;onCompleteNow:()=>void;
+};
 const euro=(amount:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(amount);
-const formatDuration=(ms:number)=>{const seconds=Math.ceil(Math.max(0,ms)/1000);const hours=Math.floor(seconds/3600);const minutes=Math.floor(seconds%3600/60);const secs=seconds%60;return hours>0?`${hours}h ${String(minutes).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`:`${minutes}m ${String(secs).padStart(2,'0')}s`;};
-export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,gameNow,onStart,onCancel,onCompleteNow}:{company:Company|null;state:ResearchState;discoveredRoads:number;explorerSpecializations:number;gameNow:number;onStart:(id:ResearchId)=>void;onCancel:()=>void;onCompleteNow:()=>void}){
- const now=gameNow;
- const [tab,setTab]=useState<Tab>('overview');
- const [category,setCategory]=useState<number>(0);
+const formatDuration=(ms:number)=>{
+ const seconds=Math.ceil(Math.max(0,ms)/1000),hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),secs=seconds%60;
+ return hours>0?hours+'h '+String(minutes).padStart(2,'0')+'m':minutes+'m '+String(secs).padStart(2,'0')+'s';
+};
 
- const completed=projects.reduce((total,p)=>total+level(state,p.id),0);
- const activeProject=state.active?projects.find(p=>p.id===state.active?.id):undefined;
- const progress=state.active?Math.min(100,Math.max(0,100*(now-state.active.startedAt)/Math.max(1,state.active.endsAt-state.active.startedAt))):0;
- const finishCost=instantCompletionCost(state,now);
+export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,gameNow,onStart,onCancel,onCompleteNow}:Props){
+ const [tab,setTab]=useState<Tab>('overview');
+ const [category,setCategory]=useState<number|'all'>('all');
+ const [search,setSearch]=useState('');
+ const [filtersOpen,setFiltersOpen]=useState(false);
+ const [filter,setFilter]=useState<'available'|'all'|'completed'>('available');
+ const [expanded,setExpanded]=useState<ResearchId|null>(null);
+ const active=state.active;
+ const activeProject=active?projects.find(p=>p.id===active.id):undefined;
+ const progress=active?Math.max(0,Math.min(100,100*(gameNow-active.startedAt)/Math.max(1,active.endsAt-active.startedAt))):0;
+ const finishCost=instantCompletionCost(state,gameNow);
+ const total=projects.reduce((sum,p)=>sum+maxLevel(p.id),0);
+ const completed=projects.reduce((sum,p)=>sum+level(state,p.id),0);
  const available=projects.filter(p=>level(state,p.id)<maxLevel(p.id)).length;
- const projectCard=(p:typeof projects[number])=>{
-  const current=level(state,p.id),next=current+1,cost=price(p.id,next);
-  const maxed=current>=maxLevel(p.id),prerequisiteMissing=p.id==='explorerExpansion'&&(discoveredRoads<5000||explorerSpecializations<1),locked=!!state.active||!company||company.cash<cost||prerequisiteMissing;
-  const Icon=icons[p.id];
-  return <article className="research-project" key={p.id}>
-   <div className="research-project-top"><span className="research-project-icon"><Icon size={22}/></span><span className={maxed?'research-level-badge complete':'research-level-badge'}>{maxed?'MAX LEVEL':`LEVEL ${current} / ${maxLevel(p.id)}`}</span></div>
-   <h3>{p.name}</h3><p>{p.effect}</p>
-   <div className="research-level-track" aria-label={`${current} of ${maxLevel(p.id)} levels completed`}>{Array.from({length:maxLevel(p.id)},(_,i)=><span key={i} className={i<current?'filled':''}/>)}</div>
-   <div className="research-project-details"><div><small>Next level</small><strong>{maxed?'Completed':`Level ${next}`}</strong></div><div><small>Research cost</small><strong>{maxed?'—':euro(cost)}</strong></div><div><small>Research time</small><strong>{maxed?'—':formatDuration(duration(state,next,p.id))}</strong></div></div>
-   {p.id==='explorerExpansion'&&!maxed&&<p>Progress: {discoveredRoads.toLocaleString('en-IE')} / 5,000 roads · {explorerSpecializations} / 1 universal explorer</p>}
-   {maxed?<div className="research-maxed"><CheckCircle2 size={16}/> Fully researched</div>:<button type="button" disabled={locked} onClick={()=>onStart(p.id)}>{state.active?'Research in progress':!company?'Create company first':company.cash<cost?'Insufficient funds':prerequisiteMissing?'Unlock exploration milestones':<>Start research <ArrowUpRight size={15}/></>}</button>}
+ const visible=projects.filter(p=>(category==='all'||p.category===category)&&(filter==='all'||(filter==='completed'?level(state,p.id)===maxLevel(p.id):level(state,p.id)<maxLevel(p.id)))&&(!search.trim()||(p.name+' '+p.effect+' '+categories[p.category]).toLowerCase().includes(search.trim().toLowerCase())));
+ const recommended=projects.filter(p=>level(state,p.id)<maxLevel(p.id)).sort((a,b)=>price(a.id,level(state,a.id)+1)-price(b.id,level(state,b.id)+1)).slice(0,3);
+ const openProject=(id:ResearchId)=>{setExpanded(id);setTab('projects');setCategory('all');setSearch('');setFilter('available');};
+
+ const projectRow=(p:typeof projects[number])=>{
+  const current=level(state,p.id);
+  const max=maxLevel(p.id);
+  const maxed=current>=max;
+  const next=current+1;
+  const cost=maxed?0:price(p.id,next);
+  const time=maxed?0:duration(state,next,p.id);
+  const milestoneMissing=p.id==='explorerExpansion'&&(discoveredRoads<5000||explorerSpecializations<1);
+  const blocked=!!active||!company||company.cash<cost||milestoneMissing;
+  const isExpanded=expanded===p.id;
+  const Icon=p.category===7?Coins:p.category===3?Compass:Beaker;
+  return <article className="research-v3-project" key={p.id}>
+   <button type="button" className="research-v3-project-trigger" aria-expanded={isExpanded} onClick={()=>setExpanded(isExpanded?null:p.id)}>
+    <span className="research-v3-project-icon"><Icon size={18}/></span>
+    <span className="research-v3-project-identity"><strong>{p.name}</strong><small>{categories[p.category]}</small></span>
+    <span className={maxed?'research-v3-level is-maxed':'research-v3-level'}>{maxed?'Max':current+' / '+max}</span>
+    <ChevronDown size={16} className="research-v3-chevron"/>
+   </button>
+   <div className="research-v3-level-track" role="progressbar" aria-label={p.name+' completed levels'} aria-valuenow={current} aria-valuemin={0} aria-valuemax={max}>
+    <span style={{width:(current/max*100)+'%'}}/>
+   </div>
+   {isExpanded&&<div className="research-v3-project-expanded">
+    <p>{p.effect}</p>
+    {!maxed&&<div className="research-v3-project-costs">
+     <div><span>Next</span><strong>Level {next}</strong></div>
+     <div><span>Cost</span><strong>{euro(cost)}</strong></div>
+     <div><span>Game time</span><strong>{formatDuration(time)}</strong></div>
+    </div>}
+    {p.id==='explorerExpansion'&&!maxed&&<div className="research-v3-requirements">
+     <span>Roads discovered <strong>{Math.min(discoveredRoads,5000).toLocaleString('en-IE')} / 5,000</strong></span>
+     <span>Explorer specializations <strong>{explorerSpecializations} / 1</strong></span>
+    </div>}
+    {maxed?<div className="research-v3-maxed"><CheckCircle2 size={16}/> Fully researched</div>:
+     <button type="button" className="research-v3-primary" disabled={blocked} onClick={()=>onStart(p.id)}>
+      {active?'Research already running':!company?'Create company first':company.cash<cost?'Insufficient funds':milestoneMissing?'Milestones required':'Start research · '+euro(cost)}
+     </button>}
+   </div>}
   </article>;
  };
- return <section className="research-page research-v215">
-  <header className="research-heading"><div><span className="eyebrow">RESEARCH & DEVELOPMENT · V2.1.5</span><h1>Research</h1><p>Develop revenue, petrol vehicles, fleet operations and company technology.</p></div><span className="research-real-time"><Clock3 size={14}/> GAME TIME · 24×</span></header>
-  <nav className="research-tabs" role="tablist" aria-label="Research sections">{([['overview','Overview',FlaskConical],['projects','Research projects',Beaker],['progress','Progress',TrendingUp]] as const).map(([id,label,Icon])=><button type="button" role="tab" aria-selected={tab===id} className={tab===id?'active':''} key={id} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}</nav>
-  <div className="research-kpis"><article><small>RESEARCH LEVELS</small><strong>{completed} <em>/ {projects.reduce((sum,p)=>sum+maxLevel(p.id),0)}</em></strong><span>Across eight research categories</span></article><article><small>ACTIVE PROJECTS</small><strong>{state.active?1:0} <em>/ 1</em></strong><span>One project at a time</span></article><article><small>AVAILABLE UPGRADES</small><strong>{available}</strong><span>Programmes not yet maxed</span></article><article><small>AVAILABLE CAPITAL</small><strong>{euro(company?.cash??0)}</strong><span>Company cash balance</span></article></div>
-  {!company&&<div className="research-notice">Create a company to unlock research projects. You can review the programmes below.</div>}
-  {tab==='overview'&&<div className="research-section"><div className="research-section-heading"><h2>Research status</h2><span>Live project information</span></div>
-   <article className="research-active-card">{state.active&&activeProject?<><div className="research-active-icon"><Beaker size={26}/></div><div className="research-active-body"><span className="research-overline">CURRENTLY RESEARCHING</span><h3>{activeProject.name} · Level {state.active.level}</h3><p>Research progresses on the 24× game calendar, including elapsed game time while the game is closed.</p><div className="research-active-progress"><div style={{width:`${progress}%`}}/></div><div className="research-active-footer"><span>{progress.toFixed(0)}% complete</span><strong>{formatDuration(state.active.endsAt-now)} remaining</strong></div><button type="button" className="research-instant-button" disabled={!company||company.cash<finishCost} onClick={onCompleteNow}>{company&&company.cash<finishCost?`Need ${euro(finishCost)} to finish now`:`Complete now · ${euro(finishCost)}`}</button><small className="research-instant-note">Optional acceleration fee · decreases as research progresses</small></div><button type="button" className="research-cancel" onClick={onCancel}>Cancel · no refund</button></>:<><div className="research-active-icon idle"><CheckCircle2 size={26}/></div><div className="research-active-body"><span className="research-overline">RESEARCH LAB</span><h3>No active project</h3><p>Select a programme to begin improving your company.</p></div><button type="button" onClick={()=>setTab('projects')}>Browse projects <ArrowUpRight size={15}/></button></>}</article>
-   <div className="research-section-heading"><h2>Research programmes</h2><button type="button" className="research-link" onClick={()=>setTab('projects')}>View all projects →</button></div>
-   <div className="research-categories" style={{display:'flex',gap:8,overflowX:'auto',padding:'8px 0 14px'}}>{categories.map((name,i)=><button key={name} type="button" aria-pressed={category===i} onClick={()=>setCategory(i)} style={{flexShrink:0,padding:'9px 12px',borderRadius:10,border:'1px solid #668',background:category===i?'#244e68':'#142734',color:'white'}}>{name}</button>)}</div><div className="research-grid">{projects.filter(p=>p.category===category).map(projectCard)}</div>
+
+ return <section className="research-page research-v215 research-v3" aria-label="Research centre">
+  <header className="research-v3-header"><span className="research-v3-header-icon"><FlaskConical size={23}/></span><div><h1>Research</h1><p>Technology &amp; upgrades</p></div></header>
+  <nav className="research-v3-nav" aria-label="Research sections">
+   {([['overview','Overview',FlaskConical],['projects','Projects',Beaker],['progress','Progress',TrendingUp]] as const).map(([id,label,Icon])=>
+    <button type="button" key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}><Icon size={18}/><span>{tab===id?label:''}</span></button>)}
+  </nav>
+  <div className="research-v3-summary" aria-label="Research summary">
+   <span><strong>{completed}</strong> / {total} levels</span>
+   <span><strong>{available}</strong> available</span>
+   <span><Wallet size={13}/><strong>{euro(company?.cash??0)}</strong> cash</span>
+  </div>
+  {!company&&<p className="research-v3-notice">Create a company to start researching. You can still browse projects.</p>}
+  {tab==='overview'&&<div className="research-v3-content">
+   <div className="research-v3-section-heading"><h2>Current research</h2><small>Game time · 24×</small></div>
+   <article className="research-v3-active">
+    {active&&activeProject?<>
+     <div className="research-v3-active-top"><span className="research-v3-active-icon"><Beaker size={19}/></span><div><strong>{activeProject.name}</strong><small>Level {active.level}</small></div><span className="research-v3-active-percent">{Math.round(progress)}%</span></div>
+     <div className="research-v3-active-track" role="progressbar" aria-label="Research progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{width:progress+'%'}}/></div>
+     <div className="research-v3-active-meta"><span><Clock3 size={13}/> {formatDuration(active.endsAt-gameNow)} remaining</span><span>Researching</span></div>
+     <button type="button" className="research-v3-primary" disabled={!company||company.cash<finishCost} onClick={onCompleteNow}>{company&&company.cash<finishCost?'Need '+euro(finishCost):'Complete now · '+euro(finishCost)}</button>
+     <details className="research-v3-more"><summary>More options <ChevronDown size={14}/></summary><div><p>Completion price decreases with the remaining research time. Cancelling provides no refund.</p><button type="button" className="research-v3-cancel" onClick={onCancel}>Cancel research</button></div></details>
+    </>:<>
+     <div className="research-v3-active-top"><span className="research-v3-active-icon"><CheckCircle2 size={19}/></span><div><strong>No active project</strong><small>Your research lab is ready</small></div></div>
+     <button type="button" className="research-v3-primary" onClick={()=>setTab('projects')}>Browse projects <ArrowUpRight size={15}/></button>
+    </>}
+   </article>
+   <div className="research-v3-section-heading"><h2>Next upgrades</h2><button type="button" onClick={()=>setTab('projects')}>All projects <ArrowUpRight size={14}/></button></div>
+   <div className="research-v3-suggestions">{recommended.map(p=><button key={p.id} type="button" onClick={()=>openProject(p.id)}>
+    <span className="research-v3-suggestion-name"><strong>{p.name}</strong><small>Level {level(state,p.id)+1} · {euro(price(p.id,level(state,p.id)+1))}</small></span><ArrowUpRight size={15}/></button>)}
+    {!recommended.length&&<p className="research-v3-empty">All available research is complete.</p>}
+   </div>
   </div>}
-  {tab==='projects'&&<div className="research-section"><div className="research-section-heading"><h2>Available research</h2><span>Permanent company improvements</span></div><div className="research-grid">{projects.map(projectCard)}</div><div className="research-info"><ShieldCheck size={18}/> Research costs are charged when you start a project. Cancelling does not refund the cost.</div></div>}
-  {tab==='progress'&&<div className="research-section"><div className="research-section-heading"><h2>Development progress</h2><span>{completed} of {projects.reduce((sum,p)=>sum+maxLevel(p.id),0)} research levels completed</span></div><div className="research-progress-list">{projects.map(p=>{const Icon=icons[p.id],current=level(state,p.id);return <article key={p.id}><span className="research-project-icon"><Icon size={19}/></span><div><strong>{p.name}</strong><small>{p.effect}</small><div className="research-level-track">{Array.from({length:maxLevel(p.id)},(_,i)=><span key={i} className={i<current?'filled':''}/>)}</div></div><b>{current} / {maxLevel(p.id)}</b></article>})}</div><div className="research-info"><Clock3 size={18}/> Research uses the same 24× game clock as company operations.</div></div>}
+  {tab==='projects'&&<div className="research-v3-content">
+   <div className="research-v3-section-heading"><div><h2>Projects</h2><small>{visible.length} programmes</small></div><button type="button" className={filtersOpen||category!=='all'||filter!=='available'||search?'research-v3-filter-toggle active':'research-v3-filter-toggle'} aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={16}/> Filter</button></div>
+   {filtersOpen&&<div className="research-v3-tools">
+    <label className="research-v3-search"><Search size={16}/><input type="search" value={search} onChange={e=>setSearch(e.target.value)} aria-label="Search research projects" placeholder="Find technology…"/></label>
+    <div className="research-v3-filter-chips" aria-label="Project status">{([['available','Available'],['all','All'],['completed','Complete']] as const).map(([id,label])=><button type="button" key={id} className={filter===id?'active':''} aria-pressed={filter===id} onClick={()=>setFilter(id)}>{label}</button>)}</div>
+    <label className="research-v3-category-label">Category <select value={category} onChange={e=>setCategory(e.target.value==='all'?'all':Number(e.target.value))}><option value="all">All categories</option>{categories.map((name,i)=><option key={name} value={i}>{name}</option>)}</select></label>
+   </div>}
+   <div className="research-v3-project-list">{visible.map(projectRow)}{!visible.length&&<p className="research-v3-empty">No matching projects. Change the filters to see more.</p>}</div>
+  </div>}
+  {tab==='progress'&&<div className="research-v3-content">
+   <div className="research-v3-section-heading"><h2>Development</h2><small>{completed} / {total} levels</small></div>
+   <div className="research-v3-progress-total" role="progressbar" aria-label="Overall research completion" aria-valuenow={completed} aria-valuemin={0} aria-valuemax={total}><span style={{width:(total?completed/total*100:0)+'%'}}/></div>
+   <div className="research-v3-progress-list">{projects.map(p=>{
+    const current=level(state,p.id),max=maxLevel(p.id);return <article key={p.id}>
+     <div className="research-v3-progress-info"><strong>{p.name}</strong><small>{current} / {max}</small></div>
+     <div className="research-v3-level-track" role="progressbar" aria-label={p.name+' completed levels'} aria-valuenow={current} aria-valuemin={0} aria-valuemax={max}><span style={{width:(current/max*100)+'%'}}/></div>
+    </article>;
+   })}</div>
+  </div>}
  </section>;
 }
