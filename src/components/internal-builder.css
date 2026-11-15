@@ -45,7 +45,7 @@
 .internal-builder .ib-header h1{font-size:21px;letter-spacing:-.6px}
 .internal-builder .ib-header p{color:var(--ib-muted);font-size:11px}
 .internal-builder .ib-tabs{
- display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;
+ display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;
  padding:5px;margin-bottom:14px;border-radius:13px;background:rgba(36,49,80,.64);
  border:1px solid var(--ib-line);
 }
@@ -252,4 +252,41 @@
  .internal-builder .ib-heading-actions{justify-content:flex-start}
  .internal-builder .ib-section>.ib-heading:first-child{align-items:flex-start;flex-direction:column}
  .internal-builder .ib-heading-actions button{min-height:38px}
+}
+
+.internal-builder .ib-supplies{display:flex;flex-direction:column;gap:13px}
+.internal-builder .ib-inventory-grid{
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));gap:7px;
+}
+.internal-builder .ib-inventory-row{
+ display:flex;align-items:center;justify-content:space-between;gap:9px;
+ padding:10px;border:1px solid var(--ib-line);border-radius:10px;background:var(--ib-card);
+}
+.internal-builder .ib-inventory-row>div{min-width:0}
+.internal-builder .ib-inventory-row strong{font-size:11px}
+.internal-builder .ib-inventory-row small{font-size:10px;color:var(--ib-muted);display:block;margin-top:4px}
+.internal-builder .ib-inventory-row>span{
+ flex:0 0 auto;font-size:11px;font-weight:700;color:var(--ib-accent);
+ font-variant-numeric:tabular-nums;
+}
+.internal-builder .ib-supply-order{
+ display:flex;flex-direction:column;gap:12px;
+ border:1px solid rgba(197,160,242,.32);border-radius:12px;
+ background:rgba(36,41,73,.85);padding:13px;
+}
+.internal-builder .ib-supply-order>div:first-child{display:flex;flex-direction:column;gap:5px}
+.internal-builder .ib-supply-order>div:first-child strong{display:flex;align-items:center;gap:7px;font-size:12px}
+.internal-builder .ib-supply-order>div:first-child small{color:var(--ib-muted);font-size:10px}
+.internal-builder .ib-supply-order input{
+ min-height:38px;width:105px;padding:8px 10px;
+ border:1px solid var(--ib-line);border-radius:8px;
+ background:#1d2a46;color:var(--ib-fg);
+}
+@media(max-width:680px){
+ .internal-builder .ib-inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .internal-builder .ib-inventory-row{min-width:0;flex-direction:column;align-items:start;gap:5px}
+ .internal-builder .ib-tabs button{font-size:9px}
+}
+@media(max-width:380px){
+ .internal-builder .ib-tabs button{font-size:8px}
 }
