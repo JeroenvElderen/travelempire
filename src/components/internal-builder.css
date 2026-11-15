@@ -290,3 +290,20 @@
 @media(max-width:380px){
  .internal-builder .ib-tabs button{font-size:8px}
 }
+
+.internal-builder .ib-history-controls{display:flex;align-items:center;gap:5px}
+.internal-builder .ib-history-controls button{
+ display:grid;place-items:center;min-width:35px;min-height:35px;
+ border:1px solid var(--ib-line);border-radius:8px;
+ background:rgba(37,52,80,.94);color:var(--ib-fg);
+}
+.internal-builder .ib-room-duplicate{
+ flex:0 0 auto;display:grid;place-items:center;
+ width:33px;height:33px;padding:0;border-radius:8px;
+ border:1px solid rgba(197,160,242,.32);
+ background:rgba(119,88,156,.24);color:var(--ib-accent);
+}
+@media(max-width:680px){
+ .internal-builder .ib-history-controls{order:2}
+ .internal-builder .ib-zoom{order:1}
+}
