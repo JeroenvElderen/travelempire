@@ -14,4 +14,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm test -- src/constructionLogistics.test.ts
+      - run: npm test -- src/constructionLogistics.test.ts src/internalConstruction.test.ts src/hotelOperations.test.ts
