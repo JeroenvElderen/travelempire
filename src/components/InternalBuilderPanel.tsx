@@ -13,7 +13,7 @@ import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
  onSelectLand:()=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
- onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;
+ onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
 };
 type Tab='sites'|'blueprint'|'projects'|'supplies'|'crew';
 const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'#65516f',restaurant:'#695d81',bar:'#66486b',lobby:'#3f6672',storage:'#4c5d65',staff:'#4d5a79',corridor:'#414c64',office:'#445a7a',meeting:'#535079'};
@@ -21,7 +21,7 @@ const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',k
 type Cell={x:number;y:number;fx:number;fy:number};
 const id=()=>crypto.randomUUID();
 const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker,onDismissWorker}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -232,7 +232,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
    <div className="ib-heading"><div><h2>Internal construction team</h2><small>Hire workers to build your own developments</small></div></div>
    <div className="ib-stat-row"><span><Users size={14}/><strong>{state.workers}</strong> workers</span><span><strong>{euros(state.workers*WORKER_HOURLY_CENTS)}</strong>/game hour payroll</span></div>
    <article className="ib-crew-card"><span className="ib-site-icon"><Users size={23}/></span><div><strong>Construction worker</strong><small>€{Math.round(RECRUITMENT_CENTS/100).toLocaleString('en-IE')} hiring & training · {euros(WORKER_HOURLY_CENTS)}/game hour</small><small>Workers are paid every simulated hour, including while idle.</small></div><button type="button" className="ib-primary" disabled={cash*100<RECRUITMENT_CENTS} onClick={()=>{const msg=onHireWorker();setStatus(msg??'Worker joined your internal construction division.');}}><Plus size={14}/> Hire</button></article>
-   <p className="ib-note">Hiring is optional. External contractors charge fixed project fees. Your own team requires at least two workers and incurs continuing wages, so schedule jobs carefully.</p>
+   <div className="ib-crew-actions"><button type="button" className="ib-secondary" disabled={state.workers===0} onClick={()=>{const msg=onDismissWorker();setStatus(msg??'Worker dismissed. Hourly payroll will decrease.');}}><Trash2 size={14}/> Dismiss one worker</button></div>
+   <p className="ib-note">Hiring is optional. External contractors charge fixed project fees. Your own team requires at least two workers and incurs continuing wages, so schedule jobs carefully. Workers cannot be dismissed during an active self-build project.</p>
   </div>}
  </section>;
 }
