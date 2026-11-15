@@ -1,5 +1,6 @@
-import {useMemo,useState} from 'react';
-import {BRANDS,EUROPEAN_MODELS,configuredOffer,marketPrice,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {CarFront,ChevronDown,ChevronRight} from 'lucide-react';
+import {BRANDS,EUROPEAN_MODELS,configuredOffer,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
@@ -20,6 +21,8 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const [variantId,setVariantId]=useState('');
  const [search,setSearch]=useState('');
  const [reviewing,setReviewing]=useState(false);
+ const summaryRef=useRef<HTMLElement>(null);
+ useEffect(()=>{if(reviewing)summaryRef.current?.scrollIntoView({behavior:'smooth',block:'start'});},[reviewing]);
  const filteredBrands=BRANDS.filter(b=>b.toLowerCase().includes(search.toLowerCase()));
  const choices=trimChoices(model,year);
  const currentTrim=choices.includes(trim)?trim:choices[0];
@@ -46,73 +49,69 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const selectableExtras=extras.filter(o=>!o.included);
  const allExtrasSelected=selectableExtras.length>0&&selectableExtras.every(o=>extraIds.includes(o.id));
  const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
- const market=marketPrice(model,year);
  const priceBreakdown=trimPricing(model,year,currentTrim);
  const offer=configuredOffer(model,year,extraIds,currentTrim,activeVariant?.id,paint?.id,wheel?.id);
  const upfront=mode==='cash'?offer.price+DRIVER_COST:mode==='finance'?financeQuote(offer.price,depositPercent,termDays).deposit+DRIVER_COST:leaseQuote(offer.price,termDays).upfront+DRIVER_COST;
  const bonus=offer.revenueBonus??0;
- const cheapestEnginePrice=availableVariants.length?Math.min(...availableVariants.map(v=>v.price)):0;
- const engineBonus=availableVariants.length===1?1:activeVariant&&activeVariant.price>cheapestEnginePrice?5:0;
  return <section className="eu-dealership">
-  {onBack&&<button type="button" className="eu-back" onClick={onBack}>← Browse vehicles</button>}
-  <header className="eu-dealer-hero"><span>TRAVELEMPIRE MOTORS · EUROPE</span><h2>Build your next vehicle</h2><p>{BRANDS.length} manufacturers · {EUROPEAN_MODELS.length} models · brochure-based · factory-style configuration</p></header>
+  {onBack&&<button type="button" className="eu-back" onClick={onBack}>← Back to models</button>}
+  <header className="eu-dealer-hero"><div><span>VEHICLE CONFIGURATOR</span><h2>{model.brand} {model.name}</h2><p>{year} · {activeVariant?.fuel??model.fuel} · {model.seats} seats</p></div><div className="eu-hero-price"><small>Configured price</small><strong>{eur(offer.price)}</strong></div></header>
   <div className={'eu-dealer-grid'+(reviewing?' eu-reviewing':'')}>
-   <div className="eu-dealer-controls">
-    <label>Find manufacturer<input type="search" placeholder="Search brands…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-    <div className="eu-brand-grid">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} onClick={()=>{setBrand(b);setSelected('');setYear(EUROPEAN_MODELS.find(m=>m.brand===b)?.years[0]??2026);setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
-    <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setYear(models.find(m=>m.name===e.target.value)?.years[0]??2026);setSelectedExtras([]);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Model year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}>{model.years.map(y=><option key={y} value={y}>{y}</option>)}</select></label></div>
-    <label>Equipment grade<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('');setSelectedExtras([])}}>{choices.map((choice,index)=><option key={choice} value={choice}>{choice} · {variants.length?'Published variant · upgrades estimated':index===0?'Included':index===1?'+6% estimated price · +5% revenue':'+12% estimated price · +10% revenue'}</option>)}</select></label>
-    {availableVariants.length>0&&<label>Verified engine and transmission (+{engineBonus}% revenue)<select value={activeVariant?.id??''} onChange={e=>setVariantId(e.target.value)}>{availableVariants.map(v=><option key={v.id} value={v.id}>{v.engine} · {v.powerHp?v.powerHp+' hp · ':''}{v.transmission} · {eur(v.price)} · +{availableVariants.length===1?1:v.price>cheapestEnginePrice?5:0}% revenue</option>)}</select></label>}
-    <label>Exterior colour<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name} · {p.price?'+':' '}{eur(p.price)}</option>)}</select></label>
-    <label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name} · {w.price?'+':' '}{eur(w.price)}</option>)}</select></label>
-    <fieldset><legend>Individual equipment</legend>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',flexWrap:'wrap',marginBottom:'10px'}}>
-       <small>{extraIds.length} of {selectableExtras.length} options selected</small>
-       <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-        <button type="button" disabled={selectableExtras.length===0||allExtrasSelected} onClick={()=>setSelectedExtras(selectableExtras.map(o=>o.id))}>Select all</button>
-        <button type="button" disabled={extraIds.length===0} onClick={()=>setSelectedExtras([])}>Deselect all</button>
-       </div>
-      </div>
-      <p className="eu-source-note">Only optional equipment is shown. Features already included in the selected grade are hidden. Prices are TravelEmpire estimates; real-world retrofit availability is not guaranteed.</p>
+   {!reviewing&&<div className="eu-dealer-controls">
+    <section className="eu-config-group">
+      <div className="eu-config-group-heading"><span className="eu-step-number">01</span><h3>Vehicle</h3></div>
+      <label className="eu-manufacturer-search">Manufacturer<input type="search" placeholder="Find a manufacturer…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+      <div className="eu-brand-grid" aria-label="Manufacturers">{filteredBrands.map(b=><button key={b} type="button" className={brand===b?'selected':''} aria-pressed={brand===b} onClick={()=>{setBrand(b);setSelected('');setYear(EUROPEAN_MODELS.find(m=>m.brand===b)?.years[0]??2026);setPaintId('');setWheelId('');setSelectedExtras([]);setTrim('Base');setVariantId('')}}>{b}</button>)}</div>
+      <div className="eu-two"><label>Model<select value={model.name} onChange={e=>{setSelected(brand+' '+e.target.value);setYear(models.find(m=>m.name===e.target.value)?.years[0]??2026);setSelectedExtras([]);setPaintId('');setWheelId('');setTrim('Base');setVariantId('')}}>{models.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></label><label>Year<select value={year} onChange={e=>{setYear(Number(e.target.value));setTrim('Base');setPaintId('');setWheelId('');setSelectedExtras([]);setVariantId('')}}>{model.years.map(y=><option key={y} value={y}>{y}</option>)}</select></label></div>
+      <label>Trim<select value={currentTrim} onChange={e=>{setTrim(e.target.value);setVariantId('');setSelectedExtras([])}}>{choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}</select></label>
+      {availableVariants.length>0&&<label>Engine &amp; transmission<select value={activeVariant?.id??''} onChange={e=>setVariantId(e.target.value)}>{availableVariants.map(v=><option key={v.id} value={v.id}>{v.engine} · {v.transmission}</option>)}</select></label>}
+    </section>
+    <section className="eu-config-group">
+      <div className="eu-config-group-heading"><span className="eu-step-number">02</span><h3>Appearance</h3></div>
+      <div className="eu-two"><label>Paint<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name}{p.price?' · +'+eur(p.price):''}</option>)}</select></label><label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name}{w.price?' · +'+eur(w.price):''}</option>)}</select></label></div>
+    </section>
+    <details className="eu-extras-panel eu-config-group">
+     <summary><span className="eu-extras-title"><span className="eu-step-number">03</span><strong>Optional equipment</strong></span><span className="eu-extras-count">{extraIds.length} selected <ChevronDown size={16}/></span></summary>
+     <div className="eu-extras-content">
+      <div className="eu-extras-toolbar"><small>{selectableExtras.length} available options</small><div><button type="button" disabled={!selectableExtras.length||allExtrasSelected} onClick={()=>setSelectedExtras(selectableExtras.map(o=>o.id))}>Select all</button><button type="button" disabled={!extraIds.length} onClick={()=>setSelectedExtras([])}>Clear</button></div></div>
       {(['Safety','Comfort','Technology','Exterior','Interior','Wheels'] as const).map(group=>{
        const categoryExtras=extras.filter(o=>o.group===group&&!o.included);
        const selectedCount=categoryExtras.filter(o=>extraIds.includes(o.id)).length;
-       if(categoryExtras.length===0)return null;
-       return <details key={group} className="eu-equipment-category" style={{marginTop:'10px',border:'1px solid var(--border, #d5dbe3)',borderRadius:'8px',padding:'10px 12px'}}>
-        <summary style={{cursor:'pointer',fontWeight:600}}>{group} · {selectedCount} selected · {categoryExtras.length} options</summary>
-        <div className="eu-options" style={{marginTop:'10px'}}>{categoryExtras.map(o=>{
-         const selected=o.included||extraIds.includes(o.id);
-         return <button key={o.id} type="button" aria-pressed={selected} disabled={o.included}
-          onClick={()=>setSelectedExtras(old=>old.includes(o.id)?old.filter(id=>id!==o.id):[...old,o.id])}
-          style={{display:'flex',width:'100%',minWidth:0,boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',gap:'8px',textAlign:'left',padding:'10px',borderRadius:'10px',border:selected?'2px solid #22a35a':'1px solid var(--border, #cbd5e1)',background:selected?'rgba(34,163,90,0.08)':'transparent',color:'inherit',cursor:o.included?'default':'pointer',opacity:1}}>
-          <span style={{display:'flex',minWidth:0,flex:1,flexDirection:'column',gap:'3px',overflowWrap:'anywhere'}}><strong>{o.label}</strong><small>{o.included?'Included in '+currentTrim:'+'+eur(o.price)}</small></span>
-          {selected&&<span aria-hidden="true" style={{color:'#22a35a',fontWeight:700,fontSize:'11px',flexShrink:0}}>{o.included?'Included':'Selected'}</span>}
+       if(!categoryExtras.length)return null;
+       return <details key={group} className="eu-equipment-category">
+        <summary>{group}<span>{selectedCount}/{categoryExtras.length} <ChevronDown size={14}/></span></summary>
+        <div className="eu-options">{categoryExtras.map(o=>{
+         const checked=extraIds.includes(o.id);
+         return <button key={o.id} type="button" className={checked?'eu-option-selected':''} aria-pressed={checked} onClick={()=>setSelectedExtras(old=>old.includes(o.id)?old.filter(id=>id!==o.id):[...old,o.id])}>
+          <span className="eu-option-copy"><strong>{o.label}</strong><small>+{eur(o.price)}</small></span><span className="eu-option-indicator">{checked?'✓':'+'}</span>
          </button>;
         })}</div>
        </details>;
       })}
-    </fieldset>
-
+     </div>
+    </details>
    </div>
-   <aside className="eu-config-summary">
-    <div className="eu-vehicle-stage"><div className="eu-car-symbol" aria-hidden="true">🚘</div><small>{model.segment} · {activeVariant?.fuel??model.fuel} · {model.seats} passenger seats</small></div>
+   <aside className="eu-config-summary" ref={summaryRef}>
+    <div className="eu-vehicle-stage"><CarFront size={29} aria-hidden="true"/><small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small></div>
     <h3>{year} {model.brand} {model.name}</h3><p>{currentTrim} grade · {paint?.name??'Standard paint'} · {wheel?.name??'Standard wheels'}</p>
-    <div className="eu-price-line"><span>Base vehicle</span><strong>{eur(activeVariant?.price??priceBreakdown.base)}</strong></div>
-    <div className="eu-price-line"><span>Trim</span><strong>{eur(activeVariant?0:priceBreakdown.cost)}</strong></div>
-    <div className="eu-price-line"><span>Colour</span><strong>{eur(paint?.price??0)}</strong></div>
-    <div className="eu-price-line"><span>Wheels</span><strong>{eur(wheel?.price??0)}</strong></div>
-    {!activeVariant&&market?<p className="eu-source-note">Published {market.market} starting price ({market.year}): <a href={market.source} target="_blank" rel="noopener noreferrer">{eur(market.from)} · manufacturer source</a>. {market.note}. Higher trim and option prices are game estimates.</p>:!activeVariant?<p className="eu-source-note">Starting price and options are in-game estimates; no manufacturer quote has been verified for this model and year.</p>:null}
-    <div className="eu-price-line"><span>Individual equipment</span><strong>{eur(extraTotal)}</strong></div>
+    <details className="eu-price-breakdown"><summary>Price breakdown <span>View details <ChevronDown size={15}/></span></summary><div>
+      <div className="eu-price-line"><span>Base vehicle</span><strong>{eur(activeVariant?.price??priceBreakdown.base)}</strong></div>
+      <div className="eu-price-line"><span>Trim</span><strong>{eur(activeVariant?0:priceBreakdown.cost)}</strong></div>
+      <div className="eu-price-line"><span>Paint</span><strong>{eur(paint?.price??0)}</strong></div>
+      <div className="eu-price-line"><span>Wheels</span><strong>{eur(wheel?.price??0)}</strong></div>
+      <div className="eu-price-line"><span>Options</span><strong>{eur(extraTotal)}</strong></div>
+     </div></details>
     <div className="eu-price-total"><span>Configured price</span><strong>{eur(offer.price)}</strong></div>
-    <div className="eu-revenue"><strong>+{bonus}% fare revenue</strong><span>Example €25 fare → €{(25*(1+bonus/100)).toFixed(2)}</span><small>+1% per paid equipment option or premium paint/wheels; engine +5% above cheapest, or +1% if only one engine is available. Applied to completed passenger fares.</small></div>
+    <div className="eu-revenue"><span>Fare bonus</span><strong>+{bonus}%</strong><small>Example €25 fare → €{(25*(1+bonus/100)).toFixed(2)}</small></div>
     <div className="eu-price-line"><span>Estimated energy cost / 100 km</span><strong>{eur((activeVariant?.fuel??model.fuel)==='Electric'?18*.32:(activeVariant?.fuel??model.fuel)==='Hybrid'?4.6*1.85:(activeVariant?.fuel??model.fuel)==='Diesel'?5.8*1.75:8*1.85)}</strong></div>
-    <div className="eu-price-line"><span>Order quantity</span><strong>{quantity}</strong></div>
-    <div className="eu-price-line"><span>Delivery depot</span><strong>{depotName}</strong></div>
+    <div className="eu-price-line"><span>Quantity</span><strong>{quantity}</strong></div>
+    <div className="eu-price-line"><span>Delivery</span><strong>{depotName}</strong></div>
     {parkingError&&<p className="dealer-parking-error" role="alert">{parkingError}</p>}
-    <div className="eu-price-total"><span>Due at checkout incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
-    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-source-note">Review your configuration and payment before confirming. {quantity} vehicle(s) · {mode} · {eur(upfront*quantity)} due now · {eur(Math.max(0,cash-upfront*quantity))} cash remaining.</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
-    <small className="eu-disclaimer">Curated European-market-inspired game catalogue. Selected 2026 models have published manufacturer variant prices; other 2026 references may be undated live starting prices. All remaining prices and factory upgrades are gameplay estimates. Model-year availability and equipment compatibility are not fully manufacturer-verified. Petrol, diesel, hybrid and electric vehicles now use separate simplified energy-consumption and operating-cost profiles; model-specific WLTP data and charging infrastructure are not yet implemented.</small>
+    <div className="eu-price-total eu-checkout-due"><span>Due now incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
+    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-upfront*quantity))} remaining cash</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
+    <small className="eu-brief-note">Vehicle prices and equipment may include gameplay estimates.</small>
    </aside>
   </div>
+  {!reviewing&&<div className="eu-mobile-quick-order"><span><small>Configured price</small><strong>{eur(offer.price)}</strong></span><button type="button" onClick={()=>setReviewing(true)}>Review order <ChevronRight size={16}/></button></div>}
  </section>;
 }
