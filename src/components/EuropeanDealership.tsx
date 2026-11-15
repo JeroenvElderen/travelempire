@@ -90,7 +90,7 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
       })}
      </div>
     </details>
-   </div>
+   </div>}
    <aside className="eu-config-summary" ref={summaryRef}>
     <div className="eu-vehicle-stage"><CarFront size={29} aria-hidden="true"/><small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small></div>
     <h3>{year} {model.brand} {model.name}</h3><p>{currentTrim} grade · {paint?.name??'Standard paint'} · {wheel?.name??'Standard wheels'}</p>
