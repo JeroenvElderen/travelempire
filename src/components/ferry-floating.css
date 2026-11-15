@@ -1,0 +1,388 @@
+/* Minimal Ferries — same navy/lavender floating glass as Fleet and Operations.
+   Styles are scoped to the active ferry overlay; other pages stay unchanged. */
+.nav-v216.ferries-overlay-mode{
+ --ferry-accent:#c5a0f2;--ferry-accent-soft:rgba(173,121,230,.20);
+ --ferry-ink:#f5f2ff;--ferry-muted:#c5cadb;--ferry-subtle:#aab3c9;
+ --ferry-border:rgba(202,194,235,.23);
+ --ferry-surface:rgba(22,32,56,.68);--ferry-card:rgba(24,35,61,.77);
+}
+.nav-v216.ferries-overlay-mode .main{position:relative;overflow:hidden}
+.nav-v216.ferries-overlay-mode .world{
+ position:absolute!important;inset:0!important;width:100%;height:100%;
+}
+.nav-v216.ferries-overlay-mode .topbar.world-minimal-topbar,
+.nav-v216.ferries-overlay-mode .live-finance-wrap,
+.nav-v216.ferries-overlay-mode .world-minimal-date,
+.nav-v216.ferries-overlay-mode .world-minimal-money,
+.nav-v216.ferries-overlay-mode .world-minimal-layers{display:none!important}
+.nav-v216.ferries-overlay-mode .ferries-map-overlay{
+ position:absolute;z-index:55;top:12px;bottom:12px;left:50%;
+ transform:translateX(-50%);width:min(860px,calc(100% - 26px));
+ min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+ border:1px solid rgba(202,184,237,.29);border-radius:25px;
+ background:linear-gradient(145deg,rgba(12,22,45,.44),rgba(15,24,45,.50));
+ box-shadow:0 14px 38px rgba(3,9,23,.19),inset 0 1px rgba(255,255,255,.10);
+ -webkit-backdrop-filter:blur(17px) saturate(113%);
+ backdrop-filter:blur(17px) saturate(113%);
+ scrollbar-width:thin;scrollbar-color:rgba(197,160,242,.38) transparent;
+}
+.nav-v216.ferries-overlay-mode .ferries-map-close{
+ position:sticky;top:10px;float:right;z-index:10;
+ display:grid;place-items:center;margin:10px 12px -46px 0;
+ width:36px;height:36px;border-radius:50%;
+ border:1px solid rgba(197,160,242,.42);
+ background:rgba(28,39,68,.86);color:var(--ferry-ink);
+ -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);cursor:pointer;
+}
+.nav-v216.ferries-overlay-mode .ferry-routes-panel{
+ --ferry-muted:#c5cadb;
+ min-width:0;max-width:none;min-height:0;height:auto;overflow:visible;
+ margin:0!important;padding:13px 14px 25px!important;
+ background:transparent!important;border:0!important;box-shadow:none!important;
+ color:var(--ferry-ink);font-size:13px;line-height:1.4;
+}
+.nav-v216.ferries-overlay-mode .ferry-routes-panel *,
+.nav-v216.ferries-overlay-mode .ferry-routes-panel *::before,
+.nav-v216.ferries-overlay-mode .ferry-routes-panel *::after{box-sizing:border-box}
+.nav-v216.ferries-overlay-mode .ferry-routes-panel :is(button,summary):focus-visible,
+.nav-v216.ferries-overlay-mode .ferries-map-close:focus-visible{outline:2px solid var(--ferry-accent);outline-offset:2px}
+.nav-v216.ferries-overlay-mode .ferry-routes-panel :is(h2,h3,strong){letter-spacing:-.02em}
+.nav-v216.ferries-overlay-mode .ferry-hero{
+ display:flex;align-items:center;justify-content:flex-start;
+ min-height:43px;margin:0 40px 10px 0;padding:0;
+ border:0!important;border-radius:0;
+ background:transparent!important;box-shadow:none!important;overflow:visible;
+}
+.nav-v216.ferries-overlay-mode .ferry-hero-identity{gap:9px}
+.nav-v216.ferries-overlay-mode .ferry-hero-symbol{
+ display:grid;place-items:center;flex:0 0 39px;
+ width:39px;height:39px;border-radius:12px;
+ border:1px solid rgba(197,160,242,.43);
+ background:var(--ferry-accent-soft);color:var(--ferry-accent);
+ box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-hero h2{
+ margin:0;font-size:20px;line-height:1.13;letter-spacing:-.02em;
+ color:var(--ferry-ink);
+}
+.nav-v216.ferries-overlay-mode .ferry-hero p{
+ margin:2px 0 0;font-size:10px;color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-tabs{
+ display:flex;align-items:center;gap:4px;margin:0 0 10px;
+ padding:4px;min-height:42px;
+ border:1px solid var(--ferry-border);border-radius:15px;
+ background:rgba(22,32,56,.62);
+}
+.nav-v216.ferries-overlay-mode .ferry-tabs button{
+ flex:1;min-width:0;display:flex;align-items:center;justify-content:center;
+ height:34px;min-height:34px;padding:0 6px;gap:7px;
+ background:transparent;color:var(--ferry-muted);
+ border:1px solid transparent;border-radius:10px;
+ font-size:12px;white-space:nowrap;box-shadow:none;cursor:pointer;
+}
+.nav-v216.ferries-overlay-mode .ferry-tabs button.active{
+ flex:1.45;border-color:rgba(197,160,242,.6);
+ background:var(--ferry-accent-soft);color:var(--ferry-ink);
+ box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-tabs button>span{
+ font-size:12px;font-weight:750;
+}
+.nav-v216.ferries-overlay-mode .ferry-mini-summary{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:8px;padding:10px 12px;margin:0 0 11px;
+ border:1px solid var(--ferry-border);border-radius:14px;
+ background:rgba(24,35,61,.68);color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-mini-summary span{
+ display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;
+}
+.nav-v216.ferries-overlay-mode .ferry-mini-summary strong{
+ font-size:13px;color:var(--ferry-ink);font-variant-numeric:tabular-nums;
+}
+.nav-v216.ferries-overlay-mode .ferry-toolbar{
+ display:flex;align-items:center;flex-wrap:nowrap;gap:8px;
+ margin:0 0 10px;
+}
+.nav-v216.ferries-overlay-mode .ferry-search{
+ flex:1;min-width:0;min-height:40px;gap:8px;
+ border:1px solid var(--ferry-border);border-radius:12px;
+ background:rgba(14,24,46,.80);color:var(--ferry-accent);
+ padding:0 11px;
+}
+.nav-v216.ferries-overlay-mode .ferry-search input{
+ width:100%;min-width:0;height:40px;min-height:40px;padding:8px 0;
+ color:var(--ferry-ink);background:transparent;font-size:12px;
+}
+.nav-v216.ferries-overlay-mode .ferry-search input::placeholder{color:var(--ferry-subtle)}
+.nav-v216.ferries-overlay-mode .ferry-reload{
+ width:40px;height:40px;min-height:40px;flex:0 0 40px;
+ padding:0;display:grid;place-items:center;
+ border:1px solid var(--ferry-border);border-radius:12px;
+ background:var(--ferry-surface);color:var(--ferry-accent);
+ box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-filters{
+ display:flex;align-items:center;flex-wrap:nowrap;gap:6px;
+ overflow-x:auto;padding:0 0 3px;margin:0 0 10px;
+ scrollbar-width:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-filters button{
+ flex:0 0 auto;min-width:0;min-height:32px;
+ padding:5px 10px;gap:6px;border-radius:100px;
+ border:1px solid var(--ferry-border);background:var(--ferry-surface);
+ color:var(--ferry-muted);font-size:11px;font-weight:700;white-space:nowrap;
+ box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-filters button.active{
+ border-color:rgba(197,160,242,.61);
+ background:var(--ferry-accent-soft);color:var(--ferry-ink);box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-filters button span{
+ min-width:0;padding:0;background:transparent;color:inherit;font-size:10px;
+}
+.nav-v216.ferries-overlay-mode .ferry-section-heading{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:8px;margin:3px 0 10px;
+}
+.nav-v216.ferries-overlay-mode .ferry-section-heading h3{
+ margin:0;font-size:17px;color:var(--ferry-ink);
+}
+.nav-v216.ferries-overlay-mode .ferry-section-heading>span{
+ display:block;margin:0;padding:5px 9px;
+ border-radius:20px;border:1px solid var(--ferry-border);
+ color:var(--ferry-muted);background:var(--ferry-surface);
+ font-size:10px;
+}
+.nav-v216.ferries-overlay-mode :is(.ferry-routes-grid,.ferry-harbour-grid,.ferry-fleet-grid){
+ display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,350px),1fr));
+ gap:9px;
+}
+.nav-v216.ferries-overlay-mode :is(.ferry-route-card,.ferry-port-card,.ferry-fleet-card,.ferry-empty){
+ min-width:0;padding:11px 12px;
+ border:1px solid var(--ferry-border);border-radius:15px;
+ background:var(--ferry-card);color:var(--ferry-ink);
+ box-shadow:inset 0 1px rgba(255,255,255,.08),0 5px 16px rgba(4,9,27,.11);
+ -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-card{padding:11px 12px}
+.nav-v216.ferries-overlay-mode .ferry-route-top{
+ display:flex;align-items:center;gap:8px;min-width:0;
+}
+.nav-v216.ferries-overlay-mode .ferry-card-icon{
+ width:35px;height:35px;flex:0 0 35px;display:grid;place-items:center;
+ border:1px solid rgba(197,160,242,.36);border-radius:11px;
+ background:var(--ferry-accent-soft);color:var(--ferry-accent);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-name{
+ min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-name strong{
+ display:flex;align-items:center;flex-wrap:wrap;gap:5px;
+ min-width:0;font-size:13px;color:var(--ferry-ink);
+ line-height:1.2;overflow-wrap:anywhere;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-name strong svg{
+ color:var(--ferry-accent);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-name small{
+ font-size:10px;line-height:1.2;color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-state{
+ flex:0 0 auto;max-width:98px;min-width:0;
+ padding:4px 7px;border:1px solid var(--ferry-border);
+ border-radius:9px;background:rgba(173,121,230,.12);
+ color:var(--ferry-muted);font-size:10px;font-weight:650;
+ white-space:normal;text-align:center;
+}
+.nav-v216.ferries-overlay-mode .ferry-state.is-unlocked,
+.nav-v216.ferries-overlay-mode .ferry-state.is-approaching{
+ background:var(--ferry-accent-soft);color:var(--ferry-accent);
+ border-color:rgba(197,160,242,.31);
+}
+.nav-v216.ferries-overlay-mode .ferry-state.is-locked{
+ background:rgba(213,205,243,.07);color:var(--ferry-muted);
+ border-color:var(--ferry-border);
+}
+.nav-v216.ferries-overlay-mode .ferry-mini-progress{
+ height:5px;margin:10px 0 0;border-radius:99px;
+ overflow:hidden;background:rgba(214,205,242,.16);
+}
+.nav-v216.ferries-overlay-mode .ferry-mini-progress>div{
+ height:100%;max-width:100%;border-radius:99px;background:var(--ferry-accent);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ margin:10px 0 0;padding-top:9px;border-top:1px solid rgba(202,194,235,.16);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom>div{
+ display:flex;flex-direction:column;gap:2px;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom>div small{
+ color:var(--ferry-muted);font-size:10px;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom>div strong{
+ color:var(--ferry-accent);font-size:15px;white-space:nowrap;
+ font-variant-numeric:tabular-nums;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom .ferry-buy{
+ display:flex;align-items:center;justify-content:center;
+ min-height:35px;padding:7px 12px;
+ border:1px solid rgba(197,160,242,.53);border-radius:11px;
+ background:rgba(123,81,169,.72);color:var(--ferry-ink);
+ font-size:11px;font-weight:750;box-shadow:none;white-space:nowrap;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-bottom .ferry-route-owned{
+ display:flex;align-items:center;gap:5px;color:var(--ferry-accent);font-size:11px;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded{
+ margin:9px 0 0;border-top:1px solid rgba(202,194,235,.16);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded>summary{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:8px;padding:9px 0 0;
+ list-style:none;color:var(--ferry-muted);cursor:pointer;
+ font-size:11px;font-weight:700;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded>summary::-webkit-details-marker{display:none}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded>summary svg{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded[open]>summary svg{transform:rotate(180deg)}
+.nav-v216.ferries-overlay-mode .ferry-route-expanded-content{
+ display:flex;flex-direction:column;gap:10px;padding:11px 0 0;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-progress{margin:2px 0 0}
+.nav-v216.ferries-overlay-mode .ferry-route-terminals{
+ align-items:center;gap:10px;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-terminals>div{gap:4px;max-width:45%}
+.nav-v216.ferries-overlay-mode .ferry-route-terminals svg{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-route-terminals strong{font-size:11px}
+.nav-v216.ferries-overlay-mode .ferry-progress-line{
+ margin:16px 10px 12px;height:6px;
+ border:0;background:rgba(214,205,242,.16);
+}
+.nav-v216.ferries-overlay-mode .ferry-progress-fill{
+ background:var(--ferry-accent);box-shadow:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-progress-boat{
+ color:var(--ferry-accent);filter:none;
+}
+.nav-v216.ferries-overlay-mode .ferry-journey-caption{
+ font-size:10px;color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-route-details{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:0;border:1px solid var(--ferry-border);
+ border-radius:12px;background:transparent;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-details>div{
+ display:flex;flex-direction:column;align-items:center;gap:5px;
+ padding:10px 4px;min-width:0;background:transparent;
+}
+.nav-v216.ferries-overlay-mode .ferry-route-details svg{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-route-details span{font-size:10px;color:var(--ferry-muted)}
+.nav-v216.ferries-overlay-mode .ferry-route-details strong{
+ font-size:12px;color:var(--ferry-ink);
+}
+.nav-v216.ferries-overlay-mode .ferry-fare-control{
+ margin:0;padding:10px 0 0;border-top:1px solid var(--ferry-border);
+}
+.nav-v216.ferries-overlay-mode .ferry-fare-control label{font-size:11px;color:var(--ferry-muted)}
+.nav-v216.ferries-overlay-mode .ferry-fare-control label strong{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-fare-control input{accent-color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-fare-control small{color:var(--ferry-subtle);font-size:10px}
+.nav-v216.ferries-overlay-mode .ferry-port-card{
+ display:flex;align-items:center;gap:9px;min-height:65px;
+}
+.nav-v216.ferries-overlay-mode .ferry-port-symbol{
+ width:34px;height:34px;flex:0 0 34px;border-radius:11px;
+ border:1px solid rgba(197,160,242,.27);
+ background:var(--ferry-accent-soft);color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-port-symbol.is-discovered{
+ background:var(--ferry-accent-soft);color:var(--ferry-accent);
+}
+.nav-v216.ferries-overlay-mode .ferry-port-copy{gap:3px;min-width:0}
+.nav-v216.ferries-overlay-mode .ferry-port-copy strong{
+ font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.nav-v216.ferries-overlay-mode .ferry-port-copy small{
+ font-size:10px;color:var(--ferry-muted);white-space:nowrap;
+}
+.nav-v216.ferries-overlay-mode .ferry-port-card .ferry-state{
+ flex:0 0 auto;max-width:100px;font-size:9px;
+}
+.nav-v216.ferries-overlay-mode .ferry-fleet-card{
+ display:grid;grid-template-columns:34px minmax(0,1fr) auto;
+ align-items:center;gap:9px;padding:11px 12px;
+}
+.nav-v216.ferries-overlay-mode .ferry-fleet-icon{
+ display:grid;place-items:center;width:34px;height:34px;
+ border-radius:11px;border:1px solid rgba(197,160,242,.33);
+ background:var(--ferry-accent-soft);color:var(--ferry-accent);
+}
+.nav-v216.ferries-overlay-mode .ferry-fleet-icon svg{width:19px;height:19px}
+.nav-v216.ferries-overlay-mode .ferry-fleet-card>div:nth-child(2){gap:3px}
+.nav-v216.ferries-overlay-mode .ferry-fleet-card strong{font-size:12px}
+.nav-v216.ferries-overlay-mode .ferry-fleet-card small{font-size:10px;color:var(--ferry-muted)}
+.nav-v216.ferries-overlay-mode .ferry-fleet-foot{
+ display:flex;gap:8px;align-items:center;justify-content:space-between;
+ margin:0;padding:8px 0 0;
+ border-top:1px solid rgba(202,194,235,.17);
+ font-size:10px;color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode .ferry-fleet-foot svg{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-fleet-foot span{gap:5px}
+.nav-v216.ferries-overlay-mode .ferry-empty{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:8px;margin:0;padding:18px;text-align:center;
+}
+.nav-v216.ferries-overlay-mode .ferry-empty svg{color:var(--ferry-accent)}
+.nav-v216.ferries-overlay-mode .ferry-empty strong{font-size:13px}
+.nav-v216.ferries-overlay-mode .ferry-empty p{
+ max-width:450px;margin:0;font-size:11px;color:var(--ferry-muted);
+}
+.nav-v216.ferries-overlay-mode :is(.ferry-empty button,.ferry-show-more){
+ display:flex;align-items:center;justify-content:center;
+ min-height:36px;padding:7px 13px;border-radius:11px;
+ border:1px solid rgba(197,160,242,.5);
+ background:var(--ferry-accent-soft);color:var(--ferry-ink);
+ box-shadow:none;font-size:11px;font-weight:700;
+}
+.nav-v216.ferries-overlay-mode .ferry-show-more{margin:12px auto 0}
+.nav-v216.ferries-overlay-mode .ferry-alert,
+.nav-v216.ferries-overlay-mode .ferry-reload-status{
+ margin:0 0 9px;padding:10px 12px;border-radius:12px;
+ font-size:11px;
+}
+.nav-v216.ferries-overlay-mode .ferry-reload-status{
+ background:var(--ferry-accent-soft);border:1px solid var(--ferry-border);
+ color:var(--ferry-ink);
+}
+@media(max-width:800px){
+ .nav-v216.ferries-overlay-mode .ferries-map-overlay{
+  top:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  width:calc(100% - 20px);
+ }
+ .nav-v216.ferries-overlay-mode .ferry-routes-panel{padding:10px 10px 22px!important}
+ .nav-v216.ferries-overlay-mode .ferry-hero{margin-bottom:9px}
+ .nav-v216.ferries-overlay-mode .ferry-tabs{margin-bottom:10px}
+ .nav-v216.ferries-overlay-mode :is(.ferry-routes-grid,.ferry-harbour-grid,.ferry-fleet-grid){
+  grid-template-columns:minmax(0,1fr);gap:8px;
+ }
+ .nav-v216.ferries-overlay-mode .ferry-route-filters{
+  display:flex;grid-template-columns:none;gap:6px;
+ }
+ .nav-v216.ferries-overlay-mode .ferry-route-card{padding:10px 11px}
+}
+@media(max-width:360px){
+ .nav-v216.ferries-overlay-mode .ferry-mini-summary{gap:5px;padding:9px}
+ .nav-v216.ferries-overlay-mode .ferry-mini-summary span{font-size:10px;gap:3px}
+ .nav-v216.ferries-overlay-mode .ferry-mini-summary strong{font-size:11px}
+ .nav-v216.ferries-overlay-mode .ferry-state{max-width:76px;font-size:9px}
+ .nav-v216.ferries-overlay-mode .ferry-route-name strong{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+ .nav-v216.ferries-overlay-mode .ferry-route-card{transition:none!important}
+}
