@@ -1,15 +1,11 @@
 import type {RestStop} from './simulation/driverRest';
-import {DEFAULT_HOTEL_POLICY,hotelPolicyAt,hotelRenovationLevel,officeLevel,type HotelPolicyChange,type HotelRenovation,type OfficeUpgrade} from './propertyManagement';
 
 export type InvestablePOI=RestStop & {kind:'hotel'|'parking'};
 export type PropertyHolding={
  id:string;name:string;kind:'hotel'|'parking';position:[number,number];
  valuationCents:number;investedCents:number;dividendsCents:number;
  /** Last settled simulated hour. Legacy saves may only have lastDay. */
- lastHour?:number;lastDay?:number;
- /** Time-stamped hotel management choices; legacy holdings use standard policy. */
- hotelPolicyHistory?:HotelPolicyChange[];
- hotelRenovations?:HotelRenovation[];
+ lastHour?:number;lastDay?:number
 };
 export type PropertyPortfolio={holdings:Record<string,PropertyHolding>};
 export type PropertyOperations={
@@ -72,9 +68,7 @@ export function buyPropertyShare(portfolio:PropertyPortfolio,p:InvestablePOI,amo
   kind:p.kind,position:p.position,valuationCents,
   investedCents:(old?.investedCents??0)+amountCents,
   dividendsCents:old?.dividendsCents??0,
-  lastHour:old?lastPaidHour(old):currentHour(gameNow),
-  hotelPolicyHistory:old?.hotelPolicyHistory,
-  hotelRenovations:old?.hotelRenovations
+  lastHour:old?lastPaidHour(old):currentHour(gameNow)
  };
  return {holdings:{...portfolio.holdings,[p.id]:holding}};
 }
@@ -102,22 +96,18 @@ export function propertyCapacity(p:Pick<PropertyHolding,'id'|'kind'|'valuationCe
  * disappear at the start of each hour. Parking demand varies by hour.
  * All revenue and cost calculations use integer cents.
  */
-export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'> & Partial<Pick<PropertyHolding,'hotelPolicyHistory'|'hotelRenovations'>>,hour:number,officeUpgrades?:readonly OfficeUpgrade[]):PropertyOperations{
+export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'>,hour:number):PropertyOperations{
  const day=Math.floor(hour/24);
  const time=((hour%24)+24)%24;
  const date=new Date(day*86400000);
  const month=date.getUTCMonth();
+ const capacity=propertyCapacity(p);
  const hotel=p.kind==='hotel';
- const capacity=Math.max(1,Math.round(propertyCapacity(p)*(hotel?1+0.10*hotelRenovationLevel(p.hotelRenovations,hour):1)));
  const variation=(stableHash(p.id+':demand:'+day)%25-12)/100;
  const seasonal=month>=5&&month<=8?1.17:month>=3&&month<=9?1:0.75;
  const weekend=((day+4)%7+7)%7>=5;
- const policy=hotel?hotelPolicyAt(p.hotelPolicyHistory,hour):DEFAULT_HOTEL_POLICY;
- const staffOccupancy=policy.staffing==='lean'?-0.10:policy.staffing==='full'?0.085:0;
- const rateOccupancy=policy.rate==='value'?0.065:policy.rate==='premium'?-0.075:0;
- const hqOccupancy=hotel?officeLevel(officeUpgrades,'reservations',hour)*0.03:0;
  const desiredOccupancy=hotel
-  ?clamp(0.66*seasonal+(weekend?0.06:0)+variation+staffOccupancy+rateOccupancy+hqOccupancy,0.12,0.97)
+  ?clamp(0.66*seasonal+(weekend?0.06:0)+variation,0.12,0.97)
   :clamp((time>=8&&time<19?0.70:time>=19&&time<23?0.47:0.18)+
     (weekend&&time>=10&&time<21?0.08:0)+variation,0.05,0.98);
  const occupiedUnits=clamp(Math.round(capacity*desiredOccupancy),0,capacity);
@@ -128,7 +118,7 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
  // and a predictable parking peak-hour surcharge.
  const priceVariation=stableHash(p.id+':price')%31;
  const rateCents=hotel
-  ?Math.round((90+priceVariation)*100*(month>=5&&month<=8?1.1:1)*(policy.rate==='value'?0.87:policy.rate==='premium'?1.24:1)*(1+0.03*officeLevel(officeUpgrades,'marketing',hour)))
+  ?Math.round((90+priceVariation)*100*(month>=5&&month<=8?1.1:1))
   :Math.round((2.5+priceVariation/20+(time>=8&&time<19?0.50:0))*100);
  const grossCents=hotel
   ?Math.round(occupiedUnits*rateCents/24)
@@ -136,9 +126,7 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
  // Operational expenses do not vanish when a property is empty.
  // Hotels have greater staffing/room-turnover costs; parking has lower
  // variable costs but still incurs supervision, lighting and maintenance.
- const staffCostFactor=hotel?(policy.staffing==='lean'?0.80:policy.staffing==='full'?1.28:1):1;
- const officeCostFactor=hotel?(1-0.04*officeLevel(officeUpgrades,'facilities',hour)):1;
- const fixedCostCents=hotel?Math.round(capacity*18*staffCostFactor*officeCostFactor):Math.round(capacity*13);
+ const fixedCostCents=hotel?Math.round(capacity*18):Math.round(capacity*13);
  const variableCostCents=hotel
   ?Math.round(occupiedUnits*rateCents*0.24/24)
   :Math.round(occupiedUnits*rateCents*0.16);
@@ -153,7 +141,7 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
  };
 }
 /** Accrue once for every completed simulated hour. Never repay already settled hours. */
-export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:number,officeUpgrades?:readonly OfficeUpgrade[]):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
+export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:number):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
  const hour=currentHour(gameNow);
  let incomeCents=0,hours=0,changed=false;
  const holdings={...portfolio.holdings};
@@ -164,7 +152,7 @@ export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:numb
   const from=Math.max(last,hour-MAX_CATCHUP_HOURS);
   let payment=0;
   for(let t=from+1;t<=hour;t++){
-   const operations=propertyOperations(h,t-1,officeUpgrades);
+   const operations=propertyOperations(h,t-1);
    payment+=Math.round(operations.netCents*ownership(h));
   }
   incomeCents+=payment;hours=Math.max(hours,hour-from);changed=true;
