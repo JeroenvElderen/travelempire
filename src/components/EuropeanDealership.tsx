@@ -6,8 +6,8 @@ import {DRIVER_COST} from '../simulation/taxi';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
-type Props={cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const [brand,setBrand]=useState(initialBrand);
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
  const [selected,setSelected]=useState(initialModel??'Toyota Corolla Saloon');
@@ -20,7 +20,6 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
  const [selectedExtras,setSelectedExtras]=useState<string[]>([]);
  const [variantId,setVariantId]=useState('');
  const [search,setSearch]=useState('');
- const [reviewing,setReviewing]=useState(false);
  const summaryRef=useRef<HTMLElement>(null);
  useEffect(()=>{if(reviewing)summaryRef.current?.scrollIntoView({behavior:'smooth',block:'start'});},[reviewing]);
  const filteredBrands=BRANDS.filter(b=>b.toLowerCase().includes(search.toLowerCase()));
@@ -108,10 +107,10 @@ export default function EuropeanDealership({cash,ready,quantity,mode,depositPerc
     <div className="eu-price-line"><span>Delivery</span><strong>{depotName}</strong></div>
     {parkingError&&<p className="dealer-parking-error" role="alert">{parkingError}</p>}
     <div className="eu-price-total eu-checkout-due"><span>Due now incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
-    {!reviewing?<button className="eu-order" type="button" onClick={()=>setReviewing(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-upfront*quantity))} remaining cash</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>setReviewing(false)}>← Edit configuration</button></>}
+    {!reviewing?<button className="eu-order" type="button" onClick={()=>onReviewChange(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-upfront*quantity))} remaining cash</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>onReviewChange(false)}>← Edit configuration</button></>}
     <small className="eu-brief-note">Vehicle prices and equipment may include gameplay estimates.</small>
    </aside>
   </div>
-  {!reviewing&&<div className="eu-mobile-quick-order"><span><small>Configured price</small><strong>{eur(offer.price)}</strong></span><button type="button" onClick={()=>setReviewing(true)}>Review order <ChevronRight size={16}/></button></div>}
+  {!reviewing&&<div className="eu-mobile-quick-order"><span><small>Configured price</small><strong>{eur(offer.price)}</strong></span><button type="button" onClick={()=>onReviewChange(true)}>Review order <ChevronRight size={16}/></button></div>}
  </section>;
 }
