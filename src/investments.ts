@@ -1,5 +1,5 @@
 import type {RestStop} from './simulation/driverRest';
-import {DEFAULT_HOTEL_POLICY,hotelPolicyAt,officeLevel,type HotelPolicyChange,type OfficeUpgrade} from './propertyManagement';
+import {DEFAULT_HOTEL_POLICY,hotelPolicyAt,hotelRenovationLevel,officeLevel,type HotelPolicyChange,type HotelRenovation,type OfficeUpgrade} from './propertyManagement';
 
 export type InvestablePOI=RestStop & {kind:'hotel'|'parking'};
 export type PropertyHolding={
@@ -9,6 +9,7 @@ export type PropertyHolding={
  lastHour?:number;lastDay?:number;
  /** Time-stamped hotel management choices; legacy holdings use standard policy. */
  hotelPolicyHistory?:HotelPolicyChange[];
+ hotelRenovations?:HotelRenovation[];
 };
 export type PropertyPortfolio={holdings:Record<string,PropertyHolding>};
 export type PropertyOperations={
@@ -72,7 +73,8 @@ export function buyPropertyShare(portfolio:PropertyPortfolio,p:InvestablePOI,amo
   investedCents:(old?.investedCents??0)+amountCents,
   dividendsCents:old?.dividendsCents??0,
   lastHour:old?lastPaidHour(old):currentHour(gameNow),
-  hotelPolicyHistory:old?.hotelPolicyHistory
+  hotelPolicyHistory:old?.hotelPolicyHistory,
+  hotelRenovations:old?.hotelRenovations
  };
  return {holdings:{...portfolio.holdings,[p.id]:holding}};
 }
@@ -100,13 +102,13 @@ export function propertyCapacity(p:Pick<PropertyHolding,'id'|'kind'|'valuationCe
  * disappear at the start of each hour. Parking demand varies by hour.
  * All revenue and cost calculations use integer cents.
  */
-export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'> & Partial<Pick<PropertyHolding,'hotelPolicyHistory'>>,hour:number,officeUpgrades?:readonly OfficeUpgrade[]):PropertyOperations{
+export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuationCents'> & Partial<Pick<PropertyHolding,'hotelPolicyHistory'|'hotelRenovations'>>,hour:number,officeUpgrades?:readonly OfficeUpgrade[]):PropertyOperations{
  const day=Math.floor(hour/24);
  const time=((hour%24)+24)%24;
  const date=new Date(day*86400000);
  const month=date.getUTCMonth();
- const capacity=propertyCapacity(p);
  const hotel=p.kind==='hotel';
+ const capacity=Math.max(1,Math.round(propertyCapacity(p)*(hotel?1+0.10*hotelRenovationLevel(p.hotelRenovations,hour):1)));
  const variation=(stableHash(p.id+':demand:'+day)%25-12)/100;
  const seasonal=month>=5&&month<=8?1.17:month>=3&&month<=9?1:0.75;
  const weekend=((day+4)%7+7)%7>=5;
