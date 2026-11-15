@@ -12,15 +12,15 @@ import {
 import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
- onSelectLand:()=>void;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
+ onSelectLand:()=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
  onStartProject:(id:string,method:TradeMode)=>string|null;onHireWorker:()=>string|null;
 };
 type Tab='sites'|'blueprint'|'projects'|'crew';
-const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'#65516f',restaurant:'#695d81',bar:'#66486b',lobby:'#3f6672',storage:'#4c5d65',staff:'#4d5a79',corridor:'#414c64'};
-const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',kitchen:'Kitchen',restaurant:'Restaurant',bar:'Bar',lobby:'Lobby',storage:'Storage',staff:'Staff room',corridor:'Corridor'};
+const tone:Record<RoomType,string>={guest:'#38557a',bathroom:'#4b6680',kitchen:'#65516f',restaurant:'#695d81',bar:'#66486b',lobby:'#3f6672',storage:'#4c5d65',staff:'#4d5a79',corridor:'#414c64',office:'#445a7a',meeting:'#535079'};
+const category:Record<RoomType,string>={guest:'Guest room',bathroom:'Bathroom',kitchen:'Kitchen',restaurant:'Restaurant',bar:'Bar',lobby:'Lobby',storage:'Storage',staff:'Staff room',corridor:'Corridor',office:'Office',meeting:'Meeting room'};
 type Cell={x:number;y:number;fx:number;fy:number};
 const id=()=>crypto.randomUUID();
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAdoptHolding,onChangeSite,onStartProject,onHireWorker}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onHireWorker}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -104,18 +104,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   }catch(e){setStatus(e instanceof Error?e.message:'Could not add floor.');}
  };
  return <section className="internal-builder">
-  <header className="ib-header"><span className="ib-header-icon"><Building2 size={22}/></span><div><h1>Hotel Development</h1><p>Build and renovate your own properties</p></div></header>
+  <header className="ib-header"><span className="ib-header-icon"><Building2 size={22}/></span><div><h1>Building Development</h1><p>Your hotels, headquarters &amp; construction</p></div></header>
   <nav className="ib-tabs" aria-label="Hotel development sections">
    {([['sites','Properties',Building2],['blueprint','2D builder',Grid2X2],['projects','Construction',HardHat],['crew','My crew',Users]] as const).map(([idValue,label,Icon])=><button type="button" key={idValue} className={tab===idValue?'selected':''} aria-current={tab===idValue?'page':undefined} onClick={()=>{setTab(idValue);setStatus('');setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
   </nav>
   {(status||error)&&<div className="ib-feedback" role="status"><AlertCircle size={15}/>{error||status}</div>}
   {!company&&<div className="ib-empty"><Landmark size={22}/><strong>Create a company to develop hotels.</strong><p>Your building projects use the company treasury and game clock.</p></div>}
   {company&&tab==='sites'&&<div className="ib-section">
-   <div className="ib-heading"><div><h2>My development sites</h2><small>Construct, renovate and furnish your own hotels</small></div><button type="button" className="ib-primary" onClick={onSelectLand}><MapPin size={16}/> Buy land</button></div>
+   <div className="ib-heading"><div><h2>My development sites</h2><small>Construct, renovate and furnish your own buildings</small></div><div className="ib-heading-actions"><button type="button" className="ib-secondary" onClick={()=>{const msg=onAddHeadquarters();if(msg)setStatus(msg);else{setSelectedId('hq:'+company.id);setFloorIndex(0);setTab('blueprint');setStatus('HQ building blueprint opened.');}}}><Landmark size={15}/> Headquarters</button><button type="button" className="ib-primary" onClick={onSelectLand}><MapPin size={16}/> Buy land</button></div></div>
    <div className="ib-stat-row"><span><strong>{sites.length}</strong> sites</span><span><strong>{sites.filter(s=>s.projects.some(p=>p.status==='active')).length}</strong> under construction</span><span><strong>{euros(Math.round(cash*100))}</strong> cash</span></div>
    <div className="ib-cards">
-    {sites.map(s=><article key={s.id} className="ib-site-card"><span className="ib-site-icon"><Building2 size={20}/></span><div><strong>{s.name}</strong><small>{s.kind==='new'?'Own development plot':'Existing hotel renovation'} · {s.draft.length} floor(s)</small><small>{s.projects.some(p=>p.status==='active')?'Construction underway':s.projects.length?'Built / ready for further work':'Blueprint planning'}</small></div><button className="ib-primary" onClick={()=>choose(s.id)}>Open <ChevronLeft size={15}/></button></article>)}
-    {sites.length===0&&<div className="ib-empty"><Building2 size={23}/><strong>No construction sites yet</strong><p>Buy a simulated development plot on the world map or renovate a hotel you control.</p></div>}
+    {sites.map(s=><article key={s.id} className="ib-site-card"><span className="ib-site-icon"><Building2 size={20}/></span><div><strong>{s.name}</strong><small>{s.kind==='new'?'Own development plot':s.kind==='headquarters'?'Company headquarters':'Existing hotel renovation'} · {s.draft.length} floor(s)</small><small>{s.projects.some(p=>p.status==='active')?'Construction underway':s.projects.length?'Built / ready for further work':'Blueprint planning'}</small></div><button className="ib-primary" onClick={()=>choose(s.id)}>Open <ChevronLeft size={15}/></button></article>)}
+    {sites.length===0&&<div className="ib-empty"><Building2 size={23}/><strong>No construction sites yet</strong><p>Open your headquarters, buy a simulated development plot or renovate a hotel you control.</p></div>}
    </div>
    <div className="ib-heading"><div><h2>Hotels you control</h2><small>At least 50% ownership required to plan a renovation</small></div></div>
    {available.length===0?<p className="ib-muted">No unregistered controlling hotel interests. Buy shares in Investments to acquire an existing hotel.</p>:<div className="ib-cards">{available.map(h=><article key={h.id} className="ib-site-card"><span className="ib-site-icon"><Building2 size={19}/></span><div><strong>{h.name}</strong><small>{Math.round(ownership(h)*100)}% owned · Existing hotel</small></div><button type="button" onClick={()=>{const message=onAdoptHolding(h.id);if(message)setStatus(message);else{setSelectedId('hotel:'+h.id);setTab('blueprint');setStatus('Hotel added. Its original investment income remains separate from building plans.');}}}>Plan renovation</button></article>)}</div>}
@@ -123,7 +123,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
   </div>}
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
-   <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':'Renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
+   <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
    <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-zoom"><button onClick={()=>setZoom(v=>Math.max(.7,Math.round((v-.15)*100)/100))} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+.15)*100)/100))} aria-label="Zoom in">+</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
     {([['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
