@@ -12,6 +12,7 @@ import {loadStationTile,type Station} from './data/stations';
 import {loadRestStopTile} from './data/restStops';
 import InvestmentsPanel from './components/InvestmentsPanel';
 import InternalBuilderPanel from './components/InternalBuilderPanel';
+import {setHotelOperating,changeHotelSetting,activeHotelPeriods,settleHotelOperations,type HotelRole} from './hotelOperations';
 import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,orderSupplies,LAND_PRICE_CENTS,RECRUITMENT_CENTS,HOUR_MS,type HotelSite,type TradeMode,type SupplyCode} from './internalConstruction';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
@@ -2686,7 +2687,7 @@ export default function App(){
   const settle=()=>{
    if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
    const now=gameClockRef.current?.epochMs;if(now===undefined)return;
-   const result=settlePropertyDividends(portfolioRef.current,now);
+   const result=settlePropertyDividends(portfolioRef.current,now,activeHotelPeriods(constructionRef.current));
    if(result.portfolio===portfolioRef.current)return;
    try{savePortfolio(companyId,result.portfolio)}catch(error){diagnostic('investments:save-error',String(error));return;}
    portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
@@ -2810,6 +2811,46 @@ export default function App(){
   pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
   setFleet(oldFleet=>({...oldFleet,transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)}));
   setConstructionError('');
+  return null;
+ };
+ const configureHotel=(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  if(!current||clock===undefined)return 'Company or game clock is not ready.';
+  const site=constructionRef.current.sites[siteId];
+  if(!site||site.kind==='headquarters')return 'Choose a hotel to manage.';
+  if(site.sourceHoldingId&&ownership(portfolioRef.current.holdings[site.sourceHoldingId])<.5)
+   return 'You need a controlling share to manage this hotel.';
+  let result;
+  try{result=changeHotelSetting(site,key,value,Math.floor(clock/HOUR_MS));}
+  catch(e){return e instanceof Error?e.message:'Unable to update hotel settings.';}
+  const cost=result.recruitmentCents/100,available=current.cash+pendingCashRef.current;
+  if(cost>available)return 'Insufficient company cash to recruit these employees.';
+  const old=constructionRef.current,next={...old,sites:{...old.sites,[siteId]:result.site}};
+  try{saveConstruction(current.id,next);}catch{return 'Could not save hotel settings.';}
+  constructionRef.current=next;setConstruction(next);
+  if(cost>0){
+   const updated={...current,cash:Math.round((available-cost)*100)/100};
+   pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+   setFleet(oldFleet=>({...oldFleet,transactions:[{
+    id:crypto.randomUUID(),time:clock,description:'Hotel staffing · '+site.name,amount:-cost
+   },...(oldFleet.transactions??[])].slice(0,100)}));
+  }
+  setConstructionError('');
+  return null;
+ };
+ const changeHotelOpening=(siteId:string,open:boolean):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs;
+  if(!current||clock===undefined)return 'Company clock is not ready.';
+  const site=constructionRef.current.sites[siteId];
+  if(!site||site.kind==='headquarters')return 'Choose a hotel to operate.';
+  if(site.sourceHoldingId&&ownership(portfolioRef.current.holdings[site.sourceHoldingId])<.5)
+   return 'You must own at least 50% to operate this hotel.';
+  let updatedSite;
+  try{updatedSite=setHotelOperating(site,open,Math.floor(clock/HOUR_MS));}
+  catch(e){return e instanceof Error?e.message:'Could not change hotel status.';}
+  const old=constructionRef.current,next={...old,sites:{...old.sites,[siteId]:updatedSite}};
+  try{saveConstruction(current.id,next);}catch{return 'Unable to save hotel operating status.';}
+  constructionRef.current=next;setConstruction(next);setConstructionError('');
   return null;
  };
  const dismissConstructionWorker=():string|null=>{
