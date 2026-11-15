@@ -418,3 +418,179 @@
  .nav-v216 .fleet-v2 .fleet-drivers-hire-form>div{flex-wrap:wrap}
  .nav-v216 .fleet-v2 .fleet-drivers-hire-form input{flex-basis:100%}
 }
+
+
+/* Fleet Analytics — compact mobile report with legible frosted-glass panels. */
+.nav-v216 .fleet-v2 .fleet-analytics-modern{
+ display:flex;flex-direction:column;gap:13px;min-width:0;padding:4px 0 26px;color:#f8f6ff;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-heading,
+.nav-v216 .fleet-v2 .fleet-analytics-section-heading{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-heading h2{font-size:21px;letter-spacing:-.035em;margin:0 0 3px;color:#fff}
+.nav-v216 .fleet-v2 .fleet-analytics-heading p{font-size:12px;color:#c8d3e6;margin:0}
+.nav-v216 .fleet-v2 .fleet-analytics-heading>span{
+ padding:6px 9px;flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.075em;
+ border:1px solid rgba(198,159,237,.45);border-radius:20px;color:#e4c9f7;
+ background:rgba(78,52,119,.36);
+}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics article,
+.nav-v216 .fleet-v2 .fleet-analytics-kpis article,
+.nav-v216 .fleet-v2 .fleet-analytics-exploration article,
+.nav-v216 .fleet-v2 .fleet-analytics-utilization,
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle,
+.nav-v216 .fleet-v2 .fleet-analytics-advanced{
+ min-width:0;border:1px solid rgba(201,181,239,.34);
+ background:linear-gradient(145deg,rgba(34,47,80,.85),rgba(15,29,55,.85));
+ box-shadow:inset 0 1px rgba(255,255,255,.12),0 8px 22px rgba(3,7,23,.14);
+ -webkit-backdrop-filter:blur(16px) saturate(120%);backdrop-filter:blur(16px) saturate(120%);
+}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics article{
+ display:flex;flex-direction:column;gap:7px;padding:14px 12px;border-radius:18px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-metric-label{
+ display:flex;align-items:center;gap:6px;min-width:0;color:#d6dbed;font-size:11px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-metric-label svg{flex:0 0 auto;color:#c790f1}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics strong{
+ display:block;font-size:clamp(18px,4.9vw,27px);line-height:1.12;font-weight:800;
+ letter-spacing:-.04em;white-space:nowrap;font-variant-numeric:tabular-nums;color:#f7f7ff;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics .positive{color:#67e3ad}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics .negative,
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-money .negative{color:#ffad9c}
+.nav-v216 .fleet-v2 .fleet-analytics-main-metrics small{font-size:10px;color:#b5c2d8;line-height:1.35}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis article{
+ padding:11px 4px;border-radius:15px;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;gap:6px;text-align:center;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis article svg{color:#c790f1}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis strong{
+ font-size:clamp(11px,2.2vw,16px);color:#f7f9ff;white-space:nowrap;
+ font-variant-numeric:tabular-nums;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis strong.warning{color:#ffc087}
+.nav-v216 .fleet-v2 .fleet-analytics-kpis small{font-size:10px;color:#bfcbdd}
+.nav-v216 .fleet-v2 .fleet-analytics-section{
+ display:flex;flex-direction:column;gap:9px;min-width:0;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-section-heading h3{
+ font-size:17px;letter-spacing:-.03em;margin:0;color:#fff;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-section-heading>span{font-size:11px;color:#c7d2e4}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration article{
+ display:flex;align-items:center;gap:10px;padding:12px;border-radius:16px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration article svg{color:#ca8ff1;flex:0 0 auto}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration article div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration small{font-size:10px;color:#becbe0}
+.nav-v216 .fleet-v2 .fleet-analytics-exploration strong{
+ font-size:15px;letter-spacing:-.02em;white-space:nowrap;color:#fafaff;font-variant-numeric:tabular-nums;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization{
+ padding:13px 14px;border-radius:17px;display:flex;justify-content:space-between;
+ align-items:center;gap:16px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization>div:first-child{
+ min-width:0;flex:1;display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization small{font-size:11px;color:#ccd5e8}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization strong{
+ font-size:18px;font-variant-numeric:tabular-nums;color:#f7f9ff;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization strong span{font-size:12px;color:#b7c5d9}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization progress{
+ grid-column:1/-1;width:100%;height:6px;accent-color:#74debb;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-utilization-note{font-size:11px;color:#70e2ad;white-space:nowrap}
+.nav-v216 .fleet-v2 .fleet-analytics-sort{
+ display:flex;align-items:center;gap:5px;padding:4px;border-radius:14px;
+ border:1px solid rgba(202,180,236,.25);background:rgba(15,28,53,.66);
+}
+.nav-v216 .fleet-v2 .fleet-analytics-sort button{
+ flex:1;min-height:34px;border-radius:10px;border:1px solid transparent;
+ color:#bdc9de;font-size:12px;font-weight:750;background:transparent;cursor:pointer;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-sort button.active{
+ border-color:rgba(217,166,254,.7);color:#fff;
+ background:linear-gradient(125deg,rgba(147,90,192,.78),rgba(104,70,165,.82));
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-list{display:flex;flex-direction:column;gap:7px}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle{
+ display:flex;align-items:center;gap:10px;width:100%;
+ padding:11px 10px;border-radius:14px;text-align:left;color:#f9f9ff;cursor:pointer;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-rank{
+ display:grid;place-items:center;flex:0 0 25px;width:25px;height:25px;
+ border:1px solid rgba(198,152,244,.32);border-radius:9px;
+ background:rgba(152,102,205,.24);font-size:11px;font-weight:800;color:#d6b3f9;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-info strong{
+ font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-info small{
+ font-size:10px;color:#b6c4db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-money{
+ display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:0 0 auto;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-money strong{
+ font-size:13px;color:#70e4b1;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle-money small{font-size:10px;color:#bdc6db}
+.nav-v216 .fleet-v2 .fleet-analytics-vehicle>svg{width:15px;flex:0 0 15px;color:#c9bfdc}
+.nav-v216 .fleet-v2 .fleet-analytics-show-all{
+ display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:38px;
+ border-radius:12px;border:1px solid rgba(201,172,242,.45);
+ color:#e6d3fa;background:rgba(66,48,108,.4);font-size:12px;font-weight:750;cursor:pointer;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-empty{
+ margin:0;padding:16px;text-align:center;font-size:12px;color:#d6d7e7;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced{
+ border-radius:16px;overflow:hidden;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced summary{
+ display:flex;align-items:center;justify-content:space-between;
+ cursor:pointer;min-height:43px;padding:12px 14px;font-size:12px;
+ font-weight:700;color:#e6e3f4;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced[open] summary svg{transform:rotate(180deg)}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced>p{
+ margin:0;padding:0 14px 8px;font-size:11px;color:#b7c5d9;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced .fleet-stat-table{
+ margin:0 8px 12px;padding:4px 8px;max-width:100%;overflow-x:auto;
+ background:rgba(13,28,50,.74);border:1px solid rgba(170,177,219,.18);border-radius:10px;
+}
+.nav-v216 .fleet-v2 .fleet-analytics-advanced th,
+.nav-v216 .fleet-v2 .fleet-analytics-advanced td{font-size:11px;padding:10px 8px}
+.nav-v216 .fleet-v2 .fleet-analytics-modern button:focus-visible,
+.nav-v216 .fleet-v2 .fleet-analytics-modern summary:focus-visible{
+ outline:2px solid #e3b5ff;outline-offset:2px;
+}
+@media(max-width:800px){
+ .nav-v216 .fleet-v2 .fleet-analytics-modern{gap:11px;padding:1px 0 20px}
+ .nav-v216 .fleet-v2 .fleet-analytics-heading h2{font-size:20px}
+ .nav-v216 .fleet-v2 .fleet-analytics-main-metrics{gap:7px}
+ .nav-v216 .fleet-v2 .fleet-analytics-main-metrics article{padding:12px 10px;gap:6px}
+ .nav-v216 .fleet-v2 .fleet-analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .nav-v216 .fleet-v2 .fleet-analytics-kpis article{min-height:75px;padding:10px 6px;gap:5px}
+ .nav-v216 .fleet-v2 .fleet-analytics-kpis strong{font-size:15px}
+ .nav-v216 .fleet-v2 .fleet-analytics-utilization{gap:12px}
+ .nav-v216 .fleet-v2 .fleet-analytics-vehicle{padding:10px 8px;gap:7px}
+}
+@media(max-width:355px){
+ .nav-v216 .fleet-v2 .fleet-analytics-exploration{grid-template-columns:1fr}
+ .nav-v216 .fleet-v2 .fleet-analytics-main-metrics strong{font-size:18px}
+ .nav-v216 .fleet-v2 .fleet-analytics-utilization-note{font-size:10px}
+}
