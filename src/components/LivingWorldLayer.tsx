@@ -2,13 +2,12 @@ import {useEffect,useRef,useState} from 'react';
 import maplibregl,{Popup} from 'maplibre-gl';
 import type {GameClock} from '../simulation/gameClock';
 import {GAME_TIME_SCALE} from '../simulation/gameClock';
-import type {RoadGraph} from '../simulation/taxi';
+import type {RoadGraph,Point} from '../simulation/taxi';
 import type {RoadFeature} from './purpleRoadDiff';
-import {advanceWorldState,newWorldState,trafficLoadAt,visibleWorldVehicles,weatherAt,incidentStatus,type WorldState,type WorldWeather} from '../simulation/livingWorld';
-import {parkedCarSprites} from './parkedCars';
+import {advanceWorldState,newWorldState,trafficLoadAt,visibleWorldVehicles,weatherAt,incidentStatus,
+ type WorldState,type WorldWeather} from '../simulation/livingWorld';
+import {advanceAmbientCar,ambientVehicleBudget,spawnAmbientCar,type AmbientCar} from '../simulation/livingNpcTraffic';
 
-const CAR_SOURCE='te-world-vehicles';
-const CAR_LAYER='te-world-vehicles-layer';
 const INCIDENT_SOURCE='te-world-incidents';
 const INCIDENT_LAYER='te-world-incidents-layer';
 const TRAFFIC_SOURCE='te-world-traffic';
@@ -19,8 +18,18 @@ type Props={
  traffic:boolean;npcs:boolean;events:boolean;weather:boolean;
 };
 type PointFeature=GeoJSON.Feature<GeoJSON.Point>;
+type AmbientVehicle= {id:string;kind:'civilian'|'police'|'ambulance';point:Point;bearing:number;color?:number};
 const emptyCollection=():GeoJSON.FeatureCollection=>({type:'FeatureCollection',features:[]});
 const storageKey=(companyId:string)=>'travelempire.world.v1.'+companyId;
+const PAINT_FILTERS=[
+ 'hue-rotate(180deg) saturate(0.9)',
+ 'hue-rotate(135deg) saturate(1.1)',
+ 'hue-rotate(325deg) saturate(1.0)',
+ 'hue-rotate(245deg) saturate(0.8)',
+ 'grayscale(1) brightness(0.72)',
+ 'grayscale(1) brightness(1.8)',
+ 'hue-rotate(55deg) saturate(0.7)',
+];
 function loadWorld(companyId?:string):WorldState{
  if(!companyId)return newWorldState();
  try{
@@ -31,42 +40,16 @@ function loadWorld(companyId?:string):WorldState{
  }catch{ /* Saved world may predate this version. */ }
  return newWorldState();
 }
-function addSprite(map:maplibregl.Map,id:string,width:number,height:number,data:Uint8Array){
- if(!map.hasImage(id))map.addImage(id,{width,height,data});
-}
-async function addSvgSprite(map:maplibregl.Map,id:string,path:string,w:number,h:number):Promise<boolean>{
- if(map.hasImage(id))return true;
- return new Promise(resolve=>{
-  const image=new Image();
-  image.onload=()=>{
-   try{
-    if(!map.isStyleLoaded())return resolve(false);
-    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-    const context=canvas.getContext('2d');
-    if(!context)return resolve(false);
-    context.clearRect(0,0,w,h);context.drawImage(image,0,0,w,h);
-    const pixels=context.getImageData(0,0,w,h);
-    addSprite(map,id,w,h,new Uint8Array(pixels.data));
-    resolve(true);
-   }catch{resolve(false);}
-  };
-  image.onerror=()=>resolve(false);
-  image.src=path;
- });
-}
 function source(map:maplibregl.Map,id:string){
  if(!map.getSource(id))map.addSource(id,{type:'geojson',data:emptyCollection()});
  return map.getSource(id) as maplibregl.GeoJSONSource;
 }
-function pointFeature(id:string,point:[number,number],properties:Record<string,string|number>):PointFeature{
+function pointFeature(id:string,point:Point,properties:Record<string,string|number>):PointFeature{
  return {type:'Feature',id,geometry:{type:'Point',coordinates:point},properties};
-}
-function validPoint(point:readonly number[]):point is [number,number]{
- return point.length>=2&&Number.isFinite(point[0])&&Number.isFinite(point[1]);
 }
 function addLayers(map:maplibregl.Map){
  if(!map.isStyleLoaded())return;
- source(map,TRAFFIC_SOURCE);source(map,INCIDENT_SOURCE);source(map,CAR_SOURCE);
+ source(map,TRAFFIC_SOURCE);source(map,INCIDENT_SOURCE);
  if(!map.getLayer(TRAFFIC_LAYER))map.addLayer({
   id:TRAFFIC_LAYER,type:'line',source:TRAFFIC_SOURCE,
   layout:{'line-cap':'round','line-join':'round'},
@@ -81,24 +64,28 @@ function addLayers(map:maplibregl.Map){
    'circle-color':['match',['get','kind'],'medical','#e95a63','roadworks','#e7a848','#e5494b'],
    'circle-stroke-color':'#fff','circle-stroke-width':2,'circle-opacity':0.96},
  });
- if(!map.getLayer(CAR_LAYER))map.addLayer({
-  id:CAR_LAYER,type:'symbol',source:CAR_SOURCE,
-  layout:{'icon-image':['get','sprite'],'icon-size':1,'icon-rotate':['get','bearing'],
-   'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
-   'icon-allow-overlap':true,'icon-ignore-placement':true},
-  paint:{'icon-opacity':0.97},
- });
-}
-function hideLayers(map:maplibregl.Map,traffic:boolean,npcs:boolean,events:boolean,weather:boolean){
- // Weather remains a regional status indicator, rather than obscuring roads with a full-screen tint.
- void weather;
- for(const [id,shown] of [[TRAFFIC_LAYER,traffic],[CAR_LAYER,npcs||events],[INCIDENT_LAYER,events]] as const){
-  if(map.getLayer(id))map.setLayoutProperty(id,'visibility',shown?'visible':'none');
- }
 }
 const weatherLabel:Record<WorldWeather,string>={
  clear:'Clear',rain:'Rain',storm:'Thunderstorms',wind:'Windy',snow:'Snow / ice',
 };
+function buildVehicleElement(kind:AmbientVehicle['kind'],color=0):HTMLElement{
+ const element=document.createElement('div');
+ // Exactly the same car artwork and marker proportions as player-owned taxis.
+ element.className='taxi-map-marker te-ambient-vehicle';
+ element.style.pointerEvents='none';
+ if(kind!=='civilian'){
+  element.style.width=kind==='ambulance'?'13px':'10px';
+  element.style.height=kind==='ambulance'?'25px':'21px';
+ }
+ const image=document.createElement('img');
+ const base=import.meta.env.BASE_URL+'assets/';
+ image.src=base+(kind==='civilian'?'car_topview.svg':kind==='police'?'world_police.svg':'world_ambulance.svg');
+ image.alt='';image.draggable=false;
+ if(kind==='civilian')image.style.filter=PAINT_FILTERS[color%PAINT_FILTERS.length];
+ element.title=kind==='civilian'?'Civilian traffic':kind==='police'?'Police response':'Ambulance response';
+ element.appendChild(image);
+ return element;
+}
 export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,discovered,traffic,npcs,events,weather}:Props){
  const worldRef=useRef<WorldState>(loadWorld(companyId));
  const clockRef=useRef(gameClock);clockRef.current=gameClock;
@@ -110,8 +97,13 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
  useEffect(()=>{worldRef.current=loadWorld(companyId);},[companyId]);
  useEffect(()=>{
   if(!map)return;
-  let disposed=false,installed=false,installing=false,lastTrafficUpdate=0;
-  const currentGameTime=()=>{
+  let disposed=false,lastTrafficUpdate=0,lastWorldUpdate=0,lastSpawn=0;
+  let lastFrame=0,animation=0;
+  const mobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const agents=new Map<string,AmbientCar>();
+  const markers=new Map<string,maplibregl.Marker>();
+  const headings=new Map<string,number>();
+  const nowGame=()=>{
    const clock=clockRef.current;
    return clock?clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE:Date.now();
   };
@@ -119,100 +111,158 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
    if(!companyId)return;
    try{localStorage.setItem(storageKey(companyId),JSON.stringify(state));}catch{ /* Storage full */ }
   };
+  const removeMarker=(id:string)=>{
+   markers.get(id)?.remove();markers.delete(id);headings.delete(id);
+  };
+  const drawVehicle=(v:AmbientVehicle,elapsed:number)=>{
+   if(!map.getBounds().contains(v.point)){removeMarker(v.id);return;}
+   let marker=markers.get(v.id);
+   if(!marker){
+    marker=new maplibregl.Marker({element:buildVehicleElement(v.kind,v.color),
+     anchor:'center',rotationAlignment:'map',pitchAlignment:'map'})
+     .setLngLat(v.point).setRotation(v.bearing).addTo(map);
+    markers.set(v.id,marker);headings.set(v.id,v.bearing);
+   }else{
+    marker.setLngLat(v.point);
+    const old=headings.get(v.id)??v.bearing;
+    const turn=((v.bearing-old+540)%360)-180;
+    const next=old+turn*(1-Math.exp(-Math.max(0,elapsed)/0.16));
+    headings.set(v.id,next);
+    marker.setRotation(next);
+   }
+  };
   const onIncidentClick=(event:maplibregl.MapMouseEvent)=>{
    if(!flagsRef.current.events||!map.getLayer(INCIDENT_LAYER))return;
    const feature=map.queryRenderedFeatures(event.point,{layers:[INCIDENT_LAYER]})[0];
    if(!feature)return;
    const incident=worldRef.current.incidents.find(item=>item.id===String(feature.properties?.id));
    if(!incident)return;
-   const name=incident.kind==='collision'?'Road collision':incident.kind==='medical'?'Medical emergency':'Roadworks';
+   const title=incident.kind==='collision'?'Road collision':incident.kind==='medical'?'Medical emergency':'Roadworks';
    const response=incident.responders.map(r=>r.kind==='police'?'Police':'Ambulance').join(' + ');
-   // Text-only popup: never interpolate incident data into HTML.
-   new Popup({offset:14,maxWidth:'260px'})
-    .setLngLat(incident.point).setText(name+' · '+incidentStatus(incident,currentGameTime())+
-      (response?' · '+response:' · No nearby responder route')).addTo(map);
+   new Popup({offset:14,maxWidth:'260px'}).setLngLat(incident.point)
+    .setText(title+' · '+incidentStatus(incident,nowGame())+(response?' · '+response:' · No reachable responder'))
+    .addTo(map);
   };
-  const install=async()=>{
-   if(disposed||installing||!map.isStyleLoaded())return;
-   installing=true;
-   try{
-    const parked=parkedCarSprites()[0];
-    addSprite(map,'te-world-civilian',parked.width,parked.height,parked.data);
-    const base=import.meta.env.BASE_URL+'assets/';
-    await Promise.all([
-     addSvgSprite(map,'te-world-police',base+'world_police.svg',25,49),
-     addSvgSprite(map,'te-world-ambulance',base+'world_ambulance.svg',27,50),
-    ]);
-    if(disposed||!map.isStyleLoaded())return;
-    addLayers(map);installed=true;
-    hideLayers(map,flagsRef.current.traffic,flagsRef.current.npcs,flagsRef.current.events,flagsRef.current.weather);
-    update();
-   }catch(e){console.warn('Living world map layer unavailable',e);}
-   finally{installing=false;}
+  const install=()=>{
+   if(disposed||!map.isStyleLoaded())return;
+   try{addLayers(map);}catch(error){console.warn('Living-world overlays unavailable',error);}
   };
-  const update=()=>{
-   if(disposed||document.hidden||!map.isStyleLoaded())return;
-   const now=currentGameTime();
-   const flags=flagsRef.current;
-   const center=map.getCenter(),point:[number,number]=[center.lng,center.lat];
-   const condition=weatherAt(point,now);
-   const load=trafficLoadAt(point,now);
-   const visible=[...roadsRef.current().values()];
-   const discoveredRoads=discoveredRef.current();
-   const next=advanceWorldState(worldRef.current,now,visible,graphRef.current??null,discoveredRoads,companyId??'world');
-   if(next.lastBucket!==worldRef.current.lastBucket||next.incidents.length!==worldRef.current.incidents.length)persist(next);
+  const updateWorld=()=>{
+   if(disposed||!map.isStyleLoaded())return;
+   const at=nowGame(),flags=flagsRef.current;
+   const center=map.getCenter(),centerPoint:Point=[center.lng,center.lat];
+   const load=trafficLoadAt(centerPoint,at),condition=weatherAt(centerPoint,at);
+   const roadsNow=[...roadsRef.current().values()];
+   const next=advanceWorldState(worldRef.current,at,roadsNow,
+    graphRef.current??null,discoveredRef.current(),companyId??'world');
+   if(next.lastBucket!==worldRef.current.lastBucket||next.incidents.length!==worldRef.current.incidents.length)
+    persist(next);
    worldRef.current=next;
-   const incidentCount=next.incidents.length;
-   setSummary(previous=>{
+   setSummary(current=>{
     const label=weatherLabel[condition];
-    return previous.weather===label&&previous.load===load&&previous.incidents===incidentCount
-     ?previous:{weather:label,load,incidents:incidentCount};
+    return current.weather===label&&current.load===load&&current.incidents===next.incidents.length
+     ?current:{weather:label,load,incidents:next.incidents.length};
    });
-   if(!installed||!map.getSource(CAR_SOURCE))return;
-   hideLayers(map,flags.traffic,flags.npcs,flags.events,flags.weather);
-   const inDetail=map.getZoom()>=13.5;
-   const vehicles=visibleWorldVehicles(flags.npcs&&inDetail?visible:[],
-    graphRef.current??null,discoveredRoads,now,Date.now(),
-    flags.events?next.incidents:[],inDetail?28:0);
-   const bounds=map.getBounds();
-   const output=vehicles.filter(vehicle=>
-    bounds.contains(vehicle.point)&&
-    (vehicle.kind==='civilian'?flags.npcs:flags.events));
-   const symbols:PointFeature[]=output.map(vehicle=>
-    pointFeature(vehicle.id,vehicle.point,{sprite:'te-world-'+vehicle.kind,bearing:vehicle.bearing}));
-   (map.getSource(CAR_SOURCE) as maplibregl.GeoJSONSource).setData({
-    type:'FeatureCollection',features:symbols});
-   const incidentFeatures:PointFeature[]=flags.events?next.incidents.filter(i=>bounds.contains(i.point))
-    .map(i=>pointFeature(i.id,i.point,{id:i.id,kind:i.kind})):[];
-   (map.getSource(INCIDENT_SOURCE) as maplibregl.GeoJSONSource).setData({
-    type:'FeatureCollection',features:incidentFeatures});
-   const wallNow=Date.now();
-   if(wallNow-lastTrafficUpdate>9000){
-    lastTrafficUpdate=wallNow;
-    const sampled=flags.traffic&&map.getZoom()>=11.5?visible.slice(0,1500):[];
+   if(map.getSource(INCIDENT_SOURCE)){
+    const bounds=map.getBounds();
+    (map.getSource(INCIDENT_SOURCE) as maplibregl.GeoJSONSource).setData({
+     type:'FeatureCollection',
+     features:flags.events?next.incidents.filter(i=>bounds.contains(i.point))
+      .map(i=>pointFeature(i.id,i.point,{id:i.id,kind:i.kind})):[],
+    });
+   }
+   if(map.getSource(TRAFFIC_SOURCE)&&Date.now()-lastTrafficUpdate>=9000){
+    lastTrafficUpdate=Date.now();
     const lines:GeoJSON.Feature<GeoJSON.LineString>[]=[];
-    for(const road of sampled){
-     const coords=road.geometry.coordinates;
-     if(!coords.length||!validPoint(coords[0]))continue;
-     const density=trafficLoadAt(coords[0],now);
-     lines.push({type:'Feature',id:String(road.id),
-      geometry:road.geometry,properties:{density}});
+    if(flags.traffic&&map.getZoom()>=11.5)for(const road of roadsNow.slice(0,1500)){
+     const point=road.geometry.coordinates[0];
+     if(!point||!Number.isFinite(point[0])||!Number.isFinite(point[1]))continue;
+     lines.push({type:'Feature',id:String(road.id),geometry:road.geometry,
+      properties:{density:trafficLoadAt(point as Point,at)}});
     }
     (map.getSource(TRAFFIC_SOURCE) as maplibregl.GeoJSONSource).setData({
-     type:'FeatureCollection',features:lines});
+     type:'FeatureCollection',features:lines,
+    });
    }
+   for(const [id,on] of [[TRAFFIC_LAYER,flags.traffic],[INCIDENT_LAYER,flags.events]] as const)
+    if(map.getLayer(id))map.setLayoutProperty(id,'visibility',on?'visible':'none');
   };
-  const onStyleLoad=()=>{installed=false;lastTrafficUpdate=0;void install();};
-  const onMove=()=>{lastTrafficUpdate=0;update();};
+  const refillFleet=(timestamp:number)=>{
+   const flags=flagsRef.current,graphNow=graphRef.current;
+   const limit=ambientVehicleBudget(map.getZoom(),
+    trafficLoadAt([map.getCenter().lng,map.getCenter().lat],nowGame()),
+    mobile,roadsRef.current().size);
+   if(!flags.npcs||!graphNow||limit===0){
+    agents.clear();
+    for(const id of [...markers.keys()])if(id.startsWith('npc:'))removeMarker(id);
+    return;
+   }
+   if(timestamp-lastSpawn<2500&&agents.size>0)return;
+   lastSpawn=timestamp;
+   while(agents.size>limit){
+    const id=agents.keys().next().value;
+    if(!id)break;
+    agents.delete(id);removeMarker(id);
+   }
+   if(agents.size>=limit)return;
+   const visible=[...roadsRef.current().values()];
+   const stride=Math.max(1,Math.floor(visible.length/Math.max(1,limit*5)));
+   let added=0;
+   for(let i=0;i<visible.length&&agents.size<limit;i+=stride){
+    const car=spawnAmbientCar(visible[i],graphNow,discoveredRef.current());
+    if(!car||agents.has(car.id))continue;
+    agents.set(car.id,car);added++;
+   }
+   if(!added&&agents.size===0)lastSpawn=timestamp-1500;
+  };
+  const animate=(timestamp:number)=>{
+   animation=requestAnimationFrame(animate);
+   if(disposed||document.hidden||!map.isStyleLoaded()){lastFrame=timestamp;return;}
+   const interval=mobile?50:33; // Match taxi motion without excessive iPhone DOM work.
+   if(timestamp-lastFrame<interval)return;
+   const elapsed=lastFrame?Math.min(0.25,(timestamp-lastFrame)/1000):0;
+   lastFrame=timestamp;
+   if(timestamp-lastWorldUpdate>1400){lastWorldUpdate=timestamp;updateWorld();}
+   refillFleet(timestamp);
+   const flags=flagsRef.current,graphNow=graphRef.current,at=nowGame();
+   const desired=new Set<string>();
+   if(flags.npcs&&graphNow){
+    for(const [id,old] of agents){
+     const moved=advanceAmbientCar(old,graphNow,discoveredRef.current(),elapsed,at);
+     if(!moved||!map.getBounds().contains(moved.taxi.position)){
+      agents.delete(id);removeMarker(id);continue;
+     }
+     agents.set(id,moved);
+     const a=moved.taxi.path[moved.taxi.leg],b=moved.taxi.path[moved.taxi.leg+1];
+     const east=a&&b?(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360):0;
+     const heading=a&&b?Math.atan2(east,b[1]-a[1])*180/Math.PI:moved.bearing;
+     desired.add(id);
+     drawVehicle({id,kind:'civilian',point:moved.taxi.position,bearing:heading,color:moved.color},elapsed);
+    }
+   }
+   if(flags.events){
+    // Emergency paths interpolate every render frame using game time, not a 1.1s timer.
+    const emergency=visibleWorldVehicles([],null,new Set(),at,Date.now(),worldRef.current.incidents,0);
+    for(const v of emergency){
+     if(!map.getBounds().contains(v.point))continue;
+     desired.add(v.id);
+     drawVehicle(v,elapsed);
+    }
+   }
+   for(const id of markers.keys())if(!desired.has(id))removeMarker(id);
+  };
+  const onStyleLoad=()=>{lastTrafficUpdate=0;install();};
+  const onMove=()=>{lastTrafficUpdate=0;lastSpawn=0;updateWorld();};
   map.on('style.load',onStyleLoad);map.on('moveend',onMove);map.on('click',onIncidentClick);
-  void install();
-  const timer=window.setInterval(update,1100);
+  install();
+  animation=requestAnimationFrame(animate);
   return()=>{
-   disposed=true;window.clearInterval(timer);
-   map.off('style.load',onStyleLoad);map.off('moveend',onMove);
-   map.off('click',onIncidentClick);
-   for(const id of [CAR_LAYER,INCIDENT_LAYER,TRAFFIC_LAYER])if(map.getLayer(id))map.removeLayer(id);
-   for(const id of [CAR_SOURCE,INCIDENT_SOURCE,TRAFFIC_SOURCE])if(map.getSource(id))map.removeSource(id);
+   disposed=true;cancelAnimationFrame(animation);
+   map.off('style.load',onStyleLoad);map.off('moveend',onMove);map.off('click',onIncidentClick);
+   for(const marker of markers.values())marker.remove();
+   markers.clear();headings.clear();agents.clear();
+   for(const id of [INCIDENT_LAYER,TRAFFIC_LAYER])if(map.getLayer(id))map.removeLayer(id);
+   for(const id of [INCIDENT_SOURCE,TRAFFIC_SOURCE])if(map.getSource(id))map.removeSource(id);
   };
  },[map,companyId]);
  if(!companyId)return null;
