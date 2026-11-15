@@ -14,12 +14,8 @@ export type WorldIncident={
  responders:WorldResponder[];
 };
 export type WorldState={lastBucket:number;incidents:WorldIncident[]};
-export type VisibleWorldVehicle={id:string;kind:'civilian'|ResponderKind;point:Point;bearing:number};
 const HOUR=3600000;
 const EMPTY_STATE:WorldState={lastBucket:-1,incidents:[]};
-const HOUR_FORMAT=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'});
-const WEEKDAY_FORMAT=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',weekday:'short'});
-let cachedTrafficMinute=NaN,cachedHour=0,cachedWeekday='';
 export const newWorldState=():WorldState=>({lastBucket:-1,incidents:[]});
 function hash(s:string):number{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
 function key(point:Point):string{return point[0].toFixed(6)+','+point[1].toFixed(6);}
@@ -51,27 +47,11 @@ export function weatherAt(point:Point,at:number):WorldWeather{
  if(roll<38)return 'wind';
  return 'clear';
 }
-export function trafficLoadAt(point:Point,at:number):number{
- const minute=Math.floor(at/60000);
- if(minute!==cachedTrafficMinute){
-  const date=new Date(at);
-  cachedTrafficMinute=minute;cachedHour=Number(HOUR_FORMAT.format(date));
-  cachedWeekday=WEEKDAY_FORMAT.format(date);
- }
- const hour=cachedHour,weekday=cachedWeekday;
- const weekend=weekday==='Sat'||weekday==='Sun';
- const rush=!weekend&&(hour>=7&&hour<10||hour>=16&&hour<19);
- const daytime=hour>=10&&hour<21;
- const overnight=hour<6||hour>=23;
- const variability=hash(Math.floor(point[0]*5)+':'+Math.floor(point[1]*5))%19;
- const weather=weatherAt(point,at);
- const weatherLoad=weather==='storm'?16:weather==='rain'?9:weather==='snow'?12:0;
- return Math.max(5,Math.min(99,(rush?70:overnight?12:daytime?42:27)+(weekend?-7:0)+variability+weatherLoad));
-}
-/** Bounded slowdown for occupied/empty taxi road movement (not explorers). */
-export function worldTaxiSpeedFactor(point:Point,at:number):number{
- const congestion=trafficLoadAt(point,at);
- return Math.max(0.58,Math.min(1,1-Math.max(0,congestion-20)*0.005));
+/** Keep real weather effects, but no fictional civilian traffic or congestion. */
+export function weatherTaxiSpeedFactor(point:Point,at:number):number{
+ const conditions=weatherAt(point,at);
+ return conditions==='snow'?0.70:conditions==='storm'?0.80:
+  conditions==='rain'?0.90:conditions==='wind'?0.98:1;
 }
 export function incidentStatus(incident:WorldIncident,now:number):'responding'|'on-scene'|'clearing'{
  if(incident.responders.some(r=>r.arriveAt>now))return 'responding';
@@ -178,50 +158,4 @@ export function advanceWorldState(state:WorldState|undefined,now:number,
  const incident=incidentOnRoad(chosen,candidates,graph,discovered,now,roll);
  if(incident)next.incidents=[...incidents,incident];
  return next;
-}
-export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGraph|null,
- discovered:Set<string>,at:number,realNow:number,incidents:readonly WorldIncident[],limit=40):VisibleWorldVehicle[]{
- const output:VisibleWorldVehicle[]=[];
- const incidentRoads=new Set(incidents.map(i=>i.roadId));
- if(graph){
-  const max=Math.max(0,Math.min(60,Math.floor(limit)));
-  const density=roads.length?trafficLoadAt(roadEnds(roads[0])?.[0]??[23.7,37.9],at):0;
-  // Sample without sorting or retaining millions of road segments.
-  const stride=Math.max(1,Math.floor(roads.length/Math.max(1,max*4)));
-  for(let i=0;i<roads.length&&output.length<max;i+=stride){
-   const road=roads[i],ends=roadEnds(road),id=String(road.id??road.properties?.roadId??i);
-   if(!ends||!validRoad(road)||!discovered.has(id)||incidentRoads.has(id)||hash(id)%100>=density*0.58)continue;
-   const nodes=roadNodeKeys(road);
-   if(!nodes)continue;
-   const [ak,bk]=nodes;
-   const fwd=(graph.edges.get(ak)??[]).some(e=>e.to===bk&&e.id===id&&!e.taxiOnly);
-   const rev=(graph.edges.get(bk)??[]).some(e=>e.to===ak&&e.id===id&&!e.taxiOnly);
-   if(!fwd&&!rev)continue;
-   const reverse=!fwd||rev&&hash(id+'reverse')%2===0;
-   const path:Point[]=reverse?[ends[1],ends[0]]:[ends[0],ends[1]];
-   let previousKey=reverse?bk:ak,cursorKey=reverse?ak:bk;
-   for(let j=0;j<3;j++){
-    const options=(graph.edges.get(cursorKey)??[]).filter(e=>
-     discovered.has(e.id)&&!incidentRoads.has(e.id)&&!e.taxiOnly&&e.to!==previousKey&&graph.nodes.has(e.to)&&e.id!==id);
-    if(!options.length)break;
-    const chosen=options[hash(id+':'+j)%options.length];
-    previousKey=cursorKey;cursorKey=chosen.to;path.push(graph.nodes.get(cursorKey)!);
-   }
-   const length=path.slice(1).reduce((sum,p,j)=>sum+meters(path[j],p),0);
-   if(length<20)continue;
-   const speed=weatherAt(path[0],at)==='snow'?5:weatherAt(path[0],at)==='storm'?8:13;
-   const t=(((realNow/1000*speed+hash(id)%Math.max(1,length))%length)+length)%length/length;
-   const sample=pointOnPath(path,t);
-   if(sample)output.push({id:'npc:'+id,kind:'civilian',point:sample.point,bearing:sample.bearing});
-  }
- }
- for(const incident of incidents){
-  for(const responder of incident.responders){
-   if(at<responder.departAt||at>=incident.endsAt)continue;
-   const progress=Math.min(1,(at-responder.departAt)/Math.max(1,responder.arriveAt-responder.departAt));
-   const sample=pointOnPath(responder.path,progress);
-   if(sample)output.push({id:responder.id,kind:responder.kind,point:sample.point,bearing:sample.bearing});
-  }
- }
- return output;
 }
