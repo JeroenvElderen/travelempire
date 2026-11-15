@@ -123,7 +123,7 @@
 .internal-builder .ib-zoom{margin-left:auto;display:flex;align-items:center;gap:7px}
 .internal-builder .ib-zoom button{justify-content:center;width:33px;padding:3px;font-size:18px}
 .internal-builder .ib-zoom span{font-size:11px;color:var(--ib-muted);font-variant-numeric:tabular-nums}
-.internal-builder .ib-tools{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.internal-builder .ib-tools{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
 .internal-builder .ib-tools button{
  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;
  min-height:55px;padding:7px 3px;border:1px solid var(--ib-line);
@@ -442,4 +442,71 @@
 @media(max-width:680px){
  .internal-builder .ib-site-actions{margin-left:auto}
  .internal-builder .ib-hotel-quick-links .ib-secondary{flex:1 1 130px}
+}
+
+/* Purchase plot size before placing a location on the world map. */
+.internal-builder .ib-plot-planner{
+ display:flex;flex-direction:column;gap:12px;padding:13px;
+ border:1px solid rgba(197,160,242,.35);border-radius:13px;
+ background:linear-gradient(140deg,rgba(41,46,80,.94),rgba(27,37,61,.94));
+}
+.internal-builder .ib-plot-heading{
+ display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.internal-builder .ib-plot-heading>div{display:flex;flex-direction:column;gap:4px}
+.internal-builder .ib-plot-heading strong{font-size:13px;color:var(--ib-fg)}
+.internal-builder .ib-plot-heading small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-plot-heading>span{font-size:17px;font-weight:800;color:var(--ib-accent);font-variant-numeric:tabular-nums}
+.internal-builder .ib-plot-presets{
+ display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;
+}
+.internal-builder .ib-plot-presets button{
+ display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;
+ min-width:0;min-height:50px;padding:7px 4px;border:1px solid var(--ib-line);
+ border-radius:9px;background:rgba(26,38,67,.93);color:var(--ib-fg);font-size:11px;font-weight:750;
+}
+.internal-builder .ib-plot-presets button.selected{
+ background:rgba(126,89,171,.42);border-color:var(--ib-accent);
+}
+.internal-builder .ib-plot-presets small{font-size:9px;color:var(--ib-muted);font-weight:400}
+.internal-builder .ib-plot-dimensions{
+ display:flex;gap:9px;align-items:end;flex-wrap:wrap;
+}
+.internal-builder .ib-plot-dimensions label{
+ display:flex;flex-direction:column;gap:5px;color:var(--ib-muted);font-size:10px;
+}
+.internal-builder .ib-plot-dimensions input{
+ width:102px;min-height:38px;border:1px solid var(--ib-line);
+ background:#17253f;color:var(--ib-fg);border-radius:8px;padding:8px 10px;font-size:16px;
+}
+.internal-builder .ib-plot-dimensions>span{font-size:16px;color:var(--ib-muted);padding-bottom:10px}
+.internal-builder .ib-plot-area{display:flex;flex-direction:column;gap:3px;margin-left:auto}
+.internal-builder .ib-plot-area strong{font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-plot-area small{font-size:10px;color:var(--ib-muted)}
+/* The plan handles touch drags itself: swipe pans while furnishing;
+   the Move tool pans from any point, and Room dragging still draws rooms. */
+.internal-builder .ib-plan-scroller{
+ width:100%;overflow:auto;-webkit-overflow-scrolling:touch;
+}
+.internal-builder .ib-floor-canvas{
+ touch-action:none;-webkit-touch-callout:none;user-select:none;
+}
+.internal-builder .ib-zoom .ib-fit-button{
+ width:auto;min-width:39px;font-size:10px;font-weight:700;padding:6px;
+}
+.internal-builder .ib-pan-guide{display:flex;gap:8px;align-items:center}
+.internal-builder .ib-pan-guide svg{flex:0 0 auto;color:var(--ib-accent)}
+@media(max-width:680px){
+ .internal-builder .ib-plot-presets{gap:4px}
+ .internal-builder .ib-plot-presets button{font-size:10px;padding:5px 2px}
+ .internal-builder .ib-plot-presets small{font-size:8px}
+ .internal-builder .ib-plot-dimensions input{width:94px}
+ .internal-builder .ib-plot-area{flex-basis:100%;margin-left:0}
+ .internal-builder .ib-tools{grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+ .internal-builder .ib-tools button{font-size:8px;min-height:54px;padding:4px 1px}
+}
+@media(max-width:370px){
+ .internal-builder .ib-plot-presets{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .internal-builder .ib-plot-dimensions input{width:85px}
+ .internal-builder .ib-tools button svg{width:15px;height:15px}
 }
