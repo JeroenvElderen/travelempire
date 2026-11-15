@@ -109,7 +109,15 @@ export function planConstructionFreight(
 export function freightPosition(freight:ConstructionFreight,hour:number):
  {kind:'ship'|'truck';point:Point;bearing:number}|null{
  const stage=freightStage(freight,hour);
- if(stage!=='at-sea'&&stage!=='unloading'&&stage!=='trucking')return null;
+ if(stage==='delivered')return null;
+ // Keep the ship docked at the supplier harbour during procurement/loading,
+ // so the player can locate the shipment immediately after approving work.
+ if(stage==='preparing'){
+  const a=freight.seaPath[0],b=freight.seaPath[1];
+  if(!a||!b)return null;
+  const east=(b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360);
+  return {kind:'ship',point:a,bearing:Math.atan2(east,b[1]-a[1])*180/Math.PI};
+ }
  const ship=stage==='at-sea'||stage==='unloading';
  const path=ship?freight.seaPath:freight.roadPath;
  const start=ship?freight.shippingHour:freight.truckDepartureHour;

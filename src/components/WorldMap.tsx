@@ -19,7 +19,7 @@ import {syncRoadLevelsDebug,removeRoadLevelsDebug,ROAD_LEVEL_DEBUG_LAYER_IDS,typ
 import MobilityMapLayer from './MobilityMapLayer';
 import WorldEventsController,{type WorldActivitySnapshot} from './WorldEventsController';
 import ConstructionFreightLayer from './ConstructionFreightLayer';
-import type {ConstructionFreight} from '../constructionLogistics';
+import {freightPosition,freightStage,freightStatusLabel,type ConstructionFreight} from '../constructionLogistics';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
 import {driverSchedule} from '../simulation/driverSchedule';
@@ -180,10 +180,10 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];constructionSites?:Array<{id:string;name:string;longitude:number;latitude:number}>;constructionFreight?:Array<{id:string;siteName:string;freight:ConstructionFreight}>;exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];constructionSites?:Array<{id:string;name:string;longitude:number;latitude:number}>;constructionFreight?:Array<{id:string;siteName:string;freight:ConstructionFreight}>;constructionFreightFocus?:{id:string;token:number}|null;exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],constructionSites=[],constructionFreight=[],exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],constructionSites=[],constructionFreight=[],constructionFreightFocus=null,exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const driversRef=useRef(drivers);driversRef.current=drivers;
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
@@ -330,11 +330,54 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{startupTrace('Road graph changed',graph?('nodes='+graph.nodeKeys.length):'not ready');},[graph]);
  useEffect(()=>{startupTrace('Exploration changed','roads='+exploredEdgeIds.length);},[exploredEdgeIds.length]);
  const [showMobilityExploration,setShowMobilityExploration]=useState(false);
+
  const [worldStatus,setWorldStatus]=useState<WorldActivitySnapshot|null>(null);
  const [showRoadLevelsDebug,setShowRoadLevelsDebug]=useState(false);
  const [roadLevelsStats,setRoadLevelsStats]=useState('Zoom in to inspect road connectivity');
  const [showUndergroundVehicles,setShowUndergroundVehicles]=useState(false);
  const showUndergroundVehiclesRef=useRef(false);showUndergroundVehiclesRef.current=showUndergroundVehicles;const [roadStatus,setRoadStatus]=useState('Waiting for geographic road tiles');const [basemap,setBasemap]=useState<Basemap>('standard');const [error,setError]=useState<string|null>(null);const [ready,setReady]=useState(false);const [selectorOpen,setSelectorOpen]=useState(false);const lastLayersToggle=useRef(layersToggleToken);useEffect(()=>{if(layersToggleToken===lastLayersToggle.current)return;lastLayersToggle.current=layersToggleToken;setSelectorOpen(v=>!v);},[layersToggleToken]);const [lookingUp,setLookingUp]=useState(false);const busy=useRef(false);
+ const freightRef=useRef(constructionFreight);freightRef.current=constructionFreight;
+ const [trackedCargo,setTrackedCargo]=useState<{id:string;token:number}|null>(null);
+ const [trackedCargoLabel,setTrackedCargoLabel]=useState('');
+ useEffect(()=>{
+  if(constructionFreightFocus)setTrackedCargo(constructionFreightFocus);
+ },[constructionFreightFocus?.id,constructionFreightFocus?.token]);
+ useEffect(()=>{
+  if(!ready||!trackedCargo||!map.current)return;
+  const instance=map.current;
+  let started=false,lastLabel='',disposed=false;
+  const follow=()=>{
+   if(disposed||document.hidden)return;
+   const clock=gameClockNowRef.current;
+   const entry=freightRef.current.find(item=>item.id===trackedCargo.id);
+   if(!clock||!entry){setTrackedCargo(null);return;}
+   const now=(clock.epochMs+Math.max(0,Date.now()-clock.lastRealMs)*GAME_TIME_SCALE)/3600000;
+   const vehicle=freightPosition(entry.freight,now);
+   if(!vehicle){setTrackedCargo(null);return;}
+   const label=freightStatusLabel[freightStage(entry.freight,now)]+' · '+entry.siteName;
+   if(label!==lastLabel){lastLabel=label;setTrackedCargoLabel(label);}
+   if(!started){
+    started=true;
+    // Show the ship's surrounding sea corridor; zoom closer when it becomes a truck.
+    instance.easeTo({center:vehicle.point,zoom:vehicle.kind==='ship'?10.5:13.5,duration:750,essential:true});
+    return;
+   }
+   // Follow only when the vehicle starts drifting away from the centre.
+   // Avoid resetting camera/tiles every frame on mobile Safari.
+   const screen=instance.project(vehicle.point);
+   const centre=instance.project(instance.getCenter());
+   if(Math.hypot(screen.x-centre.x,screen.y-centre.y)>24)
+    instance.easeTo({center:vehicle.point,duration:600,essential:true});
+  };
+  const stopOnDrag=()=>setTrackedCargo(null);
+  instance.on('dragstart',stopOnDrag);
+  follow();
+  const timer=window.setInterval(follow,1100);
+  return()=>{
+   disposed=true;window.clearInterval(timer);
+   instance.off('dragstart',stopOnDrag);
+  };
+ },[ready,trackedCargo?.id,trackedCargo?.token]);
  // Tap a diagnostic road or endpoint to inspect actual OSM identifiers.
  useEffect(()=>{
   const instance=map.current;
@@ -1299,6 +1342,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    <div>Purple source: {perfSnapshot.sourceMs.toFixed(1)} ms · Updates: {perfSnapshot.sourceUpdates}</div>
    <div>Visible purple roads: {perfSnapshot.visibleExplored}</div>
   </div>}
- </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><WorldEventsController companyId={companyId} gameClock={gameClock} graph={graph} roads={()=>visibleExploredFeatures.current} discovered={()=>currentExploredRoads.current} center={()=>{const c=map.current?.getCenter();return c?[c.lng,c.lat]:headquarters?[headquarters.lng,headquarters.lat]:[23.7275,37.9838]}} onStatus={setWorldStatus}/><ConstructionFreightLayer map={ready?map.current:null} shipments={constructionFreight} gameClock={gameClock}/><MobilityMapLayer map={ready?map.current:null} enabled={showMobilityExploration}
+ </div><div className="map-canvas" ref={container} role="application" aria-label="Interactive world street map"/><WorldEventsController companyId={companyId} gameClock={gameClock} graph={graph} roads={()=>visibleExploredFeatures.current} discovered={()=>currentExploredRoads.current} center={()=>{const c=map.current?.getCenter();return c?[c.lng,c.lat]:headquarters?[headquarters.lng,headquarters.lat]:[23.7275,37.9838]}} onStatus={setWorldStatus}/><ConstructionFreightLayer map={ready?map.current:null} shipments={constructionFreight} gameClock={gameClock}/>{trackedCargo&&ready&&<div className="te-cargo-follow" role="status" style={{position:'absolute',right:12,top:'calc(76px + env(safe-area-inset-top))',zIndex:41,maxWidth:'min(320px,calc(100vw - 24px))',display:'flex',alignItems:'center',gap:9,padding:'11px 12px',background:'rgba(14,29,47,.94)',border:'1px solid rgba(101,203,211,.5)',borderRadius:12,color:'#f3f9ff',boxShadow:'0 5px 18px #0006'}}><div style={{minWidth:0,flex:1}}><strong style={{display:'block',fontSize:12}}>Tracking construction cargo</strong><span style={{fontSize:11,color:'#bfdaea'}}>{trackedCargoLabel}</span></div><button type="button" onClick={()=>setTrackedCargo(null)} style={{background:'#304258',border:'1px solid #658197',borderRadius:7,color:'#fff',padding:'8px 10px',fontSize:11}}>Stop</button></div>}<MobilityMapLayer map={ready?map.current:null} enabled={showMobilityExploration}
   companyId={companyId} ferryNetwork={ferryNetwork} unlockedHarbourIds={unlockedHarbourIds}/><div className="te-offscreen-layer" ref={offscreenLayer} aria-label="Off-screen map locations"/><div className="map-layer-control">{selectorOpen&&<div id="map-layer-options" className="map-layer-options" role="group" aria-label="Map appearance"><button type="button" className={basemap==='standard'?'active':''} aria-pressed={basemap==='standard'} onClick={()=>selectBasemap('standard')}><MapIcon size={17}/> Daylight Atlas · Light Streets</button><button type="button" className={basemap==='satellite'?'active':''} aria-pressed={basemap==='satellite'} onClick={()=>selectBasemap('satellite')} disabled={!key}><Satellite size={17}/> Satellite</button><div className="map-layer-note"><div>{exploredEdgeIds.length.toLocaleString()} roads discovered</div><div>{stationStatus}</div><div>{restStatus}</div><div>Only invested properties and destinations in use are shown; all facilities remain available for routing.</div><div className="te-world-event-summary" aria-label="Living world activity" style={{borderTop:'1px solid #ffffff22',paddingTop:9,marginTop:7,display:'grid',gap:5}}><strong>World activity</strong><div>Weather: {worldStatus?({clear:'Clear',rain:'Rain',storm:'Thunderstorm',wind:'Windy',snow:'Snow / ice'}[worldStatus.weather]):'Loading'}</div><div>Active incidents: {worldStatus?.incidents.length??0}</div>{worldStatus?.incidents.map(incident=><div key={incident.id} style={{padding:'6px 8px',border:'1px solid #ffffff20',borderRadius:8}}><strong>{incident.kind==='medical'?'Medical emergency':incident.kind==='roadworks'?'Roadworks / road closure':'Road collision'}</strong><div>{incident.status==='responding'?'Emergency response en route':incident.status==='on-scene'?'On scene':'Clearing'}{incident.responders.length?' · '+incident.responders.map(r=>r==='police'?'Police':'Ambulance').join(' + '):''}</div></div>)}<small>Events and responders run in the simulation only, without map markers or overlays.</small></div><label className="territory-toggle"><input type="checkbox" checked={showMobilityExploration} onChange={e=>setShowMobilityExploration(e.target.checked)}/> 🚶 🚴 Show walking &amp; cycling explorers (automatic)</label><label className="territory-toggle"><input type="checkbox" checked={showRoadLevelsDebug} onChange={e=>setShowRoadLevelsDebug(e.target.checked)}/> Road levels &amp; connectivity (diagnostic)</label>{showRoadLevelsDebug&&<div className="te-road-level-legend"><div><span style={{color:'#b660ff'}}>━━</span> Purple dashed: tunnel</div><div><span style={{color:'#ffb249'}}>━━</span> Amber: bridge</div><div><span style={{color:'#e85ad6'}}>┄┄</span> Pink dashed: lower layer</div><div><span style={{color:'#91a1ad'}}>━━</span> Grey: surface</div><div><span style={{color:'#00e0ff'}}>➜</span> Cyan arrows: one-way travel</div><div><span style={{color:'#4dffad'}}>●</span> Green dot: real shared-node level transition</div><div><span style={{color:'#ff465f'}}>●</span> Red dot: no loaded outgoing road</div><div>{roadLevelsStats}</div><div>Shows only loaded OSM graph roads. A crossing is connected only if the same real node ID is shared; a red dot may disappear when adjacent tiles load. Tap a coloured road to inspect its OSM IDs.</div></div>}<label className="territory-toggle"><input type="checkbox" checked={showUndergroundVehicles} onChange={e=>setShowUndergroundVehicles(e.target.checked)}/> Show vehicles inside tunnels (ghosted)</label><div>{roadStatus}</div><div>Blue = discovered roads. Undiscovered roads are not rendered. Discovered tunnels are dashed; discovered roads unlock passenger jobs.</div></div></div>}</div>{!styleFor('standard')&&<div className="map-error" role="alert">Set VITE_MAPTILER_KEY in .env.local and restart the server.</div>}{error&&<div className="map-error" role="alert">{error}</div>}{lookingUp&&<div className="map-loading" role="status">Identifying selected location…</div>}{!ready&&styleFor('standard')&&<div className="map-loading" role="status">Loading world map…</div>}</div>;
 }

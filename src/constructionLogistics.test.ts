@@ -34,6 +34,11 @@ describe('hotel materials from cargo vessel to hotel construction',()=>{
   expect(freight.truckDepartureHour).toBe(freight.seaArrivalHour+2);
   expect(freight.deliveryHour).toBeGreaterThanOrEqual(start+11);
   expect(freightStage(freight,start)).toBe('preparing');
+  // During procurement, the docked vessel is still visible at the origin port.
+  expect(freightPosition(freight,start)).toEqual({
+   kind:'ship',point:o,bearing:expect.any(Number),
+  });
+  expect(freightPosition(freight,freight.shippingHour-0.1)?.point).toEqual(o);
   expect(freightStage(freight,freight.shippingHour)).toBe('at-sea');
   expect(freightStage(freight,freight.seaArrivalHour)).toBe('unloading');
   expect(freightStage(freight,freight.truckDepartureHour)).toBe('trucking');
