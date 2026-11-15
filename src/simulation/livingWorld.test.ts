@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import type {RoadGraph,Point} from './taxi';
 import type {RoadFeature} from '../components/purpleRoadDiff';
-import {advanceWorldState,dispatchResponders,newWorldState,pointOnPath,trafficLoadAt,visibleWorldVehicles,weatherAt} from './livingWorld';
+import {advanceWorldState,dispatchResponders,newWorldState,pointOnPath,trafficLoadAt,visibleWorldVehicles,weatherAt,worldTaxiSpeedFactor} from './livingWorld';
 
 const points:Point[]=Array.from({length:7},(_,i)=>[23+i*0.002,38]);
 const key=(p:Point)=>p[0].toFixed(6)+','+p[1].toFixed(6);
@@ -31,6 +31,12 @@ describe('living world hybrid simulation',()=>{
   const rush=Date.parse('2026-11-16T06:00:00Z'); // 08:00 in Athens
   const quiet=Date.parse('2026-11-16T01:00:00Z');
   expect(trafficLoadAt(points[0],rush)).toBeGreaterThan(trafficLoadAt(points[0],quiet));
+ });
+ it('slows taxis more in heavy traffic than at quiet hours',()=>{
+  const busy=Date.parse('2026-11-16T06:00:00Z');
+  const quiet=Date.parse('2026-11-16T01:00:00Z');
+  expect(worldTaxiSpeedFactor(points[0],busy)).toBeLessThan(worldTaxiSpeedFactor(points[0],quiet));
+  expect(worldTaxiSpeedFactor(points[0],busy)).toBeGreaterThanOrEqual(0.58);
  });
  it('interpolates emergency routes along the polyline and points north',()=>{
   const p=pointOnPath([[23,38],[23,38.002]],0.5);
