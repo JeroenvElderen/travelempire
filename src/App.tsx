@@ -2774,7 +2774,7 @@ export default function App(){
  {page==='Company'&&company&&!showSetup&&<div className="company-map-overlay" role="dialog" aria-label="Company management"><button type="button" className="company-map-close" aria-label="Close Company and return to map" onClick={()=>go('World')}><X size={20}/></button><section className="company-dashboard company-v213 company-v3">
  <header className="company-v3-header"><span className="company-v3-icon"><Building2 size={23}/></span><div><h1>Company</h1><p>Business &amp; depots</p></div></header>
  <nav className="company-v3-nav" aria-label="Company sections">
- {([['overview','Overview',Building2],['depots','Depots',Warehouse],['vehicles','Assignments',CarFront],['settings','Settings',SlidersHorizontal]] as const).map(([key,label,Icon])=><button type="button" key={key} className={companyTab===key?'active':''} aria-label={label} aria-current={companyTab===key?'page':undefined} onClick={()=>setCompanyTab(key)}><Icon size={19}/><span>{companyTab===key?label:''}</span></button>)}
+ {([['overview','Overview',Building2],['headquarters','HQ',Landmark],['depots','Depots',Warehouse],['vehicles','Assignments',CarFront],['settings','Settings',SlidersHorizontal]] as const).map(([key,label,Icon])=><button type="button" key={key} className={companyTab===key?'active':''} aria-label={label} aria-current={companyTab===key?'page':undefined} onClick={()=>setCompanyTab(key)}><Icon size={19}/><span>{companyTab===key?label:''}</span></button>)}
  </nav>
  <div className="company-v3-identity"><span className="company-v3-company-icon"><Building2 size={19}/></span><div className="company-v3-company-name"><strong>{company.name}</strong><small>{company.headquarters.label}</small></div><span className="company-v3-active">Active</span></div>
 {companyTab==='overview'&&<section className="company-v3-content">
@@ -2794,8 +2794,26 @@ export default function App(){
    <div className="company-v3-row"><span>Idle vehicles</span><strong>{fleet.taxis.filter(t=>t.status==='IDLE').length} / {fleet.taxis.length}</strong></div>
   </article>
  </div>
- <div className="company-v3-toolbar"><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('depots')}>Depots</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('vehicles')}>Assignments</button><button type="button" className="company-v3-button" onClick={()=>setPage('Finance')}>Finance</button></div>
+ <div className="company-v3-toolbar"><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('headquarters')}>HQ upgrades</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('depots')}>Depots</button><button type="button" className="company-v3-button" onClick={()=>setCompanyTab('vehicles')}>Assignments</button><button type="button" className="company-v3-button" onClick={()=>setPage('Finance')}>Finance</button></div>
 </section>}
+{companyTab==='headquarters'&&<section className="company-v3-content">
+ <div className="company-v3-section-heading"><h2>Headquarters</h2><small>{company.headquarters.label}</small></div>
+ <div className="company-v3-summary"><span><Landmark size={15}/><strong>{(company.officeUpgrades??[]).length}</strong> upgrades</span><span><strong>3</strong> departments</span><span><strong>{new Set(Object.values(portfolio.holdings).filter(h=>h.kind==='hotel'&&h.investedCents>0).map(h=>h.id)).size}</strong> hotels</span></div>
+ <p className="company-v3-note">Develop your headquarters to improve occupancy, room pricing and operating efficiency at every hotel you own. Each improvement becomes active next game hour.</p>
+ <div className="company-v3-office-list">
+ {OFFICE_DEPARTMENTS.map(dept=>{
+  const level=officeLevel(company.officeUpgrades,dept.id);
+  const isMax=level>=dept.max;
+  const cost=isMax?0:officeCost(dept.id,level+1);
+  return <article key={dept.id} className="company-v3-card company-v3-office-card">
+   <div className="company-v3-office-top"><span className="company-v3-company-icon"><Landmark size={18}/></span><div><strong>{dept.title}</strong><small>{dept.subtitle}</small></div><span className="company-v3-status">{level} / {dept.max}</span></div>
+   <div className="company-v3-progress"><span style={{width:(100*level/dept.max)+'%'}}/></div>
+   <div className="company-v3-row"><span>Benefit</span><strong>{dept.bonus}</strong></div>
+   <button type="button" className="company-v3-button company-v3-button-primary" disabled={isMax||company.cash+pendingCashRef.current<cost} onClick={()=>upgradeHeadquarters(dept.id)}>{isMax?'Fully upgraded':company.cash+pendingCashRef.current<cost?'Insufficient funds':'Upgrade · €'+cost.toLocaleString('en-IE')}</button>
+  </article>;
+ })}
+ </div>
+ </section>}
 {companyTab==='depots'&&<section className="company-v3-content">
  <div className="company-v3-section-heading"><h2>Depots</h2><small>{1+(company.depots??[]).length} locations</small></div>
  <div className="company-v3-toolbar"><button type="button" className="company-v3-button" disabled={company.cash<2500} onClick={()=>{if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<2500){setSimError('Insufficient funds for depot expansion (€2,500).');return;}pendingCashRef.current-=2500;setFleet(old=>({...old,upgrades:[...(old.upgrades??[]),'depot-capacity'],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Main depot expansion (+5 spaces)',amount:-2500},...(old.transactions??[])].slice(0,100)}));setSimError('');}}>Expand main depot (+5 spaces) · €2,500</button><button type="button" className="company-v3-button company-v3-button-primary" onClick={()=>{setPlacingDepot(true);setSelecting(true);setPage('World');setSimError('');}}>+ Place new depot on map · €10,000</button></div>
