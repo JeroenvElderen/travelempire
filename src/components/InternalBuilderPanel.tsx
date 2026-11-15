@@ -17,7 +17,7 @@ import './internal-builder.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
  onSelectLand:(size:HotelPlotSize)=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
- onStartProject:(id:string,method:TradeMode)=>string|null;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
+ onStartProject:(id:string,method:TradeMode)=>string|null;onTrackFreight:(projectId:string)=>void;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
  onHotelSetting:(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>string|null;
  onHotelOpening:(siteId:string,open:boolean)=>string|null;
 };
@@ -42,7 +42,7 @@ function PriceInput({title,cents,minimum,maximum,onSave}:{
   <span>{title}</span><div><span>€</span><input aria-label={title+' price in euro'} type="number" inputMode="decimal" min={minimum} max={maximum} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></div>
  </label>;
 }
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onTrackFreight,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -369,6 +369,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
       <div className="ib-cargo-head"><Ship size={17}/><div><strong>{freightStatusLabel[freightStage(active.freight,gameHour)]}</strong><small>Contracted ship and truck delivery · materials & furniture</small></div></div>
       <div className="ib-meter"><span style={{width:freightProgress(active.freight,gameHour)+'%'}}/></div>
       <div className="ib-cargo-route"><span>{active.freight.originPortName}</span><span>→</span><span>{active.freight.destinationPortName}</span><span>→</span><span>{site.name}</span></div>
+      <button type="button" className="ib-primary ib-full" onClick={()=>onTrackFreight(active.id)}><Ship size={17}/> {freightStage(active.freight,gameHour)==='trucking'?'Track delivery truck on map':'Track cargo ship on map'}</button>
       <div className="ib-cargo-stages">
        <div className={gameHour>=active.freight.shippingHour?'reached':''}><Ship size={15}/><span>Ship departs</span><strong>Hour {active.freight.shippingHour}</strong></div>
        <div className={gameHour>=active.freight.seaArrivalHour?'reached':''}><Package size={15}/><span>Harbour arrival</span><strong>Hour {active.freight.seaArrivalHour}</strong></div>
