@@ -2,14 +2,13 @@ import {useMemo,useState} from 'react';
 import {Building2,CarFront,Hotel,Search,Wallet,TrendingUp,ChevronDown,SlidersHorizontal} from 'lucide-react';
 import type {InvestablePOI,PropertyPortfolio} from '../investments';
 import {euro,ownership,propertyOperations,propertyValuationCents} from '../investments';
-import {hotelPolicyAt,hotelRenovationLevel,hotelRenovationCost,MAX_HOTEL_RENOVATIONS,type HotelPolicy,type OfficeUpgrade} from '../propertyManagement';
 import {investmentLimitCents,selectedInvestmentCents,defaultInvestmentEuros,asEuros} from '../investmentAmounts';
 import './InvestmentsPanel.css';
 import './investments-floating.css';
 const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 
-type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;onHotelPolicyChange:(id:string,policy:HotelPolicy)=>string|null;onHotelRenovate:(id:string)=>string|null;officeUpgrades?:OfficeUpgrade[];error:string};
-export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,onHotelPolicyChange,onHotelRenovate,officeUpgrades,error}:Props){
+type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;error:string};
+export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,error}:Props){
  const [category,setCategory]=useState<'all'|'hotel'|'parking'>('all');
  const [view,setView]=useState<'explore'|'owned'>('explore');
  const [expanded,setExpanded]=useState<string|null>(null);
@@ -28,12 +27,12 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  const invested=holdings.reduce((sum,h)=>sum+h.investedCents,0);
  const dividends=holdings.reduce((sum,h)=>sum+h.dividendsCents,0);
  const gameHour=Math.floor(gameNow/3600000);
- const expectedHourly=holdings.reduce((sum,h)=>sum+Math.round(propertyOperations(h,gameHour,officeUpgrades).netCents*ownership(h)),0);
+ const expectedHourly=holdings.reduce((sum,h)=>sum+Math.round(propertyOperations(h,gameHour).netCents*ownership(h)),0);
  const forecast=(p:InvestablePOI,valuationCents:number,ownedCents:number,additionalCents:number)=>{
   const existingShare=Math.min(1,ownedCents/valuationCents);
   const newShare=Math.min(1,(ownedCents+additionalCents)/valuationCents);
   const hourEarnings=Array.from({length:24},(_,offset)=>{
-   const result=propertyOperations({id:p.id,kind:p.kind,valuationCents,hotelPolicyHistory:portfolio.holdings[p.id]?.hotelPolicyHistory,hotelRenovations:portfolio.holdings[p.id]?.hotelRenovations},gameHour+offset,officeUpgrades);
+   const result=propertyOperations({id:p.id,kind:p.kind,valuationCents},gameHour+offset);
    return result.netCents;
   });
   const dailyNet=hourEarnings.reduce((sum,value)=>sum+value,0);
@@ -52,14 +51,6 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
   // A successful purchase resets only this property's input to the
   // newly available amount; other POI sliders retain their selections.
   if(!problem)setAmounts(old=>{const next={...old};delete next[p.id];return next;});
- };
- const renovate=(id:string)=>{
-  const problem=onHotelRenovate(id);
-  setMessage(problem??'Hotel renovation purchased. New rooms open next game hour.');
- };
- const updateHotelPolicy=(id:string,policy:HotelPolicy)=>{
-  const problem=onHotelPolicyChange(id,policy);
-  setMessage(problem??'Hotel management policy updated. Changes take effect next game hour.');
  };
  const updateAmount=(id:string,value:string)=>
   setAmounts(old=>({...old,[id]:value}));
@@ -88,10 +79,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     const value=owned?.valuationCents??propertyValuationCents(p);
     const remaining=Math.max(0,value-(owned?.investedCents??0));
     const percent=ownership(owned)*100;
-    const performance=propertyOperations(owned??{id:p.id,kind:p.kind,valuationCents:value},gameHour,officeUpgrades);
-    const hotelPolicy=hotelPolicyAt(owned?.hotelPolicyHistory,gameHour+1);
-    const renovationLevel=hotelRenovationLevel(owned?.hotelRenovations);
-    const hotelNextHour=owned?.kind==='hotel'?propertyOperations(owned,gameHour+1,officeUpgrades):null;
+    const performance=propertyOperations({id:p.id,kind:p.kind,valuationCents:value},gameHour);
     const limit=investmentLimitCents(remaining,companyCash);
     const rawAmount=amounts[p.id]??defaultInvestmentEuros(limit);
     const charge=selectedInvestmentCents(rawAmount,limit);
@@ -126,29 +114,6 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
       <small className="investment-unit-note">Capacity and rates are gameplay estimates, not verified real-world room or parking-space counts. Hotel nightly revenue is spread over 24 game hours.</small>
      </div>
       </details>
-     {p.kind==='hotel'&&owned&&ownership(owned)>=0.5&&<div className="investment-hotel-manager">
-      <div className="investment-hotel-heading"><Hotel size={16}/><strong>Hotel management</strong><span>Controlling stake</span></div>
-      <p>Set nightly pricing and staffing. These choices affect occupancy, room income and costs from the next game hour.</p>
-      <div className="investment-hotel-controls">
-       <label>Room pricing
-        <select value={hotelPolicy.rate} onChange={e=>updateHotelPolicy(p.id,{...hotelPolicy,rate:e.target.value as HotelPolicy['rate']})}>
-         <option value="value">Value · higher occupancy</option>
-         <option value="standard">Standard · balanced</option>
-         <option value="premium">Premium · higher rate</option>
-        </select>
-       </label>
-       <label>Staffing
-        <select value={hotelPolicy.staffing} onChange={e=>updateHotelPolicy(p.id,{...hotelPolicy,staffing:e.target.value as HotelPolicy['staffing']})}>
-         <option value="lean">Lean · lower costs</option>
-         <option value="balanced">Standard · balanced</option>
-         <option value="full">Full service · better occupancy</option>
-        </select>
-       </label>
-      </div>
-      <div className="investment-hotel-profit"><span>Next-hour property net</span><strong>{euro(hotelNextHour?.netCents??performance.netCents)}/h</strong></div>
-      <div className="investment-hotel-renovation"><div><strong>Room renovations</strong><small>+10% capacity per level · {renovationLevel} / {MAX_HOTEL_RENOVATIONS}</small></div><button type="button" disabled={renovationLevel>=MAX_HOTEL_RENOVATIONS||companyCash<hotelRenovationCost(renovationLevel+1)} onClick={()=>renovate(p.id)}>{renovationLevel>=MAX_HOTEL_RENOVATIONS?'Complete':companyCash<hotelRenovationCost(renovationLevel+1)?'Not enough cash':'Renovate · '+exactEuro(hotelRenovationCost(renovationLevel+1)*100)}</button></div>
-     </div>}
-     {p.kind==='hotel'&&owned&&ownership(owned)<0.5&&<p className="investment-hotel-hint">Own at least 50% of this hotel to manage pricing and staffing.</p>}
      {remaining>0&&<div className="investment-poi-amount">
       <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{exactEuro(charge)}</strong></div>
       <input className="investment-poi-slider" type="range"
