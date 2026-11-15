@@ -39,7 +39,7 @@ describe('internal property construction',()=>{
   expect(quote.materials.some(m=>m.id==='concrete')).toBe(true);
   const started=beginConstruction(next,'contractor',0,1010,'project-1');
   expect(started.quote.totalCents).toBe(quote.totalCents);
-  expect(()=>updateFloor(started.site,0,f=>f)).toThrow('underway');
+  expect(()=>updateFloor(started.site,0,f=>f)).toThrow('construction');
   const state={...emptyConstruction(1010),sites:{[s.id]:started.site}};
   const before=settleConstruction(state,1011);
   expect(before.state.sites[s.id].built[0].rooms).toHaveLength(0);
