@@ -272,3 +272,34 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.ops-overlay-mode .ops-v2 *{transition:none!important;animation:none!important}
 }
+
+/* Keep advanced diagnostics out of the main information hierarchy. */
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced{
+ padding:0;overflow:hidden;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced>summary{
+ display:flex;align-items:center;justify-content:space-between;gap:8px;
+ min-height:43px;padding:10px 12px;
+ list-style:none;cursor:pointer;color:var(--ops-muted);
+ font-size:11px;font-weight:700;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced>summary::-webkit-details-marker{display:none}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced>summary svg{color:var(--ops-accent)}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced[open]>summary svg{transform:rotate(180deg)}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-advanced .ops-extra{
+ padding:10px 12px 12px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-section-heading>svg{
+ color:var(--ops-accent);
+}
+@media(max-width:360px){
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-quick-stats{
+  gap:5px;padding:8px;
+ }
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-quick-stats span{
+  font-size:10px;gap:3px;
+ }
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-quick-stats svg{
+  display:none;
+ }
+}
