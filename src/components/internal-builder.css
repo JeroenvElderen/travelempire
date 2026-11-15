@@ -227,3 +227,22 @@
  .internal-builder .ib-controls select,.internal-builder .ib-methods select{font-size:16px}
  .internal-builder .ib-plan-scroller{max-height:48vh}
 }
+
+/* World-map handoff when choosing a plot for an internal hotel development. */
+.nav-v216 .hotel-land-pick{
+ position:absolute;z-index:80;top:12px;left:50%;transform:translateX(-50%);
+ width:min(560px,calc(100% - 24px));display:flex;align-items:center;justify-content:space-between;
+ gap:12px;padding:11px 13px;border-radius:13px;
+ background:rgba(14,24,46,.96);border:1px solid rgba(197,160,242,.45);
+ color:#f5f2ff;box-shadow:0 9px 30px rgba(0,0,0,.3);
+}
+.nav-v216 .hotel-land-pick>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.nav-v216 .hotel-land-pick strong{font-size:12px;display:flex;align-items:center;gap:6px}
+.nav-v216 .hotel-land-pick small{font-size:10px;color:#c2cadd}
+.nav-v216 .hotel-land-pick button{
+ background:rgba(86,65,117,.75);border:1px solid rgba(197,160,242,.4);
+ color:#fff;border-radius:8px;padding:8px 11px;min-height:34px;font-size:11px;
+}
+@media(max-width:680px){
+ .nav-v216 .hotel-land-pick{top:calc(6px + env(safe-area-inset-top));}
+}
