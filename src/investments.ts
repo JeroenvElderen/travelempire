@@ -141,7 +141,10 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
  };
 }
 /** Accrue once for every completed simulated hour. Never repay already settled hours. */
-export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:number):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
+export function settlePropertyDividends(
+ portfolio:PropertyPortfolio,gameNow:number,
+ operatedPeriods?:ReadonlyMap<string,readonly {fromHour:number;toHour?:number}[]>
+):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
  const hour=currentHour(gameNow);
  let incomeCents=0,hours=0,changed=false;
  const holdings={...portfolio.holdings};
@@ -152,6 +155,10 @@ export function settlePropertyDividends(portfolio:PropertyPortfolio,gameNow:numb
   const from=Math.max(last,hour-MAX_CATCHUP_HOURS);
   let payment=0;
   for(let t=from+1;t<=hour;t++){
+   // An actively managed hotel replaces passive dividends for exactly the hours
+   // it operates. Historic pre-opening and post-closing hours remain eligible.
+   const periods=h.kind==='hotel'?operatedPeriods?.get(id):undefined;
+   if(periods?.some(p=>p.fromHour<=t-1&&(p.toHour===undefined||t-1<p.toHour)))continue;
    const operations=propertyOperations(h,t-1);
    payment+=Math.round(operations.netCents*ownership(h));
   }
