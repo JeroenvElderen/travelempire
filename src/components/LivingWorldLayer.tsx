@@ -71,8 +71,9 @@ function addLayers(map:maplibregl.Map){
   id:TRAFFIC_LAYER,type:'line',source:TRAFFIC_SOURCE,
   layout:{'line-cap':'round','line-join':'round'},
   paint:{'line-color':['step',['get','density'],'#20a984',35,'#e4af40',65,'#ea584e'],
-   'line-width':['interpolate',['linear'],['zoom'],11,1.5,16,4],
-   'line-opacity':0.65},
+   'line-width':['interpolate',['linear'],['zoom'],11,1.3,16,2.7],
+   'line-offset':['interpolate',['linear'],['zoom'],11,1.6,16,3.1],
+   'line-opacity':0.68},
  });
  if(!map.getLayer(INCIDENT_LAYER))map.addLayer({
   id:INCIDENT_LAYER,type:'circle',source:INCIDENT_SOURCE,
