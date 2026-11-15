@@ -34,7 +34,7 @@ export default function ConstructionFreightLayer({map,shipments,gameClock}:Props
     let entry=markers.get(cargo.id);
     if(!entry){
      const node=document.createElement('div');
-     node.style.cssText='width:34px;height:18px;pointer-events:auto;filter:drop-shadow(0 1px 2px #0008);';
+     node.style.cssText=`width:${current.kind==='ship'?58:51}px;height:${current.kind==='ship'?27:23}px;pointer-events:auto;filter:drop-shadow(0 2px 4px #000b);`;
      const img=document.createElement('img');
      img.src=(import.meta.env.BASE_URL??'/')+'assets/'+(current.kind==='ship'?'construction_cargo_ship.svg':'delivery_truck.svg');
      img.style.cssText='width:100%;height:100%;object-fit:contain;pointer-events:none;';
@@ -44,10 +44,11 @@ export default function ConstructionFreightLayer({map,shipments,gameClock}:Props
       pitchAlignment:'map'}).setLngLat(current.point).addTo(map);
      entry={marker,kind:current.kind};
      markers.set(cargo.id,entry);
+     marker.getElement().style.zIndex='8';
     }
     const phase=freightStage(cargo.freight,hour);
     entry.marker.getElement().title=(current.kind==='ship'?'Construction cargo ship':'Construction delivery truck')+
-     ' · '+cargo.siteName+' · '+(phase==='unloading'?'Unloading at harbour':phase==='trucking'?'Delivering to site':'Under way');
+     ' · '+cargo.siteName+' · '+(phase==='preparing'?'Loading at supplier harbour':phase==='unloading'?'Unloading at harbour':phase==='trucking'?'Delivering to site':'Under way');
     entry.marker.setLngLat(current.point);
     // Both supplied top-down SVG assets face east at zero rotation.
     entry.marker.setRotation(current.bearing-90);
