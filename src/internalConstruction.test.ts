@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import {
  newHotelSite,drawRoom,placeFurniture,updateFloor,constructionQuote,beginConstruction,
- settleConstruction,emptyConstruction,roomIssues,addFloor,orderSupplies,supplyStock,MAX_FLOORS,HOUR_MS,
+ settleConstruction,emptyConstruction,roomIssues,addFloor,orderSupplies,supplyStock,hotelPlotCostCents,validHotelPlotSize,LAND_PRICE_CENTS,MAX_FLOORS,HOUR_MS,
  type Room
 } from './internalConstruction';
 
@@ -9,6 +9,27 @@ const site=()=>newHotelSite('test-site','Test Hotel','new',37.98,23.72,1000);
 const firstRoom:Room={id:'room-1',name:'Room 101',type:'guest',x:1,y:1,width:4,height:4};
 
 describe('internal property construction',()=>{
+ it('offers custom plot sizes and scales land cost by purchased area',()=>{
+  expect(validHotelPlotSize({width:24,height:16})).toBe(true);
+  expect(hotelPlotCostCents({width:24,height:16})).toBe(LAND_PRICE_CENTS);
+  expect(hotelPlotCostCents({width:48,height:32})).toBe(LAND_PRICE_CENTS*4);
+  expect(hotelPlotCostCents({width:12,height:12})).toBe(Math.round(LAND_PRICE_CENTS*144/(24*16)));
+  expect(validHotelPlotSize({width:13,height:16})).toBe(false);
+  expect(validHotelPlotSize({width:24,height:66})).toBe(false);
+  expect(()=>hotelPlotCostCents({width:0,height:16})).toThrow('Plot width');
+ });
+ it('retains the purchased plot dimensions and guards old hotel/HQ footprints',()=>{
+  const compact=newHotelSite('small','Compact','new',37.98,23.72,1010,undefined,{width:12,height:14});
+  const large=newHotelSite('large','Large','new',37.98,23.72,1010,undefined,{width:48,height:32});
+  expect([compact.width,compact.height]).toEqual([12,14]);
+  expect([large.width,large.height]).toEqual([48,32]);
+  expect(()=>drawRoom(compact.draft[0],{...firstRoom,x:10},compact)).toThrow('outside');
+  expect(drawRoom(large.draft[0],{...firstRoom,x:42,y:20},large).rooms).toHaveLength(1);
+  const oldHotel=site();
+  const headOffice=newHotelSite('hq','HQ','headquarters',37.98,23.72,1000,undefined,{width:48,height:32});
+  expect([oldHotel.width,oldHotel.height,headOffice.width,headOffice.height]).toEqual([24,16,24,16]);
+ });
+
  it('starts without external tenders or arbitrary revenue',()=>{
   const s=site();
   expect(s.draft).toHaveLength(1);
