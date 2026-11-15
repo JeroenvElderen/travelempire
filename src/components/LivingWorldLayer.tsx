@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import type maplibregl from 'maplibre-gl';
+import maplibregl,{Popup} from 'maplibre-gl';
 import type {GameClock} from '../simulation/gameClock';
 import {GAME_TIME_SCALE} from '../simulation/gameClock';
 import type {RoadGraph} from '../simulation/taxi';
@@ -15,7 +15,7 @@ const TRAFFIC_SOURCE='te-world-traffic';
 const TRAFFIC_LAYER='te-world-traffic-layer';
 type Props={
  map:maplibregl.Map|null;companyId?:string;gameClock?:GameClock|null;graph:RoadGraph|null|undefined;
- roads:()=>ReadonlyMap<string,RoadFeature>;discovered:()=>ReadonlySet<string>;
+ roads:()=>ReadonlyMap<string,RoadFeature>;discovered:()=>Set<string>;
  traffic:boolean;npcs:boolean;events:boolean;weather:boolean;
 };
 type PointFeature=GeoJSON.Feature<GeoJSON.Point>;
@@ -118,19 +118,19 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
    if(!companyId)return;
    try{localStorage.setItem(storageKey(companyId),JSON.stringify(state));}catch{ /* Storage full */ }
   };
-  const onIncidentClick=(event:maplibregl.MapLayerMouseEvent)=>{
-   const feature=event.features?.[0];
-   if(!feature||!event.lngLat)return;
+  const onIncidentClick=(event:maplibregl.MapMouseEvent)=>{
+   if(!flagsRef.current.events||!map.getLayer(INCIDENT_LAYER))return;
+   const feature=map.queryRenderedFeatures(event.point,{layers:[INCIDENT_LAYER]})[0];
+   if(!feature)return;
    const incident=worldRef.current.incidents.find(item=>item.id===String(feature.properties?.id));
    if(!incident)return;
    const name=incident.kind==='collision'?'Road collision':incident.kind==='medical'?'Medical emergency':'Roadworks';
    const response=incident.responders.map(r=>r.kind==='police'?'Police':'Ambulance').join(' + ');
    // Text-only popup: never interpolate incident data into HTML.
-   new (requirePopup())({offset:14,maxWidth:'260px'})
+   new Popup({offset:14,maxWidth:'260px'})
     .setLngLat(incident.point).setText(name+' · '+incidentStatus(incident,currentGameTime())+
       (response?' · '+response:' · No nearby responder route')).addTo(map);
   };
-  // Dynamic import avoided: Popup is available from the same MapLibre package as the map.
   const install=async()=>{
    if(disposed||installing||!map.isStyleLoaded())return;
    installing=true;
@@ -145,8 +145,6 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
     if(disposed||!map.isStyleLoaded())return;
     addLayers(map);installed=true;
     hideLayers(map,flagsRef.current.traffic,flagsRef.current.npcs,flagsRef.current.events,flagsRef.current.weather);
-    map.off('click',INCIDENT_LAYER,onIncidentClick);
-    map.on('click',INCIDENT_LAYER,onIncidentClick);
     update();
    }catch(e){console.warn('Living world map layer unavailable',e);}
    finally{installing=false;}
@@ -205,13 +203,13 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
   };
   const onStyleLoad=()=>{installed=false;lastTrafficUpdate=0;void install();};
   const onMove=()=>{lastTrafficUpdate=0;update();};
-  map.on('style.load',onStyleLoad);map.on('moveend',onMove);
+  map.on('style.load',onStyleLoad);map.on('moveend',onMove);map.on('click',onIncidentClick);
   void install();
   const timer=window.setInterval(update,1100);
   return()=>{
    disposed=true;window.clearInterval(timer);
    map.off('style.load',onStyleLoad);map.off('moveend',onMove);
-   map.off('click',INCIDENT_LAYER,onIncidentClick);
+   map.off('click',onIncidentClick);
    for(const id of [CAR_LAYER,INCIDENT_LAYER,TRAFFIC_LAYER])if(map.getLayer(id))map.removeLayer(id);
    for(const id of [CAR_SOURCE,INCIDENT_SOURCE,TRAFFIC_SOURCE])if(map.getSource(id))map.removeSource(id);
   };
@@ -226,6 +224,3 @@ export default function LivingWorldLayer({map,companyId,gameClock,graph,roads,di
   <div>{flagsRef.current.weather?summary.weather+' · ':''}{summary.load}% traffic · {summary.incidents} incident{summary.incidents===1?'':'s'}</div>
  </div>;
 }
-// Module-local import keeps MapLibre's Popup constructor type safe.
-import {Popup} from 'maplibre-gl';
-function requirePopup(){return Popup;}
