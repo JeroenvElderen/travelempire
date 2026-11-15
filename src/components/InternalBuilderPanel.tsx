@@ -13,9 +13,10 @@ import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRo
  type HotelRole} from '../hotelOperations';
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
 import {freightStage,freightStatusLabel,freightProgress} from '../constructionLogistics';
+import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import './internal-builder.css';
 type Props={
- company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;cash:number;error:string;
+ company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;gameNowHour:number;cash:number;error:string;
  onSelectLand:(size:HotelPlotSize)=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
  onStartProject:(id:string,method:TradeMode)=>string|null;onAssignFreight:(projectId:string)=>string|null;onTrackFreight:(projectId:string)=>void;onOrderSupplies:(siteId:string,code:SupplyCode,quantity:number)=>string|null;onHireWorker:()=>string|null;onDismissWorker:()=>string|null;
  onHotelSetting:(siteId:string,key:HotelRole|'rateCents'|'breakfastPriceCents'|'dinnerPriceCents'|'drinkPriceCents',value:number)=>string|null;
@@ -42,7 +43,7 @@ function PriceInput({title,cents,minimum,maximum,onSave}:{
   <span>{title}</span><div><span>€</span><input aria-label={title+' price in euro'} type="number" inputMode="decimal" min={minimum} max={maximum} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></div>
  </label>;
 }
-export default function InternalBuilderPanel({company,state,portfolio,gameHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onAssignFreight,onTrackFreight,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
+export default function InternalBuilderPanel({company,state,portfolio,gameHour,gameNowHour,cash,error,onSelectLand,onAddHeadquarters,onAdoptHolding,onChangeSite,onStartProject,onAssignFreight,onTrackFreight,onOrderSupplies,onHireWorker,onDismissWorker,onHotelSetting,onHotelOpening}:Props){
  const [tab,setTab]=useState<Tab>('sites');
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [floorIndex,setFloorIndex]=useState(0);
@@ -372,19 +373,20 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
      </div>}
      {!active.freight&&gameHour>=active.deliveryHour&&<p className="ib-note">This project was started before ship deliveries existed. Its materials have already arrived under the original schedule; construction continues without resetting your progress.</p>}
      {active.freight&&gameHour<active.deliveryHour&&<div className="ib-cargo-panel">
-      <div className="ib-cargo-head"><Ship size={17}/><div><strong>{freightStatusLabel[freightStage(active.freight,gameHour)]}</strong><small>Contracted ship and truck delivery · materials & furniture</small></div></div>
-      <div className="ib-meter"><span style={{width:freightProgress(active.freight,gameHour)+'%'}}/></div>
+      <div className="ib-cargo-head"><Ship size={17}/><div><strong>{freightStatusLabel[freightStage(active.freight,gameNowHour)]}</strong><small>Contracted ship and truck delivery · materials & furniture</small></div></div>
+      <div className="ib-meter"><span style={{width:freightProgress(active.freight,gameNowHour)+'%'}}/></div>
       <div className="ib-cargo-route"><span>{active.freight.originPortName}</span><span>→</span><span>{active.freight.destinationPortName}</span><span>→</span><span>{site.name}</span></div>
-      <button type="button" className="ib-primary ib-full" onClick={()=>onTrackFreight(active.id)}><Ship size={17}/> {freightStage(active.freight,gameHour)==='trucking'?'Track delivery truck on map':'Track cargo ship on map'}</button>
+      <button type="button" className="ib-primary ib-full" onClick={()=>onTrackFreight(active.id)}><Ship size={17}/> {freightStage(active.freight,gameNowHour)==='trucking'?'Track delivery truck on map':'Track cargo ship on map'}</button>
       <div className="ib-cargo-stages">
-       <div className={gameHour>=active.freight.shippingHour?'reached':''}><Ship size={15}/><span>Ship departs</span><strong>Hour {active.freight.shippingHour}</strong></div>
-       <div className={gameHour>=active.freight.seaArrivalHour?'reached':''}><Package size={15}/><span>Harbour arrival</span><strong>Hour {active.freight.seaArrivalHour}</strong></div>
-       <div className={gameHour>=active.freight.truckDepartureHour?'reached':''}><Truck size={15}/><span>Truck dispatch</span><strong>Hour {active.freight.truckDepartureHour}</strong></div>
-       <div className={gameHour>=active.freight.deliveryHour?'reached':''}><CheckCircle2 size={15}/><span>Site delivery</span><strong>Hour {active.freight.deliveryHour}</strong></div>
+       <div className={gameNowHour>=active.freight.shippingHour?'reached':''}><Ship size={15}/><span>Ship departure</span><strong>{formatConstructionDate(active.freight.shippingHour)}</strong><small className="ib-milestone-countdown">{milestoneCountdown(active.freight.shippingHour,gameNowHour,'Departed')}</small></div>
+       <div className={gameNowHour>=active.freight.seaArrivalHour?'reached':''}><Package size={15}/><span>Harbour arrival</span><strong>{formatConstructionDate(active.freight.seaArrivalHour)}</strong><small className="ib-milestone-countdown">{milestoneCountdown(active.freight.seaArrivalHour,gameNowHour,'Arrived')}</small></div>
+       <div className={gameNowHour>=active.freight.truckDepartureHour?'reached':''}><Truck size={15}/><span>Truck dispatch</span><strong>{formatConstructionDate(active.freight.truckDepartureHour)}</strong><small className="ib-milestone-countdown">{milestoneCountdown(active.freight.truckDepartureHour,gameNowHour,'Dispatched')}</small></div>
+       <div className={gameNowHour>=active.freight.deliveryHour?'reached':''}><CheckCircle2 size={15}/><span>Site delivery</span><strong>{formatConstructionDate(active.freight.deliveryHour)}</strong><small className="ib-milestone-countdown">{milestoneCountdown(active.freight.deliveryHour,gameNowHour,'Delivered')}</small></div>
       </div>
+      <small>All times use the in-game calendar (UTC). Live countdowns use game time; 1 game hour = 2.5 real minutes.</small>
       <small>{Math.round(active.freight.roadDistanceMeters/1000)} km road journey · cargo follows loaded ferry corridors and drivable roads. No teleporting.</small>
      </div>}
-     <div className="ib-project-row"><strong>{gameHour<active.deliveryHour?'Waiting for building materials':'Construction underway'}</strong><span>{progressProject(active,gameHour).toFixed(0)}%</span></div><div className="ib-meter"><span style={{width:progressProject(active,gameHour)+'%'}}/></div><div className="ib-project-row"><small>Delivered game hour {active.deliveryHour}</small><small>Completion game hour {active.finishHour}</small></div>
+     <div className="ib-project-row"><strong>{gameHour<active.deliveryHour?'Waiting for building materials':'Construction underway'}</strong><span>{progressProject(active,gameHour).toFixed(0)}%</span></div><div className="ib-meter"><span style={{width:progressProject(active,gameHour)+'%'}}/></div><div className="ib-project-timing"><div><span>Materials delivery</span><strong>{formatConstructionDate(active.deliveryHour)}</strong><small>{milestoneCountdown(active.deliveryHour,gameNowHour,'Delivered')}</small></div><div><span>Estimated completion</span><strong>{formatConstructionDate(active.finishHour)}</strong><small>{milestoneCountdown(active.finishHour,gameNowHour,'Completed')}</small></div></div>
      <p className="ib-note">Construction can only progress after the ship unloads and the truck reaches the hotel site. Materials and project charges were paid when approved. Own crews also draw hourly wages.</p>
     </div>:
     <>
@@ -397,7 +399,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
     </>}
    </div>}
    {!site&&<div className="ib-empty"><Building2 size={23}/><strong>Choose a property to manage construction</strong><button onClick={()=>setTab('sites')} className="ib-secondary">My properties</button></div>}
-   {site&&site.projects.length>0&&<><div className="ib-heading"><h2>Project history</h2></div><div className="ib-cards">{[...site.projects].reverse().slice(0,12).map(p=><div key={p.id} className="ib-history-row"><span>{p.status==='complete'?<CheckCircle2 size={17}/>:<Clock3 size={17}/>}</span><div><strong>{p.method==='own'?'Own construction crew':'Contracted construction'}</strong><small>{p.status==='complete'?'Completed':'In progress'} · Game hour {p.startHour}</small></div><strong>{euros(p.budgetCents)}</strong></div>)}</div></>}
+   {site&&site.projects.length>0&&<><div className="ib-heading"><h2>Project history</h2></div><div className="ib-cards">{[...site.projects].reverse().slice(0,12).map(p=><div key={p.id} className="ib-history-row"><span>{p.status==='complete'?<CheckCircle2 size={17}/>:<Clock3 size={17}/>}</span><div><strong>{p.method==='own'?'Own construction crew':'Contracted construction'}</strong><small>{p.status==='complete'?'Completed':'In progress'} · Started {formatConstructionDate(p.startHour)}</small></div><strong>{euros(p.budgetCents)}</strong></div>)}</div></>}
   </div>}
   {company&&tab==='operations'&&<div className="ib-section ib-hotel-operations">
    <div className="ib-heading"><div><h2>Hotel operations</h2><small>Live bookings, staff, guest services and operating profit</small></div></div>
@@ -492,7 +494,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,c
      <button className="ib-primary ib-full" disabled={!Number.isInteger(supplyQuantity)||supplyQuantity<1||supplyQuantity>200||cash*100<selectedSupply.unitCents*supplyQuantity} onClick={()=>{const msg=onOrderSupplies(site.id,supplyCode,supplyQuantity);setStatus(msg??'Order placed. Items will arrive on the game clock.');}}><ShoppingCart size={15}/> Place supply order</button>
     </div>
     <div className="ib-heading"><div><h2>Deliveries</h2><small>Only completed deliveries enter your physical inventory</small></div></div>
-    {(site.supplyOrders??[]).length?<div className="ib-cards">{[...(site.supplyOrders??[])].reverse().slice(0,30).map(order=><div className="ib-history-row" key={order.id}><span>{order.status==='delivered'?<CheckCircle2 size={16}/>:<Clock3 size={16}/>}</span><div><strong>{supplies.find(item=>item.code===order.code)?.name??order.code} × {order.quantity}</strong><small>{order.status==='delivered'?'Delivered':'In transit'} · Arrival game hour {order.deliveryHour}</small></div><strong>{exactEuro(order.quantity*order.unitCents)}</strong></div>)}</div>:<p className="ib-muted">No supply orders yet.</p>}
+    {(site.supplyOrders??[]).length?<div className="ib-cards">{[...(site.supplyOrders??[])].reverse().slice(0,30).map(order=><div className="ib-history-row" key={order.id}><span>{order.status==='delivered'?<CheckCircle2 size={16}/>:<Clock3 size={16}/>}</span><div><strong>{supplies.find(item=>item.code===order.code)?.name??order.code} × {order.quantity}</strong><small>{order.status==='delivered'?'Delivered':'In transit'} · {formatConstructionDate(order.deliveryHour)} · {milestoneCountdown(order.deliveryHour,gameNowHour,'Arrived')}</small></div><strong>{exactEuro(order.quantity*order.unitCents)}</strong></div>)}</div>:<p className="ib-muted">No supply orders yet.</p>}
     <p className="ib-note">Kitchen items require a constructed kitchen, bar items a bar, and housekeeping goods a storage room. Storage capacity is limited. Food expires. Guest consumption, recipes and restaurant sales will be added in a later operating stage.</p>
    </div>}
   </div>}

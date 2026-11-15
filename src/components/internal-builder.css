@@ -564,3 +564,34 @@
 @media(max-width:480px){
  .internal-builder .ib-cargo-stages{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Calendar-readable milestones and continuously updated construction countdowns. */
+.internal-builder .ib-cargo-stages>div{min-width:0;gap:6px;padding:10px 6px;overflow-wrap:anywhere}
+.internal-builder .ib-cargo-stages>div strong{
+ color:#edf6ff;font-size:10px;line-height:1.5;font-weight:700;
+ white-space:normal;overflow-wrap:normal;font-variant-numeric:tabular-nums;
+}
+.internal-builder .ib-cargo-stages .ib-milestone-countdown{
+ display:block;color:#9cd5f4;font-size:10px;line-height:1.35;
+ font-weight:700;margin-top:2px;
+}
+.internal-builder .ib-cargo-stages .reached .ib-milestone-countdown{color:#8ce1bd}
+.internal-builder .ib-project-timing{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:8px;margin-top:6px;
+}
+.internal-builder .ib-project-timing>div{
+ display:flex;flex-direction:column;gap:6px;min-width:0;
+ padding:11px;border:1px solid var(--ib-line);border-radius:10px;
+ background:rgba(22,36,60,.5);
+}
+.internal-builder .ib-project-timing span{color:var(--ib-muted);font-size:11px}
+.internal-builder .ib-project-timing strong{
+ font-size:12px;font-weight:700;line-height:1.45;color:var(--ib-fg);
+ font-variant-numeric:tabular-nums;
+}
+.internal-builder .ib-project-timing small{font-size:10px;font-weight:700;color:#9bd6ec}
+@media(max-width:350px){
+ .internal-builder .ib-project-timing{grid-template-columns:1fr}
+}
