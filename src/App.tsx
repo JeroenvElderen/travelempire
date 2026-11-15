@@ -12,7 +12,7 @@ import {loadStationTile,type Station} from './data/stations';
 import {loadRestStopTile} from './data/restStops';
 import InvestmentsPanel from './components/InvestmentsPanel';
 import InternalBuilderPanel from './components/InternalBuilderPanel';
-import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,LAND_PRICE_CENTS,RECRUITMENT_CENTS,HOUR_MS,type HotelSite,type TradeMode} from './internalConstruction';
+import {loadConstruction,saveConstruction,newHotelSite,beginConstruction,settleConstruction,orderSupplies,LAND_PRICE_CENTS,RECRUITMENT_CENTS,HOUR_MS,type HotelSite,type TradeMode,type SupplyCode} from './internalConstruction';
 import FutureModulePanel from './components/FutureModulePanel';
 import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
@@ -2794,6 +2794,24 @@ export default function App(){
   setConstructionError('');
   return null;
  };
+ const orderInternalHotelSupplies=(siteId:string,code:SupplyCode,quantity:number):string|null=>{
+  const current=companyRef.current,clock=gameClockRef.current?.epochMs,old=constructionRef.current;
+  if(!current||clock===undefined)return 'Company clock is not ready.';
+  const site=old.sites[siteId];if(!site)return 'Select a building first.';
+  let order;
+  try{order=orderSupplies(site,code,quantity,Math.floor(clock/HOUR_MS),crypto.randomUUID());}
+  catch(e){return e instanceof Error?e.message:'Unable to order supplies.';}
+  const cost=order.costCents/100,available=current.cash+pendingCashRef.current;
+  if(available+0.001<cost)return 'Insufficient company cash for this order.';
+  const next={...old,sites:{...old.sites,[siteId]:order.site}};
+  try{saveConstruction(current.id,next);}catch{return 'Could not store the supply order.';}
+  constructionRef.current=next;setConstruction(next);
+  const updated={...current,cash:Math.round((available-cost)*100)/100};
+  pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
+  setFleet(oldFleet=>({...oldFleet,transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)}));
+  setConstructionError('');
+  return null;
+ };
  const recruitConstructionWorker=():string|null=>{
   const current=companyRef.current,clock=gameClockRef.current?.epochMs;
   if(!current||clock===undefined)return 'Company clock is not ready.';
@@ -2925,7 +2943,7 @@ export default function App(){
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/></div>}
  {page==='Ferries'&&<div className="ferries-map-overlay" role="dialog" aria-label="Ferry management"><button type="button" className="ferries-map-close" aria-label="Close Ferries and return to map" onClick={()=>go('World')}><X size={20}/></button><FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/></div>}
  {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} error={investmentError}/></div>}
- {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={()=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onHireWorker={recruitConstructionWorker}/></div>}
+ {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={()=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onOrderSupplies={orderInternalHotelSupplies} onHireWorker={recruitConstructionWorker}/></div>}
  {page==='Finance'&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
  {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
