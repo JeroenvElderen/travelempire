@@ -1,14 +1,18 @@
 import {useMemo,useState} from 'react';
-import {Building2,CarFront,Hotel,Landmark,MapPin,Search} from 'lucide-react';
+import {Building2,CarFront,Hotel,Search,Wallet,TrendingUp,ChevronDown,SlidersHorizontal} from 'lucide-react';
 import type {InvestablePOI,PropertyPortfolio} from '../investments';
 import {euro,ownership,propertyOperations,propertyValuationCents} from '../investments';
 import {investmentLimitCents,selectedInvestmentCents,defaultInvestmentEuros,asEuros} from '../investmentAmounts';
 import './InvestmentsPanel.css';
+import './investments-floating.css';
 const exactEuro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 
 type Props={available:InvestablePOI[];portfolio:PropertyPortfolio;companyCash:number;gameNow:number;onInvest:(poi:InvestablePOI,euros:number)=>string|null;error:string};
 export default function InvestmentsPanel({available,portfolio,companyCash,gameNow,onInvest,error}:Props){
  const [category,setCategory]=useState<'all'|'hotel'|'parking'>('all');
+ const [view,setView]=useState<'explore'|'owned'>('explore');
+ const [expanded,setExpanded]=useState<string|null>(null);
+ const [filtersOpen,setFiltersOpen]=useState(false);
  const [filter,setFilter]=useState('');
  const [amounts,setAmounts]=useState<Record<string,string>>({});
  const [message,setMessage]=useState('');
@@ -18,8 +22,8 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
   const byId=new Map<string,InvestablePOI>();
   for(const item of available)if(item.kind==='hotel'||item.kind==='parking')byId.set(item.id,item);
   for(const item of holdings)if(!byId.has(item.id))byId.set(item.id,item);
-  return [...byId.values()].filter(p=>(category==='all'||p.kind===category)&&(!filter||((p.name||'')+' '+p.id).toLowerCase().includes(filter.toLowerCase()))).sort((a,b)=>Number(holdingsIds.has(b.id))-Number(holdingsIds.has(a.id))||(a.name||'').localeCompare(b.name||'')).slice(0,160);
- },[available,portfolio,category,filter]);
+  return [...byId.values()].filter(p=>(view==='explore'||holdingsIds.has(p.id))&&(category==='all'||p.kind===category)&&(!filter||((p.name||'')+' '+p.id).toLowerCase().includes(filter.toLowerCase()))).sort((a,b)=>Number(holdingsIds.has(b.id))-Number(holdingsIds.has(a.id))||(a.name||'').localeCompare(b.name||'')).slice(0,160);
+ },[available,portfolio,category,filter,view]);
  const invested=holdings.reduce((sum,h)=>sum+h.investedCents,0);
  const dividends=holdings.reduce((sum,h)=>sum+h.dividendsCents,0);
  const gameHour=Math.floor(gameNow/3600000);
@@ -50,20 +54,24 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
  };
  const updateAmount=(id:string,value:string)=>
   setAmounts(old=>({...old,[id]:value}));
- return <section className="investment-page">
-  <div className="investment-heading"><span className="eyebrow">PROPERTY INVESTMENT · LIVE OSM LOCATIONS</span><h1>Investments</h1><p>Invest in hotels with a fixed number of guest rooms or parking facilities with a fixed number of spaces. Every occupied room or space earns revenue; your ownership share determines your dividends.</p></div>
-  <div className="investment-metrics">
-   <article><span>OWNED PROPERTIES</span><strong>{holdings.length}</strong></article>
-   <article><span>TOTAL INVESTED</span><strong>{euro(invested)}</strong></article>
-   <article><span>PROJECTED HOURLY INCOME</span><strong>{euro(expectedHourly)}</strong></article>
-   <article><span>DIVIDENDS EARNED</span><strong>{euro(dividends)}</strong></article>
+ return <section className="investment-page investment-v2">
+  <header className="investment-heading"><span className="investment-header-icon"><Building2 size={23}/></span><div><h1>Investments</h1><p>Properties &amp; income</p></div></header>
+  <nav className="investment-nav" aria-label="Investment sections">
+   <button type="button" aria-current={view==='explore'?'page':undefined} className={view==='explore'?'active':''} onClick={()=>{setView('explore');setExpanded(null)}}><Search size={18}/><span>{view==='explore'?'Explore':''}</span></button>
+   <button type="button" aria-current={view==='owned'?'page':undefined} className={view==='owned'?'active':''} onClick={()=>{setView('owned');setExpanded(null)}}><Building2 size={18}/><span>{view==='owned'?'Owned':''}</span></button>
+  </nav>
+  <div className="investment-mini-summary" aria-label="Investment portfolio summary">
+   <span><Building2 size={14}/><strong>{holdings.length}</strong> owned</span>
+   <span><TrendingUp size={14}/><strong>{euro(expectedHourly)}</strong>/hour</span>
+   <span><Wallet size={14}/><strong>{euro(Math.round(companyCash*100))}</strong> cash</span>
   </div>
-  <div className="investment-toolbar">
-   <div className="investment-filters">
-    {(['all','hotel','parking'] as const).map(kind=><button key={kind} type="button" className={category===kind?'active':''} onClick={()=>setCategory(kind)}>{kind==='all'?'All properties':kind==='hotel'?'Hotels':'Parking'}</button>)}
+  <div className="investment-section-heading"><div><h2>{view==='owned'?'My properties':'Properties'}</h2><small>{view==='owned'?'Owned portfolio':'Hotels &amp; parking facilities'}</small></div><button type="button" className={filtersOpen||category!=='all'||filter?'investment-filter-toggle active':'investment-filter-toggle'} aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={16}/>{filtersOpen?'Hide filters':'Filter'}</button></div>
+  {filtersOpen&&<div className="investment-toolbar">
+   <div className="investment-filters" role="group" aria-label="Property type">
+    {(['all','hotel','parking'] as const).map(kind=><button key={kind} type="button" aria-pressed={category===kind} className={category===kind?'active':''} onClick={()=>setCategory(kind)}>{kind==='all'?'All':kind==='hotel'?'Hotels':'Parking'}</button>)}
    </div>
-   <label className="investment-search"><Search size={17}/><input placeholder="Search loaded properties" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
-  </div>
+   <label className="investment-search"><Search size={16}/><input type="search" aria-label="Search properties" placeholder="Search properties" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
+  </div>}
   {(message||error)&&<p className="investment-feedback" role="status">{error||message}</p>}
   <div className="investment-properties">
    {entries.map(p=>{
@@ -79,8 +87,13 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     const canBuy=charge>0;
     const inputError=rawAmount.trim()!==''&&!canBuy&&limit>0;
     return <article className="investment-property" key={p.id}>
-     <div className="investment-property-top"><span className="investment-property-icon">{p.kind==='hotel'?<Hotel size={23}/>:<CarFront size={23}/>}</span><div className="investment-property-name"><strong>{p.name|| (p.kind==='hotel'?'Unnamed hotel':'Parking facility')}</strong><span><MapPin size={12}/>{p.kind==='hotel'?'Hotel':'Parking'} · {p.position[1].toFixed(3)}°, {p.position[0].toFixed(3)}°</span></div><span className="investment-tag">{percent===100?'Fully owned':percent>0?'Part owned':'Available'}</span></div>
+     <div className="investment-property-top"><span className="investment-property-icon">{p.kind==='hotel'?<Hotel size={23}/>:<CarFront size={23}/>}</span><div className="investment-property-name"><strong>{p.name|| (p.kind==='hotel'?'Unnamed hotel':'Parking facility')}</strong><span>{p.kind==='hotel'?'Hotel':'Parking'}</span></div><span className="investment-tag">{percent===100?'Fully owned':percent>0?'Part owned':'Available'}</span></div>
      <div className="investment-property-values"><div><small>PROPERTY VALUE</small><strong>{euro(value)}</strong></div><div><small>YOUR STAKE</small><strong>{percent.toFixed(2)}%</strong></div><div><small>YOUR HOURLY INCOME</small><strong>{euro(Math.round(performance.netCents*ownership(owned)))}</strong></div></div>
+     <div className="investment-track" role="progressbar" aria-label="Ownership share" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{width:`${percent}%`}}/></div>
+     <button type="button" className="investment-expand-toggle" aria-expanded={expanded===p.id} onClick={()=>setExpanded(expanded===p.id?null:p.id)}>{expanded===p.id?'Hide details':remaining<=0?'View details':owned?'Manage investment':'View & invest'} <ChevronDown size={16}/></button>
+     {expanded===p.id&&<div className="investment-property-expanded">
+      <details className="investment-details-toggle">
+       <summary>Occupancy &amp; operating costs <ChevronDown size={15}/></summary>
      <div className="investment-unit-economics">
       <div className="investment-unit-heading"><strong>{p.kind==='hotel'?'Hotel rooms':'Parking spaces'}</strong><small>Estimated operating capacity</small></div>
       <div className="investment-unit-summary">
@@ -100,6 +113,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
       <div className="investment-unit-net"><span>Property net income</span><strong>{euro(performance.netCents)}/h</strong></div>
       <small className="investment-unit-note">Capacity and rates are gameplay estimates, not verified real-world room or parking-space counts. Hotel nightly revenue is spread over 24 game hours.</small>
      </div>
+      </details>
      <div className="investment-poi-amount">
       <div className="investment-poi-amount-header"><label htmlFor={`invest-value-${p.id}`}>Investment amount</label><strong>{exactEuro(charge)}</strong></div>
       <input className="investment-poi-slider" type="range"
@@ -123,7 +137,8 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        inputError?'Enter an amount within your available cash and remaining shares':
        `${euro(remaining)} in shares available · ${euro(Math.round(companyCash*100))} company cash`}</small>
      </div>
-     <div className="investment-preview">
+     <div className="investment-earnings-preview"><span>Projected income after investment</span><strong>{euro(projection.hourAfter)}/h</strong></div>
+     <details className="investment-details-toggle"><summary>Full income forecast <ChevronDown size={15}/></summary><div className="investment-preview">
       <div className="investment-preview-heading"><strong>Purchase preview</strong><small>For {exactEuro(charge)} · simulated forecast</small></div>
       <div className="investment-preview-metrics">
        <div><span>ADDITIONAL STAKE</span><strong>+{(projection.additionalShare*100).toFixed(2)}%</strong></div>
@@ -134,13 +149,13 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
        <div><span>EXTRA PER HOUR</span><strong>+{euro(Math.max(0,projection.hourAfter-projection.hourBefore))}</strong></div>
       </div>
       <small>Forecast uses estimated room or space occupancy and unit prices over the next 24 game hours, less fixed and usage-based costs. Income is proportional to your projected ownership share.</small>
-     </div>
-     <div className="investment-track"><span style={{width:`${percent}%`}}/></div>
+     </div></details>
      <div className="investment-property-bottom"><span>{euro(owned?.investedCents??0)} invested · {euro(remaining)} remaining · {euro(owned?.dividendsCents??0)} earned</span><button type="button" disabled={!canBuy} onClick={()=>invest(p,charge)}>{remaining<=0?'100% Owned':limit===0?'Insufficient cash':!canBuy?'Choose amount':`Invest ${exactEuro(charge)}`}</button></div>
+     </div>}
     </article>;
    })}
   </div>
-  {entries.length===0&&<div className="investment-empty"><Building2 size={28}/><strong>No properties loaded yet</strong><p>Hotels and parking facilities come from the existing rest-stop POI tiles around headquarters and your active vehicles. As new areas load, their properties appear here.</p></div>}
-  <p className="investment-disclaimer"><Landmark size={15}/> Physical capacity, rates, occupancy and valuations are deterministic gameplay estimates, not verified property information. Dividends are based on occupied rooms or parking spaces, calculated hourly, with a 30-day catch-up limit.</p>
+  {entries.length===0&&<div className="investment-empty"><Building2 size={24}/><strong>{view==='owned'?'No properties owned yet':'No matching properties'}</strong><p>{view==='owned'?'Explore properties to make your first investment.':'More properties appear as your road network expands.'}</p></div>}
+  <p className="investment-disclaimer">Income, occupancy and property values are gameplay estimates.</p>
  </section>;
 }
