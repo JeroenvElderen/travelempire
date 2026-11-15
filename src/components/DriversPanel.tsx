@@ -1,48 +1,157 @@
-import type {FleetState} from '../simulation/taxi';
+import {useState} from 'react';
+import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,BriefcaseBusiness,Moon,PanelTop} from 'lucide-react';
+import type {FleetState,Taxi} from '../simulation/taxi';
 import type {GameClock} from '../simulation/gameClock';
 import {driverLevel} from '../simulation/taxi';
 import {driverSchedule,clockLabel} from '../simulation/driverSchedule';
+import './drivers-floating.css';
 
 type Props={fleet:FleetState;gameClock:GameClock|null};
-const time=clockLabel;
+type Schedule=ReturnType<typeof driverSchedule>;
+type ShiftPhase='duty'|'break'|'off';
+type ShiftSegment={from:number;to:number;kind:'duty'|'break'};
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
+const time=clockLabel;
+function segmentsForDay(start:number):ShiftSegment[]{
+ const source:ShiftSegment[]=[
+  {from:start,to:start+5.75,kind:'duty'},
+  {from:start+5.75,to:start+6.25,kind:'break'},
+  {from:start+6.25,to:start+12,kind:'duty'}
+ ];
+ return source.flatMap(segment=>{
+  if(segment.from>=24)return [{...segment,from:segment.from-24,to:segment.to-24}];
+  if(segment.to>24)return [
+   {...segment,to:24},
+   {...segment,from:0,to:segment.to-24}
+  ];
+  return [segment];
+ });
+}
+function statusOf(t:Taxi,s:Schedule):{label:string;phase:ShiftPhase}{
+ if(t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')return {label:'With passenger',phase:s.onBreak?'break':s.onDuty?'duty':'off'};
+ if(t.scheduledShiftParked&&t.status==='PAUSED')return {label:s.onBreak?'On break':'Off duty · parked',phase:s.onBreak?'break':'off'};
+ if(t.status==='RETURNING'&&t.shiftParked)return {label:'Returning to rest',phase:s.onBreak?'break':'off'};
+ if(t.status==='PAUSED'&&t.shiftParked)return {label:'Parked',phase:'off'};
+ if(s.onBreak)return {label:'Scheduled break',phase:'break'};
+ if(!s.onDuty)return {label:'Off duty',phase:'off'};
+ if(t.status==='REFUELLING')return {label:'Refuelling',phase:'duty'};
+ if(t.status==='SERVICING')return {label:'Servicing',phase:'duty'};
+ return {label:'On duty',phase:'duty'};
+}
+function Timeline({schedule,driverName}:{schedule:Schedule;driverName:string}){
+ return <div className="drivers-timeline">
+  <div className="drivers-timeline-track" role="img" aria-label={`${driverName}: shift ${time(schedule.start)}–${time(schedule.start+12)}, break ${time(schedule.start+5.75)}–${time(schedule.start+6.25)}. Current game time ${time(schedule.current)}`}>
+   {segmentsForDay(schedule.start).map((segment,index)=><span key={index} className={`drivers-timeline-segment ${segment.kind}`} style={{left:`${segment.from/24*100}%`,width:`${(segment.to-segment.from)/24*100}%`}}/>)}
+   <span className="drivers-timeline-now" style={{left:`${schedule.current/24*100}%`}}/>
+  </div>
+  <div className="drivers-timeline-hours"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+ </div>;
+}
 export default function DriversPanel({fleet,gameClock}:Props){
+ const [view,setView]=useState<'schedules'|'team'|'performance'>('schedules');
+ const [filter,setFilter]=useState<'all'|'duty'|'break'|'off'>('all');
+ const [query,setQuery]=useState('');
+ const [expanded,setExpanded]=useState<string|null>(null);
  const taxis=fleet.taxis.filter(t=>!t.kind||t.kind==='taxi');
  const roster=fleet.drivers??[];
  const current=gameClock?.epochMs??Date.now();
- const active=taxis.filter(t=>{const s=driverSchedule(t,roster,current);return s.onDuty&&!s.onBreak&&!t.shiftParked;}).length;
- return <section className="company-dashboard" style={{padding:'24px',maxWidth:1150,margin:'0 auto'}}>
-  <div style={{marginBottom:24}}><span className="eyebrow">FLEET MANAGEMENT · AUTOMATIC SCHEDULING</span><h1>Drivers</h1><p>Daily shifts, rest periods, breaks and driver performance. Times are in game time.</p></div>
-  <div style={{display:'flex',flexWrap:'wrap',gap:12,marginBottom:24}}>
-   {[[ 'Employed drivers',roster.length],['Passenger taxis',taxis.length],['Scheduled available',active],['Daily duty','12h'],['Daily break','30m']].map(([label,value])=><div key={label} style={{padding:16,border:'1px solid #64748b55',borderRadius:12,minWidth:135,flex:'1 1 135px'}}><div style={{fontSize:12,opacity:.7}}>{label}</div><strong style={{fontSize:23}}>{value}</strong></div>)}
-  </div>
-  <h2 style={{fontSize:20}}>24-hour driver schedules</h2>
-  <p style={{opacity:.75}}>Preferences are assigned automatically and shifts are staggered. The yellow marker shows current game time. Breaks start 5h 45m into each duty period; active passenger trips finish first.</p>
-  <div style={{display:'grid',gap:12,marginTop:16}}>
-   {taxis.map(t=>{
-    const s=driverSchedule(t,roster,current);
-    const driver=roster.find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
-    const state=t.status==='TO_PICKUP'||t.status==='TO_DROPOFF'?'With passenger':t.scheduledShiftParked&&t.status==='PAUSED'?(s.onBreak?'On scheduled break':'Off duty · parked'):t.status==='RETURNING'&&t.shiftParked?'Travelling to break/rest':t.status==='PAUSED'&&t.shiftParked?'Parked':s.onBreak?'Break due':!s.onDuty?'Off duty':t.status==='REFUELLING'?'Refuelling':t.status==='SERVICING'?'Servicing':'On duty';
-    return <article key={t.id} style={{border:'1px solid #64748b55',borderRadius:12,padding:18}}>
-     <div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><strong>{t.driver}</strong><div style={{fontSize:13,opacity:.7}}>{t.name} · {driverLevel(driver?.completedTrips??0)}</div></div><strong>{state}</strong></div>
-     <div style={{fontSize:12,opacity:.75,marginTop:8}}>Automatic preference: <strong>{s.preference}</strong> · Game time: <strong>{time(s.current)}</strong></div>
-     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginTop:15,fontSize:13}}>
-      <div>Shift: <strong>{time(s.start)}–{time(s.start+12)}</strong></div>
-      <div>Break: <strong>{time(s.start+5.75)}–{time(s.start+6.25)}</strong></div>
-      <div>Rest: <strong>{time(s.start+12)}–{time(s.start+24)}</strong></div>
-      <div>Trips: <strong>{driver?.completedTrips??0}</strong></div>
-      <div>Distance: <strong>{(driver?.distanceKm??0).toFixed(1)} km</strong></div>
-      <div>Revenue: <strong>{money(driver?.revenueGenerated??0)}</strong></div>
-     </div>
-     <div aria-label="24-hour schedule with live game-time indicator" style={{position:'relative',height:16,borderRadius:8,marginTop:22,background:'#64748b'}}>
-      {[[0,5.75,'#16a34a'],[5.75,6.25,'#eab308'],[6.25,12,'#16a34a']] .map(([from,to,color],i)=><div key={i} style={{position:'absolute',left:`${((Number(from)+s.start)%24)/24*100}%`,width:`${Math.min(Number(to)-Number(from),24-((Number(from)+s.start)%24))/24*100}%`,height:'100%',background:String(color),borderRadius:3}}/>)}
-      {[[0,5.75,'#16a34a'],[5.75,6.25,'#eab308'],[6.25,12,'#16a34a']].map(([,to,color],i)=>{const end=(Number(to)+s.start);return end>24?<div key={'wrap'+i} style={{position:'absolute',left:0,width:`${(end-24)/24*100}%`,height:'100%',background:String(color),borderRadius:3}}/>:null})}
-      <div style={{position:'absolute',left:`${s.current/24*100}%`,top:-6,bottom:-6,width:3,background:'#facc15',border:'1px solid #fff',borderRadius:3,transform:'translateX(-50%)',boxShadow:'0 0 6px #facc15'}}/>
-     </div><div style={{display:'flex',justifyContent:'space-between',fontSize:11,opacity:.7,marginTop:8}}><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+ const entries=taxis.map(t=>{
+  const schedule=driverSchedule(t,roster,current);
+  const driver=roster.find(d=>d.name.toLowerCase()===t.driver.toLowerCase());
+  return {taxi:t,schedule,driver,status:statusOf(t,schedule)};
+ });
+ const active=entries.filter(e=>e.schedule.onDuty&&!e.schedule.onBreak&&!e.taxi.shiftParked).length;
+ const resting=entries.filter(e=>!e.schedule.onDuty).length;
+ const breaks=entries.filter(e=>e.schedule.onBreak).length;
+ const assignedNames=new Set(taxis.map(t=>t.driver.toLowerCase()));
+ const unassigned=roster.filter(d=>!assignedNames.has(d.name.toLowerCase()));
+ const visible=entries.filter(e=>(filter==='all'||e.status.phase===filter)&&
+  (!query.trim()||[e.taxi.name,e.taxi.driver,e.driver?.name].some(v=>String(v??'').toLowerCase().includes(query.trim().toLowerCase()))));
+ const tripCount=roster.reduce((n,d)=>n+(d.completedTrips??0),0);
+ const distance=roster.reduce((n,d)=>n+(d.distanceKm??0),0);
+ const revenue=roster.reduce((n,d)=>n+(d.revenueGenerated??0),0);
+ return <section className="drivers-v2" aria-label="Driver schedules and performance">
+  <header className="drivers-head"><span className="drivers-head-icon"><CalendarDays size={25}/></span><div><h1>Drivers</h1><p>Schedules &amp; performance · game time</p></div></header>
+  <nav className="drivers-nav" aria-label="Drivers sections">
+   {([['schedules','Schedules',CalendarDays],['team','Team',UsersRound],['performance','Analytics',BarChart3]] as const).map(([key,label,Icon])=>
+    <button type="button" key={key} className={view===key?'active':''} aria-label={label} aria-current={view===key?'page':undefined} onClick={()=>setView(key)}><Icon size={19}/><span>{view===key?label:''}</span></button>)}
+  </nav>
+  {view==='schedules'&&<>
+   <div className="drivers-kpis">
+    <article><UsersRound size={20}/><span>Drivers</span><strong>{roster.length}</strong></article>
+    <article><CarFront size={20}/><span>Taxis</span><strong>{taxis.length}</strong></article>
+    <article><BriefcaseBusiness size={20}/><span>On duty</span><strong>{active}</strong></article>
+    <article><Moon size={20}/><span>Resting</span><strong>{resting}</strong></article>
+   </div>
+   <section className="drivers-section">
+    <div className="drivers-section-header"><h2>Daily schedules</h2><span>12h shift · 30m break</span></div>
+    <p className="drivers-schedule-hint">Automatically staggered shifts. Breaks begin 5h 45m into a shift; ongoing passenger journeys finish first. Current game time: <strong>{time(((current/3600000)%24+24)%24)}</strong>.</p>
+    <label className="drivers-search"><Search size={17}/><input type="search" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search drivers or taxis" placeholder="Find driver or taxi…"/></label>
+    <div className="drivers-filters" role="group" aria-label="Filter schedules">
+     {([['all','All'],['duty','On duty'],['break',`Breaks (${breaks})`],['off','Off duty']] as const).map(([key,label])=><button key={key} type="button" className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
+    </div>
+    <div className="drivers-legend"><span><i/>Shift</span><span><i className="break"/>Break</span><span><i className="rest"/>Rest</span><span><i className="now"/>Game time</span></div>
+    <div className="drivers-list">
+     {visible.map(({taxi,driver,schedule,status})=>{
+      const isExpanded=expanded===taxi.id;
+      return <article className="drivers-schedule-card" key={taxi.id}>
+       <div className="drivers-card-head">
+        <span className="drivers-card-avatar"><UserRound size={22}/></span>
+        <div className="drivers-card-info"><strong>{taxi.driver}</strong><small>{taxi.name} · {driverLevel(driver?.completedTrips??0)}</small></div>
+        <span className="drivers-status">{status.label}</span>
+       </div>
+       <div className="drivers-shift-meta"><span>{schedule.preference} shift</span><strong>{time(schedule.start)}–{time(schedule.start+12)}</strong></div>
+       <Timeline schedule={schedule} driverName={taxi.driver}/>
+       <div className="drivers-schedule-actions">
+        <span>Break {time(schedule.start+5.75)}–{time(schedule.start+6.25)}</span>
+        <button type="button" aria-expanded={isExpanded} onClick={()=>setExpanded(isExpanded?null:taxi.id)}>{isExpanded?'Less':'Details'}{isExpanded?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>
+       </div>
+       {isExpanded&&<div className="drivers-card-expanded">
+        <div><small>Trips</small><strong>{driver?.completedTrips??0}</strong></div>
+        <div><small>Distance</small><strong>{(driver?.distanceKm??0).toFixed(1)} km</strong></div>
+        <div><small>Revenue</small><strong>{money(driver?.revenueGenerated??0)}</strong></div>
+        <div><small>Rest</small><strong>{time(schedule.start+12)}–{time(schedule.start+24)}</strong></div>
+        <div><small>Start</small><strong>{time(schedule.start)}</strong></div>
+        <div><small>Now</small><strong>{time(schedule.current)}</strong></div>
+       </div>}
+      </article>;
+     })}
+     {!visible.length&&<p className="drivers-empty">{!taxis.length?'No passenger taxis yet. Purchase a taxi and assign a driver to see its automatic schedule.':'No schedules match the selected filter.'}</p>}
+    </div>
+   </section>
+  </>}
+  {view==='team'&&<section className="drivers-section">
+   <div className="drivers-section-header"><h2>Driver roster</h2><span>{roster.length} employed</span></div>
+   <p className="drivers-schedule-hint">Driver assignments and shifts are managed automatically. Assign drivers to idle taxis from Fleet → Vehicles.</p>
+   <div className="drivers-list">{roster.map(driver=>{
+    const assigned=entries.find(e=>e.taxi.driver.toLowerCase()===driver.name.toLowerCase());
+    return <article className="drivers-team-card" key={driver.id}>
+     <span className="drivers-card-avatar"><UserRound size={22}/></span>
+     <div className="drivers-team-card-body"><strong>{driver.name}</strong><small>{assigned?`Assigned to ${assigned.taxi.name}`:'Not assigned'} · {driverLevel(driver.completedTrips??0)}</small><small>{(driver.distanceKm??0).toFixed(1)} km · {driver.completedTrips??0} trips</small></div>
+     <span>{assigned?assigned.schedule.preference:'Available'}</span>
     </article>;
    })}
-   {!taxis.length&&<p>No passenger taxis yet. Purchase a taxi and assign a driver to see its automatic schedule.</p>}
-  </div>
-  {roster.some(d=>!taxis.some(t=>t.driver.toLowerCase()===d.name.toLowerCase()))&&<section style={{marginTop:24}}><h2 style={{fontSize:20}}>Unassigned drivers</h2><p>{roster.filter(d=>!taxis.some(t=>t.driver.toLowerCase()===d.name.toLowerCase())).map(d=>d.name).join(', ')}</p></section>}
+   {!roster.length&&<p className="drivers-empty">No drivers employed yet. Hire drivers in Fleet → Drivers.</p>}
+   </div>
+   {unassigned.length>0&&<p className="drivers-schedule-hint">{unassigned.length} unassigned driver{unassigned.length===1?'':'s'} available for taxi assignment.</p>}
+  </section>}
+  {view==='performance'&&<section className="drivers-section">
+   <div className="drivers-section-header"><h2>Driver performance</h2><span>Career totals</span></div>
+   <div className="drivers-performance-grid">
+    <article className="drivers-performance-card"><small>Completed trips</small><strong>{tripCount.toLocaleString('en-IE')}</strong><span>All employed drivers</span></article>
+    <article className="drivers-performance-card"><small>Distance driven</small><strong>{distance.toFixed(1)} km</strong><span>Recorded driver kilometres</span></article>
+    <article className="drivers-performance-card"><small>Passenger revenue</small><strong>{money(revenue)}</strong><span>Generated by drivers</span></article>
+    <article className="drivers-performance-card"><small>Revenue per km</small><strong>{distance>0?money(revenue/distance):'—'}</strong><span>Career average</span></article>
+   </div>
+   <div className="drivers-section-header"><h2>Driver results</h2><span>{roster.length} drivers</span></div>
+   <div className="drivers-list">{[...roster].sort((a,b)=>(b.revenueGenerated??0)-(a.revenueGenerated??0)).map(driver=><article className="drivers-stats-card" key={driver.id}>
+    <strong>{driver.name}</strong>
+    <div><span><Route size={13}/> Trips</span><strong>{driver.completedTrips??0}</strong></div>
+    <div><span><Clock3 size={13}/> Distance</span><strong>{(driver.distanceKm??0).toFixed(1)} km</strong></div>
+    <div><span><Wallet size={13}/> Revenue</span><strong>{money(driver.revenueGenerated??0)}</strong></div>
+   </article>)}
+   {!roster.length&&<p className="drivers-empty">No driver performance data yet.</p>}
+   </div>
+  </section>}
  </section>;
 }
