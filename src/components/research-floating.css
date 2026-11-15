@@ -409,3 +409,10 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.research-overlay-mode .research-v3 *{transition:none!important;animation:none!important}
 }
+
+.nav-v216.research-overlay-mode .research-map-error{
+ margin:0 12px 14px;padding:10px 11px;
+ border:1px solid rgba(234,173,190,.45);border-radius:11px;
+ background:rgba(84,36,59,.72);color:#f4c9d6;
+ font-size:11px;line-height:1.45;
+}
