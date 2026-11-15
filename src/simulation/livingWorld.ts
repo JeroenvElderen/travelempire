@@ -102,7 +102,7 @@ export function dispatchResponders(
  if(!targetKeys)return [];
  const ordered=roads.filter(validRoad)
   .map(r=>({r,d:Math.min(...(roadEnds(r)??ends).map(p=>meters(p,ends[0])))}))
-  .filter(item=>item.d>=120&&item.d<=2600)
+  .filter(item=>String(item.r.id??item.r.properties?.roadId)!==String(road.id??road.properties?.roadId)&&item.d<=2600)
   .sort((a,b)=>a.d-b.d).slice(0,8);
  const responders:WorldResponder[]=[];
  const kinds:ResponderKind[]=kind==='roadworks'?[]:kind==='medical'?['ambulance']:['police','ambulance'];
