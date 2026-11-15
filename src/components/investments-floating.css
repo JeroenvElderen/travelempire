@@ -482,3 +482,31 @@
   font-size:16px;
  }
 }
+
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:9px;padding-top:10px;border-top:1px solid var(--investment-line);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation>div{
+ display:flex;flex-direction:column;gap:3px;min-width:0;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation strong{
+ font-size:11px;color:var(--investment-foreground);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation small{
+ font-size:10px;color:var(--investment-muted);
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation button{
+ flex:0 0 auto;min-height:34px;padding:7px 10px;
+ border:1px solid rgba(197,160,242,.46);border-radius:10px;
+ background:rgba(123,81,169,.68);color:var(--investment-foreground);
+ font-size:10px;font-weight:700;
+}
+.nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation button:disabled{
+ cursor:not-allowed;opacity:.5;
+}
+@media(max-width:440px){
+ .nav-v216.investments-overlay-mode .investment-v2 .investment-hotel-renovation{
+  align-items:stretch;flex-direction:column;
+ }
+}
