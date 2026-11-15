@@ -36,7 +36,7 @@ export default function ConstructionFreightLayer({map,shipments,gameClock}:Props
      const node=document.createElement('div');
      node.style.cssText='width:34px;height:18px;pointer-events:auto;filter:drop-shadow(0 1px 2px #0008);';
      const img=document.createElement('img');
-     img.src=(import.meta.env.BASE_URL??'/')+'assets/'+(current.kind==='ship'?'passenger_ferry_professional.svg':'delivery_truck.svg');
+     img.src=(import.meta.env.BASE_URL??'/')+'assets/'+(current.kind==='ship'?'construction_cargo_ship.svg':'delivery_truck.svg');
      img.style.cssText='width:100%;height:100%;object-fit:contain;pointer-events:none;';
      img.alt='';
      node.appendChild(img);
