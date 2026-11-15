@@ -81,7 +81,7 @@ export function pointOnPath(path:Point[],progress:number):{point:Point;bearing:n
 }
 /** Use the game's actual turn-aware, discovery-limited router for responders. */
 export function dispatchResponders(
- road:RoadFeature, roads:readonly RoadFeature[],graph:RoadGraph,discovered:ReadonlySet<string>,at:number,
+ road:RoadFeature, roads:readonly RoadFeature[],graph:RoadGraph,discovered:Set<string>,at:number,
  kind:IncidentKind,id:string,
 ):WorldResponder[]{
  const ends=roadEnds(road);
@@ -90,22 +90,26 @@ export function dispatchResponders(
  const ordered=roads.filter(validRoad).slice(0,800)
   .map(r=>({r,d:Math.min(...(roadEnds(r)??ends).map(p=>meters(p,ends[0])))}))
   .filter(item=>item.d>=120&&item.d<=2600)
-  .sort((a,b)=>a.d-b.d).slice(0,24);
+  .sort((a,b)=>a.d-b.d).slice(0,8);
  const responders:WorldResponder[]=[];
  const kinds:ResponderKind[]=kind==='roadworks'?[]:kind==='medical'?['ambulance']:['police','ambulance'];
  for(const emergencyKind of kinds){
+  let routeAttempts=0;
   let best:{path:Point[];distance:number}|null=null;
   for(const candidate of ordered){
    const fromEnds=roadEnds(candidate.r);
    if(!fromEnds)continue;
    for(const origin of fromEnds){
+    if(routeAttempts>=6)break;
     const from=key(origin);
     if(!graph.nodes.has(from))continue;
     for(const target of targetKeys){
+     if(routeAttempts>=6)break;
      if(!graph.nodes.has(target))continue;
      // A short geographic prefilter bounds routing work on very large graphs.
      const targetPoint=graph.nodes.get(target)!;
      if(meters(origin,targetPoint)>3100)continue;
+     routeAttempts++;
      const routed=routeDiscovered(graph,from,target,discovered);
      if(routed&&routed.path.length>=2&&routed.length>80&&(!best||routed.length<best.distance))
       best={path:routed.path,distance:routed.length};
@@ -121,7 +125,7 @@ export function dispatchResponders(
  }
  return responders;
 }
-function incidentOnRoad(road:RoadFeature,roads:readonly RoadFeature[],graph:RoadGraph,discovered:ReadonlySet<string>,at:number,seed:number):WorldIncident|null{
+function incidentOnRoad(road:RoadFeature,roads:readonly RoadFeature[],graph:RoadGraph,discovered:Set<string>,at:number,seed:number):WorldIncident|null{
  const ends=roadEnds(road);
  if(!ends)return null;
  const point:Point=[fraction(ends[0][0],ends[1][0],0.5),fraction(ends[0][1],ends[1][1],0.5)];
@@ -133,7 +137,7 @@ function incidentOnRoad(road:RoadFeature,roads:readonly RoadFeature[],graph:Road
 }
 /** One incident opportunity every four in-game hours; cap three simultaneous events. */
 export function advanceWorldState(state:WorldState|undefined,now:number,
- roads:readonly RoadFeature[],graph:RoadGraph|null,discovered:ReadonlySet<string>,seed='world'):WorldState{
+ roads:readonly RoadFeature[],graph:RoadGraph|null,discovered:Set<string>,seed='world'):WorldState{
  const current=state??EMPTY_STATE;
  const incidents=current.incidents.filter(i=>i.endsAt>now&&i.startedAt<=now).slice(-3);
  const bucket=Math.floor(now/(4*HOUR));
@@ -150,7 +154,7 @@ export function advanceWorldState(state:WorldState|undefined,now:number,
  return next;
 }
 export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGraph|null,
- discovered:ReadonlySet<string>,at:number,realNow:number,incidents:readonly WorldIncident[],limit=40):VisibleWorldVehicle[]{
+ discovered:Set<string>,at:number,realNow:number,incidents:readonly WorldIncident[],limit=40):VisibleWorldVehicle[]{
  const output:VisibleWorldVehicle[]=[];
  if(graph){
   const max=Math.max(0,Math.min(60,Math.floor(limit)));
