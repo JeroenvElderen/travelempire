@@ -68,6 +68,11 @@ export function trafficLoadAt(point:Point,at:number):number{
  const weatherLoad=weather==='storm'?16:weather==='rain'?9:weather==='snow'?12:0;
  return Math.max(5,Math.min(99,(rush?70:overnight?12:daytime?42:27)+(weekend?-7:0)+variability+weatherLoad));
 }
+/** Bounded slowdown for occupied/empty taxi road movement (not explorers). */
+export function worldTaxiSpeedFactor(point:Point,at:number):number{
+ const congestion=trafficLoadAt(point,at);
+ return Math.max(0.58,Math.min(1,1-Math.max(0,congestion-20)*0.005));
+}
 export function incidentStatus(incident:WorldIncident,now:number):'responding'|'on-scene'|'clearing'{
  if(incident.responders.some(r=>r.arriveAt>now))return 'responding';
  return now<incident.endsAt-5*60000?'on-scene':'clearing';
