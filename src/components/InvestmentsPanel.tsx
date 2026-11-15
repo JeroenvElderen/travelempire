@@ -91,6 +91,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
     const performance=propertyOperations(owned??{id:p.id,kind:p.kind,valuationCents:value},gameHour,officeUpgrades);
     const hotelPolicy=hotelPolicyAt(owned?.hotelPolicyHistory,gameHour+1);
     const renovationLevel=hotelRenovationLevel(owned?.hotelRenovations);
+    const hotelNextHour=owned?.kind==='hotel'?propertyOperations(owned,gameHour+1,officeUpgrades):null;
     const limit=investmentLimitCents(remaining,companyCash);
     const rawAmount=amounts[p.id]??defaultInvestmentEuros(limit);
     const charge=selectedInvestmentCents(rawAmount,limit);
@@ -144,7 +145,7 @@ export default function InvestmentsPanel({available,portfolio,companyCash,gameNo
         </select>
        </label>
       </div>
-      <div className="investment-hotel-profit"><span>Hotel operating net</span><strong>{euro(performance.netCents)}/h</strong></div>
+      <div className="investment-hotel-profit"><span>Next-hour property net</span><strong>{euro(hotelNextHour?.netCents??performance.netCents)}/h</strong></div>
       <div className="investment-hotel-renovation"><div><strong>Room renovations</strong><small>+10% capacity per level · {renovationLevel} / {MAX_HOTEL_RENOVATIONS}</small></div><button type="button" disabled={renovationLevel>=MAX_HOTEL_RENOVATIONS||companyCash<hotelRenovationCost(renovationLevel+1)} onClick={()=>renovate(p.id)}>{renovationLevel>=MAX_HOTEL_RENOVATIONS?'Complete':companyCash<hotelRenovationCost(renovationLevel+1)?'Not enough cash':'Renovate · '+exactEuro(hotelRenovationCost(renovationLevel+1)*100)}</button></div>
      </div>}
      {p.kind==='hotel'&&owned&&ownership(owned)<0.5&&<p className="investment-hotel-hint">Own at least 50% of this hotel to manage pricing and staffing.</p>}
