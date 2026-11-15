@@ -18,7 +18,7 @@ function hash(value:string):number{
  for(let i=0;i<value.length;i++)h=Math.imul(h^value.charCodeAt(i),16777619);
  return h>>>0;
 }
-function validEdge(edge:RoadGraph['edges'] extends Map<string,infer T> ? T[number] : never, discovered:ReadonlySet<string>,graph:RoadGraph):boolean{
+function validEdge(edge:NonNullable<ReturnType<RoadGraph['edges']['get']>>[number], discovered:ReadonlySet<string>,graph:RoadGraph):boolean{
  return discovered.has(edge.id)&&!edge.taxiOnly&&!NON_DRIVING.has(String(edge.highway??''))&&graph.nodes.has(edge.to);
 }
 function bearing(a:Point,b:Point):number{
