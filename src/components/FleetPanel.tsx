@@ -2,7 +2,7 @@ import {energySpec,energyRemaining,energyPercent,energyRangeKm} from '../simulat
 import {driverLevel,driverSkill} from '../simulation/taxi';
 import {SPECIALIST_EXPLORERS} from '../simulation/explorerRoles';
 import {useEffect,useState} from 'react';
-import {CarFront,CalendarDays,Wrench,Gauge,Search,SlidersHorizontal,Fuel,MapPin,ChevronRight,ChevronDown,ChevronUp,TrendingUp,UserRound,UserPlus} from 'lucide-react';
+import {CarFront,CalendarDays,Wrench,Gauge,Search,SlidersHorizontal,Fuel,MapPin,ChevronRight,ChevronDown,ChevronUp,TrendingUp,UserRound,UserPlus,Route,BarChart3} from 'lucide-react';
 import type {Company} from '../company';
 import type {FleetState,RoadGraph} from '../simulation/taxi';
 import {DRIVER_COST} from '../simulation/taxi';
@@ -17,7 +17,7 @@ const serviceDistance=(t:{operatingKm?:number;lastServiceKm?:number})=>Math.max(
 const needsService=(t:{vehicleCondition?:number;operatingKm?:number;lastServiceKm?:number;serviceThreshold?:number})=>(t.vehicleCondition??100)<=(t.serviceThreshold??40)||serviceDistance(t)>=250;
 type Props={company:Company|null;fleet:FleetState;graph:RoadGraph|null;error?:string;onBuy:(driver:string,offer:VehicleOffer,mode?:'cash'|'finance'|'lease',depositPercent?:number,termDays?:number,depotId?:string)=>void;onBuyBatch:(offer:VehicleOffer,quantity:number,mode?:'cash'|'finance'|'lease',depositPercent?:number,termDays?:number,depotId?:string)=>void;onBuyRoadExplorer:(role?:import('../simulation/taxi').Taxi['explorerRole'])=>void;onAssignDriver:(id:string,name:string)=>void;onHireDriver:(name:string)=>void;onDismissDriver:(id:string)=>void;onService:(id:string)=>void;onRefill:(id:string)=>void;onSell:(id:string)=>void;onReset:(id:string)=>void;onRequestRecovery:(id:string)=>void;recoveryRequests:string[];recoveryJobs:Array<{targetId:string;phase:'pickup'|'transport'|'return'}>;onPolicy:(id:string,policy:'economy'|'balanced'|'performance')=>void;onServiceThreshold:(id:string,threshold:number)=>void;onAutoDepotService:(id:string,enabled:boolean)=>void;onLocate?:(id:string)=>void};
 export default function FleetPanel({company,fleet,graph,error='',onBuyBatch,onBuyRoadExplorer,onAssignDriver,onHireDriver,onDismissDriver,onService,onRefill,onSell,onReset,onRequestRecovery,recoveryRequests,recoveryJobs,onPolicy,onServiceThreshold,onAutoDepotService}:Props){
- const [deliveryDepotId,setDeliveryDepotId]=useState('main');const [batchQuantity,setBatchQuantity]=useState(1);const [vehicleQuery,setVehicleQuery]=useState('');const [selectedVehicle,setSelectedVehicle]=useState<string|null>(null);const [vehicleFilter,setVehicleFilter]=useState<'all'|'taxi'|'explorer'|'attention'>('all');const [driverEdits,setDriverEdits]=useState<Record<string,string>>({});const [newHire,setNewHire]=useState('');const [hireFormOpen,setHireFormOpen]=useState(false);const [expandedDriverId,setExpandedDriverId]=useState<string|null>(null);const [driverFilter,setDriverFilter]=useState<'all'|'assigned'|'available'>('all');const [fleetView,setFleetView]=useState<'overview'|'vehicles'|'drivers'|'service'|'statistics'>('overview');const [tab,setTab]=useState<'fleet'|'dealers'>('fleet');const [purchaseMode,setPurchaseMode]=useState<'cash'|'finance'|'lease'>('cash');const [depositPercent,setDepositPercent]=useState(25);const [termDays,setTermDays]=useState(90);const [filter,setFilter]=useState<'All'|'New'|'Used'>('All');const [now,setNow]=useState(Date.now());
+ const [deliveryDepotId,setDeliveryDepotId]=useState('main');const [batchQuantity,setBatchQuantity]=useState(1);const [vehicleQuery,setVehicleQuery]=useState('');const [selectedVehicle,setSelectedVehicle]=useState<string|null>(null);const [vehicleFilter,setVehicleFilter]=useState<'all'|'taxi'|'explorer'|'attention'>('all');const [driverEdits,setDriverEdits]=useState<Record<string,string>>({});const [newHire,setNewHire]=useState('');const [hireFormOpen,setHireFormOpen]=useState(false);const [expandedDriverId,setExpandedDriverId]=useState<string|null>(null);const [driverFilter,setDriverFilter]=useState<'all'|'assigned'|'available'>('all');const [analyticsMetric,setAnalyticsMetric]=useState<'revenue'|'profit'>('revenue');const [showAllAnalytics,setShowAllAnalytics]=useState(false);const [fleetView,setFleetView]=useState<'overview'|'vehicles'|'drivers'|'service'|'statistics'>('overview');const [tab,setTab]=useState<'fleet'|'dealers'>('fleet');const [purchaseMode,setPurchaseMode]=useState<'cash'|'finance'|'lease'>('cash');const [depositPercent,setDepositPercent]=useState(25);const [termDays,setTermDays]=useState(90);const [filter,setFilter]=useState<'All'|'New'|'Used'>('All');const [now,setNow]=useState(Date.now());
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
  const pending=fleet.taxis.filter(t=>t.deliveryUntil&&t.deliveryUntil>now);
  const parking=company?depotParkingChoices(company,fleet):[];
@@ -36,7 +36,15 @@ export default function FleetPanel({company,fleet,graph,error='',onBuyBatch,onBu
  const totalTrips=fleet.taxis.reduce((n,t)=>n+t.completed,0);
  const onSchedule=fleet.taxis.length?Math.round(100*fleet.taxis.filter(t=>!['PAUSED','SERVICING'].includes(t.status)).length/fleet.taxis.length):0;
  const fleetOperatingProfit=fleet.taxis.reduce((n,t)=>n+(t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0),0)-(fleet.serviceExpense??0);
-const roster=fleet.drivers??[];const assignedNames=new Set(fleet.taxis.map(t=>t.driver.toLowerCase()));
+const analyticsRevenue=fleet.taxis.reduce((sum,t)=>sum+(t.tripRevenue??0),0);
+ const analyticsDistance=fleet.taxis.reduce((sum,t)=>sum+(t.operatingKm??0),0);
+ const analyticsUniqueRoads=fleet.taxis.reduce((sum,t)=>sum+(t.uniqueDiscoveredKm??0),0);
+ const analyticsExplorerDistance=fleet.taxis.reduce((sum,t)=>sum+(t.discoveredKm??0),0);
+ const analyticsTotalTaxis=fleet.taxis.filter(t=>!t.kind||t.kind==='taxi').length;
+ const analyticsAvailableTaxis=fleet.taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&(!t.deliveryUntil||t.deliveryUntil<=now)).length;
+ const analyticsAlerts=fleet.taxis.filter(t=>needsService(t)).length;
+ const analyticsVehicleRows=fleet.taxis.map(t=>({t,profit:(t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0)})).sort((a,b)=>analyticsMetric==='revenue'?(b.t.tripRevenue??0)-(a.t.tripRevenue??0):b.profit-a.profit);
+ const roster=fleet.drivers??[];const assignedNames=new Set(fleet.taxis.map(t=>t.driver.toLowerCase()));
  return <section className="company-dashboard fleet-v2"><div className="fleet-page-heading"><div><span className="eyebrow">FLEET COMMAND · V2.1.1</span><h1>Fleet</h1><p>Manage vehicles &amp; performance</p></div><div className="fleet-heading-tag">OPERATIONS / FLEET</div></div>
  {!company?<p>Create a company first.</p>:<>
  <div className="fleet-showroom">
@@ -145,7 +153,47 @@ const roster=fleet.drivers??[];const assignedNames=new Set(fleet.taxis.map(t=>t.
  </div>
  {!roster.length&&<p className="fleet-drivers-empty">No drivers employed. Hire a driver to get started.</p>}
  {roster.length>0&&!roster.some(d=>driverFilter==='all'||(driverFilter==='assigned')===assignedNames.has(d.name.toLowerCase()))&&<p className="fleet-drivers-empty">No drivers match this filter.</p>}
- </section>}{fleetView==='statistics'&&<section><h2>Fleet performance</h2><div className="fleet-stat-grid"><article><small>Unique newly explored roads (since v2.0.9)</small><strong>{fleet.taxis.reduce((n,t)=>n+(t.uniqueDiscoveredKm??0),0).toFixed(2)} km</strong></article><article><small>Explorer distance driven</small><strong>{fleet.taxis.reduce((n,t)=>n+(t.discoveredKm??0),0).toFixed(2)} km</strong></article></div><h3>Vehicle replacement</h3><button disabled title="Automatic replacement is not enabled in v2.0.9">Automatic replacement · Coming later</button><h2>Performance overview</h2><div className="fleet-stat-grid"><article><small>Passenger revenue</small><strong>{eur(fleet.taxis.reduce((sum,t)=>sum+(t.tripRevenue??0),0))}</strong></article><article><small>Vehicle operating profit</small><strong>{eur(fleet.taxis.reduce((sum,t)=>sum+(t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0),0)-(fleet.serviceExpense??0))}</strong></article><article><small>Distance driven</small><strong>{fleet.taxis.reduce((sum,t)=>sum+(t.operatingKm??0),0).toFixed(1)} km</strong></article><article><small>Passenger taxis available</small><strong>{fleet.taxis.filter(t=>(!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&!t.deliveryUntil).length} / {fleet.taxis.filter(t=>!t.kind||t.kind==='taxi').length}</strong></article><article><small>Revenue per km (all vehicles)</small><strong>{eur(fleet.revenue/Math.max(1,fleet.distanceKm??0))}/km</strong></article><article><small>Completed trips</small><strong>{fleet.completed}</strong></article><article><small>Service alerts</small><strong>{fleet.taxis.filter(t=>needsService(t)).length}</strong></article></div><div className="fleet-stat-table"><table><thead><tr><th>Vehicle</th><th>Driver</th><th>Trips</th><th>Revenue</th><th>Operating profit*</th><th>Condition</th><th>Mileage</th><th>Service</th></tr></thead><tbody>{[...fleet.taxis].sort((a,b)=>(b.tripRevenue??0)-(a.tripRevenue??0)).map(t=><tr key={t.id}><td>{t.name}</td><td>{t.driver}</td><td>{t.completed}</td><td>{eur(t.tripRevenue??0)}</td><td>{eur((t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0))}</td><td>{(t.vehicleCondition??100).toFixed(1)}%{needsService(t)?' · Due':''}</td><td>{(t.operatingKm??0).toFixed(0)} km</td><td>{t.serviceThreshold??40}% threshold</td></tr>)}</tbody></table><small>*Excludes one-off servicing and vehicle purchases.</small></div></section>}</>:
+ </section>}{fleetView==='statistics'&&<section className="fleet-analytics-modern" aria-label="Fleet analytics">
+ <header className="fleet-analytics-heading"><div><h2>Fleet analytics</h2><p>Lifetime vehicle performance</p></div><span>ALL TIME</span></header>
+ <div className="fleet-analytics-main-metrics">
+  <article className="fleet-analytics-revenue"><div className="fleet-analytics-metric-label"><TrendingUp size={17}/><span>Passenger revenue</span></div><strong>{eur(analyticsRevenue)}</strong><small>Earned from vehicle trips</small></article>
+  <article className="fleet-analytics-profit"><div className="fleet-analytics-metric-label"><BarChart3 size={17}/><span>Operating profit</span></div><strong className={fleetOperatingProfit>=0?'positive':'negative'}>{eur(fleetOperatingProfit)}</strong><small>Before purchases and company overhead</small></article>
+ </div>
+ <div className="fleet-analytics-kpis">
+  <article><Route size={18}/><strong>{analyticsDistance.toFixed(1)} km</strong><small>Distance driven</small></article>
+  <article><CarFront size={18}/><strong>{fleet.completed.toLocaleString('en-IE')}</strong><small>Completed trips</small></article>
+  <article><Gauge size={18}/><strong>{(fleet.distanceKm??0)>0?eur(fleet.revenue/(fleet.distanceKm??1))+'/km':'—'}</strong><small>Revenue per km</small></article>
+  <article><Wrench size={18}/><strong className={analyticsAlerts?'warning':''}>{analyticsAlerts}</strong><small>Service alerts</small></article>
+ </div>
+ <section className="fleet-analytics-section">
+  <div className="fleet-analytics-section-heading"><h3>Exploration</h3><span>All explorers</span></div>
+  <div className="fleet-analytics-exploration">
+   <article><MapPin size={19}/><div><small>New roads explored</small><strong>{analyticsUniqueRoads.toFixed(2)} km</strong></div></article>
+   <article><Route size={19}/><div><small>Explorer distance</small><strong>{analyticsExplorerDistance.toFixed(2)} km</strong></div></article>
+  </div>
+ </section>
+ <section className="fleet-analytics-utilization"><div><small>Passenger taxis available</small><strong>{analyticsAvailableTaxis} <span>/ {analyticsTotalTaxis}</span></strong><progress value={analyticsAvailableTaxis} max={Math.max(1,analyticsTotalTaxis)} aria-label="Available passenger taxis"/></div><div className="fleet-analytics-utilization-note">{analyticsTotalTaxis?Math.round(100*analyticsAvailableTaxis/analyticsTotalTaxis):0}% available now</div></section>
+ <section className="fleet-analytics-section">
+  <div className="fleet-analytics-section-heading"><h3>Vehicle performance</h3><span>{fleet.taxis.length} vehicles</span></div>
+  <div className="fleet-analytics-sort" role="group" aria-label="Rank vehicles by">
+   <button type="button" className={analyticsMetric==='revenue'?'active':''} aria-pressed={analyticsMetric==='revenue'} onClick={()=>setAnalyticsMetric('revenue')}>Revenue</button>
+   <button type="button" className={analyticsMetric==='profit'?'active':''} aria-pressed={analyticsMetric==='profit'} onClick={()=>setAnalyticsMetric('profit')}>Profit</button>
+  </div>
+  <div className="fleet-analytics-vehicle-list">
+   {(showAllAnalytics?analyticsVehicleRows:analyticsVehicleRows.slice(0,5)).map(({t,profit},index)=><button type="button" className="fleet-analytics-vehicle" key={t.id} onClick={()=>{setSelectedVehicle(t.id);setFleetView('vehicles')}} aria-label={`Manage ${t.name}`}>
+    <span className="fleet-analytics-rank">{index+1}</span>
+    <span className="fleet-analytics-vehicle-info"><strong>{t.vehicleModel??t.name}</strong><small>{t.name} · {t.completed} trips · {(t.operatingKm??0).toFixed(1)} km</small></span>
+    <span className="fleet-analytics-vehicle-money"><strong className={analyticsMetric==='profit'&&profit<0?'negative':''}>{analyticsMetric==='profit'?eur(profit):eur(t.tripRevenue??0)}</strong><small>{analyticsMetric==='profit'?'Profit':'Revenue'}</small></span><ChevronRight size={16}/>
+   </button>)}
+   {!analyticsVehicleRows.length&&<p className="fleet-analytics-empty">No vehicles to compare yet.</p>}
+  </div>
+  {analyticsVehicleRows.length>5&&<button className="fleet-analytics-show-all" type="button" onClick={()=>setShowAllAnalytics(v=>!v)} aria-expanded={showAllAnalytics}>{showAllAnalytics?'Show top five':'Show all vehicles'}{showAllAnalytics?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>}
+ </section>
+ <details className="fleet-analytics-advanced"><summary>Detailed vehicle report <ChevronDown size={16}/></summary>
+  <p>Figures exclude one-off servicing and vehicle purchases.</p>
+  <div className="fleet-stat-table"><table><thead><tr><th>Vehicle</th><th>Driver</th><th>Trips</th><th>Revenue</th><th>Operating profit*</th><th>Condition</th><th>Mileage</th><th>Service</th></tr></thead><tbody>{[...fleet.taxis].sort((a,b)=>(b.tripRevenue??0)-(a.tripRevenue??0)).map(t=><tr key={t.id}><td>{t.name}</td><td>{t.driver}</td><td>{t.completed}</td><td>{eur(t.tripRevenue??0)}</td><td>{eur((t.tripRevenue??0)-(t.fuelExpense??0)-(t.maintenanceExpense??0)-(t.driverWages??0)-(t.insuranceExpense??0))}</td><td>{(t.vehicleCondition??100).toFixed(1)}%{needsService(t)?' · Due':''}</td><td>{(t.operatingKm??0).toFixed(0)} km</td><td>{t.serviceThreshold??40}% threshold</td></tr>)}</tbody></table></div>
+ </details>
+ </section>}</>:
  <><div className="fleet-dealer-heading"><div><h2>Vehicle marketplace</h2><p>Purchase a taxi and select its delivery depot.</p></div><div className="fleet-filter">{(['All','New','Used'] as const).map(f=><button key={f} className={filter===f?'active':''} onClick={()=>setFilter(f)}>{f}</button>)}</div></div>
  <label className="fleet-driver-label">Delivery depot
  <select aria-label="Fleet marketplace delivery depot" value={deliveryDepotId} onChange={e=>setDeliveryDepotId(e.target.value)}>
