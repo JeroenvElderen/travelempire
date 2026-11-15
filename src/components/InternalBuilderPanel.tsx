@@ -1,11 +1,11 @@
 import {useEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Paintbrush,Landmark} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
 import {
  type HotelSite,type HotelFloor,type RoomType,type BuilderTool,type FurnitureCode,type TradeMode,type ConstructionState,
- type Wall,type Room,type ObjectPlacement,
+ type Wall,
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
  roomIssues,furnitureSize,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS,LAND_PRICE_CENTS
 } from '../internalConstruction';
