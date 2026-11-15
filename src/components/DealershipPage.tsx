@@ -62,12 +62,12 @@ export default function DealershipPage({cash,ready,depots,error='',onDepotChange
   <nav className="dealer-stage-nav" aria-label="Dealership sections">
    {([['browse','Models',CarFront],['build','Configure',SlidersHorizontal],['review','Checkout',PackageCheck]] as const).map(([name,label,Icon])=><button type="button" key={name} className={stage===name?'active':''} aria-current={stage===name?'step':undefined} aria-label={label} disabled={name!=='browse'&&!selected} onClick={()=>switchStage(name)}><Icon size={19}/><span>{stage===name?label:''}</span></button>)}
   </nav>
-  <div className="dealer-fleet-kpis">
+  {stage==='browse'&&<div className="dealer-fleet-kpis">
    <article><Wallet size={19}/><span>Balance</span><strong>{eur(cash)}</strong></article>
    <article><Warehouse size={19}/><span>Parking</span><strong>{remainingSlots}</strong></article>
    <article><CarFront size={19}/><span>Models</span><strong>{EUROPEAN_MODELS.length}</strong></article>
    <article><SlidersHorizontal size={19}/><span>Brands</span><strong>{BRANDS.length}</strong></article>
-  </div>
+  </div>}
   {stage==='browse'||!selected?
    <div className="dealer-fleet-catalogue">
     <div className="dealer-fleet-section-heading"><h2>Available vehicles</h2><small>{models.length} models</small></div>
