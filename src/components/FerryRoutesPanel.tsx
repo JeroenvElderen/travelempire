@@ -163,6 +163,7 @@ export default function FerryRoutesPanel({
        {owned&&<div className="ferry-fare-control"><label htmlFor={'ferry-fare-'+route.id}><span>Ticket price</span><strong>€{fare.toFixed(2)}</strong></label><input id={'ferry-fare-'+route.id} type="range" min="1" max="100" step="0.5" value={Math.max(1,Math.min(100,Math.round(fare*2)/2))} onChange={e=>onTicketPriceChange(route.id,Number(e.target.value))}/><small>Estimated crossing income: {euros(estimatedPassengers*fare)} before costs</small></div>}
       </div>
      </details>
+    </article>;
    })}</div>
    {filteredRoutes.length>visibleRoutes.length&&<button type="button" className="ferry-show-more" onClick={()=>setShowAll(true)}>Show all {filteredRoutes.length} connections</button>}
 
