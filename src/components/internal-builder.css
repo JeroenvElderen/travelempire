@@ -436,3 +436,10 @@
  .internal-builder .ib-hotel-price input{font-size:16px}
  .internal-builder .ib-hotel-open-actions button{width:100%}
 }
+
+.internal-builder .ib-site-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap}
+.internal-builder .ib-hotel-quick-links{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:680px){
+ .internal-builder .ib-site-actions{margin-left:auto}
+ .internal-builder .ib-hotel-quick-links .ib-secondary{flex:1 1 130px}
+}
