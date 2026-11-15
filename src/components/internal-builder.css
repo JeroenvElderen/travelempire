@@ -45,7 +45,7 @@
 .internal-builder .ib-header h1{font-size:21px;letter-spacing:-.6px}
 .internal-builder .ib-header p{color:var(--ib-muted);font-size:11px}
 .internal-builder .ib-tabs{
- display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;
+ display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;
  padding:5px;margin-bottom:14px;border-radius:13px;background:rgba(36,49,80,.64);
  border:1px solid var(--ib-line);
 }
@@ -306,4 +306,133 @@
 @media(max-width:680px){
  .internal-builder .ib-history-controls{order:2}
  .internal-builder .ib-zoom{order:1}
+}
+
+/* Hotel operations: real rooms, staff, guest activity and profit */
+.internal-builder .ib-hotel-operations{gap:14px}
+.internal-builder .ib-hotel-head{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+ border:1px solid var(--ib-line);border-radius:12px;padding:12px 13px;background:var(--ib-card);
+}
+.internal-builder .ib-hotel-head>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.internal-builder .ib-hotel-head h2{font-size:17px}
+.internal-builder .ib-hotel-head small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-mini-label{font-size:9px;font-weight:800;letter-spacing:.09em;color:var(--ib-accent)}
+.internal-builder .ib-hotel-open,.internal-builder .ib-hotel-closed{
+ border-radius:20px;padding:6px 9px;font-size:10px;font-weight:750;
+ white-space:nowrap;
+}
+.internal-builder .ib-hotel-open{border:1px solid rgba(100,196,151,.4);background:rgba(57,114,88,.28);color:#a7e6c4}
+.internal-builder .ib-hotel-closed{border:1px solid var(--ib-line);background:rgba(36,46,72,.72);color:var(--ib-muted)}
+.internal-builder .ib-hotel-kpis{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px
+}
+.internal-builder .ib-hotel-kpis>div{
+ min-width:0;display:flex;flex-direction:column;gap:5px;
+ padding:10px;border:1px solid var(--ib-line);border-radius:11px;background:var(--ib-card)
+}
+.internal-builder .ib-hotel-kpis svg{color:var(--ib-accent)}
+.internal-builder .ib-hotel-kpis small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-hotel-kpis strong{font-size:18px;font-variant-numeric:tabular-nums}
+.internal-builder .ib-hotel-checklist{
+ display:flex;flex-direction:column;gap:8px;
+ border:1px solid rgba(209,181,113,.37);border-radius:12px;
+ background:rgba(79,58,35,.24);padding:12px 13px
+}
+.internal-builder .ib-hotel-checklist>strong,.internal-builder .ib-hotel-checklist p{
+ display:flex;align-items:center;gap:7px;font-size:12px
+}
+.internal-builder .ib-hotel-checklist p{color:#a8e5c4}
+.internal-builder .ib-hotel-checklist>strong{color:#f1d9ad}
+.internal-builder .ib-hotel-issue{display:flex;align-items:center;gap:7px;color:#e7d3b4;font-size:11px}
+.internal-builder .ib-hotel-issue svg{flex:0 0 auto}
+.internal-builder .ib-hotel-open-actions{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.internal-builder .ib-hotel-open-actions>span{color:var(--ib-muted);font-size:10px}
+.internal-builder .ib-hotel-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.internal-builder .ib-hotel-section-heading h3{font-size:13px;line-height:1.3;color:var(--ib-fg)}
+.internal-builder .ib-hotel-section-heading small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-hotel-price-grid{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px
+}
+.internal-builder .ib-hotel-price{
+ min-width:0;display:flex;flex-direction:column;gap:6px;padding:10px;
+ border:1px solid var(--ib-line);border-radius:10px;background:var(--ib-card)
+}
+.internal-builder .ib-hotel-price>span{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-hotel-price>div{display:flex;align-items:center;gap:6px}
+.internal-builder .ib-hotel-price>div>span{color:var(--ib-accent);font-size:13px;font-weight:700}
+.internal-builder .ib-hotel-price input{
+ width:100%;min-width:0;border:0;background:transparent;color:var(--ib-fg);
+ outline:none;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+.internal-builder .ib-hotel-staff-grid{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+}
+.internal-builder .ib-hotel-staff{
+ display:flex;align-items:center;justify-content:space-between;gap:8px;
+ padding:11px;border:1px solid var(--ib-line);border-radius:10px;background:var(--ib-card);
+}
+.internal-builder .ib-hotel-staff>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.internal-builder .ib-hotel-staff>div:first-child strong{font-size:12px}
+.internal-builder .ib-hotel-staff>div:first-child small{font-size:10px;color:var(--ib-muted);line-height:1.4}
+.internal-builder .ib-hotel-counter{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.internal-builder .ib-hotel-counter button{
+ width:31px;height:31px;border:1px solid var(--ib-line);border-radius:8px;
+ background:rgba(104,75,144,.5);color:var(--ib-fg);font-weight:700;font-size:17px
+}
+.internal-builder .ib-hotel-counter>strong{min-width:16px;text-align:center;font-size:13px}
+.internal-builder .ib-hotel-income{
+ display:flex;flex-direction:column;gap:0;
+ padding:4px 12px;border:1px solid var(--ib-line);background:var(--ib-card);border-radius:12px
+}
+.internal-builder .ib-hotel-income>div{
+ display:flex;justify-content:space-between;align-items:center;gap:9px;
+ padding:10px 0;border-bottom:1px solid rgba(194,178,224,.13);
+ color:var(--ib-muted);font-size:11px
+}
+.internal-builder .ib-hotel-income>div:last-child{border-bottom:0}
+.internal-builder .ib-hotel-income strong{color:var(--ib-fg);font-size:12px;font-variant-numeric:tabular-nums}
+.internal-builder .ib-hotel-income-total{font-weight:700}
+.internal-builder .ib-hotel-income-total span{font-size:13px}
+.internal-builder .ib-hotel-income-total strong.ib-positive{color:#a8e2c2}
+.internal-builder .ib-hotel-income-total strong.ib-negative{color:#f0b39a}
+.internal-builder .ib-hotel-chart{
+ display:flex;flex-direction:column;gap:10px;padding:12px;
+ background:var(--ib-card);border:1px solid var(--ib-line);border-radius:12px
+}
+.internal-builder .ib-hotel-chart>strong{font-size:12px}
+.internal-builder .ib-hotel-day{display:grid;grid-template-columns:52px minmax(0,1fr) 76px;gap:9px;align-items:center}
+.internal-builder .ib-hotel-day small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-hotel-day>strong{text-align:right;font-size:11px;font-variant-numeric:tabular-nums}
+.internal-builder .ib-hotel-bar-track{height:9px;border-radius:6px;background:#1a263d;overflow:hidden}
+.internal-builder .ib-hotel-bar-track>div{height:100%;border-radius:6px}
+.internal-builder .ib-hotel-bar-positive{background:#75ba9b}
+.internal-builder .ib-hotel-bar-negative{background:#cd8375}
+.internal-builder .ib-hotel-tag{
+ display:inline-flex;align-items:center;justify-content:center;
+ font-size:10px;padding:5px 8px;border:1px solid rgba(112,184,144,.3);
+ background:rgba(49,104,82,.2);color:#a0dec0;border-radius:8px
+}
+.internal-builder .ib-hotel-tag.occupied{border-color:rgba(197,160,242,.34);background:rgba(120,84,168,.25);color:#d9b9fa}
+.internal-builder .ib-hotel-tag.dirty{border-color:rgba(214,170,108,.34);background:rgba(116,83,45,.2);color:#f0cf9d}
+.internal-builder .ib-hotel-service-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.internal-builder .ib-hotel-service-summary>div{
+ min-width:0;display:flex;flex-direction:column;gap:6px;
+ padding:13px;border:1px solid var(--ib-line);border-radius:11px;background:var(--ib-card)
+}
+.internal-builder .ib-hotel-service-summary svg{color:var(--ib-accent)}
+.internal-builder .ib-hotel-service-summary strong{font-size:12px}
+.internal-builder .ib-hotel-service-summary small{font-size:10px;color:var(--ib-muted);line-height:1.4}
+@media(max-width:760px){
+ .internal-builder .ib-hotel-price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .internal-builder .ib-hotel-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .internal-builder .ib-hotel-staff-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:440px){
+ .internal-builder .ib-tabs{gap:2px;padding:4px}
+ .internal-builder .ib-tabs button{font-size:8px;gap:4px;padding:3px 0}
+ .internal-builder .ib-tabs button svg{width:15px;height:15px}
+ .internal-builder .ib-hotel-head{align-items:start}
+ .internal-builder .ib-hotel-price input{font-size:16px}
+ .internal-builder .ib-hotel-open-actions button{width:100%}
 }
