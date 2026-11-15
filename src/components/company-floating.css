@@ -329,3 +329,10 @@
 @media(prefers-reduced-motion:reduce){
  .nav-v216.company-overlay-mode .company-v3 *{animation:none!important;transition:none!important}
 }
+
+.nav-v216.company-overlay-mode .company-v3 .company-v3-error{
+ padding:9px 11px;margin:10px 0 0;border-radius:11px;
+ border:1px solid rgba(234,153,171,.45);
+ background:rgba(89,37,53,.45);color:#f6c7d0;font-size:11px;
+}
+.nav-v216.company-overlay-mode .company-v3 .company-v3-toolbar .company-v3-button{flex:1 1 auto}
