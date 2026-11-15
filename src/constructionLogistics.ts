@@ -109,13 +109,13 @@ export function planConstructionFreight(
 export function freightPosition(freight:ConstructionFreight,hour:number):
  {kind:'ship'|'truck';point:Point;bearing:number}|null{
  const stage=freightStage(freight,hour);
- if(stage!=='at-sea'&&stage!=='trucking')return null;
- const ship=stage==='at-sea';
+ if(stage!=='at-sea'&&stage!=='unloading'&&stage!=='trucking')return null;
+ const ship=stage==='at-sea'||stage==='unloading';
  const path=ship?freight.seaPath:freight.roadPath;
  const start=ship?freight.shippingHour:freight.truckDepartureHour;
  const finish=ship?freight.seaArrivalHour:freight.deliveryHour;
  const total=Math.max(1,finish-start);
- const p=Math.max(0,Math.min(1,(hour-start)/total));
+ const p=stage==='unloading'?1:Math.max(0,Math.min(1,(hour-start)/total));
  const lengths=path.slice(1).map((point,i)=>meters(point,path[i]));
  const sum=lengths.reduce((a,b)=>a+b,0);
  if(sum<1)return null;
