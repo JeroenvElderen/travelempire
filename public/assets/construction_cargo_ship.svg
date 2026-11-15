@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" role="img" aria-label="Construction cargo container ship, top view">
+  <defs>
+    <linearGradient id="hull" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#273a4b"/>
+      <stop offset=".20" stop-color="#526879"/>
+      <stop offset=".50" stop-color="#233747"/>
+      <stop offset=".82" stop-color="#445c6e"/>
+      <stop offset="1" stop-color="#1f303f"/>
+    </linearGradient>
+    <linearGradient id="deck" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#87959a"/>
+      <stop offset=".48" stop-color="#b5babb"/>
+      <stop offset="1" stop-color="#77868b"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#5c9cc5"/><stop offset="1" stop-color="#236088"/></linearGradient>
+    <linearGradient id="red" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#c06d65"/><stop offset="1" stop-color="#8f373b"/></linearGradient>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#c6b37c"/><stop offset="1" stop-color="#957743"/></linearGradient>
+    <g id="container">
+      <rect x="0" y="0" width="112" height="74" rx="4" fill="currentColor" stroke="#243440" stroke-width="5"/>
+      <path d="M16 8V66 M33 8V66 M50 8V66 M67 8V66 M84 8V66 M101 8V66" stroke="#ffffff" stroke-opacity=".19" stroke-width="3"/>
+      <path d="M5 9H107" stroke="#ffffff" stroke-opacity=".18" stroke-width="4"/>
+      <path d="M5 64H107" stroke="#0f1c27" stroke-opacity=".23" stroke-width="3"/>
+    </g>
+  </defs>
+  <!-- Starboard and port sides with tapered bow (facing right/east). -->
+  <path d="M52 111Q54 93 90 82L983 82Q1050 86 1092 124L1180 194L1092 264Q1050 303 983 307L90 307Q54 295 52 277Z" fill="#b2443e" stroke="#172835" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M65 123Q68 106 105 104L977 104Q1036 109 1072 137L1148 194L1072 249Q1036 279 977 284L105 284Q68 275 65 265Z" fill="url(#hull)" stroke="#cbd3d3" stroke-width="4" stroke-opacity=".45"/>
+  <path d="M104 132L976 132Q1027 138 1058 157L1110 194L1058 229Q1027 253 976 257H104Z" fill="url(#deck)" stroke="#213640" stroke-width="7"/>
+  <!-- Railings and forward mooring bollards. -->
+  <path d="M96 113H979Q1046 119 1080 144M96 276H979Q1046 269 1080 243" stroke="#d5e3e6" stroke-width="4" fill="none" opacity=".75"/>
+  <circle cx="1081" cy="194" r="16" fill="#546f7d" stroke="#ced4d5" stroke-width="4"/>
+  <circle cx="1032" cy="156" r="7" fill="#172a35"/>
+  <circle cx="1032" cy="231" r="7" fill="#172a35"/>
+  <!-- Rear wheelhouse, equipment, lifeboats. -->
+  <rect x="110" y="139" width="104" height="110" rx="12" fill="#eff2f0" stroke="#314a58" stroke-width="7"/>
+  <rect x="145" y="151" width="54" height="86" rx="7" fill="#315267" stroke="#93bdcb" stroke-width="5"/>
+  <rect x="118" y="146" width="19" height="98" rx="7" fill="#e2e9e4"/>
+  <path d="M162 144V250M175 146V247" stroke="#ffffff" stroke-opacity=".7" stroke-width="3"/>
+  <rect x="74" y="155" width="27" height="80" rx="9" fill="#edab57" stroke="#2f4f58" stroke-width="4"/>
+  <path d="M80 167L95 218" stroke="#fff" stroke-width="2" opacity=".7"/>
+  <!-- Six bays of secured containers, with clear dark deck aisles. -->
+  <g transform="translate(242 145)">
+    <use href="#container" style="color:#327ca7" x="0" y="0"/>
+    <use href="#container" style="color:#9b4246" x="119" y="0"/>
+    <use href="#container" style="color:#c19b58" x="238" y="0"/>
+    <use href="#container" style="color:#2e7491" x="357" y="0"/>
+    <use href="#container" style="color:#aa5e51" x="476" y="0"/>
+    <use href="#container" style="color:#3a7b81" x="595" y="0"/>
+  </g>
+  <path d="M242 133H956M242 255H956" stroke="#243947" stroke-width="8" opacity=".55"/>
+  <path d="M224 194H239M953 194H969" stroke="#e7ddbd" stroke-width="5"/>
+</svg>
