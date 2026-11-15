@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,BriefcaseBusiness,Moon} from 'lucide-react';
+import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,SlidersHorizontal} from 'lucide-react';
 import type {FleetState,Taxi} from '../simulation/taxi';
 import type {GameClock} from '../simulation/gameClock';
 import {driverLevel} from '../simulation/taxi';
@@ -51,6 +51,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
  const [view,setView]=useState<'schedules'|'team'|'performance'>('schedules');
  const [filter,setFilter]=useState<'all'|'duty'|'break'|'off'>('all');
  const [query,setQuery]=useState('');
+ const [filtersOpen,setFiltersOpen]=useState(false);
  const [expanded,setExpanded]=useState<string|null>(null);
  const taxis=fleet.taxis.filter(t=>!t.kind||t.kind==='taxi');
  const roster=fleet.drivers??[];
@@ -71,34 +72,36 @@ export default function DriversPanel({fleet,gameClock}:Props){
  const distance=roster.reduce((n,d)=>n+(d.distanceKm??0),0);
  const revenue=roster.reduce((n,d)=>n+(d.revenueGenerated??0),0);
  return <section className="drivers-v2" aria-label="Driver schedules and performance">
-  <header className="drivers-head"><span className="drivers-head-icon"><CalendarDays size={25}/></span><div><h1>Drivers</h1><p>Schedules &amp; performance · game time</p></div></header>
+  <header className="drivers-head"><span className="drivers-head-icon"><CalendarDays size={23}/></span><div><h1>Drivers</h1><p>Shifts &amp; team</p></div></header>
   <nav className="drivers-nav" aria-label="Drivers sections">
    {([['schedules','Schedules',CalendarDays],['team','Team',UsersRound],['performance','Analytics',BarChart3]] as const).map(([key,label,Icon])=>
     <button type="button" key={key} className={view===key?'active':''} aria-label={label} aria-current={view===key?'page':undefined} onClick={()=>setView(key)}><Icon size={19}/><span>{view===key?label:''}</span></button>)}
   </nav>
   {view==='schedules'&&<>
-   <div className="drivers-kpis">
-    <article><UsersRound size={20}/><span>Drivers</span><strong>{roster.length}</strong></article>
-    <article><CarFront size={20}/><span>Taxis</span><strong>{taxis.length}</strong></article>
-    <article><BriefcaseBusiness size={20}/><span>On duty</span><strong>{active}</strong></article>
-    <article><Moon size={20}/><span>Resting</span><strong>{resting}</strong></article>
+   <div className="drivers-quick-status" aria-label="Driver shift summary">
+    <span><UsersRound size={15}/><strong>{roster.length}</strong> drivers</span>
+    <span><CarFront size={15}/><strong>{taxis.length}</strong> taxis</span>
+    <span><strong>{active}</strong> on shift</span>
    </div>
    <section className="drivers-section">
-    <div className="drivers-section-header"><h2>Daily schedules</h2><span>12h shift · 30m break</span></div>
-    <p className="drivers-schedule-hint">Automatically staggered shifts. Breaks begin 5h 45m into a shift; ongoing passenger journeys finish first. Current game time: <strong>{time(((current/3600000)%24+24)%24)}</strong>.</p>
-    <label className="drivers-search"><Search size={17}/><input type="search" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search drivers or taxis" placeholder="Find driver or taxi…"/></label>
-    <div className="drivers-filters" role="group" aria-label="Filter schedules">
-     {([['all','All'],['duty','On duty'],['break',`Breaks (${breaks})`],['off','Off duty']] as const).map(([key,label])=><button key={key} type="button" className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
+    <div className="drivers-section-header drivers-section-compact">
+     <div><h2>Schedules</h2><small>{time(((current/3600000)%24+24)%24)} game time · 12h shifts</small></div>
+     <button type="button" className={filtersOpen||filter!=='all'?'drivers-tools-toggle active':'drivers-tools-toggle'} aria-expanded={filtersOpen} aria-label="Search and filter schedules" onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={17}/>{filter==='all'?'Filter':filter==='duty'?'On duty':filter==='break'?'Breaks':'Off duty'}</button>
     </div>
-    <div className="drivers-legend"><span><i/>Shift</span><span><i className="break"/>Break</span><span><i className="rest"/>Rest</span><span><i className="now"/>Game time</span></div>
+    {filtersOpen&&<div className="drivers-tools">
+     <label className="drivers-search"><Search size={17}/><input type="search" value={query} onChange={e=>setQuery(e.target.value)} aria-label="Search drivers or taxis" placeholder="Find driver or taxi…"/></label>
+     <div className="drivers-filters" role="group" aria-label="Filter schedules">
+      {([['all','All'],['duty','On duty'],['break',`Breaks (${breaks})`],['off','Off duty']] as const).map(([key,label])=><button key={key} type="button" className={filter===key?'active':''} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
+     </div>
+    </div>}
     <div className="drivers-list">
      {visible.map(({taxi,driver,schedule,status})=>{
       const isExpanded=expanded===taxi.id;
       return <article className="drivers-schedule-card" key={taxi.id}>
        <div className="drivers-card-head">
         <span className="drivers-card-avatar"><UserRound size={22}/></span>
-        <div className="drivers-card-info"><strong>{taxi.driver}</strong><small>{taxi.name} · {driverLevel(driver?.completedTrips??0)}</small></div>
-        <span className="drivers-status">{status.label}</span>
+        <div className="drivers-card-info"><strong>{taxi.driver}</strong><small>{taxi.name}</small></div>
+        <span className={`drivers-status drivers-status-${status.phase}`}>{status.label}</span>
        </div>
        <div className="drivers-shift-meta"><span>{schedule.preference} shift</span><strong>{time(schedule.start)}–{time(schedule.start+12)}</strong></div>
        <Timeline schedule={schedule} driverName={taxi.driver}/>
@@ -107,12 +110,11 @@ export default function DriversPanel({fleet,gameClock}:Props){
         <button type="button" aria-expanded={isExpanded} onClick={()=>setExpanded(isExpanded?null:taxi.id)}>{isExpanded?'Less':'Details'}{isExpanded?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>
        </div>
        {isExpanded&&<div className="drivers-card-expanded">
+        <div><small>Rest</small><strong>{time(schedule.start+12)}–{time(schedule.start+24)}</strong></div>
+        <div><small>Level</small><strong>{driverLevel(driver?.completedTrips??0)}</strong></div>
         <div><small>Trips</small><strong>{driver?.completedTrips??0}</strong></div>
         <div><small>Distance</small><strong>{(driver?.distanceKm??0).toFixed(1)} km</strong></div>
         <div><small>Revenue</small><strong>{money(driver?.revenueGenerated??0)}</strong></div>
-        <div><small>Rest</small><strong>{time(schedule.start+12)}–{time(schedule.start+24)}</strong></div>
-        <div><small>Start</small><strong>{time(schedule.start)}</strong></div>
-        <div><small>Now</small><strong>{time(schedule.current)}</strong></div>
        </div>}
       </article>;
      })}
@@ -122,7 +124,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
   </>}
   {view==='team'&&<section className="drivers-section">
    <div className="drivers-section-header"><h2>Driver roster</h2><span>{roster.length} employed</span></div>
-   <p className="drivers-schedule-hint">Driver assignments and shifts are managed automatically. Assign drivers to idle taxis from Fleet → Vehicles.</p>
+   <p className="drivers-schedule-hint">Assign drivers to idle taxis in Fleet → Vehicles.</p>
    <div className="drivers-list">{roster.map(driver=>{
     const assigned=entries.find(e=>e.taxi.driver.toLowerCase()===driver.name.toLowerCase());
     return <article className="drivers-team-card" key={driver.id}>
