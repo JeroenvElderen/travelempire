@@ -113,18 +113,18 @@ export function dispatchResponders(
    const fromKeys=roadNodeKeys(candidate.r);
    if(!fromKeys)continue;
    for(const from of fromKeys){
-    if(routeAttempts>=6)break;
+    if(routeAttempts>=3)break;
     const origin=graph.nodes.get(from);
     if(!origin)continue;
     for(const target of targetKeys){
-     if(routeAttempts>=6)break;
+     if(routeAttempts>=3)break;
      if(!graph.nodes.has(target))continue;
      // A short geographic prefilter bounds routing work on very large graphs.
      const targetPoint=graph.nodes.get(target)!;
-     if(meters(origin,targetPoint)>3100)continue;
+     if(meters(origin,targetPoint)>1800)continue;
      routeAttempts++;
      const routed=routeDiscovered(graph,from,target,discovered);
-     if(routed&&routed.path.length>=2&&routed.length>80&&(!best||routed.length<best.distance))
+     if(routed&&!routed.edgeIds.includes(String(road.id??road.properties?.roadId))&&routed.path.length>=2&&routed.length>80&&(!best||routed.length<best.distance))
       best={path:routed.path,distance:routed.length};
     }
    }
@@ -173,6 +173,7 @@ export function advanceWorldState(state:WorldState|undefined,now:number,
 export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGraph|null,
  discovered:Set<string>,at:number,realNow:number,incidents:readonly WorldIncident[],limit=40):VisibleWorldVehicle[]{
  const output:VisibleWorldVehicle[]=[];
+ const incidentRoads=new Set(incidents.map(i=>i.roadId));
  if(graph){
   const max=Math.max(0,Math.min(60,Math.floor(limit)));
   const density=roads.length?trafficLoadAt(roadEnds(roads[0])?.[0]??[23.7,37.9],at):0;
@@ -180,7 +181,7 @@ export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGrap
   const stride=Math.max(1,Math.floor(roads.length/Math.max(1,max*4)));
   for(let i=0;i<roads.length&&output.length<max;i+=stride){
    const road=roads[i],ends=roadEnds(road),id=String(road.id??road.properties?.roadId??i);
-   if(!ends||!validRoad(road)||!discovered.has(id)||hash(id)%100>=density*0.58)continue;
+   if(!ends||!validRoad(road)||!discovered.has(id)||incidentRoads.has(id)||hash(id)%100>=density*0.58)continue;
    const nodes=roadNodeKeys(road);
    if(!nodes)continue;
    const [ak,bk]=nodes;
@@ -192,7 +193,7 @@ export function visibleWorldVehicles(roads:readonly RoadFeature[],graph:RoadGrap
    let previousKey=reverse?bk:ak,cursorKey=reverse?ak:bk;
    for(let j=0;j<3;j++){
     const options=(graph.edges.get(cursorKey)??[]).filter(e=>
-     discovered.has(e.id)&&!e.taxiOnly&&e.to!==previousKey&&graph.nodes.has(e.to)&&e.id!==id);
+     discovered.has(e.id)&&!incidentRoads.has(e.id)&&!e.taxiOnly&&e.to!==previousKey&&graph.nodes.has(e.to)&&e.id!==id);
     if(!options.length)break;
     const chosen=options[hash(id+':'+j)%options.length];
     previousKey=cursorKey;cursorKey=chosen.to;path.push(graph.nodes.get(cursorKey)!);
