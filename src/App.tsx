@@ -2700,31 +2700,9 @@ export default function App(){
   const next=dayBaseline(day,snapshotFleet,currentCash,unlockedHarbours.length);
   dailyBaselineRef.current=next;saveSummaryBaseline(company.id,next);
  },[company?.id,gameClock?.epochMs,unlockedHarbours.length]);
- // POI explorers return to their depot after the full harbour network is unlocked.
- // Keep the retirement request stable across simulation updates and page changes.
- const harbourRetireRequestedRef=useRef(new Set<string>());
- useEffect(()=>{
-  if(!company||!graph||!harbourNetwork||!harbourEdges||!harbourNetwork.ports.length)return;
-  const allPorts=harbourNetwork.ports;
-  // Do not retire based on a partially loaded road index.
-  if(allPorts.some(port=>!harbourEdges.has(port.id)))return;
-  const discovered=discoveredCacheRef.current?.set??new Set(fleet.exploredEdgeIds??[]);
-  if(allPorts.some(port=>!(harbourEdges.get(port.id)??[]).some(edge=>discovered.has(edge))))return;
-  for(const explorer of fleet.taxis){
-   if(explorer.kind!=='explorer'||explorer.explorerRole!=='poi')continue;
-   if(harbourRetireRequestedRef.current.has(explorer.id))continue;
-   harbourRetireRequestedRef.current.add(explorer.id);
-   if(explorer.status==='PAUSED'||explorer.status==='IDLE'){
-    const assigned=(company.depots??[]).find(d=>d.id===explorer.depotId);
-    const home:[number,number]=assigned?[assigned.lng,assigned.lat]:[company.headquarters.lng,company.headquarters.lat];
-    if(meters(explorer.position,home)<150){
-     setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===explorer.id?{...t,status:'PAUSED' as const,shiftParked:true}:t)}));
-     continue;
-    }
-   }
-   controlExplorer(explorer.id,'home');
-  }
- },[company?.id,graph,harbourNetwork,harbourEdges,fleet.taxis,fleet.exploredEdgeIds]);
+ // Service/POI Explorers still prioritise harbour-access roads, but
+ // harbour coverage is not retirement: they continue discovering other
+ // drivable classes under Explorer Autopilot's all-road fallback.
  const setFerryTicketPrice=(routeId:string,fare:number)=>{const current=companyRef.current;if(!current||!(current.purchasedFerryRouteIds??[]).includes(routeId)||!Number.isFinite(fare))return;const value=Math.max(1,Math.min(100,Math.round(fare*2)/2));const updated={...current,ferryTicketPrices:{...(current.ferryTicketPrices??{}),[routeId]:value}};companyRef.current=updated;saveCompany(updated);setCompany(updated);};
  const purchaseFerryRoute=(routeId:string,_displayedPrice:number)=>{const current=companyRef.current;const price=ferryRoutePrice(routeId);if(!current||!Number.isFinite(price)||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId],ferryServiceStartedAt:{...(current.ferryServiceStartedAt??{}),[routeId]:gameClockRef.current?.epochMs??Date.now()},ferryLastPaidVoyage:{...(current.ferryLastPaidVoyage??{}),[routeId]:0}};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
  const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
