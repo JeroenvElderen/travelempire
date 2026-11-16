@@ -21,7 +21,7 @@ export function estimateExplorerFrontierGain(
  maxEdges=12,
 ):number{
  const first=(graph.edges.get(from)??[]).find(e=>e.id===id&&e.to===to&&e.meters>0);
- if(!first)return 0;
+ if(!first||!eligible.has(id)||discovered.has(id)||reserved.has(id)||reservedNodes.has(to))return 0;
  let total=first.meters,previous=from,current=to;
  const used=new Set([id]);
  for(let i=1;i<maxEdges&&total<1800;i++){
