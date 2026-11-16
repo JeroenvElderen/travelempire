@@ -25,7 +25,7 @@ const make=()=>{
  const classes=(tier:Taxi['explorerRole'])=>{
   const found=new Set<string>();
   for(const links of graph.edges.values())for(const edge of links)
-   if(explorerClassEligible(tier,edge.highway))found.add(edge.id);
+   if(!edge.taxiOnly&&explorerClassEligible(tier,edge.highway))found.add(edge.id);
   return found;
  };
  const discovered=new Set(['purple-ab','purple-bc']);
@@ -44,14 +44,14 @@ describe('iPhone shared-planner admission for existing saved explorers',()=>{
 });
 
 describe('Explorer Autopilot 2.0 Phase 1: identical specialist planning rules',()=>{
- it('does not downgrade motorway discovery after an incomplete preferred-class scan',()=>{
+ it('may keep exploring nearby roads when the preferred-class search hits its budget',()=>{
   const {graph,classes,discovered}=make();
   const pending=planSpecialistMission(graph,'A',discovered,'highway',classes,
    new Set(),new Set(),{fallbackAllowed:true,maxVisits:1});
-  expect(pending.state).toBe('incomplete');
-  expect(pending.tier).toBe('highway');
-  expect(pending.route).toBeNull();
-  expect(pending.reason).toBe('search-node-budget');
+  expect(pending.state).toBe('planned');
+  expect(pending.tier).toBe('balanced');
+  expect(pending.reason).toBe('planned-other-class');
+  expect(pending.route?.discoveryEdgeIds).toContain('local-ar');
  });
  it('finds the preferred road over the full purple component before lower classes',()=>{
   const {graph,classes,discovered}=make();
@@ -62,30 +62,31 @@ describe('Explorer Autopilot 2.0 Phase 1: identical specialist planning rules',(
   expect(plan.route?.discoveryEdgeIds).toContain('highway-cd');
   expect(plan.route?.discoveryEdgeIds).not.toContain('local-ar');
  });
- it('permits strict class fallback after a complete negative preferred search',()=>{
+ it('uses any other drivable class when preferred roads are unavailable',()=>{
   const {graph,classes,discovered}=make();
   graph.edges.set('C',graph.edges.get('C')!.filter(e=>e.id!=='highway-cd'));
   graph.edges.set('D',graph.edges.get('D')!.filter(e=>e.id!=='highway-cd'));
   const plan=planSpecialistMission(graph,'A',discovered,'highway',classes,
    new Set(),new Set(),{fallbackAllowed:true,maxVisits:100});
   expect(plan.state).toBe('planned');
-  expect(plan.tier).toBe('residential');
+  expect(plan.tier).toBe('balanced');
   expect(plan.route?.discoveryEdgeIds).toContain('local-ar');
  });
- it('holds the preferred class until directed fallback is checked, even on iPhone',()=>{
+ it('keeps priority when present and falls back to nearby roads on iPhone',()=>{
   const {graph,classes,discovered}=make();
   const pending=planSpecialistMission(graph,'A',discovered,'highway',classes,
    new Set(),new Set(),{fallbackAllowed:false,maxVisits:100});
   // Preferred road is reachable by the connected planner, so it remains
   // immediately available even while the expensive fallback is throttled.
   expect(pending.state).toBe('planned');
-  const stalled=planSpecialistMission(graph,'A',discovered,'poi',classes,
+  const opportunistic=planSpecialistMission(graph,'A',discovered,'poi',classes,
    new Set(),new Set(),{fallbackAllowed:false,maxVisits:100});
-  expect(stalled.state).toBe('incomplete');
-  expect(stalled.reason).toBe('directed-fallback-pending');
-  expect(stalled.tier).toBe('poi');
+  expect(opportunistic.state).toBe('planned');
+  expect(opportunistic.reason).toBe('planned-other-class');
+  expect(opportunistic.tier).toBe('balanced');
+  expect(opportunistic.route?.discoveryEdgeIds).toContain('local-ar');
  });
- it('Service Explorer seeks only reachable service roads',()=>{
+ it('Service Explorer prioritises reachable service roads before other types',()=>{
   const {graph,classes,discovered}=make();
   const add=(from:string,to:string,id:string,highway:string)=>{
    const edges=graph.edges.get(from)??[];
@@ -100,6 +101,49 @@ describe('Explorer Autopilot 2.0 Phase 1: identical specialist planning rules',(
   expect(plan.route?.discoveryEdgeIds).toEqual(['service-road']);
   expect(explorerClassEligible('poi','residential')).toBe(false);
   expect(explorerClassEligible('poi','service')).toBe(true);
+ });
+ it('all five roles can discover a non-priority road without changing their saved role',()=>{
+  for(const role of ['highway','primary','secondary','residential','poi'] as const){
+   const {graph,classes,discovered}=make();
+   // Only one discovered corridor and one drivable service spur remain.
+   graph.edges.set('C',graph.edges.get('C')!.filter(e=>e.id!=='highway-cd'));
+   graph.edges.set('D',graph.edges.get('D')!.filter(e=>e.id!=='highway-cd'));
+   graph.edges.set('A',graph.edges.get('A')!.filter(e=>e.id!=='local-ar'));
+   graph.edges.set('R',[]);
+   const add=(from:string,to:string)=>{
+    const edges=graph.edges.get(from)??[];
+    edges.push({id:'free-service',to,meters:120,speedKph:25,highway:'service'});
+    graph.edges.set(from,edges);
+   };
+   add('A','R');add('R','A');
+   const mission=planSpecialistMission(graph,'A',discovered,role,classes,
+    new Set(),new Set(),{maxVisits:100});
+   expect(mission.state,role).toBe('planned');
+   expect(mission.route?.discoveryEdgeIds,role).toContain('free-service');
+   expect(mission.tier,role).toBe(role==='poi'?'poi':'balanced');
+  }
+ });
+ it('never includes taxi-only roads in all-class fallback',()=>{
+  const {graph,classes,discovered}=make();
+  graph.edges.set('C',graph.edges.get('C')!.filter(e=>e.id!=='highway-cd'));
+  graph.edges.set('D',[]);
+  graph.edges.set('A',graph.edges.get('A')!.filter(e=>e.id!=='local-ar'));
+  graph.edges.set('R',[]);
+  const taxiOnly={id:'exclusive',meters:120,speedKph:30,highway:'service',taxiOnly:true};
+  graph.edges.get('A')!.push({...taxiOnly,to:'R'});
+  graph.edges.get('R')!.push({...taxiOnly,to:'A'});
+  const plan=planSpecialistMission(graph,'A',discovered,'highway',classes,
+   new Set(),new Set(),{maxVisits:100});
+  expect(plan.route).toBeNull();
+  expect(plan.state).toBe('exhausted');
+ });
+ it('does not claim road exhaustion when both priority and all-road searches hit their limits',()=>{
+  const {graph,classes,discovered}=make();
+  graph.edges.set('A',graph.edges.get('A')!.filter(e=>e.id!=='local-ar'));
+  const result=planSpecialistMission(graph,'A',discovered,'highway',classes,
+   new Set(),new Set(),{maxVisits:1,fallbackAllowed:false});
+  expect(result.state).toBe('incomplete');
+  expect(result.route).toBeNull();
  });
  it('distinguishes exhausted search from budget, distance and broken path',()=>{
   expect(explorerSearchConclusive('no-connected-class-road')).toBe(true);
