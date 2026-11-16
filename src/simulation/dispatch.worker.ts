@@ -954,7 +954,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const inboundCoverage=new Map<string,PassengerDepotRegion>();
   for(const taxi of passengerTaxis){
    if(taxi.status!=='REPOSITIONING'||!taxi.coverageRegionId||
-     !taxi.repositionTarget||!availableIds.has(taxi.id))continue;
+     !taxi.repositionTarget||(msg.driverDutyRemainingSeconds?.[taxi.id]??0)<=0)continue;
    inboundCoverage.set(taxi.coverageRegionId,{id:taxi.coverageRegionId,
     position:taxi.repositionTarget,available:1});
   }
@@ -1093,6 +1093,73 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Throttle failed hotspot routing too: never rescan each Safari tick.
     lastTaxiRepositionAt=now;
     taxiRepositionRetryAt.set(vehicle.id,now);
+    let startedCoverage=false;
+    // Prefer willing regional/intercity drivers for the initial geographic
+    // expansion, but always allow Flexible (or Local) drivers if necessary.
+    // The actual road, shift and tank checks below are non-negotiable.
+    const longDriver=[...available].sort((a,b)=>
+     driverCoveragePriority(normalDriverTripPreference(
+      msg.driverTripPreferences?.[b.id]))-
+     driverCoveragePriority(normalDriverTripPreference(
+      msg.driverTripPreferences?.[a.id]))||
+     (idleSince.get(a.id)??now)-(idleSince.get(b.id)??now))[0];
+    if(longDriver){
+     const start=nearest(activeGraph,longDriver.position);
+     const anchor=activeGraph.nodes.get(start);
+     if(anchor&&eligibleStops.has(start)&&
+      meters(anchor,longDriver.position)<=8&&
+      (msg.driverDutyRemainingSeconds?.[longDriver.id]??0)>=5400){
+      // Coarse discovered zones exist independently of any depot or taxi.
+      // The region samples are tiny; full graph routing is limited to two
+      // candidates and occurs only under the global 25-second throttle.
+      const lookup=(id:string)=>activeGraph.nodes.get(id);
+      const regionalCandidates=rankUnservedCoverage(
+       passengerSpatialStops.coverageRegions(
+        longDriver.position,lookup,6500,65000,32),
+       longDriver,taxis,8);
+      if(regionalCandidates.length)coverageAttempts++;
+      let routeAttempts=0;
+      for(const region of regionalCandidates){
+       if(routeAttempts>=2)break;
+       const cacheKey=start+'|'+region.id;
+       if(now-(coverageFailedAt.get(cacheKey)??-Infinity)<3*60000)continue;
+       routeAttempts++;
+       const candidate=routeDiscovered(activeGraph,start,region.node,
+        validDiscovered,'',false,COVERAGE_MAX_ROUTE_VISITS);
+       if(!candidate||candidate.edgeIds.length===0){
+        coverageRoadFailures++;coverageFailedAt.set(cacheKey,now);continue;
+       }
+       const distance=passengerRouteMetres(candidate.path);
+       if(!taxiCanCoverRegion(longDriver,distance)||
+        !taxiHasDutyForCoverage(candidate.length,
+         msg.driverDutyRemainingSeconds?.[longDriver.id]??0)){
+        coverageFailedAt.set(cacheKey,now);continue;
+       }
+       const index=taxis.findIndex(t=>t.id===longDriver.id);
+       if(index<0)break;
+       taxis[index]={...longDriver,status:'REPOSITIONING',
+        path:candidate.path,edgeIds:candidate.edgeIds,leg:0,
+        distanceIntoLeg:0,speedKph:0,journeyEdges:[],
+        pickup:undefined,dropoff:undefined,fare:0,
+        coverageRegionId:region.id,repositionTarget:region.position,
+        lastRepositionAt:now};
+       idleSince.delete(longDriver.id);
+       taxiRepositionRetryAt.set(longDriver.id,now);
+       taxiRepositionSuccesses++;coverageStarts++;
+       startedCoverage=true;break;
+      }
+      // Cap the short-lived negative route cache regardless of how much
+      // of Greece has been discovered on an older phone.
+      if(coverageFailedAt.size>120){
+       for(const [key,at] of coverageFailedAt){
+        if(now-at>3*60000)coverageFailedAt.delete(key);
+       }
+       while(coverageFailedAt.size>120)
+        coverageFailedAt.delete(coverageFailedAt.keys().next().value!);
+      }
+     }
+    }
+    if(!startedCoverage){
     const from=nearest(activeGraph,vehicle.position);
     const fromPoint=activeGraph.nodes.get(from);
     // No nearest-node snap across bridges or from a mid-road position.
@@ -1146,6 +1213,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       lastTaxiRepositionAt=now;
       break;
      }
+    }
     }
    }
   }
