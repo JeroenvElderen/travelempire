@@ -22,7 +22,7 @@ let graph:RoadGraph|null=null;
 // shared discovered network and current route reservations.
 type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
  outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string;
- mode?:'idle'|'successor';baseEdgeIds?:string[];discoveryTier?:Taxi['explorerRole'];searchState?:string;requestedRole?:Taxi['explorerRole'];expectedScoutingRuns?:number;};
+ mode?:'idle'|'successor';baseEdgeIds?:string[];discoveryTier?:Taxi['explorerRole'];searchState?:string;requestedRole?:Taxi['explorerRole'];expectedScoutingRuns?:number;originNode?:string;};
 type PoolMessage=PoolResult|{type:'ready'|'roadsAdded';revision:number;roadCount?:number};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
@@ -57,18 +57,9 @@ function startPlanningPool(revision:number):void{
     const request=planningRequests.get(msg.requestId);
     if(!request)return;
     planningRequests.delete(msg.requestId);
-    planningResults.set(request.id,{...msg,mode:request.mode,baseEdgeIds:request.baseEdgeIds,requestedRole:request.requestedRole,expectedScoutingRuns:request.expectedScoutingRuns} as PoolResult);
+    planningResults.set(request.id,{...msg,mode:request.mode,baseEdgeIds:request.baseEdgeIds,requestedRole:request.requestedRole,expectedScoutingRuns:request.expectedScoutingRuns,originNode:request.originNode} as PoolResult);
     planningStats.set(request.id,{result:msg.outcome??'unknown',ms:msg.ms??0,
      queueMs:performance.now()-request.at,at:performance.now()});
-    // Ferry transfers require a completed failure in every permitted
-    // specialist class, not a widening-radius retry or an unfinished BFS.
-    if(request.mode==='idle'&&msg.searchState==='exhausted'&&
-     msg.outcome==='no-reachable-specialist-frontier'&&graph){
-     const origin=request.originNode;
-     if(origin)explorerExhaustionProof.set(request.id,{
-      origin,role:request.requestedRole,at:Date.now(),
-      roadCount:msg.roadCount,discoveredCount:request.exploredCount});
-    }else if(msg.outcome==='planned')explorerExhaustionProof.delete(request.id);
     if(msg.outcome==='planned')planningBackoff.delete(request.id);
     else planningBackoff.set(request.id,{until:performance.now()+
      (msg.outcome==='no-purple-start'?6000:msg.outcome==='error'?8000:5000),
@@ -1323,6 +1314,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        if(routeValid){
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
+        explorerExhaustionProof.delete(idleVehicle.id);
         const assignment:Taxi={...idleVehicle,
          ...(role==='poi'?{poiTargetId:undefined,poiTargetName:undefined}:{}),
          status:'EXPLORING',
@@ -1332,7 +1324,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
          journeyEdges:[],leg:0,distanceIntoLeg:0,
          scoutingRuns:(idleVehicle.scoutingRuns??0)+1};
         taxis[index]=assignment;
-        for(const id of completed.edgeIds)reservedEdges.add(id);
+        for(const id of route.discoveryEdgeIds)reservedEdges.add(id);
         if(destination)reservedTargets.add(destination);
         majorSearches.delete(idleVehicle.id);
         explorerSearchTier.set(idleVehicle.id,0);
@@ -1363,9 +1355,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         explored,allowed,reservedEdges,hqNode,14000);
        explorerComponents.set(idleVehicle.id,component);
        // Only conclusive negative scans may enter the failure cooldown.
-       if(decision.state==='exhausted'&&component.complete)
+       if(decision.state==='exhausted'&&component.complete){
         frontierFailureCache.set(idleVehicle.id,{
          signature,retryAt:performance.now()+12000});
+        if(component.reservedFrontiers===0)
+         explorerExhaustionProof.set(idleVehicle.id,{
+          origin:origin.node,role:idleVehicle.explorerRole,
+          at:now,roadCount:seenRoadIds.size,discoveredCount:explored.size});
+       }else explorerExhaustionProof.delete(idleVehicle.id);
        // Incomplete checks must retry, and completed negative checks can
        // trigger ferry readiness. Neither may discover a lower class early.
        continue;
@@ -1576,7 +1573,26 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(current.id,'pool-rejected:'+reason);
      planningBackoff.delete(current.id);
     };
-    if(proposal.outcome!=='planned'||!proposal.taxi)continue;
+    if(proposal.outcome!=='planned'||!proposal.taxi){
+     // Exhaustion evidence comes from an accepted *current* IDLE request.
+     // Never let a stale planner response trigger paid ferry booking.
+     if(proposal.mode==='idle'&&proposal.searchState==='exhausted'&&
+      proposal.outcome==='no-reachable-specialist-frontier'&&
+      proposal.originNode&&explorerPlannerResultCurrent(current,{
+       mode:'idle',role:proposal.requestedRole,
+       scoutingRuns:proposal.expectedScoutingRuns,
+      })){
+      const component=inspectExplorerComponent(activeGraph,
+       proposal.originNode,explored,discoveryRoads(current),
+       reservedEdges,hqNode,14000);
+      explorerComponents.set(current.id,component);
+      if(component.complete&&component.reservedFrontiers===0)
+       explorerExhaustionProof.set(current.id,{
+        origin:proposal.originNode,role:current.explorerRole,
+        at:now,roadCount:seenRoadIds.size,discoveredCount:explored.size});
+     }
+     continue;
+    }
     if(!explorerPlannerResultCurrent(current,{
      mode:proposal.mode??'idle',role:proposal.requestedRole,
      scoutingRuns:proposal.expectedScoutingRuns,
@@ -1740,8 +1756,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  ...(planningStats.get(t.id)??{result:'not-requested',ms:0,queueMs:0,at:0}),
  waiting:planningLastSent.has(t.id)&&planningRequests.size>0&&
   [...planningRequests.values()].some(r=>r.id===t.id)
- }))},planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,majorSearchesActive:majorSearches.size,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,obsoleteReturnRecoveries,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,pauseReason:t.status==='PAUSED'?(t.deliveryUntil&&t.deliveryUntil>now?'active-rest':t.refillRequested?'refuel':t.serviceDestination?'service':t.refillDestination?'fuel-route':t.recoveryPending?'recovery':energyPercent(t)<=10?'low-energy':t.shiftParked?'parked-awaiting-roads':t.restStopId?'stale-rest-stop':'unknown'):null,planningAttempts:explorerPlanningAttempts.get(t.id)??0,planningSkipReason:explorerPlanSkipReason.get(t.id)??null,singleWorkerPlanner:singleWorkerScanResult.get(t.id)??null,
+ }))},planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,majorSearchesActive:majorSearches.size,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{active:explorerMissions.size,stalledExplorerReplans,loadedMissionPreservations,invalidMissionRecoveries,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,obsoleteReturnRecoveries,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,pauseReason:t.status==='PAUSED'?(t.deliveryUntil&&t.deliveryUntil>now?'active-rest':t.refillRequested?'refuel':t.serviceDestination?'service':t.refillDestination?'fuel-route':t.recoveryPending?'recovery':energyPercent(t)<=10?'low-energy':t.shiftParked?'parked-awaiting-roads':t.restStopId?'stale-rest-stop':'unknown'):null,planningAttempts:explorerPlanningAttempts.get(t.id)??0,planningSkipReason:explorerPlanSkipReason.get(t.id)??null,recoveryReason:explorerRecoveryReason.get(t.id)??null,savedRouteHealth:routeHealth.get(t.id)?.state??null,exhaustionProven:explorerExhaustionProof.has(t.id),singleWorkerPlanner:singleWorkerScanResult.get(t.id)??null,
  connectedComponent:explorerComponents.get(t.id)??null,
- startConnectivity:explorerStartIssues.get(t.id)??null,majorRoadSearch:majorRoadSearchDiagnostics.get(t.id)??null,incrementalSearch:majorSearches.has(t.id)?{visits:majorSearches.get(t.id)!.visits,frontier:majorSearches.get(t.id)!.heap.length,targets:majorSearches.get(t.id)!.entries.length,complete:majorSearches.get(t.id)!.complete}:null,idleReason:t.status==='IDLE'?(t.deliveryUntil?'rest':t.refillRequested?'refuel':energyPercent(t)<=10?'low-energy':(idleRetryAt.get(t.id)??0)>now?'retry-cooldown':(explorerSearchTier.get(t.id)??0)>0?'searching-wider':'awaiting-planning'):null,returnReason:t.status==='RETURNING'?(t.serviceDestination?'service':t.refillDestination?'refuel':t.pauseAtHome?'legacy-no-mission':t.shiftParked?'shift-or-parking':'unspecified'):null,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,ferryReady:!t.ferryTrip&&(t.status==='IDLE'||(t.status==='PAUSED'&&!!t.shiftParked))&&!t.deliveryUntil&&!t.refillRequested&&!t.serviceDestination&&!t.refillDestination&&!t.recoveryPending&&energyPercent(t)>15&&((explorerSearchTier.get(t.id)??0)>=SEARCH_RADII_KM.length-1||autoParkedExplorers.has(t.id)||explorerPlanSkipReason.get(t.id)==='no-eligible-candidates')&&!majorSearches.has(t.id),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerDispatch:{allowMission:msg.allowMission,allowTaxiShift:msg.allowTaxiShift,queueLength:queue.length,queueLimit:demand.queueLimit,eligibleStops:eligibleStops.size,depots:regionStates.map(region=>({id:region.id,available:region.available,waiting:region.waiting,limit:region.maxWaiting,localStops:passengerLocalStops.get(region.id)??null})),created:passengerRequestsCreated,requestGenerationFailures:passengerRequestsRejected,assignments:passengerAssignments,routeFailures:passengerRouteFailures,completed:passengerTripsCompleted,vehicles:taxis.filter(t=>!t.kind||t.kind==='taxi').map(t=>({id:t.id,status:t.status,idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,shiftEligible:msg.allowTaxiShift&&(!msg.availableTaxiIds||msg.availableTaxiIds.includes(t.id)),energyPercent:Math.round(energyPercent(t))}))},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+ startConnectivity:explorerStartIssues.get(t.id)??null,majorRoadSearch:majorRoadSearchDiagnostics.get(t.id)??null,incrementalSearch:majorSearches.has(t.id)?{visits:majorSearches.get(t.id)!.visits,frontier:majorSearches.get(t.id)!.heap.length,targets:majorSearches.get(t.id)!.entries.length,complete:majorSearches.get(t.id)!.complete}:null,idleReason:t.status==='IDLE'?(t.deliveryUntil?'rest':t.refillRequested?'refuel':energyPercent(t)<=10?'low-energy':(idleRetryAt.get(t.id)??0)>now?'retry-cooldown':(explorerSearchTier.get(t.id)??0)>0?'searching-wider':'awaiting-planning'):null,returnReason:t.status==='RETURNING'?(t.serviceDestination?'service':t.refillDestination?'refuel':t.pauseAtHome?'legacy-no-mission':t.shiftParked?'shift-or-parking':'unspecified'):null,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,ferryReady:explorerFerryEligible(t,explorerExhaustionProof.get(t.id),now,
+ energyPercent(t),purpleStartNear(t.position,explored)?.node??null,
+ seenRoadIds.size,explored.size)&&!majorSearches.has(t.id),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerDispatch:{allowMission:msg.allowMission,allowTaxiShift:msg.allowTaxiShift,queueLength:queue.length,queueLimit:demand.queueLimit,eligibleStops:eligibleStops.size,depots:regionStates.map(region=>({id:region.id,available:region.available,waiting:region.waiting,limit:region.maxWaiting,localStops:passengerLocalStops.get(region.id)??null})),created:passengerRequestsCreated,requestGenerationFailures:passengerRequestsRejected,assignments:passengerAssignments,routeFailures:passengerRouteFailures,completed:passengerTripsCompleted,vehicles:taxis.filter(t=>!t.kind||t.kind==='taxi').map(t=>({id:t.id,status:t.status,idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,shiftEligible:msg.allowTaxiShift&&(!msg.availableTaxiIds||msg.availableTaxiIds.includes(t.id)),energyPercent:Math.round(energyPercent(t))}))},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
