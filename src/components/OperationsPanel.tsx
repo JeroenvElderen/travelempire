@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
-import {Activity,Compass,Route,Settings2,TrendingUp,Users,CarFront,Layers3,ChevronDown,ChevronUp,MapPin,Clock3,AlertTriangle} from 'lucide-react';
+import {Activity,Compass,Route,Settings2,TrendingUp,Users,CarFront,Layers3,ChevronDown,ChevronUp,MapPin,Clock3,AlertTriangle,BarChart3} from 'lucide-react';
 import {demandAt} from '../simulation/demand';
+import TaxiAnalyticsPanel from './TaxiAnalyticsPanel';
 import {TAXI_DISPATCH_MODES,type TaxiDispatchMode} from '../simulation/taxiDispatchStrategy';
 import type {FleetState,RoadGraph} from '../simulation/taxi';
 import {explorerEfficiency,explorerRoleName,explorerSituation,reasonForExplorer,
@@ -8,7 +9,7 @@ import {explorerEfficiency,explorerRoleName,explorerSituation,reasonForExplorer,
 import './operations.css';
 import './operations-floating.css';
 
-type Tab='overview'|'exploration'|'diagnostics';
+type Tab='overview'|'taxis'|'exploration'|'diagnostics';
 type Props={fleet:FleetState;graph:RoadGraph|null;missionCount:number;roadPackages:number;diagnostics:{queued:number;edges:number;workerEdges:number};error:string;gameNow?:number;explorerTelemetry?:ExplorerOperationsSnapshot|null;recoveryHistory?:ExplorerRecoveryEvent[];onLocateExplorer?:(id:string)=>void;taxiDispatchMode?:TaxiDispatchMode;onTaxiDispatchModeChange?:(mode:TaxiDispatchMode)=>void};
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(n);
 const number=(n:number)=>new Intl.NumberFormat('en-IE').format(n);
@@ -60,7 +61,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
    <div><h1>Operations</h1><p>Live dispatch &amp; network</p></div>
   </header>
   <nav className="ops-tabs" role="tablist" aria-label="Operations sections">
-   {([['overview','Overview',Activity],['exploration','Exploration',Compass],['diagnostics','Diagnostics',Settings2]] as const).map(([key,label,Icon])=>
+   {([['overview','Overview',Activity],['taxis','Taxis',BarChart3],['exploration','Exploration',Compass],['diagnostics','Diagnostics',Settings2]] as const).map(([key,label,Icon])=>
     <button key={key} type="button" role="tab" aria-selected={tab===key} aria-label={label} className={tab===key?'active':''} onClick={()=>setTab(key)}><Icon size={19}/><span>{tab===key?label:''}</span></button>)}
   </nav>
   {error&&<div className="ops-alert" role="alert">{error}</div>}
@@ -96,7 +97,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
    <article className="ops-card">
     <div className="ops-card-head">
      <div className="ops-card-label"><CarFront size={17}/><strong>Taxi Autopilot</strong></div>
-     <span className="ops-card-note">Phase 2</span>
+     <span className="ops-card-note">Phase 4</span>
     </div>
     <div className="ops-dispatch-mode-switch" aria-label="Taxi dispatch strategy">
      {TAXI_DISPATCH_MODES.map(mode=><button key={mode} type="button"
@@ -117,6 +118,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
    </button>
    {showDispatchRules&&<div className="ops-card-note">Automatic dispatch runs while the game is open. Only discovered roads receive passenger requests. Waiting jobs are prioritised; the selected dispatch mode considers actual pickup time and estimated fuel, maintenance, wages and insurance. Requests expire after two minutes. Idle taxis can reposition on genuinely discovered connected roads when demand improvement outweighs empty driving, subject to duty shifts, range reserves and a cooldown.</div>}
   </div>}
+  {tab==='taxis'&&<TaxiAnalyticsPanel fleet={fleet} gameNow={gameNow??Date.now()}/>}
   {tab==='exploration'&&<div className="ops-content ops-explorer-workspace" role="tabpanel">
    <div className="ops-explorer-pulse" aria-label="Explorer fleet performance">
     <article><span>On missions</span><strong>{exploring}<small> / {explorers.length}</small></strong></article>

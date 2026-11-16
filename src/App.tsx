@@ -29,6 +29,7 @@ import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/researchExplorerGrant';
 import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule,updateDriverShift,type DriverShiftPatch} from './simulation/driverSchedule';
+import {advanceTaxiActivity,TAXI_ACTIVITY_FIELDS} from './simulation/taxiAnalytics';
 import {automaticallyStaffIdleTaxis,type DriverDepotLocation} from './simulation/driverFleetAutomation';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
@@ -1704,6 +1705,12 @@ export default function App(){
      // The movement integrator reports the exact distance travelled this tick,
      // including junction crossings and the final step before route reset.
      const km=next.distanceMeters/1000;
+     // Observed work and distance counters, not forecast fares or
+     // straight-line approximations. Recorded in accelerated game seconds.
+     // The taxonomy stays stable even when the journey finishes this tick.
+     const activity=advanceTaxiActivity(t,working.status,next.distanceMeters,
+      elapsedSeconds*24,passengerTaxi&&canAcceptPassengerJob(
+       delivered,old.drivers??[],gameNow));
      const spec=energySpec(delivered);
      const person=driversByName.get(t.driver.toLowerCase());
      const experience=person?.completedTrips??0;
@@ -1742,7 +1749,7 @@ export default function App(){
       ?registerNewRoadDistance(next.discovered,discovered,roadLengthByIdRef.current,
         working.edgeIds,working.path).kilometres:0;
      discoveryMs+=performance.now()-discoveryStarted;
-     return {...next.taxi,
+     return {...next.taxi,...activity,
       completed:duplicate?t.completed:next.taxi.completed,
       jobFareTotal:next.taxi.status==='TO_DROPOFF'?
        Math.round(Math.max(0,next.taxi.fare*fareMultiplier)*100)/100:undefined,
@@ -1768,12 +1775,22 @@ export default function App(){
     }
     const vehicleFinanceDeltas=taxis.map((t,index)=>{
      const before=old.taxis[index];
-     const delta=(field:'tripRevenue'|'fuelExpense'|'maintenanceExpense'|'explorationExpense'|'driverWages'|'insuranceExpense'|'operatingKm')=>Math.max(0,(t[field]??0)-(before[field]??0));
+     const delta=(field:'tripRevenue'|'fuelExpense'|'maintenanceExpense'|'explorationExpense'|'driverWages'|'insuranceExpense'|'operatingKm'|
+      'passengerKm'|'emptyKm'|'pickupKm'|'repositionKm'|'onDutyGameSeconds'|'serviceGameSeconds'|'occupiedGameSeconds')=>
+      Math.max(0,(t[field]??0)-(before[field]??0));
      const revenueDelta=delta('tripRevenue');
      return {day:tickDay,taxiId:t.id,name:t.name,depotId:t.depotId??'main',revenue:revenueDelta,
       expenses:delta('fuelExpense')+delta('maintenanceExpense')+delta('explorationExpense')+delta('driverWages')+delta('insuranceExpense'),
-      km:delta('operatingKm'),trips:Math.max(0,t.completed-before.completed)};
-    }).filter(v=>v.revenue>0||v.expenses>0||v.km>0||v.trips>0);
+      km:delta('operatingKm'),trips:Math.max(0,t.completed-before.completed),
+      passengerKm:delta('passengerKm'),emptyKm:delta('emptyKm'),
+      pickupKm:delta('pickupKm'),repositionKm:delta('repositionKm'),
+      onDutyGameSeconds:delta('onDutyGameSeconds'),
+      serviceGameSeconds:delta('serviceGameSeconds'),
+      occupiedGameSeconds:delta('occupiedGameSeconds'),
+      fuelCost:delta('fuelExpense'),maintenanceCost:delta('maintenanceExpense'),
+      wageCost:delta('driverWages'),insuranceCost:delta('insuranceExpense')};
+    }).filter(v=>v.revenue>0||v.expenses>0||v.km>0||v.trips>0||
+     v.onDutyGameSeconds>0||v.serviceGameSeconds>0);
     // A small office/depot overhead accrues in simulated time, including idle periods.
     const overhead=old.taxis.length*(0.00045)+0.0012; // €4.32/hr base + €1.62/hr per vehicle
     // Facility costs are NEW operating expenses; legacy office overhead remains separate.
@@ -1871,7 +1888,7 @@ export default function App(){
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
       financeHistory:(()=>{const day=tickDay;const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead:overhead+facilityCost,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
-      vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];for(const entry of vehicleFinanceDeltas){const existing=list.find(v=>v.day===entry.day&&v.taxiId===entry.taxiId);if(existing){existing.revenue+=entry.revenue;existing.expenses+=entry.expenses;existing.km+=entry.km;existing.trips+=entry.trips;}else list.push(entry);}const cutoff=new Date(gameNow-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
+      vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];const dailyIndexes=new Map<string,number>();for(let i=list.length-1;i>=0;i--){if(list[i].day===tickDay)dailyIndexes.set(list[i].taxiId,i);else if(list[i].day<tickDay)break;}for(const entry of vehicleFinanceDeltas){const index=dailyIndexes.get(entry.taxiId)??-1;if(index>=0){const previous=list[index];list[index]={...previous,revenue:previous.revenue+entry.revenue,expenses:previous.expenses+entry.expenses,km:previous.km+entry.km,trips:previous.trips+entry.trips,...Object.fromEntries(TAXI_ACTIVITY_FIELDS.map(k=>[k,(previous[k]??0)+entry[k]])),fuelCost:(previous.fuelCost??0)+entry.fuelCost,maintenanceCost:(previous.maintenanceCost??0)+entry.maintenanceCost,wageCost:(previous.wageCost??0)+entry.wageCost,insuranceCost:(previous.insuranceCost??0)+entry.insuranceCost};}else {dailyIndexes.set(entry.taxiId,list.length);list.push(entry);}}const cutoff=new Date(gameNow-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
       bank:loanTick.payments>0||leaseTick.payments>0||taxPaid>0||partnership.paid>0?appendBankEntries(bankOf(updatedBank),[...(partnership.settlements.map(item=>bankEntry('Revenue partnership · '+item.bank,-item.amount,'operating','repayment'))),...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[]),...(taxSettlement.paidVat>0?[bankEntry('Monthly VAT settlement',-taxSettlement.paidVat,'operating','repayment')]:[]),...(taxSettlement.paidCorporate>0?[bankEntry('Monthly corporate tax settlement',-taxSettlement.paidCorporate,'operating','repayment')]:[])]):updatedBank,
       bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:bookBankCollection(old.bankPartnershipPaidByDay,tickDay,partnership.paid),bankPartnershipPaidByLenderByDay:bookBankLenderCollections(old.bankPartnershipPaidByLenderByDay,tickDay,partnership.settlements),loans:loanTick.loans,loanInterestExpense:(old.loanInterestExpense??0)+loanTick.interest,loanPrincipalPaid:(old.loanPrincipalPaid??0)+loanTick.principal+securedTick.repossessions.reduce((sum,event)=>sum+event.value,0),transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:gameNow,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...transactions,...(old.transactions??[])].slice(0,100)};
    });
