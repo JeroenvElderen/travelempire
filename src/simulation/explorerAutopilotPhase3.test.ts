@@ -124,7 +124,8 @@ describe('Explorer Autopilot Phase 3 — ferry readiness',()=>{
   explorerFerryEligible({...t,status:'IDLE'},p,at,60,'A',22,10);
  it('accepts only recent conclusive proof for a non-operational idle explorer',()=>{
   expect(ready()).toBe(true);
-  expect(ready(explorer(),undefined)).toBe(false);
+  expect(explorerFerryEligible({...explorer(),status:'IDLE'},undefined,
+   30000,60,'A',22,10)).toBe(false);
   expect(explorerFerryEligible(explorer(),proof,30000,60,'A',22,10)).toBe(false);
   expect(ready(explorer(),proof,150000)).toBe(false);
  });
