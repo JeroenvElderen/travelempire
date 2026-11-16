@@ -101,7 +101,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
   // Shared with iPhone: priority class first, then any safe drivable road
   // when no useful priority mission was found in the bounded search.
   const decision=planSpecialistMission(graph,currentNode,explored,role,
-   tier=>new Set(roleAllowed(tier)),reserved,reservedDest,{fallbackAllowed:true});
+   tier=>roleAllowed(tier),reserved,reservedDest,{fallbackAllowed:true});
   const candidate=decision.route;
   const route=candidate?prependPurpleStart(candidate,origin):null;
   const eligible=roleAllowed(decision.tier);
