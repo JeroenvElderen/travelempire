@@ -30,7 +30,7 @@ export function advanceTaxiActivity(
  vehicle:Taxi,status:Taxi['status'],actualMetres:number,
  elapsedGameSeconds:number,eligibleForWork:boolean,
 ):TaxiActivitySnapshot{
- const values=Object.fromEntries(TAXI_ACTIVITY_FIELDS.map(k=>[k,finitePositive(vehicle[k])]))
+ const values=(Object.fromEntries(TAXI_ACTIVITY_FIELDS.map(k=>[k,finitePositive(vehicle[k])])))
   as Record<TaxiActivityField,number>;
  if(vehicle.kind&&vehicle.kind!=='taxi')return values;
  const km=finitePositive(actualMetres)/1000;
