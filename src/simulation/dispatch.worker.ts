@@ -1411,6 +1411,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       if(completed&&route){
        if(routeValid){
         explorerRejectedCandidate.delete(idleVehicle.id);
+        explorerRecoveryReason.delete(idleVehicle.id);
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
         explorerExhaustionProof.delete(idleVehicle.id);
