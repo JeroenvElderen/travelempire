@@ -4,7 +4,7 @@ import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {canRetryStalledExplorer,evaluateExplorerRoute,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
- type ExplorerExhaustionProof,type ExplorerProgressWatch} from './explorerRecoveryController';
+ type ExplorerExhaustionProof,type ExplorerProgressWatch,type ExplorerRouteHealth} from './explorerRecoveryController';
 import {explorerPlannerIdleQuota,explorerPlannerResultCurrent,explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,reserveExplorerDiscoveries} from './explorerAutopilot';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
@@ -795,6 +795,67 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
    }
   const activeGraph=graph;
+  // Validate restored routes on the streamed, directed graph. Missing
+  // tiles must never erase the paid/saved explorer mission.
+  const routeHealth=new Map<string,ExplorerRouteHealth>();
+  for(let i=0;i<taxis.length;i++){
+   const vehicle=taxis[i];
+   if(vehicle.kind!=='explorer'||vehicle.status!=='EXPLORING'){
+    explorerProgressWatch.delete(vehicle.id);
+    if(vehicle.status!=='IDLE')explorerExhaustionProof.delete(vehicle.id);
+    continue;
+   }
+   explorerExhaustionProof.delete(vehicle.id);
+   const health=evaluateExplorerRoute(activeGraph,vehicle,seenRoadIds,
+    roadEndpoints,explored);
+   routeHealth.set(vehicle.id,health);
+   if(health.state==='waiting-for-tiles'){
+    loadedMissionPreservations++;
+    explorerProgressWatch.delete(vehicle.id);
+    explorerRecoveryReason.set(vehicle.id,'waiting-for-road-tiles:'+health.edgeId);
+    continue;
+   }
+   if(health.state==='invalid'){
+    // Never drive an invalid saved direction or jump to a nearby level.
+    taxis[i]={...vehicle,status:'IDLE',routeInvalid:true,
+     path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
+     leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+    explorerProgressWatch.delete(vehicle.id);
+    explorerRecoveryReason.set(vehicle.id,'invalid-saved-route:'+health.reason);
+    invalidMissionRecoveries++;
+    continue;
+   }
+   if(!msg.allowScout||!explorerMovementEligible(vehicle,now,energyPercent(vehicle))){
+    explorerProgressWatch.delete(vehicle.id);
+    continue;
+   }
+   const sample=watchExplorerProgress(explorerProgressWatch.get(vehicle.id),
+    vehicle,now);
+   explorerProgressWatch.set(vehicle.id,sample.watch);
+   if(sample.stalledMs<90000){
+    if(sample.stalledMs===0)explorerRecoveryReason.delete(vehicle.id);
+    continue;
+   }
+   const start=purpleStartNear(vehicle.position,explored);
+   const node=start?activeGraph.nodes.get(start.node):undefined;
+   if(!node||meters(node,vehicle.position)>3){
+    // Never restart midway through a one-way or undiscovered segment.
+    explorerRecoveryReason.set(vehicle.id,'stalled-awaiting-legal-purple-junction');
+    continue;
+   }
+   const attempt=canRetryStalledExplorer(explorerRecoveryAttempts.get(vehicle.id),now);
+   if(!attempt.allowed){
+    explorerRecoveryReason.set(vehicle.id,'stalled-replan-cooldown');
+    continue;
+   }
+   explorerRecoveryAttempts.set(vehicle.id,attempt.next);
+   explorerProgressWatch.delete(vehicle.id);
+   taxis[i]={...vehicle,status:'IDLE',routeInvalid:false,
+    path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
+    leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
+   explorerRecoveryReason.set(vehicle.id,'stalled-replanning-from-purple-junction');
+   stalledExplorerReplans++;
+  }
   // Purple Explorer's driven roads are valid for taxi jobs regardless of Black Explorer territory.
   const validDiscovered=explored;
   const eligibleStops=passengerStopsFor(validDiscovered);
@@ -964,7 +1025,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // cannot carry a vehicle beyond the current taxi-revealed boundary.
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING')continue;
+    if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||
+       routeHealth.get(taxi.id)?.state==='waiting-for-tiles')continue;
     const permitted=taxi.kind==='explorer'?purpleAllowedRoads:allowedRoads;
     const discoveryAssignment=new Set(taxi.discoveryEdgeIds??[]);
      const validEscapeTransit=new Set(taxi.escapeTransitEdgeIds??[]);
@@ -972,7 +1034,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      // Saved missions from older builds may start on isolated red roads.
      // Keep only routes that start from an actual discovered junction, and
      // never transit an undiscovered edge unless this mission discovers it.
-     const invalidStart=!!startNode&&!purpleStartNear(taxi.path[0],explored);
+     const invalidStart=taxi.leg===0&&!!startNode&&!purpleStartNear(taxi.path[0],explored);
      const invalidRedApproach=hasInvalidRedApproach(activeGraph,taxi.path,taxi.edgeIds,
       explored,new Set(taxi.discoveryEdgeIds??[]));
      const firstForbidden=invalidStart||invalidRedApproach?taxi.leg:taxi.edgeIds.findIndex((id,i)=>i>=taxi.leg&&
