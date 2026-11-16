@@ -23,6 +23,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
  const taxis=fleet.taxis.filter(t=>!t.kind||t.kind==='taxi');
  const activeTaxis=taxis.filter(t=>t.status!=='IDLE'&&t.status!=='PAUSED').length;
  const repositioningTaxis=taxis.filter(t=>t.status==='REPOSITIONING').length;
+ const coverageTaxis=taxis.filter(t=>t.status==='REPOSITIONING'&&t.coverageRegionId).length;
  const demand=demandAt(gameNow??Date.now(),taxis.length);
  const coverage=useMemo(()=>{
   if(!graph)return null;
@@ -70,6 +71,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
     <span><CarFront size={15}/><strong>{activeTaxis}</strong> active</span>
     <span><Users size={15}/><strong>{missionCount}</strong> requests</span>
     {repositioningTaxis>0&&<span><MapPin size={15}/><strong>{repositioningTaxis}</strong> repositioning</span>}
+    {coverageTaxis>0&&<span><Route size={15}/><strong>{coverageTaxis}</strong> regional coverage</span>}
     <span><strong>{number(fleet.completed)}</strong> trips</span>
    </div>
    <div className="ops-section-heading"><h2>Live operations</h2><small>{taxis.length} passenger taxis</small></div>
@@ -97,7 +99,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
    <article className="ops-card">
     <div className="ops-card-head">
      <div className="ops-card-label"><CarFront size={17}/><strong>Taxi Autopilot</strong></div>
-     <span className="ops-card-note">Phase 4</span>
+     <span className="ops-card-note">Autopilot 2.1</span>
     </div>
     <div className="ops-dispatch-mode-switch" aria-label="Taxi dispatch strategy">
      {TAXI_DISPATCH_MODES.map(mode=><button key={mode} type="button"
@@ -111,7 +113,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
      taxiDispatchMode==='max-jobs'?'Prioritises the fastest legal pickup and accepts every feasible booking.':
      taxiDispatchMode==='max-profit'?'Prefers higher estimated contribution and declines low-margin requests.':
      'Balances passenger pickup times with estimated operating profit.'
-    } Idle taxis may move toward underserved discovered-road demand zones after 60 seconds. They use exactly the same road-speed rules as local, regional and intercity passenger trips.</span>
+    } Idle taxis can establish service in distant discovered-road regions without a depot. Driver journey preferences influence matching, but don't override pickup time, fuel, shifts or legal road connections. All trip distances retain the same driving speeds.</span>
    </article>
    <button type="button" className="ops-detail-toggle" aria-expanded={showDispatchRules} onClick={()=>setShowDispatchRules(v=>!v)}>
     {showDispatchRules?'Hide dispatch details':'How dispatch works'}{showDispatchRules?<ChevronUp size={15}/>:<ChevronDown size={15}/>}
