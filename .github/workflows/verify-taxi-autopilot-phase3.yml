@@ -1,0 +1,17 @@
+name: Verify Taxi Autopilot Phase 3 driver automation
+on:
+  push:
+    branches:
+      - feat/taxi-autopilot-phase3-driver-roster
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- src/simulation/taxiAutopilotPhase3.test.ts src/simulation/driverSchedule.test.ts src/simulation/taxiRepositioning.test.ts src/simulation/taxiDispatchStrategy.test.ts src/simulation/passengerJourneys.test.ts src/simulation/passengerDepotDemand.test.ts src/simulation/passengerSettlement.test.ts src/simulation/explorerAutopilotPhase3.test.ts src/simulation/explorerParkingRecovery.test.ts src/simulation/directedRoadRouting.test.ts
