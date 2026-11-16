@@ -78,15 +78,12 @@ describe('explorer operational discovery',()=>{
 });
 
 describe('specialist priority fallback',()=>{
- it('highway explorer descends through every lower class',()=>{
-  expect(specialistFallbackRoles('highway')).toEqual(['highway','primary','secondary','residential']);
+ it('all five explorers prefer their own class, then can discover any drivable class',()=>{
+  for(const role of ['highway','primary','secondary','residential','poi'] as const)
+   expect(specialistFallbackRoles(role)).toEqual([role,'balanced']);
  });
- it('primary and secondary explorers never climb to higher discovery classes',()=>{
-  expect(specialistFallbackRoles('primary')).toEqual(['primary','secondary','residential']);
-  expect(specialistFallbackRoles('secondary')).toEqual(['secondary','residential']);
- });
- it('residential and POI explorers keep their specialist boundaries',()=>{
-  expect(specialistFallbackRoles('residential')).toEqual(['residential']);
-  expect(specialistFallbackRoles('poi')).toEqual(['poi']);
+ it('legacy vehicles without a specialist retain their compatibility role',()=>{
+  expect(specialistFallbackRoles('motorway')).toEqual([]);
+  expect(specialistFallbackRoles(undefined)).toEqual([]);
  });
 });
