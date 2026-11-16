@@ -82,7 +82,10 @@ export function evaluateExplorerRoute(
    edgeId:vehicle.edgeIds[vehicle.leg]};
  const assigned=new Set(vehicle.discoveryEdgeIds??[]);
  const escape=new Set(vehicle.escapeTransitEdgeIds??[]);
- let previousTarget:string|null=null;
+ // Multiple legal orientations can match a very short OSM segment within
+ // the coordinate tolerance. Preserve possible REAL node IDs until the next
+ // leg disambiguates them; never connect geometrically overlapping levels.
+ let possibleTargets:Set<string>|null=null;
  for(let i=vehicle.leg;i<vehicle.edgeIds.length;i++){
   const id=vehicle.edgeIds[i];
   if(!knownRoadIds.has(id)||!roadEndpoints.has(id))
@@ -105,13 +108,34 @@ export function evaluateExplorerRoute(
     (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0));
   if(!forward&&!backward&&!midsegment)
    return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id,leg:i};
-  const fromNode=forward?endpoints[0]:backward?endpoints[1]:
-   meters(vehicle.path[i+1],b)<=3?endpoints[0]:endpoints[1];
-  const toNode=forward?endpoints[1]:backward?endpoints[0]:
-   meters(vehicle.path[i+1],b)<=3?endpoints[1]:endpoints[0];
-  if(previousTarget!==null&&previousTarget!==fromNode)
+  // An OSM micro-edge may be shorter than the 3 m coordinate tolerance:
+  // both forward and backward geometry can match the same path. Picking
+  // "forward" unconditionally corrupts valid reversed routes on the next
+  // leg, even though the graph contains a legal directed path.
+  const nextTargets=new Set<string>();
+  const candidates:[boolean,string,string][]=[
+   [forward,endpoints[0],endpoints[1]],
+   [backward,endpoints[1],endpoints[0]],
+  ];
+  // A genuine in-segment start is allowed only for the first leg. Its
+  // downstream OSM node remains authoritative for every subsequent leg.
+  if(midsegment&&i===0&&vehicle.leg===0){
+   const midForward=meters(vehicle.path[i+1],b)<=3&&
+    forwardAlongSegment(vehicle.path[i],a,b)&&
+    (graph.edges.get(endpoints[0])??[]).some(e=>e.id===id&&e.to===endpoints[1]&&e.meters>0);
+   const midBackward=meters(vehicle.path[i+1],a)<=3&&
+    forwardAlongSegment(vehicle.path[i],b,a)&&
+    (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0);
+   if(midForward)candidates.push([true,endpoints[0],endpoints[1]]);
+   if(midBackward)candidates.push([true,endpoints[1],endpoints[0]]);
+  }
+  for(const [valid,from,to] of candidates){
+   if(valid&&(possibleTargets===null||possibleTargets.has(from)))
+    nextTargets.add(to);
+  }
+  if(!nextTargets.size)
    return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id,leg:i};
-  previousTarget=toNode;
+  possibleTargets=nextTargets;
  }
  return {state:'valid',reason:'connected-directed-route'};
 }
