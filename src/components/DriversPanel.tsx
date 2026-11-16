@@ -1,22 +1,27 @@
 import {useState} from 'react';
 import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,SlidersHorizontal} from 'lucide-react';
-import type {FleetState,Taxi} from '../simulation/taxi';
+import type {FleetState,Taxi,DriverRecord} from '../simulation/taxi';
+import type {DriverShiftPatch} from '../simulation/driverSchedule';
 import type {GameClock} from '../simulation/gameClock';
 import {driverLevel} from '../simulation/taxi';
 import {driverSchedule,clockLabel} from '../simulation/driverSchedule';
 import './drivers-floating.css';
 
-type Props={fleet:FleetState;gameClock:GameClock|null};
+type Props={fleet:FleetState;gameClock:GameClock|null;
+ depots?:{id:string;name:string}[];
+ onScheduleChange?:(driverId:string,patch:DriverShiftPatch)=>void;
+ onHomeDepotChange?:(driverId:string,depotId:string)=>void;
+ onAutoAssignmentChange?:(enabled:boolean)=>void;};
 type Schedule=ReturnType<typeof driverSchedule>;
 type ShiftPhase='duty'|'break'|'off';
 type ShiftSegment={from:number;to:number;kind:'duty'|'break'};
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const time=clockLabel;
-function segmentsForDay(start:number):ShiftSegment[]{
+function segmentsForDay(start:number,duration:number,breakStart:number):ShiftSegment[]{
  const source:ShiftSegment[]=[
-  {from:start,to:start+5.75,kind:'duty'},
-  {from:start+5.75,to:start+6.25,kind:'break'},
-  {from:start+6.25,to:start+12,kind:'duty'}
+  {from:start,to:start+breakStart,kind:'duty'},
+  {from:start+breakStart,to:start+breakStart+.5,kind:'break'},
+  {from:start+breakStart+.5,to:start+duration,kind:'duty'}
  ];
  return source.flatMap(segment=>{
   if(segment.from>=24)return [{...segment,from:segment.from-24,to:segment.to-24}];
@@ -33,6 +38,7 @@ function statusOf(t:Taxi,s:Schedule):{label:string;phase:ShiftPhase}{
  if(t.status==='RETURNING'&&t.shiftParked)return {label:'Returning to rest',phase:s.onBreak?'break':'off'};
  if(t.status==='PAUSED'&&t.shiftParked)return {label:'Parked',phase:'off'};
  if(s.onBreak)return {label:'Scheduled break',phase:'break'};
+ if(t.status==='REPOSITIONING')return {label:'Repositioning',phase:s.onDuty?'duty':'off'};
  if(!s.onDuty)return {label:'Off duty',phase:'off'};
  if(t.status==='REFUELLING')return {label:'Refuelling',phase:'duty'};
  if(t.status==='SERVICING')return {label:'Servicing',phase:'duty'};
@@ -40,19 +46,68 @@ function statusOf(t:Taxi,s:Schedule):{label:string;phase:ShiftPhase}{
 }
 function Timeline({schedule,driverName}:{schedule:Schedule;driverName:string}){
  return <div className="drivers-timeline">
-  <div className="drivers-timeline-track" role="img" aria-label={`${driverName}: shift ${time(schedule.start)}–${time(schedule.start+12)}, break ${time(schedule.start+5.75)}–${time(schedule.start+6.25)}. Current game time ${time(schedule.current)}`}>
-   {segmentsForDay(schedule.start).map((segment,index)=><span key={index} className={`drivers-timeline-segment ${segment.kind}`} style={{left:`${segment.from/24*100}%`,width:`${(segment.to-segment.from)/24*100}%`}}/>)}
+  <div className="drivers-timeline-track" role="img" aria-label={`${driverName}: shift ${time(schedule.start)}–${time(schedule.start+schedule.duration)}, break ${time(schedule.start+schedule.breakStart)}–${time(schedule.start+schedule.breakEnd)}. Current game time ${time(schedule.current)}`}>
+   {segmentsForDay(schedule.start,schedule.duration,schedule.breakStart).map((segment,index)=><span key={index} className={`drivers-timeline-segment ${segment.kind}`} style={{left:`${segment.from/24*100}%`,width:`${(segment.to-segment.from)/24*100}%`}}/>)}
    <span className="drivers-timeline-now" style={{left:`${schedule.current/24*100}%`}}/>
   </div>
   <div className="drivers-timeline-hours"><span>00:00</span><span>12:00</span><span>24:00</span></div>
  </div>;
 }
-export default function DriversPanel({fleet,gameClock}:Props){
+function DriverSettings({driver,depots,onScheduleChange,onHomeDepotChange}:{
+ driver:DriverRecord;
+ depots:{id:string;name:string}[];
+ onScheduleChange?:Props['onScheduleChange'];
+ onHomeDepotChange?:Props['onHomeDepotChange'];
+}){
+ const duration=driver.shiftDurationHours??12;
+ const breakOptions=[2,3,4,5,5.75,6,7,8,9,10].filter(h=>h+.5<=duration);
+ return <div className="drivers-roster-editor" aria-label={'Roster settings for '+driver.name}>
+  <label>Shift starts
+   <select aria-label={'Shift start for '+driver.name}
+    value={driver.shiftStartHour??'auto'}
+    onChange={e=>onScheduleChange?.(driver.id,{
+     shiftStartHour:e.target.value==='auto'?undefined:Number(e.target.value),
+    })} disabled={!onScheduleChange}>
+    <option value="auto">Automatic</option>
+    {Array.from({length:24},(_,i)=><option key={i} value={i}>{clockLabel(i)}</option>)}
+   </select>
+  </label>
+  <label>Shift length
+   <select aria-label={'Shift length for '+driver.name}
+    value={duration} disabled={!onScheduleChange}
+    onChange={e=>onScheduleChange?.(driver.id,{
+     shiftDurationHours:Number(e.target.value),
+    })}>
+    {[6,7,8,9,10,11,12].map(hours=>
+     <option key={hours} value={hours}>{hours} hours</option>)}
+   </select>
+  </label>
+  <label>Break begins
+   <select aria-label={'Break starts for '+driver.name}
+    value={driver.shiftBreakAtHour??'auto'} disabled={!onScheduleChange}
+    onChange={e=>onScheduleChange?.(driver.id,{
+     shiftBreakAtHour:e.target.value==='auto'?undefined:Number(e.target.value),
+    })}>
+    <option value="auto">Automatic · 30 min</option>
+    {breakOptions.map(h=><option key={h} value={h}>{h}h into shift</option>)}
+   </select>
+  </label>
+  <label>Home depot
+   <select aria-label={'Home depot for '+driver.name}
+    value={driver.homeDepotId??'main'} disabled={!onHomeDepotChange}
+    onChange={e=>onHomeDepotChange?.(driver.id,e.target.value)}>
+    {depots.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+   </select>
+  </label>
+ </div>;
+}
+export default function DriversPanel({fleet,gameClock,depots=[],onScheduleChange,onHomeDepotChange,onAutoAssignmentChange}:Props){
  const [view,setView]=useState<'schedules'|'team'|'performance'>('schedules');
  const [filter,setFilter]=useState<'all'|'duty'|'break'|'off'>('all');
  const [query,setQuery]=useState('');
  const [filtersOpen,setFiltersOpen]=useState(false);
  const [expanded,setExpanded]=useState<string|null>(null);
+ const [teamExpanded,setTeamExpanded]=useState<string|null>(null);
  const taxis=fleet.taxis.filter(t=>!t.kind||t.kind==='taxi');
  const roster=fleet.drivers??[];
  const current=gameClock?.epochMs??Date.now();
@@ -63,6 +118,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
  });
  const active=entries.filter(e=>e.schedule.onDuty&&!e.schedule.onBreak&&!e.taxi.shiftParked).length;
  const breaks=entries.filter(e=>e.schedule.onBreak).length;
+ const automated=roster.length>0&&fleet.autoDriverAssignment===true;
  const assignedNames=new Set(taxis.map(t=>t.driver.toLowerCase()));
  const unassigned=roster.filter(d=>!assignedNames.has(d.name.toLowerCase()));
  const visible=entries.filter(e=>(filter==='all'||e.status.phase===filter)&&
@@ -77,6 +133,13 @@ export default function DriversPanel({fleet,gameClock}:Props){
     <button type="button" key={key} className={view===key?'active':''} aria-label={label} aria-current={view===key?'page':undefined} onClick={()=>setView(key)}><Icon size={19}/><span>{view===key?label:''}</span></button>)}
   </nav>
   {view==='schedules'&&<>
+   <div className="drivers-automation-card">
+    <div><strong>Automatic depot staffing</strong><p>When a taxi is idle at its home depot and its driver is off duty, an available on-duty driver from the same depot can take over. No mid-trip or remote swaps.</p></div>
+    <button type="button" role="switch" aria-label="Automatic driver staffing"
+     aria-checked={automated} className={automated?'active':''}
+     onClick={()=>onAutoAssignmentChange?.(!automated)}
+     disabled={!onAutoAssignmentChange||!roster.length}>{automated?'On':'Off'}</button>
+   </div>
    <div className="drivers-quick-status" aria-label="Driver shift summary">
     <span><UsersRound size={15}/><strong>{roster.length}</strong> drivers</span>
     <span><CarFront size={15}/><strong>{taxis.length}</strong> taxis</span>
@@ -84,7 +147,7 @@ export default function DriversPanel({fleet,gameClock}:Props){
    </div>
    <section className="drivers-section">
     <div className="drivers-section-header drivers-section-compact">
-     <div><h2>Schedules</h2><small>{time(((current/3600000)%24+24)%24)} game time · 12h shifts</small></div>
+     <div><h2>Schedules</h2><small>{time(((current/3600000)%24+24)%24)} game time · 12h default</small></div>
      <button type="button" className={filtersOpen||filter!=='all'?'drivers-tools-toggle active':'drivers-tools-toggle'} aria-expanded={filtersOpen} aria-label="Search and filter schedules" onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={17}/>{filter==='all'?(query.trim()?'Search active':'Filter'):filter==='duty'?'On duty':filter==='break'?'Breaks':'Off duty'}</button>
     </div>
     {filtersOpen&&<div className="drivers-tools">
@@ -102,18 +165,20 @@ export default function DriversPanel({fleet,gameClock}:Props){
         <div className="drivers-card-info"><strong>{taxi.driver}</strong><small>{taxi.name}</small></div>
         <span className={`drivers-status drivers-status-${status.phase}`}>{status.label}</span>
        </div>
-       <div className="drivers-shift-meta"><span>{schedule.preference} shift</span><strong>{time(schedule.start)}–{time(schedule.start+12)}</strong></div>
+       <div className="drivers-shift-meta"><span>{schedule.preference} shift</span><strong>{time(schedule.start)}–{time(schedule.start+schedule.duration)}</strong></div>
        <Timeline schedule={schedule} driverName={taxi.driver}/>
        <div className="drivers-schedule-actions">
-        <span>Break {time(schedule.start+5.75)}–{time(schedule.start+6.25)}</span>
+        <span>Break {time(schedule.start+schedule.breakStart)}–{time(schedule.start+schedule.breakEnd)}</span>
         <button type="button" aria-expanded={isExpanded} onClick={()=>setExpanded(isExpanded?null:taxi.id)}>{isExpanded?'Less':'Details'}{isExpanded?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>
        </div>
        {isExpanded&&<div className="drivers-card-expanded">
-        <div><small>Rest</small><strong>{time(schedule.start+12)}–{time(schedule.start+24)}</strong></div>
+        <div><small>Rest</small><strong>{time(schedule.start+schedule.duration)}–{time(schedule.start+24)}</strong></div>
         <div><small>Level</small><strong>{driverLevel(driver?.completedTrips??0)}</strong></div>
         <div><small>Trips</small><strong>{driver?.completedTrips??0}</strong></div>
         <div><small>Distance</small><strong>{(driver?.distanceKm??0).toFixed(1)} km</strong></div>
         <div><small>Revenue</small><strong>{money(driver?.revenueGenerated??0)}</strong></div>
+        {driver&&<DriverSettings driver={driver} depots={depots}
+          onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}/>}
        </div>}
       </article>;
      })}
@@ -129,7 +194,15 @@ export default function DriversPanel({fleet,gameClock}:Props){
     return <article className="drivers-team-card" key={driver.id}>
      <span className="drivers-card-avatar"><UserRound size={22}/></span>
      <div className="drivers-team-card-body"><strong>{driver.name}</strong><small>{assigned?`Assigned to ${assigned.taxi.name}`:'Not assigned'} · {driverLevel(driver.completedTrips??0)}</small><small>{(driver.distanceKm??0).toFixed(1)} km · {driver.completedTrips??0} trips</small></div>
-     <span>{assigned?assigned.schedule.preference:'Available'}</span>
+     <div className="drivers-team-controls">
+      <span>{assigned?assigned.schedule.preference:'Available'}</span>
+      <button type="button" aria-expanded={teamExpanded===driver.id}
+       onClick={()=>setTeamExpanded(teamExpanded===driver.id?null:driver.id)}>
+       {teamExpanded===driver.id?'Close':'Edit roster'}
+      </button>
+     </div>
+     {teamExpanded===driver.id&&<DriverSettings driver={driver} depots={depots}
+      onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}/>}
     </article>;
    })}
    {!roster.length&&<p className="drivers-empty">No drivers employed yet. Hire drivers in Fleet → Drivers.</p>}
