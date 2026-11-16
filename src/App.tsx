@@ -1664,7 +1664,14 @@ export default function App(){
      const needsEnergy=!!delivered.refillRequested||remainingKm<=thresholdKm;
      // Passenger taxis finish their current fare; explorers turn back before they strand themselves.
      const stopExploring=needsEnergy&&delivered.status==='EXPLORING';
-     let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:delivered;
+     // An empty demand-reposition trip is not an accepted passenger fare.
+     // If its driver goes off shift or the tank needs attention, finish the
+     // current real directed road segment and stop at that node; never
+     // teleport to a nearby bridge/tunnel, never force the night shift.
+     const stopReposition=passengerTaxi&&delivered.status==='REPOSITIONING'&&
+      (!canAcceptPassengerJob(delivered,old.drivers??[],gameNow)||needsEnergy);
+     let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:
+      stopReposition?{...delivered,repositionStopPending:true}:delivered;
      if(working.status==='IDLE'&&needsEnergy&&fuelTarget&&fuelTarget.roadKm<=remainingKm*0.95&&
        (working.kind!=='explorer'||canDepartPurple(working))){
       const target=fuelTarget;
