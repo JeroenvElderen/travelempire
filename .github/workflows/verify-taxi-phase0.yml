@@ -1,0 +1,17 @@
+name: Verify Taxi Phase 0 long journeys
+on:
+  push:
+    branches:
+      - feat/taxi-phase0-long-distance-passengers
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- src/simulation/passengerJourneys.test.ts src/simulation/passengerDepotDemand.test.ts src/simulation/driverSchedule.test.ts src/simulation/passengerDispatch.test.ts src/simulation/taxi.test.ts src/simulation/passengerRouteRecovery.test.ts
