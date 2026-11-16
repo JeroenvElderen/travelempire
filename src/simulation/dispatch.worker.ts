@@ -1064,6 +1064,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const vehicle=available[0];
    if(vehicle){
     taxiRepositionAttempts++;
+    // Throttle failed hotspot routing too: never rescan each Safari tick.
+    lastTaxiRepositionAt=now;
     taxiRepositionRetryAt.set(vehicle.id,now);
     const from=nearest(activeGraph,vehicle.position);
     const fromPoint=activeGraph.nodes.get(from);
