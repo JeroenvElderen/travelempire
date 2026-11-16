@@ -888,6 +888,11 @@ export default function App(){
      if(!assigned||meters(assigned.position,teleportTarget)>15)return t;
      resetVehicleTargetsRef.current.delete(t.id);
     }
+    // A driver roster may change while Safari's asynchronous dispatcher is
+    // still searching. Never admit an old taxi assignment made for a
+    // different driver: the old employee might already be off duty.
+    if((!t.kind||t.kind==='taxi')&&assigned&&
+       assigned.driver.toLowerCase()!==t.driver.toLowerCase())return t;
     // The main simulation owns rest travel, rest timers and wake-up.
     // A stale rest-stop ID must not override a newly planned directed
     // component-recovery route. Active rest/service journeys still belong to
