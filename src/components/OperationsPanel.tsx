@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
 import {Activity,Compass,Route,Settings2,TrendingUp,Users,CarFront,Layers3,ChevronDown,ChevronUp,MapPin,Clock3,AlertTriangle} from 'lucide-react';
 import {demandAt} from '../simulation/demand';
+import {TAXI_DISPATCH_MODES,type TaxiDispatchMode} from '../simulation/taxiDispatchStrategy';
 import type {FleetState,RoadGraph} from '../simulation/taxi';
 import {explorerEfficiency,explorerRoleName,explorerSituation,reasonForExplorer,
  type ExplorerOperationsSnapshot,type ExplorerRecoveryEvent} from '../simulation/explorerOperations';
@@ -8,11 +9,11 @@ import './operations.css';
 import './operations-floating.css';
 
 type Tab='overview'|'exploration'|'diagnostics';
-type Props={fleet:FleetState;graph:RoadGraph|null;missionCount:number;roadPackages:number;diagnostics:{queued:number;edges:number;workerEdges:number};error:string;gameNow?:number;explorerTelemetry?:ExplorerOperationsSnapshot|null;recoveryHistory?:ExplorerRecoveryEvent[];onLocateExplorer?:(id:string)=>void};
+type Props={fleet:FleetState;graph:RoadGraph|null;missionCount:number;roadPackages:number;diagnostics:{queued:number;edges:number;workerEdges:number};error:string;gameNow?:number;explorerTelemetry?:ExplorerOperationsSnapshot|null;recoveryHistory?:ExplorerRecoveryEvent[];onLocateExplorer?:(id:string)=>void;taxiDispatchMode?:TaxiDispatchMode;onTaxiDispatchModeChange?:(mode:TaxiDispatchMode)=>void};
 const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(n);
 const number=(n:number)=>new Intl.NumberFormat('en-IE').format(n);
 
-export default function OperationsPanel({fleet,graph,missionCount,roadPackages,diagnostics,error,gameNow,explorerTelemetry=null,recoveryHistory=[],onLocateExplorer}:Props){
+export default function OperationsPanel({fleet,graph,missionCount,roadPackages,diagnostics,error,gameNow,explorerTelemetry=null,recoveryHistory=[],onLocateExplorer,taxiDispatchMode='balanced',onTaxiDispatchModeChange}:Props){
  const [tab,setTab]=useState<Tab>('overview');
  const [expandedExplorer,setExpandedExplorer]=useState<string|null>(null);
  const [explorerFilter,setExplorerFilter]=useState<'all'|'active'|'attention'>('all');
@@ -90,10 +91,29 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
     <div className="ops-card-row"><span>Discovered road IDs</span><strong>{number((fleet.exploredEdgeIds??[]).length)}</strong></div>
     <span className="ops-card-note">Coverage of loaded road data, not all roads in Greece.</span>
    </article>
+   <article className="ops-card">
+    <div className="ops-card-head">
+     <div className="ops-card-label"><CarFront size={17}/><strong>Taxi Autopilot</strong></div>
+     <span className="ops-card-note">Phase 1</span>
+    </div>
+    <div className="ops-dispatch-mode-switch" aria-label="Taxi dispatch strategy">
+     {TAXI_DISPATCH_MODES.map(mode=><button key={mode} type="button"
+      aria-pressed={taxiDispatchMode===mode} disabled={!onTaxiDispatchModeChange}
+      className={taxiDispatchMode===mode?'active':''}
+      onClick={()=>onTaxiDispatchModeChange?.(mode)}>{
+       mode==='max-jobs'?'Maximum jobs':mode==='max-profit'?'Maximum profit':'Balanced'
+      }</button>)}
+    </div>
+    <span className="ops-card-note">{
+     taxiDispatchMode==='max-jobs'?'Prioritises the fastest legal pickup and accepts every feasible booking.':
+     taxiDispatchMode==='max-profit'?'Prefers higher estimated contribution and declines low-margin requests.':
+     'Balances passenger pickup times with estimated operating profit.'
+    } Local, regional and intercity taxis use exactly the same road-speed rules.</span>
+   </article>
    <button type="button" className="ops-detail-toggle" aria-expanded={showDispatchRules} onClick={()=>setShowDispatchRules(v=>!v)}>
     {showDispatchRules?'Hide dispatch details':'How dispatch works'}{showDispatchRules?<ChevronUp size={15}/>:<ChevronDown size={15}/>}
    </button>
-   {showDispatchRules&&<div className="ops-card-note">Automatic dispatch runs while the game is open. Only discovered roads receive passenger requests. Waiting jobs are prioritised and available taxis are assigned by estimated driving time; requests expire after two minutes.</div>}
+   {showDispatchRules&&<div className="ops-card-note">Automatic dispatch runs while the game is open. Only discovered roads receive passenger requests. Waiting jobs are prioritised; the selected dispatch mode considers actual pickup time and estimated fuel, maintenance, wages and insurance. Requests expire after two minutes.</div>}
   </div>}
   {tab==='exploration'&&<div className="ops-content ops-explorer-workspace" role="tabpanel">
    <div className="ops-explorer-pulse" aria-label="Explorer fleet performance">
