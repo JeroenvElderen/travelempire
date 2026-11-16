@@ -3,7 +3,7 @@
  * separately and road/shift/fuel safety is verified by the dispatcher.
  */
 import {energyRangeKm} from './energy';
-import {meters,type Point,type Taxi} from './taxi';
+import {meters,type Taxi} from './taxi';
 import type {DiscoveredServiceRegion} from './passengerDepotDemand';
 
 export const COVERAGE_MIN_METRES=6500;
