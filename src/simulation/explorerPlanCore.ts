@@ -65,7 +65,7 @@ export function planSpecialistMission(
  let unresolved:ExplorerSearchDecision|null=
   !explorerSearchConclusive(primary.diagnostic.reason)?
    {...primary,tier:preferred,state:'incomplete',reason:primary.diagnostic.reason}:null;
- if(fallbackAllowed){
+ if(fallbackAllowed&&explorerSearchConclusive(primary.diagnostic.reason)){
   const directed=planReachableExplorerRoad(graph,startNode,new Set(discovered),
    firstAllowed,new Set(reservedEdges),new Set(reservedTargets),preferred);
   if(directed.route)return {...directed,tier:preferred,state:'planned',reason:'planned-priority-directed'};
