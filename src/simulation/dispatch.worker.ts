@@ -906,33 +906,37 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const demand=demandAt(msg.gameNow??now,passengerTaxis.length);
   const availableIds=new Set(msg.availableTaxiIds??passengerTaxis.filter(t=>t.status==='IDLE').map(t=>t.id));
   const configuredDepots=msg.depots?.length?msg.depots:[{id:'main',position:hq}];
-  const regionalOrigins:PassengerDepotRegion[]=configuredDepots.map(depot=>{
-   const available=passengerTaxis.filter(t=>(t.depotId??'main')===depot.id&&
-    t.status==='IDLE'&&availableIds.has(t.id)&&!t.deliveryUntil&&
-    !t.shiftParked&&!t.restStopId&&!t.refillRequested&&energyPercent(t)>10);
-   // Use the actual on-duty taxi position when it has travelled far from
-   // the depot; nearby assigned vehicles should serve their home district.
-   const first=available[0];
-   const position=first&&meters(first.position,depot.position)>5000?
-    first.position:depot.position;
-   return{id:depot.id,position,available:available.length};
-  });
-  // An intercity drop-off leaves the taxi at its real destination.
-  // Offer that taxi local pickups even without a purchased depot nearby.
-  // Virtual passenger origins are small regional groups, not new depots.
+  // Count an available taxi in ONE geographical demand region. After
+  // a long intercity drop-off it may be far from its original depot;
+  // the actual position determines the next passenger pickup area.
+  const depotTaxiCounts=new Map<string,number>();
   const roamingRegions=new Map<string,PassengerDepotRegion>();
   for(const taxi of passengerTaxis){
    if(taxi.status!=='IDLE'||!availableIds.has(taxi.id)||taxi.shiftParked||
-    taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
-   if(configuredDepots.some(d=>meters(d.position,taxi.position)<=12000))continue;
+    taxi.restStopId||taxi.deliveryUntil||taxi.refillRequested||
+    energyPercent(taxi)<=10)continue;
+   let nearestDepot:typeof configuredDepots[number]|undefined;
+   let closestMetres=Infinity;
+   for(const depot of configuredDepots){
+    const distance=meters(taxi.position,depot.position);
+    if(distance<closestMetres){closestMetres=distance;nearestDepot=depot;}
+   }
+   if(nearestDepot&&closestMetres<=5200){
+    depotTaxiCounts.set(nearestDepot.id,(depotTaxiCounts.get(nearestDepot.id)??0)+1);
+    continue;
+   }
+   // No new depot is created. Roaming demand follows the real taxi
+   // position after drop-off, grouped into a few geographic regions.
    const zone='roaming:'+Math.floor(taxi.position[0]*10)+':'+
     Math.floor(taxi.position[1]*10);
    const active=roamingRegions.get(zone);
    if(active)active.available++;
-   else roamingRegions.set(zone,{
-    id:zone,position:taxi.position,available:1,
-   });
+   else roamingRegions.set(zone,{id:zone,position:taxi.position,available:1});
   }
+  const regionalOrigins:PassengerDepotRegion[]=configuredDepots.map(depot=>({
+   id:depot.id,position:depot.position,
+   available:depotTaxiCounts.get(depot.id)??0,
+  }));
   const regionStates=regionalPassengerDemand(
    [...regionalOrigins,...roamingRegions.values()],queue,passengerLastSelectedDepot);
   const passengerLocalStops=new Map<string,number>();
