@@ -1023,6 +1023,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(probes>=1)break;
     if(vehicle.kind!=='explorer'||vehicle.status!=='PAUSED'||
      !vehicle.shiftParked||vehicle.ferryTrip||vehicle.recoveryPending||
+     vehicle.scheduledShiftParked||vehicle.restStopId||vehicle.restUntilGameMs!==undefined||vehicle.pauseAtHome||
      vehicle.refillRequested||vehicle.serviceDestination||
      vehicle.refillDestination||(vehicle.deliveryUntil&&vehicle.deliveryUntil>now)||
      energyPercent(vehicle)<=15)continue;
@@ -1089,17 +1090,20 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Only wake auto-parked explorers when eligible roads are undiscovered.
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i],parked=autoParkedExplorers.get(t.id);
-    if(t.kind!=='explorer'||t.ferryTrip||t.status!=='PAUSED')continue;
+    if(t.kind!=='explorer'||t.ferryTrip||t.status!=='PAUSED'||
+       t.scheduledShiftParked||t.restStopId||t.restUntilGameMs!==undefined||t.pauseAtHome)continue;
      // Older saves retain shiftParked without the worker-only autoPark map.
      // Recover only at-home explorers with no operational rest/service/refuel obligation.
      const legacyParked=!parked&&t.shiftParked;
      if(!parked&&!legacyParked)continue;
      // Only active operational obligations keep a parked explorer paused.
-     // Saved restStopId and expired timers do not imply an ongoing break.
+     // Scheduled and manually requested parking/rest are excluded above.
      if((t.deliveryUntil&&t.deliveryUntil>now)||t.refillRequested||t.serviceDestination||t.refillDestination||t.recoveryPending||energyPercent(t)<=10)continue;
      if(parked&&parked.roads===seenRoadIds.size&&parked.explored===explored.size)continue;
     let available=false;
-    for(const id of discoveryRoads(t)){if(!explored.has(id)){available=true;break;}}
+    // Wake for ANY newly reachable road type, not just the old preferred
+    // specialist class. The shared planner will verify legal connectivity.
+    for(const id of allExplorableRoads){if(!explored.has(id)){available=true;break;}}
     if(!available)continue;
     taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,restStopId:undefined,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     autoParkedExplorers.delete(t.id);autoParkReactivations++;
