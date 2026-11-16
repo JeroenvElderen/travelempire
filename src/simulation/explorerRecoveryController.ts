@@ -7,7 +7,8 @@ import {meters,type Point,type RoadGraph,type Taxi} from './taxi';
 type ActiveExplorer=Pick<Taxi,'kind'|'status'|'position'|'path'|'edgeIds'|'leg'|
  'distanceIntoLeg'|'scoutingRuns'|'deliveryUntil'|'refillRequested'|
  'refillDestination'|'serviceDestination'|'serviceUntil'|'refillUntil'|
- 'recoveryPending'|'ferryTrip'|'shiftParked'|'restStopId'>;
+ 'recoveryPending'|'ferryTrip'|'shiftParked'|'restStopId'|
+ 'explorerRole'|'discoveryEdgeIds'|'escapeTransitEdgeIds'>;
 export type ExplorerRouteHealth=
  {state:'valid';reason:'connected-directed-route'}|
  {state:'waiting-for-tiles';reason:'saved-route-tiles-loading';edgeId:string}|
@@ -73,10 +74,8 @@ export function evaluateExplorerRoute(
   !Number.isInteger(vehicle.leg)||vehicle.leg<0||
   vehicle.leg>=vehicle.edgeIds.length)
   return {state:'invalid',reason:'route-shape'};
- const assigned=new Set(vehicle.kind==='explorer'?(
-  'discoveryEdgeIds' in vehicle?(vehicle as Taxi).discoveryEdgeIds??[]:[]):[]);
- const escape=new Set('escapeTransitEdgeIds' in vehicle?
-  (vehicle as Taxi).escapeTransitEdgeIds??[]:[]);
+ const assigned=new Set(vehicle.discoveryEdgeIds??[]);
+ const escape=new Set(vehicle.escapeTransitEdgeIds??[]);
  for(let i=vehicle.leg;i<vehicle.edgeIds.length;i++){
   const id=vehicle.edgeIds[i];
   if(!knownRoadIds.has(id)||!roadEndpoints.has(id))
@@ -129,7 +128,7 @@ export function explorerFerryEligible(
   !vehicle.refillRequested&&!vehicle.refillDestination&&!vehicle.serviceDestination&&
   !(vehicle.deliveryUntil&&vehicle.deliveryUntil>now)&&
   energy>15&&!!origin&&origin===proof.origin&&
-  proof.role===(vehicle as Taxi).explorerRole&&
+  proof.role===vehicle.explorerRole&&
   proof.roadCount===roadCount&&proof.discoveredCount===discoveredCount&&
   now-proof.at>=0&&now-proof.at<=120000;
 }
