@@ -19,6 +19,7 @@ import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
+import {isTaxiDispatchMode,type TaxiDispatchMode} from './simulation/taxiDispatchStrategy';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
 import {legacyFreightEligible,planConstructionFreight,retrofitLegacyProjectFreight} from './constructionLogistics';
 import { useEffect, useMemo, useState, startTransition } from "react";
@@ -431,6 +432,24 @@ export default function App(){
  // Preserve existing specialists, progress and discovered roads.
  const universalFleet=(loaded:FleetState):FleetState=>loaded;
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
+ const [taxiDispatchMode,setTaxiDispatchMode]=useState<TaxiDispatchMode>(()=>{
+  try{const saved=company?.id?localStorage.getItem('travelempire.taxi.dispatch.v1.'+company.id):null;
+   return isTaxiDispatchMode(saved)?saved:'balanced';}catch{return 'balanced';}
+ });
+ const taxiDispatchModeRef=useRef(taxiDispatchMode);taxiDispatchModeRef.current=taxiDispatchMode;
+ useEffect(()=>{
+  let saved:string|null=null;
+  try{if(company?.id)saved=localStorage.getItem('travelempire.taxi.dispatch.v1.'+company.id);}
+  catch{/* preferences are optional if private browsing disallows storage */}
+  const next=isTaxiDispatchMode(saved)?saved:'balanced';
+  taxiDispatchModeRef.current=next;setTaxiDispatchMode(next);
+ },[company?.id]);
+ const changeTaxiDispatchMode=(mode:TaxiDispatchMode)=>{
+  taxiDispatchModeRef.current=mode;setTaxiDispatchMode(mode);
+  try{if(companyRef.current?.id)
+   localStorage.setItem('travelempire.taxi.dispatch.v1.'+companyRef.current.id,mode);
+  }catch{/* preferences remain active in memory */}
+ };
  const [explorerTelemetry,setExplorerTelemetry]=useState<ExplorerOperationsSnapshot|null>(null);
  const [explorerHistory,setExplorerHistory]=useState<ExplorerRecoveryEvent[]>([]);
  const explorerHistoryRef=useRef<ExplorerRecoveryEvent[]>([]);
@@ -834,14 +853,14 @@ export default function App(){
      if(pool)diagnostic('dispatch:explorer-planner-pool',
       `workers=${pool.workers} busy=${pool.busy} pending=${pool.pending} results=${pool.results} vehicles=${JSON.stringify(pool.vehicles.map(v=>({id:v.id,role:v.role,outcome:v.result,routeMs:Math.round(v.ms),queueMs:Math.round(v.queueMs),waiting:v.waiting})))}`);
     }
-    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;regionalCreated:number;intercityCreated:number;longTripRouteChecks:number;activeRegional:number;activeIntercity:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
+    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{mode?:TaxiDispatchMode;unprofitableSkips?:number;profitableAssignments?:number;estimatedContribution?:number;allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;regionalCreated:number;intercityCreated:number;longTripRouteChecks:number;activeRegional:number;activeIntercity:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
     if(taxiPerf){
      const idleTaxis=taxiPerf.vehicles.filter(t=>t.status==='IDLE');
      const taxiSignature=JSON.stringify({queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,regional:taxiPerf.regionalCreated,intercity:taxiPerf.intercityCreated,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
      if(performance.now()-lastTaxiDispatchLogAt>12000&&
        (taxiSignature!==lastTaxiDispatchSignature||performance.now()-lastTaxiDispatchLogAt>30000)){
       lastTaxiDispatchSignature=taxiSignature;lastTaxiDispatchLogAt=performance.now();
-      diagnostic('dispatch:taxis',`allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} regionalCreated=${taxiPerf.regionalCreated} intercityCreated=${taxiPerf.intercityCreated} longSearches=${taxiPerf.longTripRouteChecks} activeLong=${taxiPerf.activeRegional+taxiPerf.activeIntercity} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
+      diagnostic('dispatch:taxis',`mode=${taxiPerf.mode??'balanced'} profitSkips=${taxiPerf.unprofitableSkips??0} expectedContribution=${(taxiPerf.estimatedContribution??0).toFixed(2)} allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} regionalCreated=${taxiPerf.regionalCreated} intercityCreated=${taxiPerf.intercityCreated} longSearches=${taxiPerf.longTripRouteChecks} activeLong=${taxiPerf.activeRegional+taxiPerf.activeIntercity} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
      }
     }
     if(perf&&perf.workerMs>150&&performance.now()-lastWorkerPerfLogAt>10000){
@@ -964,7 +983,7 @@ export default function App(){
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
-    gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
+    taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
      ...(company.depots??[]).map(d=>({id:d.id,position:[d.lng,d.lat] as [number,number]}))],
@@ -3169,6 +3188,7 @@ export default function App(){
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
   roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
   gameNow={gameClock?.epochMs??Date.now()} explorerTelemetry={explorerTelemetry}
+  taxiDispatchMode={taxiDispatchMode} onTaxiDispatchModeChange={changeTaxiDispatchMode}
   recoveryHistory={explorerHistory} onLocateExplorer={id=>{
    setVehicleFocus(previous=>({id,token:(previous?.token??0)+1}));
    go('World');
