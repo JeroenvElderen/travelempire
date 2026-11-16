@@ -105,6 +105,14 @@ export type Taxi = {
   vehicleCondition?: number;
   vehicleMileage?: number;
   operatingKm?: number;
+  /** Phase 4 measured kilometres and simulated operating time; older saves default to zero. */
+  passengerKm?:number;
+  emptyKm?:number;
+  pickupKm?:number;
+  repositionKm?:number;
+  onDutyGameSeconds?:number;
+  serviceGameSeconds?:number;
+  occupiedGameSeconds?:number;
   fuelExpense?: number;
   maintenanceExpense?: number;
   explorationExpense?: number;
@@ -145,7 +153,12 @@ export type LeaseContract={id:string;vehicleId:string;vehicleName:string;dailyPa
 export type BusinessLoan={paymentsMade?:number;vehicleId?:string;purpose?:'business'|'vehicle';id:string;principal:number;balance:number;annualRate:number;termDays:number;remainingDays:number;dailyPayment:number;accruedGameSeconds:number;secured?:boolean;missedPayments?:number;totalMissedPayments?:number;collateralRecovered?:number;};
 export type EconomyUpgrade='fuel'|'workshop'|'dispatch'|'training'|'depot-capacity';
 export type FinanceCategories={fuel:number;maintenance:number;exploration:number;payroll:number;insurance:number;overhead:number;interest:number};
-export type VehicleFinancePeriod={day:string;taxiId:string;name:string;revenue:number;expenses:number;km:number;trips:number};
+export type VehicleFinancePeriod={day:string;taxiId:string;name:string;revenue:number;expenses:number;km:number;trips:number;
+ /** Optional because older saved finance records contain only totals. */
+ passengerKm?:number;emptyKm?:number;pickupKm?:number;repositionKm?:number;
+ onDutyGameSeconds?:number;serviceGameSeconds?:number;occupiedGameSeconds?:number;
+ fuelCost?:number;maintenanceCost?:number;wageCost?:number;insuranceCost?:number;
+};
 export type FinancePeriod={day:string;revenue:number;expenses:number;trips:number;categories?:FinanceCategories};
 export type BankEntry={id:string;time:number;description:string;amount:number;account:'operating'|'savings'|'reserve';type:'transfer'|'loan'|'repayment'|'purchase'|'equity'|'corporate'};
 export type BankSettings={savings:number;reserve:number;autoSavePercent:number;minimumOperatingCash:number;lastAutoSaveDay?:string;entries:BankEntry[]};
