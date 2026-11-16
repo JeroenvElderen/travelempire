@@ -47,11 +47,7 @@ export function automaticallyStaffIdleTaxis(
  if(!free.length)return [...taxis];
  return taxis.map(taxi=>{
   if(!taxiAvailableForDriverHandover(taxi,depots,gameEpochMs)||
-   !driverSchedule(taxi,allDrivers,gameEpochMs).onDuty){
-   // Above uses negated onDuty deliberately: if on duty, no replacement.
-   if(!taxiAvailableForDriverHandover(taxi,depots,gameEpochMs)||
-      driverSchedule(taxi,allDrivers,gameEpochMs).onDuty)return taxi;
-  }
+     driverSchedule(taxi,allDrivers,gameEpochMs).onDuty)return taxi;
   const depotId=taxi.depotId??'main';
   const candidateIndex=free.findIndex(driver=>
    (driver.homeDepotId??'main')===depotId&&
