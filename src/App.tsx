@@ -834,14 +834,14 @@ export default function App(){
      if(pool)diagnostic('dispatch:explorer-planner-pool',
       `workers=${pool.workers} busy=${pool.busy} pending=${pool.pending} results=${pool.results} vehicles=${JSON.stringify(pool.vehicles.map(v=>({id:v.id,role:v.role,outcome:v.result,routeMs:Math.round(v.ms),queueMs:Math.round(v.queueMs),waiting:v.waiting})))}`);
     }
-    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
+    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;regionalCreated:number;intercityCreated:number;longTripRouteChecks:number;activeRegional:number;activeIntercity:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
     if(taxiPerf){
      const idleTaxis=taxiPerf.vehicles.filter(t=>t.status==='IDLE');
-     const taxiSignature=JSON.stringify({queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
+     const taxiSignature=JSON.stringify({queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,regional:taxiPerf.regionalCreated,intercity:taxiPerf.intercityCreated,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
      if(performance.now()-lastTaxiDispatchLogAt>12000&&
        (taxiSignature!==lastTaxiDispatchSignature||performance.now()-lastTaxiDispatchLogAt>30000)){
       lastTaxiDispatchSignature=taxiSignature;lastTaxiDispatchLogAt=performance.now();
-      diagnostic('dispatch:taxis',`allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
+      diagnostic('dispatch:taxis',`allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} regionalCreated=${taxiPerf.regionalCreated} intercityCreated=${taxiPerf.intercityCreated} longSearches=${taxiPerf.longTripRouteChecks} activeLong=${taxiPerf.activeRegional+taxiPerf.activeIntercity} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
      }
     }
     if(perf&&perf.workerMs>150&&performance.now()-lastWorkerPerfLogAt>10000){
@@ -1689,7 +1689,7 @@ export default function App(){
      if(earned){
       const tripKm=((working.jobDrivenMeters??0)+next.distanceMeters)/1000;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,
-       description:`${t.name} · passenger fare · ${tripKm.toFixed(2)} km`,
+       description:`${t.name} · ${working.jobTripType==='intercity'?'intercity ':working.jobTripType==='regional'?'regional ':''}passenger fare · ${tripKm.toFixed(2)} km`,
        amount:earned});
      }
      if(next.finished&&!duplicate)completed++;
