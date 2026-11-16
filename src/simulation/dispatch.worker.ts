@@ -824,7 +824,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const prefix=safeExplorerRoutePrefix(activeGraph,vehicle,health,roadEndpoints,explored);
     if(prefix){
      taxis[i]={...vehicle,...prefix};
-     explorerRecoveryReason.set(vehicle.id,'future-route-trimmed:legal-purple-junction');
+     // The explorer stays on its valid prefix; the next planning cycle
+     // handles the remaining frontier after it reaches the purple junction.
      explorerRecoveryReason.delete(vehicle.id);
      explorerProgressWatch.delete(vehicle.id);
      continue;
