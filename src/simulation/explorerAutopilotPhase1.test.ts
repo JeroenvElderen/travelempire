@@ -143,7 +143,7 @@ describe('Explorer Autopilot 2.0 Phase 1: directed mission validation',()=>{
  });
  it('accepts a validated mid-segment purple connector but rejects a fabricated one',()=>{
   const v=good();
-  const middle:Point=[23.0005,38];
+  const middle:Point=[23.0006,38];
   const start=resolvePurpleExplorerStart(v.graph,middle,v.discovered,new Map([
    ['purple-ab',['A','B']],['purple-bc',['B','C']]
   ]));
