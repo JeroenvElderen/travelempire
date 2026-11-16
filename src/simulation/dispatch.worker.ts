@@ -2,6 +2,7 @@ import {specialistFallbackRoles} from './explorerRoles';
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
+import {explorerWaitingForRoads} from './explorerParking';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {canRetryStalledExplorer,evaluateExplorerRoute,safeExplorerRoutePrefix,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
  type ExplorerExhaustionProof,type ExplorerProgressWatch,type ExplorerRouteHealth} from './explorerRecoveryController';
@@ -1022,11 +1023,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    let probes=0;
    for(const vehicle of taxis){
     if(probes>=1)break;
-    if(vehicle.kind!=='explorer'||vehicle.status!=='PAUSED'||
-     !vehicle.shiftParked||vehicle.ferryTrip||vehicle.recoveryPending||
-     vehicle.scheduledShiftParked||vehicle.restStopId||vehicle.restUntilGameMs!==undefined||vehicle.pauseAtHome||
-     vehicle.refillRequested||vehicle.serviceDestination||
-     vehicle.refillDestination||(vehicle.deliveryUntil&&vehicle.deliveryUntil>now)||
+    if(!explorerWaitingForRoads(vehicle)||
+     (vehicle.deliveryUntil&&vehicle.deliveryUntil>now)||
      energyPercent(vehicle)<=15)continue;
     const last=parkedProofChecks.get(vehicle.id)??0;
     if(now-last<60000)continue;
@@ -1091,8 +1089,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Only wake auto-parked explorers when eligible roads are undiscovered.
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i],parked=autoParkedExplorers.get(t.id);
-    if(t.kind!=='explorer'||t.ferryTrip||t.status!=='PAUSED'||
-       t.scheduledShiftParked||t.restStopId||t.restUntilGameMs!==undefined||t.pauseAtHome)continue;
+    if(!explorerWaitingForRoads(t))continue;
      // Older saves retain shiftParked without the worker-only autoPark map.
      // Recover only at-home explorers with no operational rest/service/refuel obligation.
      const legacyParked=!parked&&t.shiftParked;
@@ -1106,7 +1103,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // specialist class. The shared planner will verify legal connectivity.
     for(const id of classifiedRoads){if(!explored.has(id)){available=true;break;}}
     if(!available)continue;
-    taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,restStopId:undefined,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+    taxis[i]={...t,status:'IDLE',shiftParked:false,pauseAtHome:false,
+     restUntilGameMs:undefined,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     autoParkedExplorers.delete(t.id);autoParkReactivations++;
    }
    // Trim any previously assigned Explorer route at the first forbidden edge.
@@ -1906,7 +1904,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  ...(planningStats.get(t.id)??{result:'not-requested',ms:0,queueMs:0,at:0}),
  waiting:planningLastSent.has(t.id)&&planningRequests.size>0&&
   [...planningRequests.values()].some(r=>r.id===t.id)
- }))},planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,majorSearchesActive:majorSearches.size,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{recoveryEvents:explorerRecoveryEvents,active:explorerMissions.size,stalledExplorerReplans,loadedMissionPreservations,invalidMissionRecoveries,parkedExhaustionChecks,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,obsoleteReturnRecoveries,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,pauseReason:t.status==='PAUSED'?(t.deliveryUntil&&t.deliveryUntil>now?'active-rest':t.refillRequested?'refuel':t.serviceDestination?'service':t.refillDestination?'fuel-route':t.recoveryPending?'recovery':energyPercent(t)<=10?'low-energy':t.shiftParked?'parked-awaiting-roads':t.restStopId?'stale-rest-stop':'unknown'):null,planningAttempts:explorerPlanningAttempts.get(t.id)??0,planningSkipReason:explorerPlanSkipReason.get(t.id)??null,recoveryReason:explorerRecoveryReason.get(t.id)??null,savedRouteHealth:routeHealth.get(t.id)?.state??null,exhaustionProven:explorerExhaustionProof.has(t.id),singleWorkerPlanner:singleWorkerScanResult.get(t.id)??null,
+ }))},planningQueue:{phase:planningPhase,searches:planningCalls,queued:orderedExplorerIndices.length,majorSearchesActive:majorSearches.size,cursor:nextExplorerIndex,regions:regionalRoads.size,regionalLookups,regionalCandidatesExamined,negativeScoutCacheHits,negativeScoutEmptySkips,negativeScoutCacheSize:negativeScoutCache.size,regionalMissionQueueSize:regionalMissionQueues.size,regionalMissionQueueHits,regionalMissionQueueBuilds,successorNegativeCacheHits,successorNegativeCacheSize:successorNegativeCache.size,poiCooldownSkips,failedRouteCacheHits,failedRouteSearches,failedRouteCacheSize:failedRouteCache.size,regionalMissionQueueLimit:MAX_REGIONAL_MISSION_QUEUES,reachabilityCacheHits,reachabilityCacheMisses,reachabilityCacheSize:reachabilityCache.size,candidateSelectionMs:Math.round(candidateSelectionMs*10)/10,scoutRoutingMs:Math.round(scoutRoutingMs*10)/10,reachabilityChecks,reachabilitySkips,reachabilityRejected,reachabilityMs:Math.round(reachabilityMs*10)/10,prioritizedCandidates},scoutTimings:scoutTimings.filter(t=>t.ms>=10).sort((a,b)=>b.ms-a.ms).slice(0,8),extensionSkipped,idleSkipped,explorationMissions:{recoveryEvents:explorerRecoveryEvents,active:explorerMissions.size,stalledExplorerReplans,loadedMissionPreservations,invalidMissionRecoveries,parkedExhaustionChecks,pausedExplorerRecoveries,depotReturns,depotRouteFailures,autoParkReactivations,deferredDepotReturns,obsoleteReturnRecoveries,autoParked:autoParkedExplorers.size,paused:taxis.filter(t=>t.kind==='explorer'&&t.status==='PAUSED').length,idlePlans:idleMissionPlans,vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({id:t.id,role:t.explorerRole??'balanced',status:t.status,pauseReason:t.status==='PAUSED'?(t.deliveryUntil&&t.deliveryUntil>now?'active-rest':t.refillRequested?'refuel':t.serviceDestination?'service':t.refillDestination?'fuel-route':t.recoveryPending?'recovery':energyPercent(t)<=10?'low-energy':explorerWaitingForRoads(t)?'parked-awaiting-roads':t.shiftParked?'scheduled-or-location-rest':t.restStopId?'stale-rest-stop':'unknown'):null,planningAttempts:explorerPlanningAttempts.get(t.id)??0,planningSkipReason:explorerPlanSkipReason.get(t.id)??null,recoveryReason:explorerRecoveryReason.get(t.id)??null,savedRouteHealth:routeHealth.get(t.id)?.state??null,exhaustionProven:explorerExhaustionProof.has(t.id),singleWorkerPlanner:singleWorkerScanResult.get(t.id)??null,
  connectedComponent:explorerComponents.get(t.id)??null,
  startConnectivity:explorerStartIssues.get(t.id)??null,majorRoadSearch:majorRoadSearchDiagnostics.get(t.id)??null,incrementalSearch:majorSearches.has(t.id)?{visits:majorSearches.get(t.id)!.visits,frontier:majorSearches.get(t.id)!.heap.length,targets:majorSearches.get(t.id)!.entries.length,complete:majorSearches.get(t.id)!.complete}:null,idleReason:t.status==='IDLE'?(t.deliveryUntil?'rest':t.refillRequested?'refuel':energyPercent(t)<=10?'low-energy':(idleRetryAt.get(t.id)??0)>now?'retry-cooldown':(explorerSearchTier.get(t.id)??0)>0?'searching-wider':'awaiting-planning'):null,returnReason:t.status==='RETURNING'?(t.serviceDestination?'service':t.refillDestination?'refuel':t.pauseAtHome?'legacy-no-mission':t.shiftParked?'shift-or-parking':'unspecified'):null,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,ferryReady:explorerFerryEligible(t,explorerExhaustionProof.get(t.id),now,
  energyPercent(t),purpleStartNear(t.position,explored)?.node??null,
