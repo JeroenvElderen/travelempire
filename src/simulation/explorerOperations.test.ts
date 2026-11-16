@@ -85,7 +85,7 @@ describe('Explorer Autopilot phase 4 — bounded, persistent recovery history',(
  });
  it('caps history and rejects malformed records read from localStorage',()=>{
   const malformed={...event('bad',20),at:NaN};
-  const all=[...Array.from({length:100},(_,i)=>event(String(i),i+1)),malformed];
+  const all=[...Array.from({length:100},(_,i)=>event(String(i),i+1)),malformed,event('future',9e15)];
   const merged=mergeExplorerRecoveryHistory([],all,40);
   expect(merged).toHaveLength(40);
   expect(merged[0].id).toBe('99');
