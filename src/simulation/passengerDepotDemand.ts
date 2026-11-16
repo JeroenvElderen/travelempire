@@ -15,11 +15,27 @@ export class PassengerStopSpatialIndex{
  private readonly cells=new Map<string,Set<string>>();
  private readonly seen=new Set<string>();
  private readonly cellSize=0.02;
+ // Only a tiny reservoir per ~20 km region is retained, never a second
+ // full nationwide list of passenger stops on mobile Safari.
+ private readonly longCells=new Map<string,{samples:string[];seen:number}>();
+ private readonly longCellSize=0.18;
  get size(){return this.seen.size;}
- clear(){this.cells.clear();this.seen.clear();}
+ clear(){this.cells.clear();this.seen.clear();this.longCells.clear();}
  add(node:string,point:Point){
   if(this.seen.has(node))return;
   this.seen.add(node);
+  const farKey=Math.floor(point[0]/this.longCellSize)+':'+
+   Math.floor(point[1]/this.longCellSize);
+  let far=this.longCells.get(farKey);
+  if(!far){far={samples:[],seen:0};this.longCells.set(farKey,far);}
+  far.seen++;
+  if(far.samples.length<20)far.samples.push(node);
+  else{
+   // Reservoir sampling ensures newly discovered distant roads may
+   // replace earlier HQ-centric roads without growing with node count.
+   const index=Math.floor(Math.random()*far.seen);
+   if(index<far.samples.length)far.samples[index]=node;
+  }
   const key=this.cell(point[0],point[1]);
   let bucket=this.cells.get(key);
   if(!bucket){bucket=new Set();this.cells.set(key,bucket);}
@@ -50,6 +66,44 @@ export class PassengerStopSpatialIndex{
     }
    }
   return found;
+ }
+ /** Sample widely separated discovered passenger stops without visiting
+  * millions of stops or allocating a second road graph. Call infrequently:
+  * regional/intercity generation only, never each frame.
+  */
+ distant(center:Point,lookup:(node:string)=>Point|undefined,
+  minMeters:number,maxMeters:number,limit=12):string[]{
+  const samples:string[]=[];
+  let considered=0;
+  const latStep=this.longCellSize*111320;
+  for(const [key,cell] of this.longCells){
+   const [rawX,rawY]=key.split(':');
+   const x=Number(rawX),y=Number(rawY);
+   const centroid:Point=[(x+0.5)*this.longCellSize,
+    (y+0.5)*this.longCellSize];
+   const margin=latStep*1.8;
+   const approx=meters(center,centroid);
+   if(approx<minMeters-margin||approx>maxMeters+margin)continue;
+   for(const node of cell.samples){
+    const point=lookup(node);
+    if(!point)continue;
+    const actual=meters(center,point);
+    if(actual<minMeters||actual>maxMeters)continue;
+    considered++;
+    if(samples.length<limit)samples.push(node);
+    else{
+     const index=Math.floor(Math.random()*considered);
+     if(index<limit)samples[index]=node;
+    }
+   }
+  }
+  // Shuffle candidates to prevent a fixed bad island/one-way pair from
+  // consuming every bounded route attempt.
+  for(let i=samples.length-1;i>0;i--){
+   const j=Math.floor(Math.random()*(i+1));
+   [samples[i],samples[j]]=[samples[j],samples[i]];
+  }
+  return samples;
  }
 }
 
