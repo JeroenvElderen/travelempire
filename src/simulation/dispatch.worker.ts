@@ -1,5 +1,6 @@
 import {specialistFallbackRoles} from './explorerRoles';
-import {energyPercent} from './energy';
+import {energyPercent,energyRangeKm} from './energy';
+import {createLongPassengerRequest,passengerTripTypeForAttempt,sufficientPassengerRange} from './passengerJourneys';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
 import {explorerWaitingForRoads} from './explorerParking';
@@ -17,7 +18,7 @@ import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
 import {PassengerStopSpatialIndex,regionalPassengerDemand,type PassengerDepotRegion} from './passengerDepotDemand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
-import {createPassengerRequest,passengerPairKey,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,nearbyRoadNodes,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
+import {createPassengerRequest,passengerPairKey,passengerRouteMetres,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,nearbyRoadNodes,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
 let graph:RoadGraph|null=null;
 // Two independent exploration planners run outside passenger dispatch.
 // Their results are committed by this coordinator only after validating the
@@ -110,6 +111,7 @@ const parkedProofChecks=new Map<string,number>();
 let parkedExhaustionChecks=0;
 let stalledExplorerReplans=0,loadedMissionPreservations=0,invalidMissionRecoveries=0;
 let passengerRequestsCreated=0,passengerRequestsRejected=0,passengerAssignments=0,passengerRouteFailures=0;
+let passengerGenerationAttempts=0,regionalTripsCreated=0,intercityTripsCreated=0,longTripRouteChecks=0;
 const passengerCompletedByTaxi=new Map<string,number>();
 let passengerTripsCompleted=0;
 let activeRevision=0;
@@ -604,7 +606,7 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[];allowTaxiOnly?:boolean};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[];allowTaxiOnly?:boolean};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
-type Dispatch={type:'dispatch';revision:number;now:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>};
+type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
@@ -612,7 +614,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    explorerProgressWatch.clear();explorerRecoveryAttempts.clear();
    explorerRecoveryReason.clear();explorerRejectedCandidate.clear();explorerRecoveryEvents.length=0;explorerRecoveryEventSeq=0;explorerExhaustionProof.clear();parkedProofChecks.clear();parkedExhaustionChecks=0;
    stalledExplorerReplans=0;loadedMissionPreservations=0;invalidMissionRecoveries=0;
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerComponents.clear();explorerStartIssues.clear();frontierFailureCache.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerSpatialStops.clear();taxiOnlyRoadIds.clear();passengerLastSelectedDepot=null;passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerComponents.clear();explorerStartIssues.clear();frontierFailureCache.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerGenerationAttempts=0;regionalTripsCreated=0;intercityTripsCreated=0;longTripRouteChecks=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerSpatialStops.clear();taxiOnlyRoadIds.clear();passengerLastSelectedDepot=null;passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -901,7 +903,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
   const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
-  const demand=demandAt(now,passengerTaxis.length);
+  const demand=demandAt(msg.gameNow??now,passengerTaxis.length);
   const availableIds=new Set(msg.availableTaxiIds??passengerTaxis.filter(t=>t.status==='IDLE').map(t=>t.id));
   const configuredDepots=msg.depots?.length?msg.depots:[{id:'main',position:hq}];
   const regionalOrigins:PassengerDepotRegion[]=configuredDepots.map(depot=>{
@@ -915,7 +917,24 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     first.position:depot.position;
    return{id:depot.id,position,available:available.length};
   });
-  const regionStates=regionalPassengerDemand(regionalOrigins,queue,passengerLastSelectedDepot);
+  // An intercity drop-off leaves the taxi at its real destination.
+  // Offer that taxi local pickups even without a purchased depot nearby.
+  // Virtual passenger origins are small regional groups, not new depots.
+  const roamingRegions=new Map<string,PassengerDepotRegion>();
+  for(const taxi of passengerTaxis){
+   if(taxi.status!=='IDLE'||!availableIds.has(taxi.id)||taxi.shiftParked||
+    taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
+   if(configuredDepots.some(d=>meters(d.position,taxi.position)<=12000))continue;
+   const zone='roaming:'+Math.floor(taxi.position[0]*10)+':'+
+    Math.floor(taxi.position[1]*10);
+   const active=roamingRegions.get(zone);
+   if(active)active.available++;
+   else roamingRegions.set(zone,{
+    id:zone,position:taxi.position,available:1,
+   });
+  }
+  const regionStates=regionalPassengerDemand(
+   [...regionalOrigins,...roamingRegions.values()],queue,passengerLastSelectedDepot);
   const passengerLocalStops=new Map<string,number>();
   if(msg.allowMission&&queue.length<demand.queueLimit){
    for(const [pair,created] of recentPassengerPairs)
@@ -934,9 +953,26 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      node=>activeGraph.nodes.get(node),5200,1600);
     passengerLocalStops.set(region.id,localKeys.length);
     if(localKeys.length<2)continue;
-    const request=createPassengerRequest(graph,validDiscovered,hq,now,
+    // Try the intended 75/20/5 journey mix. Intercity destinations
+    // are sampled from distant already-discovered nodes across Greece.
+    // Bounded A* checks prove the *actual* directed connection, not a
+    // straight-line connection or a ferry shortcut.
+    const band=passengerTripTypeForAttempt(passengerGenerationAttempts++);
+    let request=band==='local'?null:createLongPassengerRequest(
+     activeGraph,validDiscovered,localKeys,
+     (origin,min,max,limit)=>passengerSpatialStops.distant(
+      origin,node=>activeGraph.nodes.get(node),min,max,limit),
+     band,now,demand.fareMultiplier,exclude,
+     planningPool.length===2?2:1);
+    if(band!=='local')longTripRouteChecks++;
+    // In a newly explored or island-only region, far destinations might
+    // not yet exist. Fall back to local fares rather than fabricating
+    // connections or permanently starving the passenger queue.
+    if(!request)request=createPassengerRequest(activeGraph,validDiscovered,hq,now,
      demand.fareMultiplier,new Set(localKeys),exclude);
     if(!request)continue;
+    if(request.tripType==='regional')regionalTripsCreated++;
+    else if(request.tripType==='intercity')intercityTripsCreated++;
     request.originDepotId=region.id;
     for(const pair of [passengerPairKey(request.pickup,request.dropoff),
      passengerPairKey(request.dropoff,request.pickup)])recentPassengerPairs.set(pair,now);
@@ -959,13 +995,21 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
     const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered,eligibleStops);
     if(!assigned){passengerRouteFailures++;continue;}
+    // The job must fit the real fuel/charge range, including empty
+    // approach and 15% reserve. A current on-duty roster is still
+    // required via availableTaxiIds; accepted fares are never cut short
+    // when a driver's scheduled shift ends.
+    const approachMetres=passengerRouteMetres(assigned.path);
+    if(mission.tripDistanceMeters!==undefined&&
+       !sufficientPassengerRange(energyRangeKm(taxi),approachMetres,
+        mission.tripDistanceMeters))continue;
     let etaSeconds=0;
     for(let j=0;j<assigned.edgeIds.length;j++){
      const from=nearest(activeGraph,assigned.path[j]);
      const to=nearest(activeGraph,assigned.path[j+1]);
      const edge=activeGraph.edges.get(from)?.find(e=>e.to===to&&e.id===assigned.edgeIds[j]);
      const distance=edge?.meters??meters(assigned.path[j],assigned.path[j+1]);
-     etaSeconds+=trafficTravelSeconds(distance,edge?.speedKph??50,now);
+     etaSeconds+=trafficTravelSeconds(distance,edge?.speedKph??50,msg.gameNow??now);
     }
     // Include approximate time to accelerate from a stop.
     etaSeconds+=Math.min(12,assigned.edgeIds.length*0.5+4);
