@@ -111,7 +111,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
   const valid=!!route&&check?.ok===true;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
    vehicleId:msg.vehicle.id,
-   outcome:valid?'planned':route?'rejected:'+check?.reason:
+   outcome:valid?'planned':route?'rejected:'+(check&&!check.ok?check.reason:'invalid-route'):
     decision.state==='incomplete'?'search-incomplete:'+decision.reason:decision.reason,
    discoveryTier:decision.tier,searchState:decision.state,
    taxi:valid?{...msg.vehicle,status:'EXPLORING',path:route!.path,
