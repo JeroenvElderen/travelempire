@@ -15,7 +15,7 @@ export type Taxi = {
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING' | 'PAUSED';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'REPOSITIONING' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING' | 'PAUSED';
 
   path: Point[];
   edgeIds: string[];
@@ -37,6 +37,11 @@ export type Taxi = {
   jobDrivenMeters?:number;
   /** Expected final payment including fleet/research modifiers (not yet paid). */
   jobFareTotal?:number;
+  /** Empty repositioning follows real already-discovered roads; no fare is earned. */
+  repositionTarget?:Point;
+  lastRepositionAt?:number;
+  /** Stop an empty repositioning journey at its NEXT real road junction. */
+  repositionStopPending?:boolean;
   completed: number;
   journeyEdges?: string[];
   // Last completed road approach, retained across separate assignments.
@@ -1111,6 +1116,7 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
    if(t.leg<t.path.length-1){
     t.speedKph=clamp(speedForEdge(graph,t.edgeIds[t.leg]),5,160);
    }
+   if(t.status==='REPOSITIONING'&&t.repositionStopPending)break;
   }
   if(stepSeconds<=0&&remaining>0)break;
  }
@@ -1160,6 +1166,16 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   // meter when a route exceeds its original estimated distance.
   ...(taxi.status==='TO_DROPOFF'?{jobDrivenMeters:
    Math.max(0,(taxi.jobDrivenMeters??0)+advanced.distanceMeters)}:{})};
+ // The driver has gone off duty or needs fuel. Stop at the first
+ // completed directed OSM junction, never teleport to a nearest node or
+ // continue across the network while off shift.
+ if(t.status==='REPOSITIONING'&&t.repositionStopPending&&advanced.crossed.length){
+  const stopped:Taxi={...t,status:'IDLE',path:[],edgeIds:[],leg:0,
+   distanceIntoLeg:0,speedKph:0,repositionTarget:undefined,
+   repositionStopPending:undefined,journeyEdges:[]};
+  return {taxi:stopped,earned:0,finished:false,
+   discovered:[],distanceMeters:advanced.distanceMeters};
+ }
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
@@ -1204,7 +1220,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
-  recoveryTransitOnly:undefined,jobSurgeMultiplier:undefined,
+  recoveryTransitOnly:undefined,repositionTarget:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
   jobDistanceMeters:undefined,jobTripType:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};

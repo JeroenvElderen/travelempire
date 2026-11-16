@@ -853,14 +853,14 @@ export default function App(){
      if(pool)diagnostic('dispatch:explorer-planner-pool',
       `workers=${pool.workers} busy=${pool.busy} pending=${pool.pending} results=${pool.results} vehicles=${JSON.stringify(pool.vehicles.map(v=>({id:v.id,role:v.role,outcome:v.result,routeMs:Math.round(v.ms),queueMs:Math.round(v.queueMs),waiting:v.waiting})))}`);
     }
-    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{mode?:TaxiDispatchMode;unprofitableSkips?:number;profitableAssignments?:number;estimatedContribution?:number;allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;regionalCreated:number;intercityCreated:number;longTripRouteChecks:number;activeRegional:number;activeIntercity:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
+    const taxiPerf=(message as typeof message & {perf?:{passengerDispatch?:{mode?:TaxiDispatchMode;unprofitableSkips?:number;profitableAssignments?:number;estimatedContribution?:number;repositioning?:number;repositionAttempts?:number;repositionStarts?:number;repositionRouteFailures?:number;allowMission:boolean;allowTaxiShift:boolean;queueLength:number;queueLimit:number;eligibleStops:number;created:number;requestGenerationFailures:number;assignments:number;routeFailures:number;completed:number;regionalCreated:number;intercityCreated:number;longTripRouteChecks:number;activeRegional:number;activeIntercity:number;depots?:Array<{id:string;available:number;waiting:number;limit:number;localStops:number|null}>;vehicles:Array<{id:string;status:string;idleMs:number;shiftEligible:boolean;energyPercent:number}>}}}).perf?.passengerDispatch;
     if(taxiPerf){
      const idleTaxis=taxiPerf.vehicles.filter(t=>t.status==='IDLE');
-     const taxiSignature=JSON.stringify({queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,regional:taxiPerf.regionalCreated,intercity:taxiPerf.intercityCreated,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
+     const taxiSignature=JSON.stringify({repositioning:taxiPerf.repositioning??0,repositionStarts:taxiPerf.repositionStarts??0,queue:taxiPerf.queueLength,created:taxiPerf.created,rejected:taxiPerf.requestGenerationFailures,assigned:taxiPerf.assignments,completed:taxiPerf.completed,failed:taxiPerf.routeFailures,regional:taxiPerf.regionalCreated,intercity:taxiPerf.intercityCreated,depots:taxiPerf.depots?.map(d=>[d.id,d.available,d.waiting,d.localStops]),idle:idleTaxis.map(t=>t.id)});
      if(performance.now()-lastTaxiDispatchLogAt>12000&&
        (taxiSignature!==lastTaxiDispatchSignature||performance.now()-lastTaxiDispatchLogAt>30000)){
       lastTaxiDispatchSignature=taxiSignature;lastTaxiDispatchLogAt=performance.now();
-      diagnostic('dispatch:taxis',`mode=${taxiPerf.mode??'balanced'} profitSkips=${taxiPerf.unprofitableSkips??0} expectedContribution=${(taxiPerf.estimatedContribution??0).toFixed(2)} allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} regionalCreated=${taxiPerf.regionalCreated} intercityCreated=${taxiPerf.intercityCreated} longSearches=${taxiPerf.longTripRouteChecks} activeLong=${taxiPerf.activeRegional+taxiPerf.activeIntercity} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
+      diagnostic('dispatch:taxis',`repositioning=${taxiPerf.repositioning??0} repositionStarts=${taxiPerf.repositionStarts??0} repositionRouteFailures=${taxiPerf.repositionRouteFailures??0} mode=${taxiPerf.mode??'balanced'} profitSkips=${taxiPerf.unprofitableSkips??0} expectedContribution=${(taxiPerf.estimatedContribution??0).toFixed(2)} allowMission=${taxiPerf.allowMission} allowTaxiShift=${taxiPerf.allowTaxiShift} queue=${taxiPerf.queueLength}/${taxiPerf.queueLimit} eligibleStops=${taxiPerf.eligibleStops} created=${taxiPerf.created} generationFailures=${taxiPerf.requestGenerationFailures} assignments=${taxiPerf.assignments} completed=${taxiPerf.completed} routeFailures=${taxiPerf.routeFailures} regionalCreated=${taxiPerf.regionalCreated} intercityCreated=${taxiPerf.intercityCreated} longSearches=${taxiPerf.longTripRouteChecks} activeLong=${taxiPerf.activeRegional+taxiPerf.activeIntercity} depots=${JSON.stringify(taxiPerf.depots??[])} vehicles=${JSON.stringify(taxiPerf.vehicles)}`);
      }
     }
     if(perf&&perf.workerMs>150&&performance.now()-lastWorkerPerfLogAt>10000){
@@ -1664,7 +1664,14 @@ export default function App(){
      const needsEnergy=!!delivered.refillRequested||remainingKm<=thresholdKm;
      // Passenger taxis finish their current fare; explorers turn back before they strand themselves.
      const stopExploring=needsEnergy&&delivered.status==='EXPLORING';
-     let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:delivered;
+     // An empty demand-reposition trip is not an accepted passenger fare.
+     // If its driver goes off shift or the tank needs attention, finish the
+     // current real directed road segment and stop at that node; never
+     // teleport to a nearby bridge/tunnel, never force the night shift.
+     const stopReposition=passengerTaxi&&delivered.status==='REPOSITIONING'&&
+      (!canAcceptPassengerJob(delivered,old.drivers??[],gameNow)||needsEnergy);
+     let working=stopExploring?{...delivered,status:'IDLE' as const,path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]}:
+      stopReposition?{...delivered,repositionStopPending:true}:delivered;
      if(working.status==='IDLE'&&needsEnergy&&fuelTarget&&fuelTarget.roadKm<=remainingKm*0.95&&
        (working.kind!=='explorer'||canDepartPurple(working))){
       const target=fuelTarget;

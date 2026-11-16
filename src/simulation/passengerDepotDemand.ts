@@ -67,6 +67,26 @@ export class PassengerStopSpatialIndex{
    }
   return found;
  }
+ /** Count discovered passenger stops near a hotspot without creating
+  * another array of thousands of node IDs on mobile Safari.
+  */
+ countNear(center:Point,lookup:(node:string)=>Point|undefined,
+  radiusMeters=2000,cap=120):number{
+  const dy=radiusMeters/111320;
+  const dx=dy/Math.max(.1,Math.cos(center[1]*Math.PI/180));
+  const cx=Math.floor(center[0]/this.cellSize),cy=Math.floor(center[1]/this.cellSize);
+  const rx=Math.ceil(dx/this.cellSize),ry=Math.ceil(dy/this.cellSize);
+  let count=0;
+  for(let x=cx-rx;x<=cx+rx;x++)for(let y=cy-ry;y<=cy+ry;y++)
+   for(const node of this.cells.get(x+':'+y)??[]){
+    const point=lookup(node);
+    if(point&&meters(point,center)<=radiusMeters){
+     count++;
+     if(count>=cap)return count;
+    }
+   }
+  return count;
+ }
  /** Sample widely separated discovered passenger stops without visiting
   * millions of stops or allocating a second road graph. Call infrequently:
   * regional/intercity generation only, never each frame.

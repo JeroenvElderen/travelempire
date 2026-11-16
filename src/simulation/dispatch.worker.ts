@@ -1,6 +1,10 @@
 import {specialistFallbackRoles} from './explorerRoles';
 import {energyPercent,energyRangeKm} from './energy';
 import {createLongPassengerRequest,passengerTripTypeForAttempt,sufficientPassengerRange} from './passengerJourneys';
+import {taxiCanStartRepositioning,taxiCanCompleteRepositioning,
+ taxiRepositionWorthwhile,taxiDemandScore,TAXI_REPOSITION_GLOBAL_INTERVAL_MS,
+ TAXI_REPOSITION_MIN_METRES,TAXI_REPOSITION_MAX_METRES
+} from './taxiRepositioning';
 import {estimateTaxiJob,taxiDispatchScore,taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode} from './taxiDispatchStrategy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
@@ -113,6 +117,8 @@ let parkedExhaustionChecks=0;
 let stalledExplorerReplans=0,loadedMissionPreservations=0,invalidMissionRecoveries=0;
 let passengerRequestsCreated=0,passengerRequestsRejected=0,passengerAssignments=0,passengerRouteFailures=0;
 let passengerGenerationAttempts=0,regionalTripsCreated=0,intercityTripsCreated=0,longTripRouteChecks=0;
+let taxiRepositionAttempts=0,taxiRepositionSuccesses=0,taxiRepositionRouteFailures=0,lastTaxiRepositionAt=-Infinity;
+const taxiRepositionRetryAt=new Map<string,number>();
 let taxiUnprofitableSkips=0,taxiProfitableAssignments=0,taxiEstimatedContribution=0;
 const passengerCompletedByTaxi=new Map<string,number>();
 let passengerTripsCompleted=0;
@@ -616,7 +622,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    explorerProgressWatch.clear();explorerRecoveryAttempts.clear();
    explorerRecoveryReason.clear();explorerRejectedCandidate.clear();explorerRecoveryEvents.length=0;explorerRecoveryEventSeq=0;explorerExhaustionProof.clear();parkedProofChecks.clear();parkedExhaustionChecks=0;
    stalledExplorerReplans=0;loadedMissionPreservations=0;invalidMissionRecoveries=0;
-   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerComponents.clear();explorerStartIssues.clear();frontierFailureCache.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerGenerationAttempts=0;regionalTripsCreated=0;intercityTripsCreated=0;longTripRouteChecks=0;taxiUnprofitableSkips=0;taxiProfitableAssignments=0;taxiEstimatedContribution=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerSpatialStops.clear();taxiOnlyRoadIds.clear();passengerLastSelectedDepot=null;passengerIndexRebuilds=0;passengerIndexAdded=0;
+   idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerComponents.clear();explorerStartIssues.clear();frontierFailureCache.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerGenerationAttempts=0;regionalTripsCreated=0;intercityTripsCreated=0;longTripRouteChecks=0;taxiUnprofitableSkips=0;taxiProfitableAssignments=0;taxiEstimatedContribution=0;taxiRepositionAttempts=0;taxiRepositionSuccesses=0;taxiRepositionRouteFailures=0;lastTaxiRepositionAt=-Infinity;taxiRepositionRetryAt.clear();passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerSpatialStops.clear();taxiOnlyRoadIds.clear();passengerLastSelectedDepot=null;passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
    // iOS runs exploration in this existing worker to avoid two more
    // 200k+ segment graph clones and Safari memory-pressure reloads.
@@ -1044,6 +1050,79 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    else pending.push(mission);
   }
   queue.length=0;queue.push(...pending);
+  // Phase 2: idle-only empty repositioning after EVERY waiting passenger had
+  // first chance at an on-duty vehicle. This is intentionally separate from
+  // passenger requests: no fake fare, no free teleport and no speed modifier.
+  // At most one taxi starts moving per 25 seconds, with at most two extra
+  // bounded real discovered-road routing searches per dispatch.
+  if(msg.allowTaxiShift&&now-lastTaxiRepositionAt>=TAXI_REPOSITION_GLOBAL_INTERVAL_MS&&
+     activeGraph.nodeKeys.length&&eligibleStops.size>1){
+   const available=taxis.filter(t=>taxiCanStartRepositioning(t,now,
+    availableIds.has(t.id),idleSince.get(t.id)??now)&&
+    now-(taxiRepositionRetryAt.get(t.id)??-Infinity)>=60000)
+    .sort((a,b)=>(idleSince.get(a.id)??now)-(idleSince.get(b.id)??now));
+   const vehicle=available[0];
+   if(vehicle){
+    taxiRepositionAttempts++;
+    // Throttle failed hotspot routing too: never rescan each Safari tick.
+    lastTaxiRepositionAt=now;
+    taxiRepositionRetryAt.set(vehicle.id,now);
+    const from=nearest(activeGraph,vehicle.position);
+    const fromPoint=activeGraph.nodes.get(from);
+    // No nearest-node snap across bridges or from a mid-road position.
+    if(fromPoint&&meters(vehicle.position,fromPoint)<=8&&eligibleStops.has(from)){
+     const lookup=(node:string)=>activeGraph.nodes.get(node);
+     const demandAtPoint=(point:Point)=>({
+      localStops:passengerSpatialStops.countNear(point,lookup,2000,120),
+      pendingPickups:queue.filter(q=>meters(point,q.pickup)<=2200).length,
+      competingIdleTaxis:taxis.filter(t=>t.id!==vehicle.id&&
+       (!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&
+       availableIds.has(t.id)&&meters(t.position,point)<=2500).length,
+     });
+     const baseline=demandAtPoint(vehicle.position);
+     const waitTargets=queue.filter(q=>
+      meters(vehicle.position,q.pickup)>=TAXI_REPOSITION_MIN_METRES&&
+      meters(vehicle.position,q.pickup)<=TAXI_REPOSITION_MAX_METRES*1.2)
+      .map(q=>nearest(activeGraph,q.pickup)).filter(k=>eligibleStops.has(k));
+     const otherTargets=passengerSpatialStops.distant(vehicle.position,lookup,
+      TAXI_REPOSITION_MIN_METRES,TAXI_REPOSITION_MAX_METRES*1.2,12);
+     const ranked=[...new Set([...waitTargets.slice(0,6),...otherTargets])].slice(0,18)
+      .map(node=>{
+       const point=lookup(node);
+       if(!point)return null;
+       const straight=meters(vehicle.position,point);
+       const signal=demandAtPoint(point);
+       if(!taxiRepositionWorthwhile(baseline,signal,straight))return null;
+       return {node,point,advantage:taxiDemandScore(signal)-taxiDemandScore(baseline)-
+        straight/1000*1.4};
+      }).filter((x):x is {node:string;point:Point;advantage:number}=>!!x)
+      .sort((a,b)=>b.advantage-a.advantage).slice(0,3);
+     let routesTried=0;
+     for(const target of ranked){
+      if(routesTried++>=2)break;
+      // A map coordinate alone is not connectivity evidence. Reuse the
+      // existing directed road-only routing and never board a ferry.
+      const route=routeDiscovered(activeGraph,from,target.node,
+       validDiscovered,'',false,12000);
+      if(!route||route.edgeIds.length===0){
+       taxiRepositionRouteFailures++;continue;
+      }
+      const distance=passengerRouteMetres(route.path);
+      if(!taxiCanCompleteRepositioning(vehicle,distance))continue;
+      const index=taxis.findIndex(t=>t.id===vehicle.id);
+      if(index<0)break;
+      taxis[index]={...vehicle,status:'REPOSITIONING',
+       path:route.path,edgeIds:route.edgeIds,leg:0,distanceIntoLeg:0,
+       speedKph:0,journeyEdges:[],pickup:undefined,dropoff:undefined,
+       fare:0,repositionTarget:target.point,lastRepositionAt:now};
+      idleSince.delete(vehicle.id);
+      taxiRepositionSuccesses++;
+      lastTaxiRepositionAt=now;
+      break;
+     }
+    }
+   }
+  }
   const passengerMs=performance.now()-passengerStarted;
   const scoutStarted=performance.now();
   let successorPlansThisDispatch=0;
@@ -1993,6 +2072,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  connectedComponent:explorerComponents.get(t.id)??null,
  startConnectivity:explorerStartIssues.get(t.id)??null,majorRoadSearch:majorRoadSearchDiagnostics.get(t.id)??null,incrementalSearch:majorSearches.has(t.id)?{visits:majorSearches.get(t.id)!.visits,frontier:majorSearches.get(t.id)!.heap.length,targets:majorSearches.get(t.id)!.entries.length,complete:majorSearches.get(t.id)!.complete}:null,idleReason:t.status==='IDLE'?(t.deliveryUntil?'rest':t.refillRequested?'refuel':energyPercent(t)<=10?'low-energy':(idleRetryAt.get(t.id)??0)>now?'retry-cooldown':(explorerSearchTier.get(t.id)??0)>0?'searching-wider':'awaiting-planning'):null,returnReason:t.status==='RETURNING'?(t.serviceDestination?'service':t.refillDestination?'refuel':t.pauseAtHome?'legacy-no-mission':t.shiftParked?'shift-or-parking':'unspecified'):null,missionId:explorerMissions.get(t.id)?.id??null,remainingEdges:Math.max(0,t.edgeIds.length-t.leg),idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,ferryReady:explorerFerryEligible(t,explorerExhaustionProof.get(t.id),now,
  energyPercent(t),purpleStartNear(t.position,explored)?.node??null,
- seenRoadIds.size,explored.size)&&!majorSearches.has(t.id),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerDispatch:{mode:taxiMode,unprofitableSkips:taxiUnprofitableSkips,profitableAssignments:taxiProfitableAssignments,estimatedContribution:Math.round(taxiEstimatedContribution*100)/100,allowMission:msg.allowMission,allowTaxiShift:msg.allowTaxiShift,queueLength:queue.length,queueLimit:demand.queueLimit,eligibleStops:eligibleStops.size,depots:regionStates.map(region=>({id:region.id,available:region.available,waiting:region.waiting,limit:region.maxWaiting,localStops:passengerLocalStops.get(region.id)??null})),created:passengerRequestsCreated,requestGenerationFailures:passengerRequestsRejected,assignments:passengerAssignments,routeFailures:passengerRouteFailures,completed:passengerTripsCompleted,regionalCreated:regionalTripsCreated,intercityCreated:intercityTripsCreated,longTripRouteChecks,activeRegional:taxis.filter(t=>t.jobTripType==='regional'&&(t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')).length,activeIntercity:taxis.filter(t=>t.jobTripType==='intercity'&&(t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')).length,vehicles:taxis.filter(t=>!t.kind||t.kind==='taxi').map(t=>({id:t.id,status:t.status,idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,shiftEligible:msg.allowTaxiShift&&(!msg.availableTaxiIds||msg.availableTaxiIds.includes(t.id)),energyPercent:Math.round(energyPercent(t))}))},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
+ seenRoadIds.size,explored.size)&&!majorSearches.has(t.id),retryInMs:Math.max(0,(idleRetryAt.get(t.id)??0)-now),lastPlannedAt:missionPlannedAt.get(t.id)??null})),created:missionCounter,completed:completedExplorerMissions,interrupted:interruptedExplorerMissions,successorsPlanned:successorPlansThisDispatch,lastPlannedAt:Math.max(0,...missionPlannedAt.values())},passengerDispatch:{repositioning:taxis.filter(t=>t.status==='REPOSITIONING').length,repositionAttempts:taxiRepositionAttempts,repositionStarts:taxiRepositionSuccesses,repositionRouteFailures:taxiRepositionRouteFailures,mode:taxiMode,unprofitableSkips:taxiUnprofitableSkips,profitableAssignments:taxiProfitableAssignments,estimatedContribution:Math.round(taxiEstimatedContribution*100)/100,allowMission:msg.allowMission,allowTaxiShift:msg.allowTaxiShift,queueLength:queue.length,queueLimit:demand.queueLimit,eligibleStops:eligibleStops.size,depots:regionStates.map(region=>({id:region.id,available:region.available,waiting:region.waiting,limit:region.maxWaiting,localStops:passengerLocalStops.get(region.id)??null})),created:passengerRequestsCreated,requestGenerationFailures:passengerRequestsRejected,assignments:passengerAssignments,routeFailures:passengerRouteFailures,completed:passengerTripsCompleted,regionalCreated:regionalTripsCreated,intercityCreated:intercityTripsCreated,longTripRouteChecks,activeRegional:taxis.filter(t=>t.jobTripType==='regional'&&(t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')).length,activeIntercity:taxis.filter(t=>t.jobTripType==='intercity'&&(t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')).length,vehicles:taxis.filter(t=>!t.kind||t.kind==='taxi').map(t=>({id:t.id,status:t.status,idleMs:t.status==='IDLE'?Math.max(0,now-(idleSince.get(t.id)??now)):0,shiftEligible:msg.allowTaxiShift&&(!msg.availableTaxiIds||msg.availableTaxiIds.includes(t.id)),energyPercent:Math.round(energyPercent(t))}))},passengerIndex:{roads:passengerIndexedRoads.size,stops:passengerEligibleStops.size,rebuilds:passengerIndexRebuilds,added:passengerIndexAdded},discoveryIndex:{updates:discoveryIndexUpdates,rebuilds:discoveryIndexRebuilds,lastMs:Math.round(discoveryIndexLastMs*10)/10,revealedNodes:revealedNodesIndex.size,connectedNodes:connectedFrontierIndex.size,completionRoads:completionRoadsIndex.size,poiRoads:poiRoadsIndex.size}}});
  }catch(error){self.postMessage({type:'error',revision:activeRevision,error:String(error)});}
 };
