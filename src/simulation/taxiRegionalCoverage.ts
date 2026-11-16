@@ -72,5 +72,5 @@ export function taxiHasDutyForCoverage(
 ):boolean{
  return Number.isFinite(routeRealSeconds)&&routeRealSeconds>0&&
   Number.isFinite(remainingDutyGameSeconds)&&remainingDutyGameSeconds>0&&
-  Math.min(routeRealSeconds*gameSpeed+1800,2*3600)<=remainingDutyGameSeconds;
+  Math.min(routeRealSeconds*gameSpeed+1800,1.5*3600)<=remainingDutyGameSeconds;
 }
