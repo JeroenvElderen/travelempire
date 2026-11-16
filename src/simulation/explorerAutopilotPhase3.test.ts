@@ -116,6 +116,68 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
   expect(health.state).toBe('waiting-for-tiles');
   expect(safeExplorerRoutePrefix(g,t,health,endpoints(),new Set(['purple']))).toBeNull();
  });
+ it('does not falsely reject reverse driving on a two-way OSM micro-segment',()=>{
+  // 1.7 metre roads are shorter than the normal 3 m endpoint coordinate
+  // tolerance. Both directions may match geometry, but the next segment
+  // resolves the ONLY legal node continuation (B -> A -> C).
+  const microA:Point=[23,38],microB:Point=[23.000019,38];
+  const microC:Point=[23,38.00015];
+  const g:RoadGraph={nodes:new Map([['A',microA],['B',microB],['C',microC]]),
+   nodeKeys:['A','B','C'],edges:new Map([
+    ['A',[{id:'tiny',to:'B',meters:1.7,speedKph:20,highway:'residential'},
+      {id:'red',to:'C',meters:16.7,speedKph:20,highway:'residential'}]],
+    ['B',[{id:'tiny',to:'A',meters:1.7,speedKph:20,highway:'residential'}]],
+    ['C',[]],
+   ])};
+  const actual={...explorer(),position:microB,
+   path:[microB,microA,microC],edgeIds:['tiny','red'],
+   discoveryEdgeIds:['red'],leg:0,distanceIntoLeg:0};
+  const checked=evaluateExplorerRoute(g,actual,new Set(['tiny','red']),
+   new Map([['tiny',['A','B']],['red',['A','C']]]),new Set(['tiny']));
+  expect(checked).toEqual({state:'valid',reason:'connected-directed-route'});
+ });
+ it('still rejects a micro-road joining an unrelated overlapping bridge node',()=>{
+  const microA:Point=[23,38],microB:Point=[23.000019,38];
+  const microC:Point=[23,38.00015];
+  const g:RoadGraph={nodes:new Map([
+   ['A',microA],['B',microB],['upperA',microA],['C',microC]]),
+   nodeKeys:['A','B','upperA','C'],edges:new Map([
+    ['A',[{id:'tiny',to:'B',meters:1.7,speedKph:20,highway:'residential'}]],
+    ['B',[{id:'tiny',to:'A',meters:1.7,speedKph:20,highway:'residential'}]],
+    ['upperA',[{id:'bridge',to:'C',meters:16.7,speedKph:20,
+      highway:'residential',layer:1,bridge:true}]],
+    ['C',[]],
+   ])};
+  const disconnected={...explorer(),position:microB,
+   path:[microB,microA,microC],edgeIds:['tiny','bridge'],
+   discoveryEdgeIds:['bridge'],leg:0,distanceIntoLeg:0};
+  const checked=evaluateExplorerRoute(g,disconnected,new Set(['tiny','bridge']),
+   new Map([['tiny',['A','B']],['bridge',['upperA','C']]]),new Set(['tiny']));
+  expect(checked).toEqual({state:'invalid',
+   reason:'one-way-or-layer-disconnected',edgeId:'bridge',leg:1});
+ });
+ it('rejects reverse travel on a genuinely one-way micro-segment',()=>{
+  const microA:Point=[23,38],microB:Point=[23.000019,38];
+  const g:RoadGraph={nodes:new Map([['A',microA],['B',microB]]),
+   nodeKeys:['A','B'],edges:new Map([
+    ['A',[{id:'tiny',to:'B',meters:1.7,speedKph:20,highway:'residential'}]],
+    ['B',[]],
+   ])};
+  // Single leg B -> A is too short to prove reversal geometrically;
+  // it is disallowed at admission using the exact directed start and node.
+  // This saved-route check cannot infer the starting OSM node from an
+  // ambiguous coordinate alone; the safest policy is to hold any terminal
+  // node ambiguity until directed-route admission has verified it.
+  const reverse={...explorer(),position:microB,path:[microB,microA],
+   edgeIds:['tiny'],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0};
+  expect(evaluateExplorerRoute(g,reverse,new Set(['tiny']),
+   new Map([['tiny',['A','B']]]),new Set(['tiny'])).state).toBe('valid');
+  // A subsequent return to node A cannot be forged by an incompatible edge.
+  const continued={...reverse,path:[microB,microA,microB],
+   edgeIds:['tiny','tiny']};
+  expect(evaluateExplorerRoute(g,continued,new Set(['tiny']),
+   new Map([['tiny',['A','B']]]),new Set(['tiny'])).state).toBe('invalid');
+ });
  it('accepts a verified mid-segment start only when the segment points downstream',()=>{
   const midpoint:Point=[23.0005,38];
   const t={...explorer(),position:midpoint,
