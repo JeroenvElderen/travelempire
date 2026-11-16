@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {CalendarDays,UsersRound,BarChart3,UserRound,CarFront,Clock3,Search,ChevronDown,ChevronUp,Route,Wallet,SlidersHorizontal} from 'lucide-react';
 import type {FleetState,Taxi,DriverRecord} from '../simulation/taxi';
 import type {DriverShiftPatch} from '../simulation/driverSchedule';
+import {DRIVER_TRIP_PREFERENCES,normalDriverTripPreference,type DriverTripPreference} from '../simulation/driverTripPreferences';
 import type {GameClock} from '../simulation/gameClock';
 import {driverLevel} from '../simulation/taxi';
 import {driverSchedule,clockLabel} from '../simulation/driverSchedule';
@@ -11,7 +12,8 @@ type Props={fleet:FleetState;gameClock:GameClock|null;
  depots?:{id:string;name:string}[];
  onScheduleChange?:(driverId:string,patch:DriverShiftPatch)=>void;
  onHomeDepotChange?:(driverId:string,depotId:string)=>void;
- onAutoAssignmentChange?:(enabled:boolean)=>void;};
+ onAutoAssignmentChange?:(enabled:boolean)=>void;
+ onTripPreferenceChange?:(driverId:string,preference:DriverTripPreference)=>void;};
 type Schedule=ReturnType<typeof driverSchedule>;
 type ShiftPhase='duty'|'break'|'off';
 type ShiftSegment={from:number;to:number;kind:'duty'|'break'};
@@ -53,11 +55,12 @@ function Timeline({schedule,driverName}:{schedule:Schedule;driverName:string}){
   <div className="drivers-timeline-hours"><span>00:00</span><span>12:00</span><span>24:00</span></div>
  </div>;
 }
-function DriverSettings({driver,depots,onScheduleChange,onHomeDepotChange}:{
+function DriverSettings({driver,depots,onScheduleChange,onHomeDepotChange,onTripPreferenceChange}:{
  driver:DriverRecord;
  depots:{id:string;name:string}[];
  onScheduleChange?:Props['onScheduleChange'];
  onHomeDepotChange?:Props['onHomeDepotChange'];
+ onTripPreferenceChange?:Props['onTripPreferenceChange'];
 }){
  const duration=driver.shiftDurationHours??12;
  const breakOptions=[2,3,4,5,5.75,6,7,8,9,10].filter(h=>h+.5<=duration);
@@ -92,6 +95,17 @@ function DriverSettings({driver,depots,onScheduleChange,onHomeDepotChange}:{
     {breakOptions.map(h=><option key={h} value={h}>{h}h into shift</option>)}
    </select>
   </label>
+  <label>Preferred journeys
+   <select aria-label={'Preferred journey distance for '+driver.name}
+    value={normalDriverTripPreference(driver.tripPreference)}
+    onChange={e=>onTripPreferenceChange?.(driver.id,e.target.value as DriverTripPreference)}
+    disabled={!onTripPreferenceChange}>
+    {DRIVER_TRIP_PREFERENCES.map(value=><option key={value} value={value}>{
+     value==='flexible'?'Flexible · any distance':
+     value==='local'?'Local trips':value==='regional'?'Regional trips':'Long-distance trips'
+    }</option>)}
+   </select>
+  </label>
   <label>Home depot
    <select aria-label={'Home depot for '+driver.name}
     value={driver.homeDepotId??'main'} disabled={!onHomeDepotChange}
@@ -101,7 +115,7 @@ function DriverSettings({driver,depots,onScheduleChange,onHomeDepotChange}:{
   </label>
  </div>;
 }
-export default function DriversPanel({fleet,gameClock,depots=[],onScheduleChange,onHomeDepotChange,onAutoAssignmentChange}:Props){
+export default function DriversPanel({fleet,gameClock,depots=[],onScheduleChange,onHomeDepotChange,onAutoAssignmentChange,onTripPreferenceChange}:Props){
  const [view,setView]=useState<'schedules'|'team'|'performance'>('schedules');
  const [filter,setFilter]=useState<'all'|'duty'|'break'|'off'>('all');
  const [query,setQuery]=useState('');
@@ -178,7 +192,8 @@ export default function DriversPanel({fleet,gameClock,depots=[],onScheduleChange
         <div><small>Distance</small><strong>{(driver?.distanceKm??0).toFixed(1)} km</strong></div>
         <div><small>Revenue</small><strong>{money(driver?.revenueGenerated??0)}</strong></div>
         {driver&&<DriverSettings driver={driver} depots={depots}
-          onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}/>}
+          onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}
+          onTripPreferenceChange={onTripPreferenceChange}/>}
        </div>}
       </article>;
      })}
@@ -202,7 +217,8 @@ export default function DriversPanel({fleet,gameClock,depots=[],onScheduleChange
       </button>
      </div>
      {teamExpanded===driver.id&&<DriverSettings driver={driver} depots={depots}
-      onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}/>}
+      onScheduleChange={onScheduleChange} onHomeDepotChange={onHomeDepotChange}
+          onTripPreferenceChange={onTripPreferenceChange}/>}
     </article>;
    })}
    {!roster.length&&<p className="drivers-empty">No drivers employed yet. Hire drivers in Fleet → Drivers.</p>}
