@@ -32,7 +32,7 @@ export function mergeExplorerRecoveryHistory(
   typeof event.vehicleId==='string'&&event.vehicleId.length<=110&&
   typeof event.description==='string'&&event.description.length<=180&&
   ['stalled-replan','invalid-route','directed-return','ferry-ready','ferry-booked'].includes(event.kind)&&
-  Number.isFinite(event.at)&&event.at>0)
+  Number.isFinite(event.at)&&event.at>0&&event.at<=8.64e15)
   .sort((a,b)=>b.at-a.at);
  return sorted.filter(event=>{
   if(seen.has(event.id))return false;
