@@ -963,7 +963,8 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
-   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,taxis,queue,discovered,
+   dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
+    gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
      ...(company.depots??[]).map(d=>({id:d.id,position:[d.lng,d.lat] as [number,number]}))],
