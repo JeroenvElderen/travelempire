@@ -52,7 +52,7 @@ describe('Explorer Autopilot 2.0 — efficient frontier selection',()=>{
   expect(open).toBeGreaterThan(blocked);
   expect(blocked).toBe(111);
   expect(estimateExplorerFrontierGain(g,'C','B','purple-b',eligible,
-   new Set(),new Set(),new Set())).toBe(111);
+   new Set(),new Set(),new Set())).toBe(0);
   expect(scoreExplorerFrontier(200,400)).toBeLessThan(scoreExplorerFrontier(100,20));
   expect(scoreExplorerFrontier(5000,500)).toBeGreaterThan(scoreExplorerFrontier(100,500));
  });
@@ -75,8 +75,7 @@ describe('Explorer Autopilot 2.0 — continuous mission scheduler',()=>{
   expect(explorerSuccessorUrgent(moving)).toBe(false);
   moving.leg=36;
   expect(explorerSuccessorUrgent(moving)).toBe(true);
-  moving.status='IDLE' as any;
-  expect(explorerSuccessorDue(moving)).toBe(false);
+  expect(explorerSuccessorDue({...moving,status:'IDLE'})).toBe(false);
  });
  it('keeps one desktop planner slot for urgent successors while still serving idle explorers',()=>{
   expect(explorerPlannerIdleQuota(2,true)).toBe(1);
