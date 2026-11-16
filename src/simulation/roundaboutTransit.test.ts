@@ -47,7 +47,9 @@ describe('strict roundabout and one-way return exceptions',()=>{
   const result=planReachableExplorerRoad(testNetwork(),'P',purple,
    discovered,new Set(),new Set(),'secondary');
   expect(result.route?.edgeIds).toEqual([
-   'purple-in','ring-ab','ring-bc','secondary-target'
+   'purple-in','ring-ab','ring-bc','secondary-target',
+   // A one-way mission must also drive back to purple before completion.
+   'secondary-target','purple-out'
   ]);
   expect(result.route?.discoveryEdgeIds).toEqual(['secondary-target']);
   expect(result.route?.escapeTransitEdgeIds).toEqual(['ring-ab','ring-bc']);
