@@ -94,7 +94,8 @@ describe('Taxi Phase 2 — demand-aware positioning',()=>{
  });
  it('counts local discovered stops without a second all-Greece graph copy',()=>{
   const {nodes}=make(),index=new PassengerStopSpatialIndex();
-  for(const [id,p] of nodes)index.add(id,p);
+  // The overlapping upper-level node is not a discovered passenger stop.
+  for(const [id,p] of nodes)if(id!=='upperC')index.add(id,p);
   expect(index.countNear(point(23),key=>nodes.get(key),500)).toBe(3);
   expect(index.countNear(point(23),key=>nodes.get(key),500,2)).toBe(2);
   expect(index.countNear(point(23),key=>nodes.get(key),100)).toBe(1);
