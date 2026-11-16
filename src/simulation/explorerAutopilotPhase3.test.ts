@@ -168,7 +168,7 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
   const reverse={...explorer(),position:microB,path:[microB,microA],
    edgeIds:['tiny'],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0};
   expect(evaluateExplorerRoute(g,reverse,new Set(['tiny']),
-   new Map([['tiny',['A','B']]]),new Set(['tiny'])).toEqual({
+   new Map([['tiny',['A','B']]]),new Set(['tiny']))).toEqual({
     state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:'tiny',leg:0,
    });
   // A subsequent return to node A cannot be forged by an incompatible edge.
