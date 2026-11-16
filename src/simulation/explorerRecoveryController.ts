@@ -96,15 +96,19 @@ export function evaluateExplorerRoute(
   const a=graph.nodes.get(endpoints[0]),b=graph.nodes.get(endpoints[1]);
   if(!a||!b)return {state:'waiting-for-tiles',reason:'saved-route-tiles-loading',edgeId:id};
   const forward=meters(vehicle.path[i],a)<=3&&meters(vehicle.path[i+1],b)<=3&&
+   routeProgressesForward(vehicle.path[i],vehicle.path[i+1],a,b)&&
    (graph.edges.get(endpoints[0])??[]).some(e=>e.id===id&&e.to===endpoints[1]&&e.meters>0);
   const backward=meters(vehicle.path[i],b)<=3&&meters(vehicle.path[i+1],a)<=3&&
+   routeProgressesForward(vehicle.path[i],vehicle.path[i+1],b,a)&&
    (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0);
   // An explorer can start midway along its first saved road segment.
   // Its legal downstream endpoint still must match a real directed edge.
   const midsegment=i===0&&vehicle.leg===0&&(
    meters(vehicle.path[i+1],b)<=3&&forwardAlongSegment(vehicle.path[i],a,b)&&
+    routeProgressesForward(vehicle.path[i],vehicle.path[i+1],a,b)&&
     (graph.edges.get(endpoints[0])??[]).some(e=>e.id===id&&e.to===endpoints[1]&&e.meters>0)||
    meters(vehicle.path[i+1],a)<=3&&forwardAlongSegment(vehicle.path[i],b,a)&&
+    routeProgressesForward(vehicle.path[i],vehicle.path[i+1],b,a)&&
     (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0));
   if(!forward&&!backward&&!midsegment)
    return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id,leg:i};
@@ -121,9 +125,11 @@ export function evaluateExplorerRoute(
   // downstream OSM node remains authoritative for every subsequent leg.
   if(midsegment&&i===0&&vehicle.leg===0){
    const midForward=meters(vehicle.path[i+1],b)<=3&&
+    routeProgressesForward(vehicle.path[i],vehicle.path[i+1],a,b)&&
     forwardAlongSegment(vehicle.path[i],a,b)&&
     (graph.edges.get(endpoints[0])??[]).some(e=>e.id===id&&e.to===endpoints[1]&&e.meters>0);
    const midBackward=meters(vehicle.path[i+1],a)<=3&&
+    routeProgressesForward(vehicle.path[i],vehicle.path[i+1],b,a)&&
     forwardAlongSegment(vehicle.path[i],b,a)&&
     (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0);
    if(midForward)candidates.push([true,endpoints[0],endpoints[1]]);
@@ -171,6 +177,17 @@ export function safeExplorerRoutePrefix(
  return {path:vehicle.path.slice(0,stop+1),edgeIds,
   discoveryEdgeIds:(vehicle.discoveryEdgeIds??[]).filter(id=>planned.has(id)),
   escapeTransitEdgeIds:(vehicle.escapeTransitEdgeIds??[]).filter(id=>planned.has(id))};
+}
+
+/** A coordinate tolerance larger than a short road must not make a
+ * one-way reverse turn appear legal. Require positive longitudinal progress
+ * in the edge's actual OSM direction, even for sub-3-metre segments.
+ */
+function routeProgressesForward(start:Point,end:Point,from:Point,to:Point):boolean{
+ const cos=Math.max(.1,Math.cos(from[1]*Math.PI/180));
+ const dx=(end[0]-start[0])*cos,dy=end[1]-start[1];
+ const ex=(to[0]-from[0])*cos,ey=to[1]-from[1];
+ return dx*ex+dy*ey>0;
 }
 
 function forwardAlongSegment(position:Point,from:Point,to:Point):boolean{
