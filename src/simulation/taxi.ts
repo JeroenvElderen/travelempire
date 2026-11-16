@@ -31,6 +31,8 @@ export type Taxi = {
   jobSurgeMultiplier?:number;
   /** Current passenger job's routed distance, excluding driving to pickup. */
   jobDistanceMeters?:number;
+  /** Local/regional/intercity quoted distance class, retained until drop-off. */
+  jobTripType?:'local'|'regional'|'intercity';
   /** Actual passenger-carrying distance travelled on the current job. */
   jobDrivenMeters?:number;
   /** Expected final payment including fleet/research modifiers (not yet paid). */
@@ -610,7 +612,7 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
  const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
  for(let attempt=0;attempt<35;attempt++){
   const from=eligible[Math.floor(Math.random()*eligible.length)];
-  const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=200&&d<=4000;});
+  const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=350&&d<=9500;});
   if(!near.length)continue;
   const to=near[Math.floor(Math.random()*near.length)];
   if(recentPairs.has(passengerPairKey(graph.nodes.get(from)!,graph.nodes.get(to)!)))continue;
@@ -630,7 +632,7 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   for(const to of eligible){
    if(to===from||recentPairs.has(passengerPairKey(origin,graph.nodes.get(to)!)))continue;
    const direct=meters(origin,graph.nodes.get(to)!);
-   if(direct<150||direct>4000)continue;
+   if(direct<350||direct>9500)continue;
    const trip=routeDiscovered(graph,from,to,explored);
    if(!trip)continue;
    const distance=passengerRouteMetres(trip.path);
@@ -660,7 +662,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,activeJobId:mission.id,jobSurgeMultiplier:mission.fareMultiplier??1,
-  jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
+  jobTripType:mission.tripType??'local',jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
@@ -1161,12 +1163,16 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  if(t.leg<t.path.length-1)return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
  if(t.status==='TO_PICKUP'&&t.dropoff){
   const from=nearest(graph,t.position),to=nearest(graph,t.dropoff);
-  const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,t.lastRoadTo===from?t.lastRoadFrom??'':''):route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
+  const next=_discoveredRoads?routeDiscovered(graph,from,to,_discoveredRoads,
+   t.lastRoadTo===from?t.lastRoadFrom??'':'',false,
+   t.jobTripType==='regional'||t.jobTripType==='intercity'?100000:150000):
+   route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
    const actualMeters=next.path.slice(1).reduce((sum,p,i)=>sum+meters(next.path[i],p),0);
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0,
     fare:pricedPassengerFare(actualMeters,t.jobSurgeMultiplier??1),
-    jobDistanceMeters:actualMeters,jobDrivenMeters:0,jobFareTotal:undefined};
+    jobDistanceMeters:actualMeters,jobDrivenMeters:0,jobFareTotal:undefined,
+    jobTripType:actualMeters>=50000?'intercity':actualMeters>=10000?'regional':'local'};
    return{taxi:t,earned:0,finished:false,discovered:newlyDiscovered,distanceMeters:advanced.distanceMeters};
   }
  }
@@ -1199,7 +1205,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
   recoveryTransitOnly:undefined,jobSurgeMultiplier:undefined,
-  jobDistanceMeters:undefined,
+  jobDistanceMeters:undefined,jobTripType:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
  return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
