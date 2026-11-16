@@ -39,6 +39,8 @@ export type Taxi = {
   jobFareTotal?:number;
   /** Empty repositioning follows real already-discovered roads; no fare is earned. */
   repositionTarget?:Point;
+  /** Targeted geographic service cell when serving uncovered regions. */
+  coverageRegionId?:string;
   lastRepositionAt?:number;
   /** Stop an empty repositioning journey at its NEXT real road junction. */
   repositionStopPending?:boolean;
@@ -146,6 +148,8 @@ export type DriverRecord={
  shiftBreakAtHour?:number;
  /** Drivers only rotate automatically into idle vehicles at their home depot. */
  homeDepotId?:string;
+ /** Preferred trip category for automatic passenger job matching. */
+ tripPreference?:'flexible'|'local'|'regional'|'long-distance';
 };
 export const driverLevel=(trips:number)=>trips>=100?'Expert':trips>=30?'Experienced':trips>=10?'Developing':'Novice';
 export const driverSkill=(trips:number)=>Math.min(5,1+Math.floor(Math.max(0,trips)/25));
@@ -1195,7 +1199,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  // continue across the network while off shift.
  if(t.status==='REPOSITIONING'&&t.repositionStopPending&&advanced.crossed.length){
   const stopped:Taxi={...t,status:'IDLE',path:[],edgeIds:[],leg:0,
-   distanceIntoLeg:0,speedKph:0,repositionTarget:undefined,
+   distanceIntoLeg:0,speedKph:0,repositionTarget:undefined,coverageRegionId:undefined,
    repositionStopPending:undefined,journeyEdges:[]};
   return {taxi:stopped,earned:0,finished:false,
    discovered:[],distanceMeters:advanced.distanceMeters};
@@ -1244,7 +1248,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
-  recoveryTransitOnly:undefined,repositionTarget:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
+  recoveryTransitOnly:undefined,repositionTarget:undefined,coverageRegionId:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
   jobDistanceMeters:undefined,jobTripType:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};

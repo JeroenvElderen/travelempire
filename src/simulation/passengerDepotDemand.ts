@@ -11,6 +11,13 @@ export type PassengerRegionStatus={
 
 /** This index contains only legal passenger-stop nodes, added as OSM road
  * packages and discovery IDs arrive. It does not duplicate the road graph. */
+/** Discovered-road service opportunity, not guaranteed passenger demand.
+ * Legal connectivity and actual passenger assignment are checked later.
+ */
+export type DiscoveredServiceRegion={
+ id:string;node:string;position:Point;discoveredStops:number;
+};
+
 export class PassengerStopSpatialIndex{
  private readonly cells=new Map<string,Set<string>>();
  private readonly seen=new Set<string>();
@@ -19,8 +26,11 @@ export class PassengerStopSpatialIndex{
  // full nationwide list of passenger stops on mobile Safari.
  private readonly longCells=new Map<string,{samples:string[];seen:number}>();
  private readonly longCellSize=0.18;
+ // One tiny reservoir per ~5-km geographic service cell.
+ private readonly coverageCells=new Map<string,{samples:string[];seen:number}>();
+ private readonly coverageCellSize=0.055;
  get size(){return this.seen.size;}
- clear(){this.cells.clear();this.seen.clear();this.longCells.clear();}
+ clear(){this.cells.clear();this.seen.clear();this.longCells.clear();this.coverageCells.clear();}
  add(node:string,point:Point){
   if(this.seen.has(node))return;
   this.seen.add(node);
@@ -35,6 +45,16 @@ export class PassengerStopSpatialIndex{
    // replace earlier HQ-centric roads without growing with node count.
    const index=Math.floor(Math.random()*far.seen);
    if(index<far.samples.length)far.samples[index]=node;
+  }
+  const coverageKey=Math.floor(point[0]/this.coverageCellSize)+':'+
+   Math.floor(point[1]/this.coverageCellSize);
+  let coverage=this.coverageCells.get(coverageKey);
+  if(!coverage){coverage={samples:[],seen:0};this.coverageCells.set(coverageKey,coverage);}
+  coverage.seen++;
+  if(coverage.samples.length<6)coverage.samples.push(node);
+  else{
+   const index=Math.floor(Math.random()*coverage.seen);
+   if(index<coverage.samples.length)coverage.samples[index]=node;
   }
   const key=this.cell(point[0],point[1]);
   let bucket=this.cells.get(key);
@@ -66,6 +86,32 @@ export class PassengerStopSpatialIndex{
     }
    }
   return found;
+ }
+ /** Sparse discovery-based region candidates, including places without any
+  * taxis or depots. Scans coarse cells rather than millions of OSM nodes.
+  */
+ coverageRegions(origin:Point,lookup:(node:string)=>Point|undefined,
+  minMetres=6500,maxMetres=65000,limit=32):DiscoveredServiceRegion[]{
+  const candidates:DiscoveredServiceRegion[]=[];
+  for(const [id,cell] of this.coverageCells){
+   if(cell.seen<8)continue;
+   let selected:string|undefined,position:Point|undefined;
+   for(const node of cell.samples){
+    const point=lookup(node);
+    if(!point)continue;
+    const distance=meters(origin,point);
+    if(distance>=minMetres&&distance<=maxMetres){
+     selected=node;position=point;break;
+    }
+   }
+   if(selected&&position)candidates.push({
+    id:'coverage:'+id,node:selected,position,discoveredStops:cell.seen,
+   });
+  }
+  candidates.sort((a,b)=>
+   b.discoveredStops-a.discoveredStops||
+   meters(origin,a.position)-meters(origin,b.position));
+  return candidates.slice(0,Math.max(0,limit));
  }
  /** Count discovered passenger stops near a hotspot without creating
   * another array of thousands of node IDs on mobile Safari.
