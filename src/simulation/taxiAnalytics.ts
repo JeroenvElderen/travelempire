@@ -3,7 +3,7 @@
  * amounts; activity measures are observed distance/time, not route estimates.
  * Never changes dispatch decisions, graph copies or driving physics.
  */
-import type {FleetState,Taxi,VehicleFinancePeriod} from './taxi';
+import type {FleetState,Taxi} from './taxi';
 
 export type TaxiAnalyticsRange='today'|'7d'|'30d';
 export const TAXI_ANALYTICS_RANGES:readonly TaxiAnalyticsRange[]=['today','7d','30d'];
