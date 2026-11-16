@@ -25,6 +25,14 @@ export const EXPLORER_ROLE_ORDER:readonly SpecialistExplorerRole[]=[
  'highway','primary','secondary','residential','poi',
 ];
 
+/** These current specialists must never fall through to the legacy regional
+ * route generator, which does not enforce every directed-return condition.
+ * Legacy role aliases remain available for migrated saves.
+ */
+export function usesAutopilotRoutePlanner(role:Taxi['explorerRole']):boolean{
+ return role!==undefined&&(EXPLORER_ROLE_ORDER as readonly string[]).includes(role);
+}
+
 /** Always resolve preferred class first. Lower-class fallback is allowed only
  * after BOTH connected-frontier and directed-exit search report a conclusive
  * failure. iOS may delay the more expensive fallback, but must not downgrade
