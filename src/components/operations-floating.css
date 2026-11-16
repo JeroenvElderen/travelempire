@@ -484,3 +484,234 @@
   padding:7px 4px;font-size:10px;
  }
 }
+
+
+/* Taxi Autopilot Phase 4 — native-feeling mobile operations analytics. */
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-analytics{
+ --taxi-green:#7ee2bd;--taxi-orange:#f3bd8b;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-period{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+ padding:4px;border-radius:12px;border:1px solid var(--ops-line);
+ background:rgba(22,32,56,.66);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-period button{
+ min-height:34px;border:1px solid transparent;border-radius:9px;
+ background:transparent;color:var(--ops-muted);
+ font-size:11px;font-weight:750;cursor:pointer;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-period button.active{
+ background:var(--ops-soft);border-color:rgba(197,160,242,.53);
+ color:var(--ops-fg);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse article{
+ display:flex;flex-direction:column;gap:5px;min-width:0;
+ padding:12px 11px;border:1px solid var(--ops-line);
+ border-radius:14px;background:var(--ops-card);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse small{
+ font-size:10px;color:var(--ops-muted);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse strong{
+ font-size:clamp(15px,4vw,21px);line-height:1.18;
+ font-variant-numeric:tabular-nums;color:var(--ops-fg);
+ overflow-wrap:anywhere;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse span{
+ color:var(--ops-subtle);font-size:10px;line-height:1.45;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-analytics .positive{color:var(--taxi-green)}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-analytics .negative{color:var(--taxi-orange)}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-data-note{
+ padding:0 2px;font-size:10px;line-height:1.55;
+ color:var(--ops-subtle);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-trend .ops-card-head>small{
+ font-size:10px;color:var(--ops-subtle);white-space:nowrap;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-legend{
+ display:flex;gap:15px;align-items:center;color:var(--ops-muted);font-size:10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-legend span{
+ display:inline-flex;align-items:center;gap:6px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-legend i{
+ display:block;width:9px;height:9px;border-radius:3px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-legend .revenue,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-bars .revenue{
+ background:var(--taxi-green);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-legend .expenses,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-bars .expenses{
+ background:var(--taxi-orange);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart{
+ display:flex;align-items:stretch;gap:3px;min-height:117px;
+ overflow:hidden;padding:3px 0 0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-column{
+ display:flex;align-items:center;flex-direction:column;
+ min-width:0;flex:1;gap:5px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-bars{
+ display:flex;align-items:flex-end;justify-content:center;
+ flex:1;gap:2px;min-height:90px;width:100%;
+ border-bottom:1px solid var(--ops-line);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-bars span{
+ flex:1;max-width:14px;min-width:0;
+ border-radius:3px 3px 0 0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-column small{
+ font-size:9px;white-space:nowrap;color:var(--ops-subtle);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-column:nth-child(even) small{
+ display:none;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-costs .ops-card-head>strong{
+ color:var(--ops-fg);font-size:13px;
+ font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-cost-row{
+ display:flex;flex-direction:column;gap:5px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-cost-row>div:first-child{
+ display:flex;align-items:center;justify-content:space-between;gap:8px;
+ color:var(--ops-muted);font-size:11px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-cost-row strong{
+ color:var(--ops-fg);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-cost-meter{
+ height:5px;border-radius:4px;background:rgba(214,205,242,.15);overflow:hidden;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-cost-meter>span{
+ display:block;height:100%;border-radius:4px;background:var(--ops-accent);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-muted{
+ color:var(--ops-subtle);font-size:10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depots,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicles{
+ display:flex;flex-direction:column;gap:9px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle{
+ display:flex;flex-direction:column;gap:8px;
+ padding:13px;border:1px solid var(--ops-line);
+ border-radius:14px;background:var(--ops-card);
+ min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-head,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head{
+ display:flex;align-items:flex-start;justify-content:space-between;
+ gap:8px;min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-head>span,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head strong{
+ display:flex;align-items:center;gap:7px;min-width:0;
+ color:var(--ops-fg);font-size:12px;font-weight:750;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-head svg,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head svg{
+ flex-shrink:0;color:var(--ops-accent);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-head small{
+ font-size:10px;color:var(--ops-muted);white-space:nowrap;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot>strong{
+ font-size:19px;line-height:1.2;font-variant-numeric:tabular-nums;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot>span{
+ color:var(--ops-muted);font-size:10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-details,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:8px;padding-top:10px;border-top:1px solid var(--ops-line);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-details>div,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics>div{
+ display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-details small,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics small{
+ color:var(--ops-muted);font-size:10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-depot-details strong,
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics strong{
+ font-size:12px;color:var(--ops-fg);overflow-wrap:anywhere;
+ font-variant-numeric:tabular-nums;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-controls{
+ display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-controls label{
+ display:flex;flex-direction:column;gap:4px;color:var(--ops-muted);
+ font-size:10px;min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-controls select{
+ width:100%;min-width:0;min-height:37px;
+ padding:7px 8px;border:1px solid var(--ops-line);
+ border-radius:10px;background:#17233f;color:var(--ops-fg);
+ font:inherit;font-size:11px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head>div{
+ display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head small{
+ color:var(--ops-muted);font-size:10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-head>span{
+ font-size:15px;font-weight:750;font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics{
+ grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-expand{
+ display:flex;align-items:center;justify-content:space-between;
+ min-height:35px;padding:6px 10px;
+ border:1px solid var(--ops-line);border-radius:9px;
+ color:var(--ops-fg);background:var(--ops-soft);
+ cursor:pointer;font-size:11px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-inspector{
+ display:grid;gap:9px;padding-top:10px;
+ border-top:1px solid var(--ops-line);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-inspector>div{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ color:var(--ops-muted);font-size:11px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-inspector span{
+ display:inline-flex;align-items:center;gap:6px;min-width:0;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-inspector svg{
+ flex-shrink:0;color:var(--ops-accent);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-inspector strong{
+ color:var(--ops-fg);font-size:11px;
+ font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+@media(max-width:440px){
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-tabs button{
+  padding:0 4px;gap:4px;
+ }
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-tabs button span{font-size:11px}
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-vehicle-metrics{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+ }
+}
+@media(max-width:360px){
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-chart-column:nth-child(odd) small{
+  display:none;
+ }
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-taxi-pulse article{
+  padding:10px 9px;
+ }
+}
