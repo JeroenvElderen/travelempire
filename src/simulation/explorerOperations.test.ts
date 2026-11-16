@@ -78,6 +78,17 @@ describe('Explorer Autopilot phase 4 — actual status precedence',()=>{
   expect(explorerSituation(idle,{...oldRecovery,planningSkipReason:'legacy-candidate-rejected:one-way-or-layer-disconnected'}).detail)
    .toContain('Rejected an unsafe candidate');
  });
+ it('does not show stale Checking Route after a newly assigned healthy mission',()=>{
+  const actual=explorerSituation(explorer(),{...live(),
+   recoveryReason:'invalid-saved-route:one-way-or-layer-disconnected',
+   savedRouteHealth:null,planningSkipReason:'single-worker:planned'});
+  expect(actual.label).toBe('Exploring');
+  const returning=explorerSituation({...explorer(),status:'RETURNING'},
+   {...live(),recoveryReason:'invalid-saved-route:one-way-or-layer-disconnected',
+    savedRouteHealth:null,planningSkipReason:'directed-component-recovery'});
+  expect(returning.label).toBe('Returning');
+  expect(reasonForExplorer('autopilot-planner-queued')).toContain('shared road planner');
+ });
  it('translates internal failure codes without exposing raw epoch or node IDs',()=>{
   expect(reasonForExplorer('preferred-class-search-incomplete:search-node-budget'))
    .toContain('preferred class');

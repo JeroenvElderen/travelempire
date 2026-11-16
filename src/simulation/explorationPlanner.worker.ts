@@ -15,6 +15,7 @@ type Message=Init|Roads|Plan;
 let revision=0;
 let graph:RoadGraph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
 const known=new Set<string>();
+const allExplorableRoads=new Set<string>();
 const roadClasses=new Map<string,Set<string>>();
 const roadEndpoints=new Map<string,[string,string]>();
 const ROAD_CELL=0.02;
@@ -30,7 +31,7 @@ function nearbyRoads(point:Point):Set<string>{
 let roadCount=0;
 const roleAllowed=(role:Taxi['explorerRole']):Set<string>=>{
  if(role==='poi')return roadClasses.get('poi')??new Set<string>();
- if(!role||role==='balanced')return known;
+ if(!role||role==='balanced')return allExplorableRoads;
  let result=roadClasses.get(role);
  if(result)return result;
  result=new Set<string>();
@@ -42,6 +43,7 @@ function addRoads(roads:RoadSegment[]):void{
  for(const road of roads){
   if(known.has(road.id)||road.coordinates?.length!==2||!Number.isFinite(road.length)||road.length<=0)continue;
   known.add(road.id);roadCount++;
+  if(!road.taxiOnly)allExplorableRoads.add(road.id);
   roadEndpoints.set(road.id,[String(road.a),String(road.b)]);
   const [fromPoint,toPoint]=road.coordinates;
   for(const p of [fromPoint,toPoint,
@@ -74,7 +76,7 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  if(msg.type==='init'){
   revision=msg.revision;
   graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};
-  known.clear();roadClasses.clear();roadEndpoints.clear();localRoads.clear();roadCount=0;
+  known.clear();allExplorableRoads.clear();roadClasses.clear();roadEndpoints.clear();localRoads.clear();roadCount=0;
   self.postMessage({type:'ready',revision,roadCount});return;
  }
  if(msg.revision!==revision)return;
@@ -96,10 +98,10 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  try{
   const reserved=new Set(msg.reservedRoads),reservedDest=new Set(msg.reservedDestinations);
   const role=msg.vehicle.explorerRole;
-  // Exactly the same specialist decision policy as iPhone's inline worker.
-  // The preferred class is never downgraded after an incomplete search.
+  // Shared with iPhone: priority class first, then any safe drivable road
+  // when no useful priority mission was found in the bounded search.
   const decision=planSpecialistMission(graph,currentNode,explored,role,
-   tier=>new Set(roleAllowed(tier)),reserved,reservedDest,{fallbackAllowed:true});
+   tier=>roleAllowed(tier),reserved,reservedDest,{fallbackAllowed:true});
   const candidate=decision.route;
   const route=candidate?prependPurpleStart(candidate,origin):null;
   const eligible=roleAllowed(decision.tier);

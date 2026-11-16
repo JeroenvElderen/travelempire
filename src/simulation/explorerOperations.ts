@@ -58,7 +58,7 @@ export function explorerSituation(taxi:Taxi,live?:ExplorerLiveVehicle):ExplorerS
  if(live?.recoveryReason?.startsWith('stalled-'))
   return {label:'Recovering',detail:reasonForExplorer(live.recoveryReason),tone:'attention'};
  if(live?.recoveryReason?.startsWith('invalid-saved-route')&&
-  (live.savedRouteHealth==='invalid'||!live.planningSkipReason))
+  live.savedRouteHealth==='invalid'&&taxi.status==='EXPLORING')
   return {label:'Checking route',detail:'Saved route rejected; looking for a legal departure',tone:'attention'};
  if(taxi.status==='EXPLORING'){
   const successor=live?.planningSkipReason==='pool-successor'||live?.planningSkipReason?.startsWith('successor-');
@@ -94,6 +94,8 @@ export function reasonForExplorer(raw:string|null|undefined):string{
   return 'Road search is incomplete; retry required';
  if(raw.startsWith('pool-successor'))return 'Planning the next mission';
  if(raw.startsWith('pool-search'))return 'Finding a connected route';
+ if(raw==='autopilot-planner-queued')return 'Waiting for the shared road planner';
+ if(raw.startsWith('shared-route-validator-rejected'))return 'A route was unsafe; trying another connected road';
  if(raw.startsWith('pool-not-ready')||raw.startsWith('pool-search-timeout'))return 'Planner restarting';
  if(raw.startsWith('preferred-class-search-incomplete')||raw.startsWith('successor-incomplete'))
   return 'Checking more roads of the preferred class';
