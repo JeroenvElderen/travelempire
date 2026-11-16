@@ -36,6 +36,8 @@ import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
+import {mergeExplorerRecoveryHistory,type ExplorerOperationsSnapshot,
+ type ExplorerRecoveryEvent,type ExplorerLiveVehicle} from './simulation/explorerOperations';
 import FinancePanel from "./components/FinancePanel";
 import FrontendConsole from "./components/FrontendConsole";
 import FinancialConsole from "./components/FinancialConsole";
@@ -111,9 +113,10 @@ type Page=(typeof navigation)[number]['name'];
 type RecoveryJob={truck:Taxi;targetId:string;phase:'pickup'|'transport'|'return';destination:[number,number];purpose:'fuel'|'service'|'depot';atDepot:boolean};
 
 export default function App(){
- const [page,setPage]=useState<Page>('World');const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);const [placingHotelLand,setPlacingHotelLand]=useState(false);
+ const [page,setPage]=useState<Page>('World');const pageRef=useRef(page);pageRef.current=page;const [consoleOpen,setConsoleOpen]=useState(false);const [consoleMode,setConsoleMode]=useState<'general'|'financial'>('general');const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{try{return localStorage.getItem('travelempire.sidebar.collapsed')==='true'}catch{return false}});useEffect(()=>{try{localStorage.setItem('travelempire.sidebar.collapsed',String(sidebarCollapsed))}catch{}},[sidebarCollapsed]);const [drawerOpen,setDrawerOpen]=useState(false);const [layersToggleToken,setLayersToggleToken]=useState(0);const [company,setCompany]=useState<Company|null>(loadCompany);const [selection,setSelection]=useState<Headquarters|null>(null);const [selecting,setSelecting]=useState(false);const [showSetup,setShowSetup]=useState(false);const [placingDepot,setPlacingDepot]=useState(false);const [placingHotelLand,setPlacingHotelLand]=useState(false);
  const [hotelPlotSize,setHotelPlotSize]=useState<HotelPlotSize>({width:24,height:16});
  const [freightFocus,setFreightFocus]=useState<{id:string;token:number}|null>(null);
+ const [vehicleFocus,setVehicleFocus]=useState<{id:string;token:number}|null>(null);
  const [constructionFerryNetwork,setConstructionFerryNetwork]=useState<FerryNetwork|null>(null);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
  const gameClockRef=useRef(gameClock);gameClockRef.current=gameClock;
@@ -427,6 +430,31 @@ export default function App(){
  // Preserve existing specialists, progress and discovered roads.
  const universalFleet=(loaded:FleetState):FleetState=>loaded;
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
+ const [explorerTelemetry,setExplorerTelemetry]=useState<ExplorerOperationsSnapshot|null>(null);
+ const [explorerHistory,setExplorerHistory]=useState<ExplorerRecoveryEvent[]>([]);
+ const explorerHistoryRef=useRef<ExplorerRecoveryEvent[]>([]);
+ const lastExplorerTelemetryAtRef=useRef(0);
+ // Keep per-company history small: never persist per-frame telemetry, road
+ // arrays or coordinates. This survives iPhone Safari page reloads.
+ useEffect(()=>{
+  setExplorerTelemetry(null);
+  let loaded:ExplorerRecoveryEvent[]=[];
+  if(company?.id)try{
+   const saved=JSON.parse(localStorage.getItem('travelempire.explorer.events.v1.'+company.id)??'[]');
+   if(Array.isArray(saved))loaded=mergeExplorerRecoveryHistory([],saved);
+  }catch{/* corrupt/older localStorage entries are safely ignored */}
+  explorerHistoryRef.current=loaded;setExplorerHistory(loaded);
+ },[company?.id]);
+ const captureExplorerEvents=(events:readonly ExplorerRecoveryEvent[])=>{
+  const id=companyRef.current?.id;
+  if(!id||events.length===0)return;
+  const current=explorerHistoryRef.current;
+  const merged=mergeExplorerRecoveryHistory(current,events);
+  if(merged.length===current.length&&merged.every((event,index)=>event.id===current[index].id))return;
+  explorerHistoryRef.current=merged;setExplorerHistory(merged);
+  try{localStorage.setItem('travelempire.explorer.events.v1.'+id,JSON.stringify(merged))}
+  catch{/* Safari storage may be unavailable; UI history remains in memory */}
+ };
  const companyRef=useRef(company);companyRef.current=company;
  const pendingCashRef=useRef(0);
  useEffect(()=>{
@@ -764,6 +792,37 @@ export default function App(){
    if(message.type==='result'){
     const ferryPerf=(message as typeof message & {perf?:{explorationMissions?:{vehicles:Array<{id:string;ferryReady?:boolean;idleMs:number}>}}}).perf?.explorationMissions?.vehicles;
     if(ferryPerf)for(const item of ferryPerf)ferryReadinessRef.current.set(item.id,{ready:!!item.ferryReady,idleMs:item.idleMs});
+    // Phase 4 keeps only a thin 2-second live snapshot while Operations is
+    // open. The complete routing graph and planner search states stay in
+    // the worker; recovery events are persisted only when a new event occurs.
+    const explorerOps=(message as typeof message & {perf?:{
+     explorationMissions?:{vehicles:ExplorerLiveVehicle[];recoveryEvents:ExplorerRecoveryEvent[]},
+     plannerPool?:{workers:number;busy:number}
+    }}).perf;
+    if(explorerOps?.explorationMissions){
+     captureExplorerEvents(explorerOps.explorationMissions.recoveryEvents??[]);
+     const stamped=performance.now();
+     if(pageRef.current==='Operations'&&
+      stamped-lastExplorerTelemetryAtRef.current>=1800){
+      lastExplorerTelemetryAtRef.current=stamped;
+      setExplorerTelemetry({
+       at:Date.now(),
+       vehicles:explorerOps.explorationMissions.vehicles.map(v=>({
+        id:v.id,role:v.role,status:v.status,missionId:v.missionId,
+        remainingEdges:v.remainingEdges,idleMs:v.idleMs,
+        retryInMs:v.retryInMs,lastPlannedAt:v.lastPlannedAt,
+        ferryReady:v.ferryReady,planningAttempts:v.planningAttempts,
+        planningSkipReason:v.planningSkipReason,
+        recoveryReason:v.recoveryReason,savedRouteHealth:v.savedRouteHealth,
+        exhaustionProven:v.exhaustionProven,pauseReason:v.pauseReason,
+        idleReason:v.idleReason,returnReason:v.returnReason,
+        singleWorkerPlanner:v.singleWorkerPlanner,
+       })),
+       poolWorkers:explorerOps.plannerPool?.workers??0,
+       poolBusy:explorerOps.plannerPool?.busy??0,
+      });
+     }
+    }
     const perf=(message as typeof message & {perf?:{workerMs:number;preparationMs:number;passengerMs:number;scoutMs:number;graphNodes:number;graphRoads:number;vehicles:number;missions:number}}).perf;
     const missionPerf=(message as typeof message & {perf?:{explorationMissions?:{active:number;idlePlans:number;vehicles:Array<{id:string;role:string;status:string;missionId:number|null;remainingEdges:number;retryInMs:number;lastPlannedAt:number|null}>};scoutTimings?:Array<{vehicleId:string;role:string;ms:number;phase:string;result?:string}>}}).perf;
     if(missionPerf?.explorationMissions&&(perf?.workerMs??0)>100&&performance.now()-lastMissionPerfLogAt>12000){lastMissionPerfLogAt=performance.now();const m=missionPerf.explorationMissions;diagnostic('dispatch:missions',`active=${m.active} idlePlans=${m.idlePlans} queue=${JSON.stringify((missionPerf as typeof missionPerf & {planningQueue?:{phase:string;searches:number;queued:number;cursor:number}}).planningQueue??{})} scouts=${(missionPerf.scoutTimings??[]).map(t=>`${t.role}:${t.phase}:${t.ms}ms:${t.result??''}`).join(',')} vehicles=${JSON.stringify(m.vehicles)}`);}
@@ -2501,6 +2560,9 @@ export default function App(){
       }));
       networkRef.current?.considerHarbour(offer.destination);
       diagnostic('explorers:ferry-booked',`vehicle=${scout.id} route=${offer.routeId} fare=${fare} durationMin=${offer.durationMinutes}`);
+      captureExplorerEvents([{id:crypto.randomUUID(),vehicleId:scout.id,
+       kind:'ferry-booked',description:'Passenger ferry ticket booked for '+offer.routeId,
+       at:Date.now()}]);
      }});
     worker.postMessage({type:'routeRequest',revision:graphRevisionRef.current,requestId,from:scout.position,to:offer.boarding,discoveredOnly:true});
     break; // At most one passenger ticket route search per scan.
@@ -3037,7 +3099,7 @@ export default function App(){
  </button>:
  <LiveFinanceTicker history={fleet.financeHistory??[]} transactions={fleet.transactions??[]}
   bankCollectionsByDay={fleet.bankPartnershipPaidByDay} gameNow={gameClock?.epochMs??Date.now()}/> )}
- {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} constructionFreightFocus={freightFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
+ {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
  </div>{page==='Company'&&(!company||showSetup)&&<div className="company-map-overlay" role="dialog" aria-label="Create company"><button type="button" className="company-map-close" aria-label="Close company setup and return to map" onClick={()=>go('World')}><X size={20}/></button><CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/></div>}
  {page==='Company'&&company&&!showSetup&&<div className="company-map-overlay" role="dialog" aria-label="Company management"><button type="button" className="company-map-close" aria-label="Close Company and return to map" onClick={()=>go('World')}><X size={20}/></button><section className="company-dashboard company-v213 company-v3">
  <header className="company-v3-header"><span className="company-v3-icon"><Building2 size={23}/></span><div><h1>Company</h1><p>Business &amp; depots</p></div></header>
@@ -3108,7 +3170,13 @@ export default function App(){
  {page==='Drivers'&&<div className="drivers-map-overlay" role="dialog" aria-label="Driver schedules"><button type="button" className="drivers-map-close" aria-label="Close Drivers and return to map" onClick={()=>go('World')}><X size={20}/></button><DriversPanel fleet={fleet} gameClock={gameClock}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
  {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
- {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length} roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}/></div>}
+ {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
+  roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
+  gameNow={gameClock?.epochMs??Date.now()} explorerTelemetry={explorerTelemetry}
+  recoveryHistory={explorerHistory} onLocateExplorer={id=>{
+   setVehicleFocus(previous=>({id,token:(previous?.token??0)+1}));
+   go('World');
+  }}/></div>}
  {page==='Ferries'&&<div className="ferries-map-overlay" role="dialog" aria-label="Ferry management"><button type="button" className="ferries-map-close" aria-label="Close Ferries and return to map" onClick={()=>go('World')}><X size={20}/></button><FerryRoutesPanel company={company} onPurchase={purchaseFerryRoute} onTicketPriceChange={setFerryTicketPrice} unlockedHarbourIds={unlockedHarbours} network={harbourNetwork} onReloadNetwork={reloadHarbourNetwork} gameNow={gameClock?.epochMs??Date.now()} headquarters={company?.headquarters??null} ferryRevenueByDay={fleet.ferryRevenueByDay??{}}/></div>}
  {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} operatedHotelIds={Object.values(construction.sites).filter(site=>site.sourceHoldingId&&hotelActiveAt(site.operations,Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS))).map(site=>site.sourceHoldingId!)} error={investmentError}/></div>}
  {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} gameNowHour={(gameClock?.epochMs??Date.now())/HOUR_MS} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={size=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}if(!validHotelPlotSize(size)){setConstructionError('Select valid plot dimensions.');return;}setHotelPlotSize(size);setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onAssignFreight={projectId=>attachLegacyConstructionFreight(projectId)} onTrackFreight={id=>{setFreightFocus(old=>({id,token:(old?.token??0)+1}));setPage('World');setDrawerOpen(false);}} onOrderSupplies={orderInternalHotelSupplies} onHotelSetting={configureHotel} onHotelOpening={changeHotelOpening} onHireWorker={recruitConstructionWorker} onDismissWorker={dismissConstructionWorker}/></div>}
