@@ -57,7 +57,8 @@ export function explorerSituation(taxi:Taxi,live?:ExplorerLiveVehicle):ExplorerS
   return {label:'Loading roads',detail:'Keeping the saved mission while road data loads',tone:'waiting'};
  if(live?.recoveryReason?.startsWith('stalled-'))
   return {label:'Recovering',detail:reasonForExplorer(live.recoveryReason),tone:'attention'};
- if(live?.recoveryReason?.startsWith('invalid-saved-route'))
+ if(live?.recoveryReason?.startsWith('invalid-saved-route')&&
+  (live.savedRouteHealth==='invalid'||!live.planningSkipReason))
   return {label:'Checking route',detail:'Saved route rejected; looking for a legal departure',tone:'attention'};
  if(taxi.status==='EXPLORING'){
   const successor=live?.planningSkipReason==='pool-successor'||live?.planningSkipReason?.startsWith('successor-');
@@ -76,7 +77,7 @@ export function explorerSituation(taxi:Taxi,live?:ExplorerLiveVehicle):ExplorerS
  }
  if(live?.exhaustionProven)
   return {label:'Area explored',detail:'No reachable new roads confirmed; ferry may be considered',tone:'waiting'};
- const reason=live?.recoveryReason||live?.planningSkipReason||live?.idleReason;
+ const reason=live?.planningSkipReason||live?.idleReason||live?.recoveryReason;
  return {label:'Searching',detail:reasonForExplorer(reason)||'Looking for a reachable undiscovered road',tone:'waiting'};
 }
 export function reasonForExplorer(raw:string|null|undefined):string{
@@ -97,7 +98,9 @@ export function reasonForExplorer(raw:string|null|undefined):string{
  if(raw.startsWith('preferred-class-search-incomplete')||raw.startsWith('successor-incomplete'))
   return 'Checking more roads of the preferred class';
  if(raw.startsWith('unchanged-directed-component'))return 'Waiting for new roads or changed reservations';
- if(raw.startsWith('no-purple'))return 'No reachable discovered start road yet';
+ if(raw.startsWith('no-purple'))return 'No discovered start road is loaded near this explorer';
+ if(raw.startsWith('legacy-candidate-rejected'))return 'Rejected an unsafe candidate route; searching for another';
+ if(raw.startsWith('future-route-trimmed'))return 'Continuing a legal route while the next segment is replanned';
  if(raw.startsWith('waiting-for-connected'))return 'Waiting for the required road class to connect';
  if(raw.startsWith('stranded-no-legal-directed'))return 'No legal return route is currently loaded';
  if(raw.startsWith('directed-component-recovery'))return 'Returning to connected roads';
