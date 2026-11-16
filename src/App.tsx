@@ -990,11 +990,19 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
+   const gameTime=gameClockRef.current?.epochMs??now;
+   const roster=fleetSaveRef.current.drivers??[];
+   const driverDutyRemainingSeconds=Object.fromEntries(taxis.filter(t=>
+    !t.kind||t.kind==='taxi').map(t=>{
+    const shift=driverSchedule(t,roster,gameTime);
+    return [t.id,shift.onDuty&&!shift.onBreak?
+      Math.max(0,(shift.duration-shift.elapsed)*3600):0];
+   }));
    const driverTripPreferences=Object.fromEntries(taxis.filter(t=>
     !t.kind||t.kind==='taxi').map(t=>[t.id,normalDriverTripPreference(
     fleetSaveRef.current.drivers?.find(d=>d.name.toLowerCase()===t.driver.toLowerCase())?.tripPreference)]));
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
-    driverTripPreferences,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
+    driverTripPreferences,driverDutyRemainingSeconds,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
      ...(company.depots??[]).map(d=>({id:d.id,position:[d.lng,d.lat] as [number,number]}))],
