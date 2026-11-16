@@ -51,20 +51,22 @@ export function planReachableExplorerRoad(
  // become purple. A safe escape must terminate back on a purple road.
  type EscapeStep={from:string;to:string;id:string};
  const escapes=new Map<string,EscapeStep[]|null>();
+ let escapeSearchBudgetHit=false;
  const safeExit=(from:string,to:string,id:string,requirePurple=false):EscapeStep[]|null=>{
   const cacheKey=from+'|'+to+'|'+id+'|'+requirePurple;
   if(escapes.has(cacheKey))return escapes.get(cacheKey)!;
   const reverse=(graph.edges.get(to)??[]).some(e=>e.to===from&&e.id===id&&e.meters>0);
   if(reverse&&!requirePurple){escapes.set(cacheKey,[]);return [];}
   // Already at a purple road junction, hence an existing connected exit.
-  if((graph.edges.get(to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
+  if(!requirePurple&&(graph.edges.get(to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
    escapes.set(cacheKey,[]);return [];
   }
   const visited=new Set([to]),parents=new Map<string,EscapeStep>();
-  const queue=[to];let finish:string|undefined;
+  const queue=[to];let finish:string|undefined,visitedCount=0;
   // Bounded directed BFS: checks actual available exits, not visual map
   // intersections. On incomplete tiles, defer and retry when roads load.
   for(let i=0;i<queue.length&&i<7000;i++){
+   visitedCount++;
    const node=queue[i];
    for(const edge of graph.edges.get(node)??[]){
     if(edge.meters<=0)continue;
@@ -75,14 +77,18 @@ export function planReachableExplorerRoad(
     if(visited.has(edge.to))continue;
     visited.add(edge.to);
     parents.set(edge.to,{from:node,to:edge.to,id:edge.id});
-    if(purple||(graph.edges.get(edge.to)??[]).some(e=>explored.has(e.id)&&e.meters>0)){
-     finish=edge.to;break;
-    }
+    // A known purple road is the physical re-entry, not merely a road
+    // available from the next junction. Include that final purple segment
+    // in the committed route so the scout actually drives back to purple.
+    if(purple){finish=edge.to;break;}
     queue.push(edge.to);
    }
    if(finish)break;
   }
-  if(!finish){escapes.set(cacheKey,null);return null;}
+  if(!finish){
+   if(queue.length>visitedCount)escapeSearchBudgetHit=true;
+   escapes.set(cacheKey,null);return null;
+  }
   const result:EscapeStep[]=[];
   let at=finish;
   while(at!==to){
@@ -155,9 +161,12 @@ export function planReachableExplorerRoad(
   if(!allowRoundabout&&eligible.size>0)
    return planReachableExplorerRoad(graph,start,explored,eligible,
     reservedRoads,reservedTargets,role,'local',true);
-  if(diag.unsafeOneWaySkipped>0&&diag.reason==='no-connected-class-road')diag.reason='one-way-no-legal-exit';
   if(diag.reason==='no-connected-class-road'&&diag.visitedPurpleNodes>=maxVisits)
    diag.reason='search-node-budget';
+  else if(diag.reason==='no-connected-class-road'&&escapeSearchBudgetHit)
+   diag.reason='escape-search-node-budget';
+  else if(diag.unsafeOneWaySkipped>0&&diag.reason==='no-connected-class-road')
+   diag.reason='one-way-no-legal-exit';
   return {route:null,diagnostic:diag};
  }
  const selected=winner as {from:string;to:string;id:string};
@@ -210,7 +219,7 @@ export function planReachableExplorerRoad(
   !(graph.edges.get(keys[i+1])??[]).some(e=>e.id===id&&e.to===keys[i]&&e.meters>0));
  const exit=lastFrom&&lastTo&&lastId?
   safeExit(lastFrom,lastTo,lastId,irreversibleDiscovery):[];
- if(exit===null)return {route:null,diagnostic:{...diag,reason:'one-way-no-legal-exit'}};
+ if(exit===null)return {route:null,diagnostic:{...diag,reason:escapeSearchBudgetHit?'escape-search-node-budget':'one-way-no-legal-exit'}};
  const escapeTransitEdgeIds:string[]=[...ringTransit];
  for(const step of exit??[]){
   keys.push(step.to);ids.push(step.id);
