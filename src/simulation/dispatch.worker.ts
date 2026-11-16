@@ -872,7 +872,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const role=taxi.explorerRole;
     if(role==='balanced'||!role)return allRoads;
     if(role==='poi')return byClass.get('service')??new Set<string>();
-    if(role==='completion')return completionRoads;
+    if(role==='completion')return completionRoadsIndex;
     // Each specialist discovers ONLY its own road classes, while all may
     // travel along already-purple roads to reach their next target.
     if(role==='highway'||role==='urban'||role==='primary'||role==='secondary'||role==='residential'){
@@ -1255,6 +1255,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        }
        singleWorkerScanResult.set(idleVehicle.id,'route-rejected:'+ (check&&!check.ok?check.reason:'unknown'));
       }
+      if(route&&!routeValid){
+       explorerPlanSkipReason.set(idleVehicle.id,
+        'shared-route-validator-rejected:'+ (check&&!check.ok?check.reason:'invalid'));
+       continue;
+      }
       if(!route){
        explorerPlanSkipReason.set(idleVehicle.id,decision.state==='incomplete'
         ?'preferred-class-search-incomplete:'+decision.reason:'no-eligible-candidates');
@@ -1489,34 +1494,21 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const projected=append?new Set([...explored,...current.discoveryEdgeIds??[]]):explored;
     const startNode=purpleStartNear(origin,projected);
     if(!startNode){reject('no-purple-segment-at-departure');continue;}
+    const tier=proposal.discoveryTier??current.explorerRole;
+    const permitted=specialistFallbackRoles(current.explorerRole);
+    if(permitted.length&&!permitted.includes(tier as typeof permitted[number])){
+     reject('invalid-specialist-fallback-tier');continue;
+    }
+    const verified=validateExplorerMission(activeGraph,{
+     path:route.path,edgeIds:route.edgeIds,
+     discoveryEdgeIds:route.discoveryEdgeIds??[],
+     escapeTransitEdgeIds:route.escapeTransitEdgeIds??[],
+    },origin,startNode,projected,discoveryRoads({...current,explorerRole:tier}),
+     reservedEdges,reservedTargets,
+     append?nearest(graph,current.path.at(-1)!):undefined);
+    if(!verified.ok){reject(verified.reason);continue;}
     const selected=new Set(route.discoveryEdgeIds??[]);
-    const escapeOnly=new Set(route.escapeTransitEdgeIds??[]);
-    // Red cross-class transit is legal both BEFORE reaching the specialist's
-    // first eligible road and AFTER it as a one-way escape. It never becomes
-    // purple; every transit leg must be a real, directed graph connection.
-    const firstDiscovery=route.edgeIds.findIndex(id=>selected.has(id));
-    if(hasInvalidRedApproach(activeGraph,route.path,route.edgeIds,projected,selected)){
-     reject('cross-class-red-before-first-discovery');continue;
-    }
-    const validEscape=escapeOnly.size===0||(
-     firstDiscovery>=0&&
-     [...escapeOnly].every(id=>!selected.has(id)&&!projected.has(id)&&
-      !reservedEdges.has(id)&&route.edgeIds.includes(id))&&
-     route.edgeIds.every((id,i)=>{
-      if(!escapeOnly.has(id))return true;
-      const from=nearest(activeGraph,route.path[i]),to=nearest(activeGraph,route.path[i+1]);
-      return !!from&&!!to&&(activeGraph.edges.get(from)??[]).some(e=>e.id===id&&e.to===to);
-     })
-    );
-    const valid=route.edgeIds.every(id=>allRoads.has(id)&&
-     (projected.has(id)||selected.has(id)||escapeOnly.has(id)));
-    if(!valid||!validEscape||
-      ![...selected].every(id=>!projected.has(id)&&!reservedEdges.has(id))){
-     reject('reservation-or-invalid-escape-transit');continue;
-    }
-    const end=nearest(graph,route.path.at(-1)!);
-    if(end&&reservedTargets.has(end)&&
-       (!append||end!==nearest(graph,current.path.at(-1)!))){reject('reserved-destination');continue;}
+    const end=verified.endNode;
     const next:Taxi=append?{...current,
      path:[...current.path,...route.path.slice(1)],
      edgeIds:[...current.edgeIds,...route.edgeIds],
@@ -1538,8 +1530,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // At most two concurrent tasks. Independent search state remains bound to
    // the explorer ID; failed POI searches do not block other specialists.
    const inFlight=new Set([...planningRequests.values()].map(r=>r.id));
-   const explorers=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole!=='poi'&&t.status==='IDLE'&&
-    specialistCanDepart(t,unlockedRoles)&&
+   const explorers=taxis.filter(t=>t.kind==='explorer'&&t.status==='IDLE'&&
+    (specialistCanDepart(t,unlockedRoles)||specialistFallbackRoles(t.explorerRole).length>0)&&
     !t.ferryTrip&&!t.deliveryUntil&&!t.serviceDestination&&
     !t.refillDestination&&!t.recoveryPending&&!t.refillRequested&&
     energyPercent(t)>10&&!inFlight.has(t.id)&&
@@ -1588,8 +1580,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Only spend otherwise unused pool capacity on route extensions. Idle
    // specialists always take precedence over moving explorers' lookahead.
    if(explorers.length===0){
-    const moving=taxis.filter(t=>t.kind==='explorer'&&t.explorerRole!=='poi'&&t.status==='EXPLORING'&&
-     specialistCanDepart(t,unlockedRoles)&&
+    const moving=taxis.filter(t=>t.kind==='explorer'&&t.status==='EXPLORING'&&
+     (specialistCanDepart(t,unlockedRoles)||specialistFallbackRoles(t.explorerRole).length>0)&&
      !t.ferryTrip&&!t.deliveryUntil&&t.path.length>=2&&
      t.edgeIds.length-t.leg<=10&&!inFlight.has(t.id)&&
      (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
