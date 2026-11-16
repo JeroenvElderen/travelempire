@@ -1,8 +1,6 @@
 import {specialistFallbackRoles} from './explorerRoles';
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
-import {planReachableExplorerRoad} from './explorerRoadPlanner';
-import {planConnectedFrontier} from './connectedFrontier';
 import {planSpecialistMission} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
@@ -899,7 +897,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const hqNode=nearest(graph,hq);
    updateDiscoveryIndex(graph,explored,hqNode);
    const revealedNodes=revealedNodesIndex;
-   const completionRoads=completionRoadsIndex;
    const poiTargets=msg.poiMissions?.map(m=>m.point)??(msg.poiTargets?.length?msg.poiTargets:msg.harbourTargets??[]);
    updatePoiIndex(graph,poiTargets);
    const poiRoads=poiRoadsIndex;
