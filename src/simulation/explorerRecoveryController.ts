@@ -13,7 +13,7 @@ export type ExplorerRouteHealth=
  {state:'valid';reason:'connected-directed-route'}|
  {state:'waiting-for-tiles';reason:'saved-route-tiles-loading'|'discovery-state-loading';edgeId:string}|
  {state:'invalid';reason:'route-shape'|'invalid-road-permission'|
-  'one-way-or-layer-disconnected';edgeId?:string};
+  'one-way-or-layer-disconnected';edgeId?:string;leg?:number};
 
 export type ExplorerProgressWatch={
  position:Point;leg:number;distanceIntoLeg:number;scoutingRuns:number;
@@ -73,7 +73,7 @@ export function evaluateExplorerRoute(
  if(vehicle.path.length!==vehicle.edgeIds.length+1||
   !Number.isInteger(vehicle.leg)||vehicle.leg<0||
   vehicle.leg>=vehicle.edgeIds.length)
-  return {state:'invalid',reason:'route-shape'};
+  return {state:'invalid',reason:'route-shape',leg:vehicle.leg};
  // Safari restores purple discoveries from IndexedDB asynchronously after
  // restoring the fleet. Do not invalidate an otherwise saved active mission
  // while the historical discovery snapshot has not arrived yet.
@@ -88,7 +88,7 @@ export function evaluateExplorerRoute(
   if(!knownRoadIds.has(id)||!roadEndpoints.has(id))
    return {state:'waiting-for-tiles',reason:'saved-route-tiles-loading',edgeId:id};
   if(!discovered.has(id)&&!assigned.has(id)&&!escape.has(id))
-   return {state:'invalid',reason:'invalid-road-permission',edgeId:id};
+   return {state:'invalid',reason:'invalid-road-permission',edgeId:id,leg:i};
   const endpoints=roadEndpoints.get(id)!;
   const a=graph.nodes.get(endpoints[0]),b=graph.nodes.get(endpoints[1]);
   if(!a||!b)return {state:'waiting-for-tiles',reason:'saved-route-tiles-loading',edgeId:id};
@@ -104,7 +104,7 @@ export function evaluateExplorerRoute(
    meters(vehicle.path[i+1],a)<=3&&forwardAlongSegment(vehicle.path[i],b,a)&&
     (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0));
   if(!forward&&!backward&&!midsegment)
-   return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id};
+   return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id,leg:i};
   const fromNode=forward?endpoints[0]:backward?endpoints[1]:
    meters(vehicle.path[i+1],b)<=3?endpoints[0]:endpoints[1];
   const toNode=forward?endpoints[1]:backward?endpoints[0]:
@@ -115,6 +115,40 @@ export function evaluateExplorerRoute(
  }
  return {state:'valid',reason:'connected-directed-route'};
 }
+/**
+ * A corrupt *future* edge must not abruptly erase a valid current mission.
+ * Finish only the already verified directed prefix, and stop at a junction
+ * with a real outgoing purple edge so the normal planner can safely resume.
+ * Never truncate to an arbitrary nearby node or to a red one-way dead end.
+ */
+export function safeExplorerRoutePrefix(
+ graph:RoadGraph,vehicle:ActiveExplorer,health:ExplorerRouteHealth,
+ roadEndpoints:ReadonlyMap<string,readonly [string,string]>,
+ discovered:ReadonlySet<string>,
+):{path:Point[];edgeIds:string[];discoveryEdgeIds:string[];escapeTransitEdgeIds:string[]}|null{
+ if(health.state!=='invalid'||health.leg===undefined||health.leg<=vehicle.leg||
+  health.leg>=vehicle.edgeIds.length)return null;
+ const stop=health.leg;
+ const previousId=vehicle.edgeIds[stop-1],pair=roadEndpoints.get(previousId);
+ if(!pair)return null;
+ const a=graph.nodes.get(pair[0]),b=graph.nodes.get(pair[1]);
+ const from=vehicle.path[stop-1],to=vehicle.path[stop];
+ if(!a||!b||!from||!to)return null;
+ const forward=meters(from,a)<=3&&meters(to,b)<=3&&
+  (graph.edges.get(pair[0])??[]).some(e=>e.id===previousId&&e.to===pair[1]&&e.meters>0);
+ const backward=meters(from,b)<=3&&meters(to,a)<=3&&
+  (graph.edges.get(pair[1])??[]).some(e=>e.id===previousId&&e.to===pair[0]&&e.meters>0);
+ // The previous leg is known legal; match its *actual* OSM destination ID
+ // instead of snapping a nearby motorway bridge to an underpass.
+ const node=forward?pair[1]:backward?pair[0]:null;
+ if(!node||(graph.edges.get(node)??[]).some(e=>discovered.has(e.id)&&e.meters>0)===false)return null;
+ const edgeIds=vehicle.edgeIds.slice(0,stop);
+ const planned=new Set(edgeIds);
+ return {path:vehicle.path.slice(0,stop+1),edgeIds,
+  discoveryEdgeIds:(vehicle.discoveryEdgeIds??[]).filter(id=>planned.has(id)),
+  escapeTransitEdgeIds:(vehicle.escapeTransitEdgeIds??[]).filter(id=>planned.has(id))};
+}
+
 function forwardAlongSegment(position:Point,from:Point,to:Point):boolean{
  const length=meters(from,to);
  if(length<1)return false;
