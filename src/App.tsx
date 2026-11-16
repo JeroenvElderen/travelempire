@@ -28,7 +28,8 @@ import WorldMap from "./components/WorldMap";
 import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/researchExplorerGrant';
 import DriversPanel from "./components/DriversPanel";
-import {canAcceptPassengerJob,driverSchedule} from './simulation/driverSchedule';
+import {canAcceptPassengerJob,driverSchedule,updateDriverShift,type DriverShiftPatch} from './simulation/driverSchedule';
+import {automaticallyStaffIdleTaxis,type DriverDepotLocation} from './simulation/driverFleetAutomation';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
 import {resetVehicleAtDepot} from './simulation/vehicleReset';
@@ -887,6 +888,11 @@ export default function App(){
      if(!assigned||meters(assigned.position,teleportTarget)>15)return t;
      resetVehicleTargetsRef.current.delete(t.id);
     }
+    // A driver roster may change while Safari's asynchronous dispatcher is
+    // still searching. Never admit an old taxi assignment made for a
+    // different driver: the old employee might already be off duty.
+    if((!t.kind||t.kind==='taxi')&&assigned&&
+       assigned.driver.toLowerCase()!==t.driver.toLowerCase())return t;
     // The main simulation owns rest travel, rest timers and wake-up.
     // A stale rest-stop ID must not override a newly planned directed
     // component-recovery route. Active rest/service journeys still belong to
@@ -1261,6 +1267,17 @@ export default function App(){
     let revenue=0,completed=0,fuelExpense=0,maintenanceExpense=0,serviceExpense=0,explorationExpense=0,distanceKm=0,driverWages=0,insuranceExpense=0;
     const driversByName=new Map((old.drivers??[]).map(d=>[d.name.toLowerCase(),d]));
     const gameNow=gameClockRef.current?.epochMs??now;
+    const companyForRota=companyRef.current;
+    const rosterDepots:DriverDepotLocation[]=companyForRota?[
+     {id:'main',position:[companyForRota.headquarters.lng,companyForRota.headquarters.lat]},
+     ...(companyForRota.depots??[]).map(d=>({
+      id:d.id,position:[d.lng,d.lat] as [number,number],
+     })),
+    ]:[];
+    // Uses only current saved vehicle locations. No driver teleports,
+    // no mid-fare handovers, and no additional route workers.
+    const rosterTaxis=automaticallyStaffIdleTaxis(old.taxis,old.drivers??[],
+     rosterDepots,gameNow,old.autoDriverAssignment===true);
     const tickDay=new Date(gameNow).toISOString().slice(0,10);
     const assignedByDepot=new Map<string,number>();
     for(const vehicle of old.taxis){const id=vehicle.depotId??'main';assignedByDepot.set(id,(assignedByDepot.get(id)??0)+1);}
@@ -1271,7 +1288,7 @@ export default function App(){
     let slowestVehicleMs=0,slowestVehicle='—',routingMs=0,integratorMs=0,discoveryMs=0;
     const depotUpgradesById=new Map<string,ReturnType<typeof upgradesFor>>();
     const depotLevelsFor=(id:string)=>{let value=depotUpgradesById.get(id);if(!value){value=upgradesFor(old,id);depotUpgradesById.set(id,value);}return value;};
-    const taxis=old.taxis.map(t=>{
+    const taxis=rosterTaxis.map(t=>{
      const vehicleStarted=performance.now();
      try{
      const delivered=t.deliveryUntil&&now>=t.deliveryUntil?{...t,deliveryUntil:undefined,deliveryStartedAt:undefined,deliveryPath:undefined}:t;
@@ -2224,6 +2241,21 @@ export default function App(){
  const hireDriver=(name:string)=>{const cleaned=name.trim();if(!cleaned){setSimError('Enter a driver name.');return;}if((fleet.drivers??[]).some(d=>d.name.toLowerCase()===cleaned.toLowerCase())){setSimError('This driver is already employed.');return;}if(!companyRef.current||companyRef.current.cash+pendingCashRef.current<DRIVER_COST){setSimError('Insufficient funds to hire a driver.');return;}pendingCashRef.current-=DRIVER_COST;setFleet(old=>({...old,drivers:[...(old.drivers??[]),{id:crypto.randomUUID(),name:cleaned,hiredAt:Date.now()}],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:`Driver onboarding · ${cleaned}`,amount:-DRIVER_COST},...(old.transactions??[])].slice(0,100)}));setSimError('');};
  const dismissDriver=(driverId:string)=>{const person=(fleet.drivers??[]).find(d=>d.id===driverId);if(!person)return;if(fleet.taxis.some(t=>t.driver.toLowerCase()===person.name.toLowerCase())){setSimError('Reassign this driver before dismissal.');return;}setFleet(old=>({...old,drivers:(old.drivers??[]).filter(d=>d.id!==driverId)}));setSimError('');};
  const assignDriver=(id:string,name:string)=>{const driver=(fleet.drivers??[]).find(d=>d.name===name);const taxi=fleet.taxis.find(t=>t.id===id);if(!driver||!taxi){setSimError('Select an employed driver.');return;}if(taxi.status!=='IDLE'||(taxi.deliveryUntil??0)>Date.now()){setSimError('Taxi must be idle and delivered to reassign its driver.');return;}if(fleet.taxis.some(t=>t.id!==id&&t.driver.toLowerCase()===driver.name.toLowerCase())){setSimError('Driver is already assigned to another taxi.');return;}setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===id?{...t,driver:driver.name}:t)}));setSimError('');};
+ const updateShiftConfig=(driverId:string,patch:DriverShiftPatch)=>{
+  setFleet(old=>({...old,drivers:(old.drivers??[]).map(d=>
+   d.id===driverId?updateDriverShift(d,patch):d)}));setSimError('');
+ };
+ const updateDriverHomeDepot=(driverId:string,depotId:string)=>{
+  const companyNow=companyRef.current;
+  if(!companyNow||depotId!=='main'&&!(companyNow.depots??[]).some(d=>d.id===depotId)){
+   setSimError('Select a valid company depot for this driver.');return;
+  }
+  setFleet(old=>({...old,drivers:(old.drivers??[]).map(d=>
+   d.id===driverId?{...d,homeDepotId:depotId}:d)}));setSimError('');
+ };
+ const setAutoDriverStaffing=(enabled:boolean)=>{
+  setFleet(old=>({...old,autoDriverAssignment:enabled}));setSimError('');
+ };
  const controlExplorer=(id:string,action:'home'|'resume'|'teleport')=>{
   if(action==='teleport'){
    const current=fleet.taxis.find(t=>t.id===id&&(t.kind==='explorer'||t.kind==='taxi'||!t.kind));
@@ -3189,7 +3221,10 @@ export default function App(){
  <div className="company-v3-settings-danger"><button className="danger-button" onClick={()=>{if(window.confirm('Delete this locally saved company? This cannot be undone.')){Research.clear(company.id);void clearExploration(company.id);clearCompany();localStorage.removeItem(`travelempire.fleet.v0.8.${company.id}`);setFleet({taxis:[],revenue:0,completed:0});setCompany(null);setSelection(null);setShowSetup(false);}}}>Delete local company</button></div>
 </section>}
 </section></div>}
- {page==='Drivers'&&<div className="drivers-map-overlay" role="dialog" aria-label="Driver schedules"><button type="button" className="drivers-map-close" aria-label="Close Drivers and return to map" onClick={()=>go('World')}><X size={20}/></button><DriversPanel fleet={fleet} gameClock={gameClock}/></div>}
+ {page==='Drivers'&&<div className="drivers-map-overlay" role="dialog" aria-label="Driver schedules"><button type="button" className="drivers-map-close" aria-label="Close Drivers and return to map" onClick={()=>go('World')}><X size={20}/></button><DriversPanel fleet={fleet} gameClock={gameClock}
+  depots={company?[{id:'main',name:'Main depot'},...(company.depots??[]).map(d=>({id:d.id,name:d.name}))]:[]}
+  onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
+  onAutoAssignmentChange={setAutoDriverStaffing}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
  {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
