@@ -333,17 +333,22 @@ function forbiddenTurnGeometry(graph:RoadGraph,previous:string,current:string,ne
 }
 // Turn-aware Dijkstra: the state includes the incoming road node. A shortest
 // path to an intersection must not erase another valid approach direction.
-function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false,incoming='',allowTaxiOnly=true):{path:Point[];edgeIds:string[];length:number}|null{
+function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<string>,timed=false,incoming='',allowTaxiOnly=true,maxVisits=150000,heuristic=false):{path:Point[];edgeIds:string[];length:number}|null{
  if(!graph.nodes.has(from)||!graph.nodes.has(to))return null;
  if(from===to)return{path:[graph.nodes.get(from)!],edgeIds:[],length:0};
- type State={node:string;incoming:string;cost:number;parent:number;edgeId:string};
- const states:State[]=[{node:from,incoming,cost:0,parent:-1,edgeId:''}];
+ type State={node:string;incoming:string;cost:number;parent:number;edgeId:string;priority:number};
+ // A* is reserved for rare regional/intercity searches. A straight-line
+ // estimate at 200 km/h is an admissible lower bound on travel time.
+ const destination=graph.nodes.get(to)!;
+ const estimate=(node:string)=>heuristic&&timed?
+  meters(graph.nodes.get(node)!,destination)/(200/3.6):0;
+ const states:State[]=[{node:from,incoming,cost:0,parent:-1,edgeId:'',priority:estimate(from)}];
  const best=new Map<string,number>([[JSON.stringify([from,incoming]),0]]);
  const heap:number[]=[0];
- const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].cost<=states[id].cost)break;heap[i]=heap[p];i=p;}heap[i]=id;};
- const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].cost<states[heap[c]].cost)c++;if(states[heap[c]].cost>=states[last].cost)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
+ const push=(id:number)=>{heap.push(id);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(states[heap[p]].priority<=states[id].priority)break;heap[i]=heap[p];i=p;}heap[i]=id;};
+ const pop=():number|undefined=>{if(!heap.length)return undefined;const first=heap[0],last=heap.pop()!;if(heap.length){let i=0;while(2*i+1<heap.length){let c=2*i+1;if(c+1<heap.length&&states[heap[c+1]].priority<states[heap[c]].priority)c++;if(states[heap[c]].priority>=states[last].priority)break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
  let finish=-1,visits=0;
- while(heap.length&&visits++<150000){
+ while(heap.length&&visits++<maxVisits){
   const id=pop()!,state=states[id];
   if(state.cost!==(best.get(JSON.stringify([state.node,state.incoming]))??Infinity))continue;
   if(state.node===to){finish=id;break;}
@@ -359,7 +364,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
    const k=JSON.stringify([edge.to,state.node]);
    if(cost>=(best.get(k)??Infinity))continue;
    best.set(k,cost);const next=states.length;
-   states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id});push(next);
+   states.push({node:edge.to,incoming:state.node,cost,parent:id,edgeId:edge.id,priority:cost+estimate(edge.to)});push(next);
   }
  }
  if(finish<0)return null;
@@ -579,7 +584,13 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 }
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
-export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string};
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string;tripType?:'local'|'regional'|'intercity';tripDistanceMeters?:number;tripTravelSeconds?:number};
+/** Discovered timed routes return time in seconds, not distance in metres. */
+export function passengerRouteMetres(path:readonly Point[]):number{
+ let total=0;
+ for(let i=1;i<path.length;i++)total+=meters(path[i-1],path[i]);
+ return total;
+}
 export const passengerPairKey=(pickup:Point,dropoff:Point)=>key(pickup)+'>'+key(dropoff);
 /** The actual passenger route is authoritative, not an outdated quote. */
 export function pricedPassengerFare(distanceMeters:number,surgeMultiplier=1):number{
@@ -606,8 +617,10 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
   // Pickup and drop-off are on Explorer-discovered roads within the revealed area.
   // Travel between those stops may use undiscovered roads without revealing them.
   const trip=routeDiscovered(graph,from,to,explored);
-  if(!trip||trip.length<150||trip.length>5000)continue;
-  return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(trip.length,fareMultiplier),fareMultiplier,createdAt:now,expiresAt:now+120000};
+  if(!trip)continue;
+  const distance=passengerRouteMetres(trip.path);
+  if(distance<500||distance>10000)continue;
+  return{id:crypto.randomUUID(),pickup:graph.nodes.get(from)!,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(distance,fareMultiplier),fareMultiplier,tripType:'local',tripDistanceMeters:distance,tripTravelSeconds:trip.length,createdAt:now,expiresAt:now+120000};
  }
  // Fallback: find a reachable pair of discovered-road stops without relying
  // on random sampling, so sparse explored networks can still produce jobs.
@@ -619,14 +632,16 @@ export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:
    const direct=meters(origin,graph.nodes.get(to)!);
    if(direct<150||direct>4000)continue;
    const trip=routeDiscovered(graph,from,to,explored);
-   if(!trip||trip.length<150||trip.length>5000)continue;
-   return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(trip.length,fareMultiplier),fareMultiplier,createdAt:now,expiresAt:now+120000};
+   if(!trip)continue;
+   const distance=passengerRouteMetres(trip.path);
+   if(distance<500||distance>10000)continue;
+   return{id:crypto.randomUUID(),pickup:origin,dropoff:graph.nodes.get(to)!,fare:pricedPassengerFare(distance,fareMultiplier),fareMultiplier,tripType:'local',tripDistanceMeters:distance,tripTravelSeconds:trip.length,createdAt:now,expiresAt:now+120000};
   }
  }
  return null;
 }
-export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming='',allowTaxiOnly=true):ReturnType<typeof route>{
- return turnAwareRoute(graph,from,to,discovered,true,incoming,allowTaxiOnly);
+export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered:Set<string>,incoming='',allowTaxiOnly=true,maxVisits=150000):ReturnType<typeof route>{
+ return turnAwareRoute(graph,from,to,discovered,true,incoming,allowTaxiOnly,maxVisits,maxVisits<150000);
 }
 export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>,eligibleStops?:Set<string>):Taxi|null{
  if(taxi.status!=='IDLE')return null;
