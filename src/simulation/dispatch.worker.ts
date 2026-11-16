@@ -1031,7 +1031,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    // Reserve only pending discoveries; existing purple transit may be
    // shared by every explorer. One active mission owns each red target.
    const {edges:reservedEdges,targets:reservedTargets}=
-    reserveExplorerDiscoveries(taxis,explored,point=>nearest(graph,point));
+    reserveExplorerDiscoveries(taxis,explored,point=>nearest(activeGraph,point));
    // Mission lifecycle is worker-owned, independent of frame-by-frame movement.
    // A vehicle leaving its assigned route completes or interrupts the mission;
    // the next idle dispatch will issue a new one.
@@ -1071,7 +1071,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil||
        !specialistCanDepart(taxi,unlockedRoles))continue;
 
-    const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
     if(!explorerSuccessorDue(taxi,MISSION_LOOKAHEAD_EDGES)||!taxi.path.length)continue;
     if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-3)continue;
