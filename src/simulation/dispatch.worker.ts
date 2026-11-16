@@ -843,7 +843,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    }
    explorerRecoveryAttempts.set(vehicle.id,attempt.next);
    explorerProgressWatch.delete(vehicle.id);
-   taxis[i]={...vehicle,status:'IDLE',routeInvalid:false,
+   // Explicit invalidation is required for App.tsx to accept this
+   // intentional safe replan instead of preserving the old moving route.
+   taxis[i]={...vehicle,status:'IDLE',routeInvalid:true,
     path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
     leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
    explorerRecoveryReason.set(vehicle.id,'stalled-replanning-from-purple-junction');
