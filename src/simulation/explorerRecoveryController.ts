@@ -76,6 +76,7 @@ export function evaluateExplorerRoute(
   return {state:'invalid',reason:'route-shape'};
  const assigned=new Set(vehicle.discoveryEdgeIds??[]);
  const escape=new Set(vehicle.escapeTransitEdgeIds??[]);
+ let previousTarget:string|null=null;
  for(let i=vehicle.leg;i<vehicle.edgeIds.length;i++){
   const id=vehicle.edgeIds[i];
   if(!knownRoadIds.has(id)||!roadEndpoints.has(id))
@@ -98,6 +99,13 @@ export function evaluateExplorerRoute(
     (graph.edges.get(endpoints[1])??[]).some(e=>e.id===id&&e.to===endpoints[0]&&e.meters>0));
   if(!forward&&!backward&&!midsegment)
    return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id};
+  const fromNode=forward?endpoints[0]:backward?endpoints[1]:
+   meters(vehicle.path[i+1],b)<=3?endpoints[0]:endpoints[1];
+  const toNode=forward?endpoints[1]:backward?endpoints[0]:
+   meters(vehicle.path[i+1],b)<=3?endpoints[1]:endpoints[0];
+  if(previousTarget!==null&&previousTarget!==fromNode)
+   return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id};
+  previousTarget=toNode;
  }
  return {state:'valid',reason:'connected-directed-route'};
 }
