@@ -29,6 +29,7 @@ import {resolvePurpleExplorerStart} from './simulation/explorerStart';
 import {grantExplorerInfrastructure,EXPANSION_ROLES} from './simulation/researchExplorerGrant';
 import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule,updateDriverShift,type DriverShiftPatch} from './simulation/driverSchedule';
+import {normalDriverTripPreference,isDriverTripPreference,type DriverTripPreference} from './simulation/driverTripPreferences';
 import {advanceTaxiActivity,TAXI_ACTIVITY_FIELDS} from './simulation/taxiAnalytics';
 import {automaticallyStaffIdleTaxis,type DriverDepotLocation} from './simulation/driverFleetAutomation';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
@@ -989,8 +990,11 @@ export default function App(){
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
+   const driverTripPreferences=Object.fromEntries(taxis.filter(t=>
+    !t.kind||t.kind==='taxi').map(t=>[t.id,normalDriverTripPreference(
+    fleetSaveRef.current.drivers?.find(d=>d.name.toLowerCase()===t.driver.toLowerCase())?.tripPreference)]));
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
-    taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
+    driverTripPreferences,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
      ...(company.depots??[]).map(d=>({id:d.id,position:[d.lng,d.lat] as [number,number]}))],
@@ -2270,6 +2274,11 @@ export default function App(){
   setFleet(old=>({...old,drivers:(old.drivers??[]).map(d=>
    d.id===driverId?{...d,homeDepotId:depotId}:d)}));setSimError('');
  };
+ const setDriverTripPreference=(driverId:string,preference:DriverTripPreference)=>{
+  if(!isDriverTripPreference(preference))return;
+  setFleet(old=>({...old,drivers:(old.drivers??[]).map(d=>
+   d.id===driverId?{...d,tripPreference:preference}:d)}));setSimError('');
+ };
  const setAutoDriverStaffing=(enabled:boolean)=>{
   setFleet(old=>({...old,autoDriverAssignment:enabled}));setSimError('');
  };
@@ -3241,7 +3250,7 @@ export default function App(){
  {page==='Drivers'&&<div className="drivers-map-overlay" role="dialog" aria-label="Driver schedules"><button type="button" className="drivers-map-close" aria-label="Close Drivers and return to map" onClick={()=>go('World')}><X size={20}/></button><DriversPanel fleet={fleet} gameClock={gameClock}
   depots={company?[{id:'main',name:'Main depot'},...(company.depots??[]).map(d=>({id:d.id,name:d.name}))]:[]}
   onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
-  onAutoAssignmentChange={setAutoDriverStaffing}/></div>}
+  onAutoAssignmentChange={setAutoDriverStaffing} onTripPreferenceChange={setDriverTripPreference}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
  {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
