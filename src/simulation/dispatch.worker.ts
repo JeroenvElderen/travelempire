@@ -1493,6 +1493,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      planningBackoff.delete(current.id);
     };
     if(proposal.outcome!=='planned'||!proposal.taxi)continue;
+    if(!explorerPlannerResultCurrent(current,{
+     mode:proposal.mode??'idle',role:proposal.requestedRole,
+     scoutingRuns:proposal.expectedScoutingRuns,
+     baseEdgeIds:proposal.baseEdgeIds,
+    })){reject('stale-mission-generation');continue;}
     const route=proposal.taxi;
     const append=proposal.mode==='successor'&&current.status==='EXPLORING'&&
      !!proposal.baseEdgeIds&&proposal.baseEdgeIds.length===current.edgeIds.length&&
@@ -1561,18 +1566,26 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(bb===undefined)return 1;
     return aa-bb;
    });
+   const readyPlannerSlots=planningPool.filter(slot=>slot.ready&&!slot.busy&&slot.roads>0).length;
+   const urgentSuccessors=taxis.some(t=>t.kind==='explorer'&&
+    explorerSuccessorUrgent(t)&&!t.ferryTrip&&!t.deliveryUntil&&!inFlight.has(t.id));
+   const idleSlotQuota=explorerPlannerIdleQuota(readyPlannerSlots,urgentSuccessors);
+   let idleSlotsUsed=0;
    for(const slot of planningPool){
     if(!slot.ready||slot.busy||slot.roads===0)continue;
+    if(idleSlotsUsed>=idleSlotQuota)break;
     const vehicle=explorers.shift();
     if(!vehicle)break;
     const start=purpleStartNear(vehicle.position,explored);
     if(!start){
      explorerPlanSkipReason.set(vehicle.id,'no-purple-start');continue;
     }
-    slot.busy=true;
+    slot.busy=true;idleSlotsUsed++;
     const requestId=++nextPlanningRequest;
     slot.requestId=requestId;
-    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position,exploredCount:explored.size,mode:'idle'});
+    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
+     position:vehicle.position,exploredCount:explored.size,mode:'idle',
+     requestedRole:vehicle.explorerRole,expectedScoutingRuns:vehicle.scoutingRuns??0});
     planningLastSent.set(vehicle.id,performance.now());
     explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
     explorerPlanSkipReason.set(vehicle.id,'pool-search');
@@ -1587,17 +1600,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(vehicle.id,'pool-message-error:'+String(error));
     }
    }
-   // Only spend otherwise unused pool capacity on route extensions. Idle
-   // specialists always take precedence over moving explorers' lookahead.
-   if(explorers.length===0){
+   // One slot is reserved for urgent successor work; the other still
+   // serves idle explorers. Nonurgent lookahead uses genuinely free slots.
+   {
     const moving=taxis.filter(t=>t.kind==='explorer'&&t.status==='EXPLORING'&&
      (specialistCanDepart(t,unlockedRoles)||specialistFallbackRoles(t.explorerRole).length>0)&&
      !t.ferryTrip&&!t.deliveryUntil&&t.path.length>=2&&
-     t.edgeIds.length-t.leg<=10&&!inFlight.has(t.id)&&
+     explorerSuccessorDue(t,MISSION_LOOKAHEAD_EDGES)&&!inFlight.has(t.id)&&
      (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
       planningBackoff.get(t.id)!.roads!==seenRoadIds.size||
       planningBackoff.get(t.id)!.explored!==explored.size));
-    moving.sort((a,b)=>(planningLastSent.get(a.id)??0)-(planningLastSent.get(b.id)??0));
+    moving.sort((a,b)=>explorerRemainingEdges(a)-explorerRemainingEdges(b)||
+     (planningLastSent.get(a.id)??0)-(planningLastSent.get(b.id)??0));
     for(const slot of planningPool){
      if(!slot.ready||slot.busy||slot.roads===0)continue;
      const vehicle=moving.shift();
@@ -1611,7 +1625,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      slot.busy=true;slot.requestId=requestId;
      planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
       position:destination,exploredCount:explored.size,mode:'successor',
-      baseEdgeIds:vehicle.edgeIds.slice()});
+      baseEdgeIds:vehicle.edgeIds.slice(),requestedRole:vehicle.explorerRole,
+      expectedScoutingRuns:vehicle.scoutingRuns??0});
      planningLastSent.set(vehicle.id,performance.now());
      explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
      explorerPlanSkipReason.set(vehicle.id,'pool-successor');
