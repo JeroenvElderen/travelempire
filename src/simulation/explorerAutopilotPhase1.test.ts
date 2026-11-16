@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {planSpecialistMission,explorerSearchConclusive} from './explorerPlanCore';
+import {planSpecialistMission,explorerSearchConclusive,usesAutopilotRoutePlanner} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {explorerClassEligible} from './explorerRoles';
@@ -31,6 +31,17 @@ const make=()=>{
  const discovered=new Set(['purple-ab','purple-bc']);
  return {graph,classes,discovered};
 };
+
+describe('iPhone shared-planner admission for existing saved explorers',()=>{
+ it('uses strict directed Autopilot exclusively for each modern specialist',()=>{
+  for(const role of ['highway','primary','secondary','residential','poi'] as const)
+   expect(usesAutopilotRoutePlanner(role)).toBe(true);
+ });
+ it('allows legacy-only role aliases to use the compatibility path',()=>{
+  for(const role of ['motorway','trunk','balanced',undefined] as const)
+   expect(usesAutopilotRoutePlanner(role)).toBe(false);
+ });
+});
 
 describe('Explorer Autopilot 2.0 Phase 1: identical specialist planning rules',()=>{
  it('does not downgrade motorway discovery after an incomplete preferred-class scan',()=>{
