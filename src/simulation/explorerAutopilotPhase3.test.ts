@@ -163,15 +163,14 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
     ['A',[{id:'tiny',to:'B',meters:1.7,speedKph:20,highway:'residential'}]],
     ['B',[]],
    ])};
-  // Single leg B -> A is too short to prove reversal geometrically;
-  // it is disallowed at admission using the exact directed start and node.
-  // This saved-route check cannot infer the starting OSM node from an
-  // ambiguous coordinate alone; the safest policy is to hold any terminal
-  // node ambiguity until directed-route admission has verified it.
+  // Even though the endpoints are closer than the coordinate tolerance,
+  // physical travel B -> A is opposite to the only directed OSM edge A -> B.
   const reverse={...explorer(),position:microB,path:[microB,microA],
    edgeIds:['tiny'],discoveryEdgeIds:[],leg:0,distanceIntoLeg:0};
   expect(evaluateExplorerRoute(g,reverse,new Set(['tiny']),
-   new Map([['tiny',['A','B']]]),new Set(['tiny'])).state).toBe('valid');
+   new Map([['tiny',['A','B']]]),new Set(['tiny'])).toEqual({
+    state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:'tiny',leg:0,
+   });
   // A subsequent return to node A cannot be forged by an incompatible edge.
   const continued={...reverse,path:[microB,microA,microB],
    edgeIds:['tiny','tiny']};
