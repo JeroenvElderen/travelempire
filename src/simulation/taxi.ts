@@ -15,7 +15,7 @@ export type Taxi = {
   driver: string;
   position: Point;
 
-  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING' | 'PAUSED';
+  status: 'IDLE' | 'TO_PICKUP' | 'TO_DROPOFF' | 'REPOSITIONING' | 'EXPLORING' | 'RETURNING' | 'REFUELLING' | 'SERVICING' | 'PAUSED';
 
   path: Point[];
   edgeIds: string[];
@@ -37,6 +37,9 @@ export type Taxi = {
   jobDrivenMeters?:number;
   /** Expected final payment including fleet/research modifiers (not yet paid). */
   jobFareTotal?:number;
+  /** Empty repositioning follows real already-discovered roads; no fare is earned. */
+  repositionTarget?:Point;
+  lastRepositionAt?:number;
   completed: number;
   journeyEdges?: string[];
   // Last completed road approach, retained across separate assignments.
@@ -1204,7 +1207,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  const discovered=t.kind==='explorer'?[...new Set(t.journeyEdges??[])]:[];
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
-  recoveryTransitOnly:undefined,jobSurgeMultiplier:undefined,
+  recoveryTransitOnly:undefined,repositionTarget:undefined,jobSurgeMultiplier:undefined,
   jobDistanceMeters:undefined,jobTripType:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
