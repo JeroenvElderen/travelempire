@@ -1277,7 +1277,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // in the global save until actually driven.
     const projected=new Set([...explored,...(taxi.discoveryEdgeIds??[])]);
     const ownEdges=new Set(taxi.discoveryEdgeIds??[]);
-    const otherReservations=new Set([...reservedEdges].filter(id=>!ownEdges.has(id)));
+    const otherReservations=explorerPendingReservations(taxi.id,
+     new Set([...reservedEdges].filter(id=>!ownEdges.has(id))));
     const start=purpleStartNear(destination,projected);
     if(!start){
      explorerPlanSkipReason.set(taxi.id,'successor-no-purple-start');
@@ -1320,16 +1321,31 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Exact endpoint continuity: no jumping onto adjacent elevated,
     // underground or parallel roads.
     if(meters(destination,route.path[0])>2)continue;
-    explorerSearchTier.set(taxi.id,0);
-    successorNegativeCache.delete(taxi.id);
-    failedRouteCache.delete('successor|'+taxi.id);
-    missionLastEndpoint.set(taxi.id,destinationKey);
     const next:Taxi={...taxi,
      path:[...taxi.path,...route.path.slice(1)],
      edgeIds:[...taxi.edgeIds,...route.edgeIds],
      discoveryEdgeIds:[...(taxi.discoveryEdgeIds??[]),...(decision.route?.discoveryEdgeIds??[])],
      escapeTransitEdgeIds:[...(taxi.escapeTransitEdgeIds??[]),...(decision.route?.escapeTransitEdgeIds??[])],
      scoutingRuns:(taxi.scoutingRuns??0)+1};
+    // Validating the *successor alone* is not enough. An appended route
+    // may cross an adjacent tunnel/bridge or inherit an invalid directed
+    // turn at the join. Validate the entire resulting mission before
+    // mutating this taxi or reserving its new discoveries.
+    const mergedHealth=evaluateExplorerRoute(activeGraph,next,seenRoadIds,
+     roadEndpoints,explored);
+    if(mergedHealth.state!=='valid'){
+     if(mergedHealth.state==='invalid')
+      rejectExplorerCandidate(taxi.id,mergedHealth.edgeId);
+     explorerPlanSkipReason.set(taxi.id,'successor-merged-route-'+
+      mergedHealth.reason+(mergedHealth.edgeId?':'+mergedHealth.edgeId:''));
+     successorNegativeCache.set(taxi.id,{
+      signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});
+     continue;
+    }
+    explorerSearchTier.set(taxi.id,0);
+    successorNegativeCache.delete(taxi.id);
+    failedRouteCache.delete('successor|'+taxi.id);
+    missionLastEndpoint.set(taxi.id,destinationKey);
     taxis[index]=next;
     for(const id of decision.route?.discoveryEdgeIds??[])reservedEdges.add(id);
     reservedTargets.add(check.endNode);
