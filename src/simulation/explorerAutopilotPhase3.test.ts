@@ -34,6 +34,15 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
     state:'valid',reason:'connected-directed-route',
    });
  });
+ it('waits for the IndexedDB discovery snapshot before judging a restored route',()=>{
+  const current=evaluateExplorerRoute(graph(),explorer(),
+   new Set(['purple','red']),endpoints(),new Set());
+  expect(current).toEqual({state:'waiting-for-tiles',
+   reason:'discovery-state-loading',edgeId:'purple'});
+  // The identical saved route becomes valid once IndexedDB restores purple.
+  expect(evaluateExplorerRoute(graph(),explorer(),
+   new Set(['purple','red']),endpoints(),new Set(['purple'])).state).toBe('valid');
+ });
  it('waits for absent tiles without clearing the saved mission',()=>{
   const route=evaluateExplorerRoute(graph(),explorer(),new Set(['purple']),
    endpoints(),new Set(['purple']));
