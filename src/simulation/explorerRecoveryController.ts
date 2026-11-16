@@ -110,7 +110,7 @@ export function evaluateExplorerRoute(
   const toNode=forward?endpoints[1]:backward?endpoints[0]:
    meters(vehicle.path[i+1],b)<=3?endpoints[1]:endpoints[0];
   if(previousTarget!==null&&previousTarget!==fromNode)
-   return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id};
+   return {state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:id,leg:i};
   previousTarget=toNode;
  }
  return {state:'valid',reason:'connected-directed-route'};
