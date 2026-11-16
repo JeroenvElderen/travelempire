@@ -6,7 +6,7 @@ import {
  explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,
  reserveExplorerDiscoveries,
 } from './explorerAutopilot';
-import type {Point,RoadGraph,Taxi} from './taxi';
+import type {Point,RoadGraph} from './taxi';
 
 const p=(lon:number):Point=>[lon,38];
 const graph=():RoadGraph=>{
