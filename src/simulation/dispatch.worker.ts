@@ -3,6 +3,8 @@ import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planReachableExplorerRoad} from './explorerRoadPlanner';
 import {planConnectedFrontier} from './connectedFrontier';
+import {planSpecialistMission} from './explorerPlanCore';
+import {validateExplorerMission} from './explorerMissionValidation';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {routeIsolatedExplorerToMainNetwork} from './explorerComponentRecovery';
@@ -19,7 +21,7 @@ let graph:RoadGraph|null=null;
 // shared discovered network and current route reservations.
 type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
  outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string;
- mode?:'idle'|'successor';baseEdgeIds?:string[];};
+ mode?:'idle'|'successor';baseEdgeIds?:string[];discoveryTier?:Taxi['explorerRole'];searchState?:string;};
 type PoolMessage=PoolResult|{type:'ready'|'roadsAdded';revision:number;roadCount?:number};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
@@ -866,6 +868,26 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   // At most one moving scout extends, while three idle scouts can start missions.
   const planningBudget=4;
   const planningPhase='continuous';
+   const discoveryRoads=(taxi:Taxi)=>{
+    const role=taxi.explorerRole;
+    if(role==='balanced'||!role)return allRoads;
+    if(role==='poi')return byClass.get('service')??new Set<string>();
+    if(role==='completion')return completionRoads;
+    // Each specialist discovers ONLY its own road classes, while all may
+    // travel along already-purple roads to reach their next target.
+    if(role==='highway'||role==='urban'||role==='primary'||role==='secondary'||role==='residential'){
+     const cached=roadClassCache.get(role);if(cached)return cached;
+     const roles=role==='highway'?['motorway','trunk']:
+      role==='primary'?['primary']:
+      role==='secondary'?['secondary','tertiary']:
+      role==='residential'?['residential','rural']:
+      ['tertiary','residential','rural','service'];
+     const combined=new Set<string>();
+     for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
+     roadClassCache.set(role,combined);return combined;
+    }
+    return byClass.get(role??'')??new Set<string>();
+   };
   if(msg.allowScout&&planningPool.length!==2){
     for(let i=0;i<taxis.length;i++){
      const t=taxis[i];
@@ -897,26 +919,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     }
    }
    const frontierFor=(_taxi:Taxi):Set<string>|undefined=>undefined;
-   const discoveryRoads=(taxi:Taxi)=>{
-    const role=taxi.explorerRole;
-    if(role==='balanced'||!role)return allRoads;
-    if(role==='poi')return byClass.get('service')??new Set<string>();
-    if(role==='completion')return completionRoads;
-    // Each specialist discovers ONLY its own road classes, while all may
-    // travel along already-purple roads to reach their next target.
-    if(role==='highway'||role==='urban'||role==='primary'||role==='secondary'||role==='residential'){
-     const cached=roadClassCache.get(role);if(cached)return cached;
-     const roles=role==='highway'?['motorway','trunk']:
-      role==='primary'?['primary']:
-      role==='secondary'?['secondary','tertiary']:
-      role==='residential'?['residential','rural']:
-      ['tertiary','residential','rural','service'];
-     const combined=new Set<string>();
-     for(const key of roles)for(const id of byClass.get(key)??[])combined.add(id);
-     roadClassCache.set(role,combined);return combined;
-    }
-    return byClass.get(role??'')??new Set<string>();
-   };
+
    // Only wake auto-parked explorers when eligible roads are undiscovered.
    for(let i=0;i<taxis.length;i++){
     const t=taxis[i],parked=autoParkedExplorers.get(t.id);
@@ -1198,65 +1201,31 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        singleWorkerScanResult.set(idleVehicle.id,'unchanged-component-waiting-for-new-roads');
        continue;
       }
-      const candidateIndexes=new Set<number>();
-      if(role==='poi')for(let i=0;i<(msg.poiMissions?.length??0);i++){
-       if(msg.poiMissions![i].vehicleId===idleVehicle.id)candidateIndexes.add(i);
-      }
-      // Saved 'poi' role is the Service Explorer: road-first, no harbour
-      // marker missions or parking-coordinate snapping. The road-class index
-      // provides only service edges, including existing parking access roads.
-      const tiers=specialistFallbackRoles(role);
-      let chosenRole=role;
-      let chosenAllowed=allowed;
-      let connected:ReturnType<typeof planConnectedFrontier>|null=null;
-      for(const tier of tiers.length?tiers:[role]){
-       const tierAllowed=tier===role?allowed:discoveryRoads({...idleVehicle,explorerRole:tier});
-       const result=planConnectedFrontier(activeGraph,origin.node,explored,
-        tierAllowed,reservedEdges,reservedTargets,tier,role==='poi'?65000:95000);
-       connected=result;chosenAllowed=tierAllowed;
-       if(result?.route){chosenRole=tier;break;}
-      }
-      const useLegacyFallback=()=>{
-       const time=performance.now(),last=legacyFallbackAt.get(idleVehicle.id)??-100000;
-       if(time-last<30000)return null;
-       legacyFallbackAt.set(idleVehicle.id,time);
-       return planReachableExplorerRoad(activeGraph,origin.node,explored,chosenAllowed,
-        reservedEdges,reservedTargets,chosenRole);
-      };
-      const planned=connected?.route?connected:useLegacyFallback()??connected;
-      const route=planned?.route??null;
+      // Shared desktop/iPhone class order and "incomplete is not exhausted"
+      // semantics. An expensive directed fallback is rate-limited on iOS;
+      // during cooldown we HOLD the preferred class instead of downgrading.
+      const timestamp=performance.now();
+      const fallbackAllowed=timestamp-(legacyFallbackAt.get(idleVehicle.id)??-100000)>=30000;
+      if(fallbackAllowed)legacyFallbackAt.set(idleVehicle.id,timestamp);
+      const decision=planSpecialistMission(activeGraph,origin.node,explored,role,
+       tier=>discoveryRoads({...idleVehicle,explorerRole:tier}),
+       reservedEdges,reservedTargets,{fallbackAllowed});
+      const planned={route:decision.route,diagnostic:decision.diagnostic};
+      const route=decision.route;
+      const completed=route?prependPurpleStart(route,origin):null;
+      const destination=completed?nearest(activeGraph,completed.path.at(-1)!):null;
+      const check=route&&completed?validateExplorerMission(activeGraph,{
+       path:completed.path,edgeIds:completed.edgeIds,
+       discoveryEdgeIds:route.discoveryEdgeIds,
+       escapeTransitEdgeIds:route.escapeTransitEdgeIds,
+      },idleVehicle.position,origin,explored,
+       discoveryRoads({...idleVehicle,explorerRole:decision.tier}),
+       reservedEdges,reservedTargets):null;
+      const routeValid=check?.ok===true;
       singleWorkerScanResult.set(idleVehicle.id,
-       (role==='poi'?'service-roads:':'road-frontier:')+
-       (planned?.diagnostic.reason??'none')+
-       ':visited='+(planned?.diagnostic.visitedPurpleNodes??0)+
-       ':classEdges='+(planned?.diagnostic.reachableClassEdges??0));
-      if(route){
-       const completed=prependPurpleStart(route,origin);
-       const destination=nearest(activeGraph,completed.path.at(-1)!);
-       const newEdges=new Set(route.discoveryEdgeIds);
-       const escapeOnly=new Set(route.escapeTransitEdgeIds);
-       const allPurpleArrival=role==='poi'&&newEdges.size===0&&
-        completed.edgeIds.every(id=>explored.has(id));
-       const routeValid=completed.edgeIds.length===completed.path.length-1&&
-        (allPurpleArrival||!hasInvalidRedApproach(activeGraph,completed.path,completed.edgeIds,
-         explored,newEdges))&&
-        [...newEdges].every(id=>chosenAllowed.has(id)&&!explored.has(id)&&!reservedEdges.has(id))&&
-        [...escapeOnly].every(id=>!explored.has(id)&&!newEdges.has(id)&&!reservedEdges.has(id))&&
-        completed.edgeIds.every((id,i)=>{
-         if(!allRoads.has(id)||!(explored.has(id)||newEdges.has(id)||escapeOnly.has(id)))return false;
-         // Mid-segment depots may have a closer red node; the snapped
-         // connector is validated against its real directed purple edge.
-         if(i===0&&origin.connector){
-          const pair=roadEndpoints.get(id);
-          const endpoint=origin.node;
-          if(!pair||id!==origin.connector.edgeId)return false;
-          return (activeGraph.edges.get(pair[0])??[]).some(e=>e.id===id&&e.to===endpoint)||
-           (activeGraph.edges.get(pair[1])??[]).some(e=>e.id===id&&e.to===endpoint);
-         }
-         const a=nearest(activeGraph,completed.path[i]),b=nearest(activeGraph,completed.path[i+1]);
-         return !!a&&!!b&&(activeGraph.edges.get(a)??[]).some(e=>e.id===id&&e.to===b);
-        })&&
-        (!destination||!reservedTargets.has(destination));
+       'road-frontier:'+decision.state+':'+decision.reason+
+       ':tier='+decision.tier+':visited='+decision.diagnostic.visitedPurpleNodes);
+      if(completed&&route){
        if(routeValid){
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
@@ -1284,16 +1253,23 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         assignedCount++;idleMissionPlans++;planningCalls++;
         continue;
        }
-       singleWorkerScanResult.set(idleVehicle.id,'route-rejected-by-directed-validation');
+       singleWorkerScanResult.set(idleVehicle.id,'route-rejected:'+ (check&&!check.ok?check.reason:'unknown'));
       }
-      if(!route||singleWorkerScanResult.get(idleVehicle.id)==='route-rejected-by-directed-validation'){
+      if(!route){
+       explorerPlanSkipReason.set(idleVehicle.id,decision.state==='incomplete'
+        ?'preferred-class-search-incomplete:'+decision.reason:'no-eligible-candidates');
+       if(decision.state==='exhausted')
+        explorerSearchTier.set(idleVehicle.id,SEARCH_RADII_KM.length-1);
        const component=inspectExplorerComponent(activeGraph,origin.node,
         explored,allowed,reservedEdges,hqNode,14000);
        explorerComponents.set(idleVehicle.id,component);
-       // A capped component scan is inconclusive; retry normally. Completed
-       // negative searches may wait briefly unless the graph changes.
-       if(component.complete)frontierFailureCache.set(idleVehicle.id,{
-        signature,retryAt:performance.now()+12000});
+       // Only conclusive negative scans may enter the failure cooldown.
+       if(decision.state==='exhausted'&&component.complete)
+        frontierFailureCache.set(idleVehicle.id,{
+         signature,retryAt:performance.now()+12000});
+       // Incomplete checks must retry, and completed negative checks can
+       // trigger ferry readiness. Neither may discover a lower class early.
+       continue;
       }
       if(!route&&role!=='poi'&&planned&&hqNode&&
        meters(idleVehicle.position,hq)>300&&
