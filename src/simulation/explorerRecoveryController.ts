@@ -11,7 +11,7 @@ type ActiveExplorer=Pick<Taxi,'kind'|'status'|'position'|'path'|'edgeIds'|'leg'|
  'explorerRole'|'discoveryEdgeIds'|'escapeTransitEdgeIds'>;
 export type ExplorerRouteHealth=
  {state:'valid';reason:'connected-directed-route'}|
- {state:'waiting-for-tiles';reason:'saved-route-tiles-loading';edgeId:string}|
+ {state:'waiting-for-tiles';reason:'saved-route-tiles-loading'|'discovery-state-loading';edgeId:string}|
  {state:'invalid';reason:'route-shape'|'invalid-road-permission'|
   'one-way-or-layer-disconnected';edgeId?:string};
 
@@ -74,6 +74,12 @@ export function evaluateExplorerRoute(
   !Number.isInteger(vehicle.leg)||vehicle.leg<0||
   vehicle.leg>=vehicle.edgeIds.length)
   return {state:'invalid',reason:'route-shape'};
+ // Safari restores purple discoveries from IndexedDB asynchronously after
+ // restoring the fleet. Do not invalidate an otherwise saved active mission
+ // while the historical discovery snapshot has not arrived yet.
+ if(discovered.size===0)
+  return {state:'waiting-for-tiles',reason:'discovery-state-loading',
+   edgeId:vehicle.edgeIds[vehicle.leg]};
  const assigned=new Set(vehicle.discoveryEdgeIds??[]);
  const escape=new Set(vehicle.escapeTransitEdgeIds??[]);
  let previousTarget:string|null=null;
