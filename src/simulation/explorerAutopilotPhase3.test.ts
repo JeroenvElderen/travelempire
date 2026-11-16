@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {
- canRetryStalledExplorer,evaluateExplorerRoute,
+ canRetryStalledExplorer,evaluateExplorerRoute,safeExplorerRoutePrefix,
  explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
  type ExplorerExhaustionProof,
 } from './explorerRecoveryController';
@@ -56,14 +56,14 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
   const t={...explorer(),discoveryEdgeIds:[]};
   const result=evaluateExplorerRoute(graph(),t,new Set(['purple','red']),
    endpoints(),new Set(['purple']));
-  expect(result).toEqual({state:'invalid',reason:'invalid-road-permission',edgeId:'red'});
+  expect(result).toEqual({state:'invalid',reason:'invalid-road-permission',edgeId:'red',leg:1});
  });
  it('rejects a reversed one-way route rather than pretending the nodes connect',()=>{
   const t={...explorer(),position:C,path:[C,B],edgeIds:['red'],leg:0};
   const result=evaluateExplorerRoute(graph(),t,new Set(['purple','red']),
    endpoints(),new Set(['purple']));
   expect(result).toEqual({
-   state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:'red',
+   state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:'red',leg:0,
   });
  });
  it('refuses bridges that visually touch tunnels at a different OSM node',()=>{
@@ -77,7 +77,44 @@ describe('Explorer Autopilot Phase 3 — saved route continuity and road streami
   const result=evaluateExplorerRoute(g,t,new Set(['purple','bridge']),
    ids,new Set(['purple']));
   expect(result).toEqual({state:'invalid',
-   reason:'one-way-or-layer-disconnected',edgeId:'bridge'});
+   reason:'one-way-or-layer-disconnected',edgeId:'bridge',leg:1});
+ });
+
+ it('preserves a safe driven prefix when a future route segment violates one-way direction',()=>{
+  const g=graph(),t=explorer();
+  // The first purple segment is valid, but the future red segment turns
+  // against a one-way edge; never abort the purple approach mid-drive.
+  g.edges.set('B',[]);
+  const health=evaluateExplorerRoute(g,t,new Set(['purple','red']),
+   endpoints(),new Set(['purple']));
+  expect(health).toEqual({
+   state:'invalid',reason:'one-way-or-layer-disconnected',edgeId:'red',leg:1,
+  });
+  // A legal purple departure from B permits the scout to stop there.
+  g.edges.set('B',[{id:'purple',to:'A',meters:111,speedKph:40,highway:'residential'}]);
+  const safe=safeExplorerRoutePrefix(g,t,health,endpoints(),new Set(['purple']));
+  expect(safe).toEqual({path:[A,B],edgeIds:['purple'],
+   discoveryEdgeIds:[],escapeTransitEdgeIds:[]});
+ });
+ it('never trims an unsafe future route onto an isolated one-way red endpoint',()=>{
+  const g=graph(),t=explorer();
+  const health={state:'invalid' as const,
+   reason:'one-way-or-layer-disconnected' as const,edgeId:'red',leg:1};
+  // B cannot depart on any discovered road: stopping there would strand it.
+  expect(safeExplorerRoutePrefix(g,t,health,endpoints(),new Set(['purple']))).toBeNull();
+ });
+ it('does not overwrite the current segment when the current edge is illegal',()=>{
+  const g=graph(),t=explorer();
+  const health={state:'invalid' as const,
+   reason:'one-way-or-layer-disconnected' as const,edgeId:'purple',leg:0};
+  expect(safeExplorerRoutePrefix(g,t,health,endpoints(),new Set(['purple']))).toBeNull();
+ });
+ it('holds planned road travel when a required tile has not loaded yet',()=>{
+  const g=graph(),t=explorer();
+  const health=evaluateExplorerRoute(g,t,new Set(['purple']),endpoints(),
+   new Set(['purple']));
+  expect(health.state).toBe('waiting-for-tiles');
+  expect(safeExplorerRoutePrefix(g,t,health,endpoints(),new Set(['purple']))).toBeNull();
  });
  it('accepts a verified mid-segment start only when the segment points downstream',()=>{
   const midpoint:Point=[23.0005,38];

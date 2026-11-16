@@ -3,7 +3,7 @@ import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
-import {canRetryStalledExplorer,evaluateExplorerRoute,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
+import {canRetryStalledExplorer,evaluateExplorerRoute,safeExplorerRoutePrefix,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
  type ExplorerExhaustionProof,type ExplorerProgressWatch,type ExplorerRouteHealth} from './explorerRecoveryController';
 import {explorerPlannerIdleQuota,explorerPlannerResultCurrent,explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,reserveExplorerDiscoveries} from './explorerAutopilot';
 import type {ExplorerRecoveryEvent} from './explorerOperations';
@@ -818,16 +818,33 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     continue;
    }
    if(health.state==='invalid'){
+    // A future invalid segment is not evidence that the vehicle's current
+    // directed leg is broken. Finish a verified prefix only when it ends on
+    // an actual discovered-road junction; replan there without teleporting.
+    const prefix=safeExplorerRoutePrefix(activeGraph,vehicle,health,roadEndpoints,explored);
+    if(prefix){
+     taxis[i]={...vehicle,...prefix};
+     // The explorer stays on its valid prefix; the next planning cycle
+     // handles the remaining frontier after it reaches the purple junction.
+     explorerRecoveryReason.delete(vehicle.id);
+     explorerProgressWatch.delete(vehicle.id);
+     continue;
+    }
     // Never drive an invalid saved direction or jump to a nearby level.
     taxis[i]={...vehicle,status:'IDLE',routeInvalid:true,
      path:[],edgeIds:[],discoveryEdgeIds:[],escapeTransitEdgeIds:[],
      leg:0,distanceIntoLeg:0,speedKph:0,journeyEdges:[]};
     explorerProgressWatch.delete(vehicle.id);
-    explorerRecoveryReason.set(vehicle.id,'invalid-saved-route:'+health.reason);
+    explorerRecoveryReason.set(vehicle.id,'invalid-saved-route:'+health.reason+
+     (health.edgeId?':road='+health.edgeId:'')+
+     (health.leg!==undefined?':leg='+health.leg:''));
     invalidMissionRecoveries++;
     recordExplorerRecoveryEvent(vehicle.id,'invalid-route','Saved route rejected; checking a legal alternative');
     continue;
    }
+   if(explorerRecoveryReason.get(vehicle.id)?.startsWith('invalid-saved-route:')||
+      explorerRecoveryReason.get(vehicle.id)?.startsWith('waiting-for-road-tiles:'))
+    explorerRecoveryReason.delete(vehicle.id);
    if(!msg.allowScout||!explorerMovementEligible(vehicle,now,energyPercent(vehicle))){
     explorerProgressWatch.delete(vehicle.id);
     continue;
@@ -1523,9 +1540,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Search-budget exhaustion is inconclusive. Do not immediately repeat
     // another large graph search with dispatchScout in the same dispatch.
     const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
+    // The legacy regional fallback is still used for some iPhone saves.
+    // It must NOT mutate global reservations until a fully directed route
+    // passes the same admission standard as Autopilot 2.0.
+    const candidateTargets=new Set(reservedTargets);
+    const candidateRoads=new Set(reservedEdges);
     const plannedScout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
      ?idleVehicle
-     :await dispatchScout(anchoredTaxi,graph,explored,hq,reservedTargets,reservedEdges,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
+     :await dispatchScout(anchoredTaxi,graph,explored,hq,candidateTargets,candidateRoads,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
     const scout=plannedScout.status==='EXPLORING'?
      {...plannedScout,position:idleVehicle.position,
       path:purpleOrigin.connector?[idleVehicle.position,...plannedScout.path]:plannedScout.path,
@@ -1541,12 +1563,32 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(idleVehicle.id,'red-transit-before-discovery');
      assignment=idleVehicle;
     }
+    // Phase 3 used to discover these illegal routes one tick AFTER assigning
+    // them, trapping the UI in "Checking Route" and repeatedly resetting the
+    // same scout. Validate at admission, including every directed OSM node,
+    // reserved discoveries, purple start and any mid-segment connector.
+    if(assignment.status==='EXPLORING'){
+     const checked=evaluateExplorerRoute(activeGraph,assignment,seenRoadIds,
+      roadEndpoints,explored);
+     if(checked.state!=='valid'){
+      explorerPlanSkipReason.set(idleVehicle.id,
+       'legacy-candidate-rejected:'+checked.reason+
+       (checked.edgeId?':road='+checked.edgeId:''));
+      singleWorkerScanResult.set(idleVehicle.id,
+       'legacy-candidate-rejected:'+checked.reason);
+      assignment=idleVehicle;
+     }
+    }
     // No immediate second expensive search: retry in a later planning turn.
     if(assignment.status!=='IDLE'){
      explorerSearchTier.set(idleVehicle.id,0);
      negativeScoutCache.delete(idleVehicle.id);failedRouteCache.delete('idle|'+idleVehicle.id);
      idleRetryAt.delete(idleVehicle.id);poiRetryWallClock.delete(idleVehicle.id);
      taxis[index]=assignment;autoParkedExplorers.delete(idleVehicle.id);
+     explorerRecoveryReason.delete(idleVehicle.id);
+     for(const id of assignment.discoveryEdgeIds??[])if(!explored.has(id))reservedEdges.add(id);
+     const goal=assignment.path.at(-1);
+     if(goal){const node=nearest(activeGraph,goal);if(node)reservedTargets.add(node);}
      missionSequence.set(idleVehicle.id,(missionSequence.get(idleVehicle.id)??0)+1);
      missionLastEndpoint.delete(idleVehicle.id);
      missionPlannedAt.set(idleVehicle.id,now);
