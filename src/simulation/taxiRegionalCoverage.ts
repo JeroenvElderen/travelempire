@@ -62,9 +62,9 @@ export function taxiCanCoverRegion(taxi:Taxi,roadMetres:number):boolean{
 }
 
 /** Prevent a new-service repositioning from monopolising almost the entire
- * remaining duty window. An on-duty driver may still finish a booked fare
- * under existing rules; empty geographic coverage is optional.
- * Route ETA is calculated by the original OSM road-speed model.
+ * remaining duty window. A long EMPTY move may span multiple shifts:
+ * at off-duty time, the simulator stops safely at the next actual road
+ * junction. New shifts can continue coverage. Driving speed is unchanged.
  */
 export function taxiHasDutyForCoverage(
  routeRealSeconds:number,remainingDutyGameSeconds:number,
@@ -72,5 +72,5 @@ export function taxiHasDutyForCoverage(
 ):boolean{
  return Number.isFinite(routeRealSeconds)&&routeRealSeconds>0&&
   Number.isFinite(remainingDutyGameSeconds)&&remainingDutyGameSeconds>0&&
-  routeRealSeconds*gameSpeed+1800<=remainingDutyGameSeconds;
+  Math.min(routeRealSeconds*gameSpeed+1800,2*3600)<=remainingDutyGameSeconds;
 }
