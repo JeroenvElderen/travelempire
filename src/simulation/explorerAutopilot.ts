@@ -60,7 +60,7 @@ export function explorerSuccessorDue(vehicle:Pick<Taxi,'status'|'edgeIds'|'leg'>
   explorerRemainingEdges(vehicle)<=threshold;
 }
 export function explorerSuccessorUrgent(vehicle:Pick<Taxi,'status'|'edgeIds'|'leg'>):boolean{
- return explorerSuccessorDue(vehicle,12);
+ return explorerSuccessorDue(vehicle,24);
 }
 /** A low-memory device still uses a single dispatcher. On desktop reserve
  * one spare planning slot for imminent successors without starving idle taxis.
