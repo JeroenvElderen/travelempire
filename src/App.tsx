@@ -913,6 +913,13 @@ export default function App(){
       path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&assigned?.status==='EXPLORING')
      return {...assigned,position:t.position,shiftParked:false,pauseAtHome:false};
+    // After correcting a legacy road-wait to IDLE, discard any delayed
+    // worker snapshot still carrying the obsolete auto-park state.
+    // Real manual/roster rests have an actual rest location or schedule
+    // and are preserved by the checks above.
+    if(t.kind==='explorer'&&t.status==='IDLE'&&
+       assigned?.status==='PAUSED'&&explorerWaitingForRoads(assigned))
+     return t;
     // Accept parking, returning, and automatic wake-up for purple Explorers.
     if(t.kind==='explorer'&&assigned&&
        ((t.status==='IDLE'&&assigned.status==='RETURNING'&&assigned.shiftParked)||
