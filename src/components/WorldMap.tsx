@@ -180,10 +180,10 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
 }
 
 type Basemap='standard'|'satellite';
-type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];constructionSites?:Array<{id:string;name:string;longitude:number;latitude:number}>;constructionFreight?:Array<{id:string;siteName:string;freight:ConstructionFreight}>;constructionFreightFocus?:{id:string;token:number}|null;exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
+type Props={depots?:Array<{id:string;name:string;lng:number;lat:number;capacity:number}>;companyId?:string;purchasedFerryRouteIds?:string[];ferryServiceStartedAt?:Record<string,number>;unlockedHarbourIds?:string[];selecting:boolean;onLocationSelected:(location:Headquarters)=>void;headquarters:Headquarters|null;taxis?:Taxi[];drivers?:DriverRecord[];ownedProperties?:PropertyHolding[];constructionSites?:Array<{id:string;name:string;longitude:number;latitude:number}>;constructionFreight?:Array<{id:string;siteName:string;freight:ConstructionFreight}>;constructionFreightFocus?:{id:string;token:number}|null;vehicleFocus?:{id:string;token:number}|null;exploredEdgeIds?:string[];graph?:RoadGraph|null;roadGraphVersion?:number;onViewportChange?:(bounds:{west:number;east:number;south:number;north:number})=>void;onExplorerCommand?:(id:string,action:'home'|'resume'|'teleport')=>void;onRequestRecovery?:(id:string,purpose:'fuel'|'depot')=>void;recoveryTargetIds?:string[];recoveryRequestedIds?:string[];gameClock?:GameClock|null;layersToggleToken?:number;shiftHours?:8|10;onShiftHoursChange?:(hours:8|10)=>void};
 const key=import.meta.env.VITE_MAPTILER_KEY?.trim();const customStyle=import.meta.env.VITE_MAP_STYLE_URL?.trim();
 function styleFor(mode:Basemap):string|null{if(!key)return mode==='standard'?customStyle||null:null;return `https://api.maptiler.com/maps/${mode==='standard'?'streets-v4':'hybrid'}/style.json?key=${encodeURIComponent(key)}`;}
-export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],constructionSites=[],constructionFreight=[],constructionFreightFocus=null,exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
+export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],ferryServiceStartedAt={},unlockedHarbourIds=[],selecting,onLocationSelected,headquarters,taxis=[],drivers=[],ownedProperties=[],constructionSites=[],constructionFreight=[],constructionFreightFocus=null,vehicleFocus=null,exploredEdgeIds=[],graph,roadGraphVersion=0,onExplorerCommand,onRequestRecovery,recoveryTargetIds=[],recoveryRequestedIds=[],gameClock,layersToggleToken=0}:Props){
  const driversRef=useRef(drivers);driversRef.current=drivers;
  const [perfOpen,setPerfOpen]=useState(false);
  const [perfSnapshot,setPerfSnapshot]=useState<PerformanceSnapshot|null>(null);
@@ -518,6 +518,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   diagnostic('map:poI-markers',`rest=${visible.length} invested=${ownedProperties.length}`);
  },[visiblePoi.restStops,ready]);
  const taxisRef=useRef(taxis);taxisRef.current=taxis;
+ // One-shot camera focus from Operations. Unlike cargo tracking, this never
+ // keeps following the vehicle or resets the camera on subsequent ticks.
+ useEffect(()=>{
+  if(!ready||!map.current||!vehicleFocus)return;
+  const target=taxisRef.current.find(t=>t.id===vehicleFocus.id);
+  if(!target)return;
+  map.current.flyTo({center:target.position,
+   zoom:Math.max(map.current.getZoom(),13.3),speed:1.3,essential:true});
+ },[ready,vehicleFocus?.id,vehicleFocus?.token]);
+
  // Render one simulation tick behind the authoritative state. This avoids running
  // the road integrator on every animation frame and prevents one-second jumps.
  const graphRef=useRef(graph);graphRef.current=graph;
