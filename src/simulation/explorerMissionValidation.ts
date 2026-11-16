@@ -54,11 +54,10 @@ export function validateExplorerMission(
    // The connector is the remaining directed purple edge from the
    // actual mid-segment position, ending at its legal downstream node.
    const endpoint=graph.nodes.get(cursor);
-   if(!endpoint||meters(endpoint,offset.to)>2||
-    !(graph.edges.get(cursor)??[]).some(e=>e.id===id&&discovered.has(id))&&
-    ![...graph.edges.values()].some(edges=>edges.some(e=>
-      e.id===id&&e.to===cursor&&discovered.has(id))))
-    return fail('invalid-purple-start-connector');
+   // resolvePurpleExplorerStart already verified the upstream directed
+   // road; never scan the nationwide graph to re-find that incoming edge.
+   if(!endpoint||meters(endpoint,offset.to)>2||!discovered.has(id)||
+    start.roadId!==id)return fail('invalid-purple-start-connector');
    continue;
   }
   const at=graph.nodes.get(cursor);
