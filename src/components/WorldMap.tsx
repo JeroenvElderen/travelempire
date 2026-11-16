@@ -660,7 +660,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       jobPanel.hidden=!job;
       if(!job)return;
       const pickup=job.phase==='pickup';
-      jobLabel.textContent=pickup?'Driving to passenger':'Passenger trip · live';
+      const distanceClass=vehicle.jobTripType==='intercity'?'Intercity':
+       vehicle.jobTripType==='regional'?'Regional':'Local';
+      jobLabel.textContent=pickup?'Driving to passenger · '+distanceClass:
+       distanceClass+' passenger trip · live';
       jobPhase.textContent=pickup?'Pickup':'On board';
       jobMoney.textContent=euro(job.earnedSoFar);
       jobDistance.textContent=job.drivenKm.toFixed(2)+' / '+job.totalKm.toFixed(2)+' km';
