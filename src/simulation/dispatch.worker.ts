@@ -3,6 +3,7 @@ import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
+import {explorerPlannerIdleQuota,explorerPlannerResultCurrent,explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,reserveExplorerDiscoveries} from './explorerAutopilot';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
 import {routeIsolatedExplorerToMainNetwork} from './explorerComponentRecovery';
@@ -19,12 +20,12 @@ let graph:RoadGraph|null=null;
 // shared discovered network and current route reservations.
 type PoolResult={type:'planResult';revision:number;requestId:number;vehicleId:string;
  outcome:string;taxi?:Taxi;roadCount:number;ms:number;error?:string;
- mode?:'idle'|'successor';baseEdgeIds?:string[];discoveryTier?:Taxi['explorerRole'];searchState?:string;};
+ mode?:'idle'|'successor';baseEdgeIds?:string[];discoveryTier?:Taxi['explorerRole'];searchState?:string;requestedRole?:Taxi['explorerRole'];expectedScoutingRuns?:number;};
 type PoolMessage=PoolResult|{type:'ready'|'roadsAdded';revision:number;roadCount?:number};
 type PoolSlot={worker:Worker;busy:boolean;requestId:number;ready:boolean;roads:number};
 const planningPool:PoolSlot[]=[];
 const planningRequests=new Map<number,{id:string;at:number;position:Point;exploredCount:number;
- mode:'idle'|'successor';baseEdgeIds?:string[]}>();
+ mode:'idle'|'successor';baseEdgeIds?:string[];requestedRole?:Taxi['explorerRole'];expectedScoutingRuns?:number}>();
 const planningResults=new Map<string,PoolResult>();
 const planningLastSent=new Map<string,number>();
 const planningBackoff=new Map<string,{until:number;roads:number;explored:number}>();
@@ -54,7 +55,7 @@ function startPlanningPool(revision:number):void{
     const request=planningRequests.get(msg.requestId);
     if(!request)return;
     planningRequests.delete(msg.requestId);
-    planningResults.set(request.id,{...msg,mode:request.mode,baseEdgeIds:request.baseEdgeIds} as PoolResult);
+    planningResults.set(request.id,{...msg,mode:request.mode,baseEdgeIds:request.baseEdgeIds,requestedRole:request.requestedRole,expectedScoutingRuns:request.expectedScoutingRuns} as PoolResult);
     planningStats.set(request.id,{result:msg.outcome??'unknown',ms:msg.ms??0,
      queueMs:performance.now()-request.at,at:performance.now()});
     if(msg.outcome==='planned')planningBackoff.delete(request.id);
@@ -1027,15 +1028,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(taxi.id,'stranded-no-legal-directed-route');
     }
    }
-   const reservedTargets=new Set<string>();
-   const reservedEdges=new Set<string>();
-   // Existing scouts reserve their remaining route, so new scouts avoid following them.
-   for(const taxi of taxis){
-    if(taxi.status!=='EXPLORING')continue;
-    const destination=taxi.path.at(-1);
-    if(destination){const target=nearest(graph,destination);if(target)reservedTargets.add(target);}
-    for(const edge of taxi.edgeIds.slice(taxi.leg))reservedEdges.add(edge);
-   }
+   // Reserve only pending discoveries; existing purple transit may be
+   // shared by every explorer. One active mission owns each red target.
+   const {edges:reservedEdges,targets:reservedTargets}=
+    reserveExplorerDiscoveries(taxis,explored,point=>nearest(activeGraph,point));
    // Mission lifecycle is worker-owned, independent of frame-by-frame movement.
    // A vehicle leaving its assigned route completes or interrupts the mission;
    // the next idle dispatch will issue a new one.
@@ -1075,9 +1071,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if((taxi.kind!=='explorer')||taxi.status!=='EXPLORING'||taxi.deliveryUntil||
        !specialistCanDepart(taxi,unlockedRoles))continue;
 
-    const remaining=taxi.path.length-1-taxi.leg;
     // Request the next route earlier to reduce waits at the final junction.
-    if(taxi.explorerRole==='poi'||remaining>MISSION_LOOKAHEAD_EDGES||!taxi.path.length)continue;
+    if(!explorerSuccessorDue(taxi,MISSION_LOOKAHEAD_EDGES)||!taxi.path.length)continue;
     if(successorPlansThisDispatch>=MAX_SUCCESSOR_PLANS_PER_DISPATCH||planningCalls>=planningBudget-3)continue;
     const destination=taxi.path[taxi.path.length-1];
     const from=nearest(graph,destination);
@@ -1101,56 +1096,73 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     successorPlansThisDispatch++;
     planningCalls++;
     // This vehicle may continue from its own reserved destination.
-    reservedTargets.delete(from);
-    const purpleCluster=purpleAllowedRoads;
-    if(taxi.kind==='explorer'&&!purpleCluster)continue;
-    const extensionStarted=performance.now();
-    const extensionCandidates=preferConnectedCandidates(graph,destination,prioritizeScoutCandidates(graph,destination,regionalCandidates(destination,discoveryRoads(taxi),explored,reservedEdges,SEARCH_RADII_KM[extensionTier],taxi.explorerRole??'balanced')),taxi.explorerRole??'balanced');
-    candidateSelectionMs+=performance.now()-extensionStarted;
-    // No eligible undiscovered roads in this tier: skip the costly route
-    // search, and try a wider tier on the next successor planning turn.
-    if(extensionCandidates.size===0){
-     negativeScoutEmptySkips++;
-     successorNegativeCache.set(taxi.id,{signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});
-     explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));
+    // Never mutate the shared reservation set to allow our own endpoint.
+    const successorTargets=new Set(reservedTargets);
+    successorTargets.delete(from);
+    // The current mission's committed discovery edges will be purple by
+    // the time the explorer reaches its endpoint, but must NOT be revealed
+    // in the global save until actually driven.
+    const projected=new Set([...explored,...(taxi.discoveryEdgeIds??[])]);
+    const ownEdges=new Set(taxi.discoveryEdgeIds??[]);
+    const otherReservations=new Set([...reservedEdges].filter(id=>!ownEdges.has(id)));
+    const start=purpleStartNear(destination,projected);
+    if(!start){
+     explorerPlanSkipReason.set(taxi.id,'successor-no-purple-start');
      continue;
     }
-    const extensionRouteStarted=performance.now();
-    // Successor planning starts at the end of the current mission. The last
-    // junction may still be undiscovered because the explorer is driving
-    // towards it. Project only THIS explorer's committed discovery edges for
-    // route planning, without changing the actual saved discovery network.
-    const projectedExplored=new Set(explored);
-    const projectedRevealed=new Set(revealedNodes);
-    // This explorer may reuse its own committed roads as transit, while
-    // other vehicles' reservations remain off limits.
-    const successorReservations=new Set(reservedEdges);
-    for(const id of taxi.edgeIds.slice(taxi.leg))successorReservations.delete(id);
-    for(const id of taxi.discoveryEdgeIds??[]){
-     if(projectedExplored.has(id))continue;
-     projectedExplored.add(id);
-     const ends=roadEndpoints.get(id);
-     if(ends){projectedRevealed.add(ends[0]);projectedRevealed.add(ends[1]);}
+    const fallbackAllowed=performance.now()-
+     (legacyFallbackAt.get(taxi.id)??-100000)>=30000;
+    if(fallbackAllowed)legacyFallbackAt.set(taxi.id,performance.now());
+    const extensionStarted=performance.now();
+    const decision=planSpecialistMission(activeGraph,start.node,projected,
+     taxi.explorerRole,tier=>discoveryRoads({...taxi,explorerRole:tier}),
+     otherReservations,successorTargets,
+     {fallbackAllowed,maxVisits:18000});
+    const route=decision.route?prependPurpleStart(decision.route,start):null;
+    const check=route&&decision.route?validateExplorerMission(activeGraph,{
+     path:route.path,edgeIds:route.edgeIds,
+     discoveryEdgeIds:decision.route.discoveryEdgeIds,
+     escapeTransitEdgeIds:decision.route.escapeTransitEdgeIds,
+    },destination,start,projected,
+     discoveryRoads({...taxi,explorerRole:decision.tier}),
+     otherReservations,successorTargets):null;
+    scoutRoutingMs+=performance.now()-extensionStarted;
+    scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',
+     ms:Math.round(performance.now()-extensionStarted),phase:'extension',
+     result:decision.state+':'+decision.reason});
+    if(!route||check?.ok!==true){
+     explorerPlanSkipReason.set(taxi.id,'successor-'+
+      (!route?decision.state+':'+decision.reason:
+       check&&!check.ok?check.reason:'invalid-route'));
+     if(decision.state==='exhausted'){
+      failedRouteCache.set('successor|'+taxi.id,{
+       signature:failureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});
+     }
+     successorNegativeCache.set(taxi.id,{
+      signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});
+     // A bounded/incomplete search cannot lower the explorer's class.
+     continue;
     }
-    const extension=await dispatchScout({...taxi,status:'IDLE',position:destination,path:[],edgeIds:[],leg:0,distanceIntoLeg:0},
-     graph,projectedExplored,hq,reservedTargets,successorReservations,undefined,purpleAllowedRoads,discoveryRoads(taxi),undefined,taxi.path.length>1?(nearest(graph,taxi.path[taxi.path.length-2])??undefined):undefined,undefined,poiTargets,undefined,projectedRevealed,()=>msg.revision===activeRevision,extensionCandidates);
     if(msg.revision!==activeRevision)return;
-    scoutRoutingMs+=performance.now()-extensionRouteStarted;
-   scoutTimings.push({vehicleId:taxi.id,role:taxi.explorerRole??'',ms:Math.round(performance.now()-extensionStarted),phase:'extension',result:extension.status});
-    if(extension.status!=='EXPLORING'||extension.path.length<2||
-       hasInvalidRedApproach(activeGraph,extension.path,extension.edgeIds,
-        projectedExplored,new Set(extension.discoveryEdgeIds??[]))){failedRouteSearches++;failedRouteCache.set('successor|'+taxi.id,{signature:failureSignature,until:performance.now()+FAILED_ROUTE_RETRY_MS});successorNegativeCache.set(taxi.id,{signature:extensionSignature,until:performance.now()+EXTENSION_RETRY_MS});explorerSearchTier.set(taxi.id,Math.min(extensionTier+1,SEARCH_RADII_KM.length-1));continue;}
+    // Exact endpoint continuity: no jumping onto adjacent elevated,
+    // underground or parallel roads.
+    if(meters(destination,route.path[0])>2)continue;
     explorerSearchTier.set(taxi.id,0);
-    successorNegativeCache.delete(taxi.id);failedRouteCache.delete('successor|'+taxi.id);
-    // The nearest node at the destination must match the new route's start.
-    if(extension.path[0][0]!==destination[0]||extension.path[0][1]!==destination[1])continue;
+    successorNegativeCache.delete(taxi.id);
+    failedRouteCache.delete('successor|'+taxi.id);
     missionLastEndpoint.set(taxi.id,destinationKey);
-    // The appended successor becomes the committed mission destination.
-    recordExplorerMission({...taxi,path:[...taxi.path,...extension.path.slice(1)],edgeIds:[...taxi.edgeIds,...extension.edgeIds]},now);
+    const next:Taxi={...taxi,
+     path:[...taxi.path,...route.path.slice(1)],
+     edgeIds:[...taxi.edgeIds,...route.edgeIds],
+     discoveryEdgeIds:[...(taxi.discoveryEdgeIds??[]),...(decision.route?.discoveryEdgeIds??[])],
+     escapeTransitEdgeIds:[...(taxi.escapeTransitEdgeIds??[]),...(decision.route?.escapeTransitEdgeIds??[])],
+     scoutingRuns:(taxi.scoutingRuns??0)+1};
+    taxis[index]=next;
+    for(const id of decision.route?.discoveryEdgeIds??[])reservedEdges.add(id);
+    reservedTargets.add(check.endNode);
+    recordExplorerMission(next,now);
     missionSequence.set(taxi.id,(missionSequence.get(taxi.id)??0)+1);
     missionPlannedAt.set(taxi.id,now);
-    taxis[index]={...taxi,path:[...taxi.path,...extension.path.slice(1)],
-     edgeIds:[...taxi.edgeIds,...extension.edgeIds],discoveryEdgeIds:[...(taxi.discoveryEdgeIds??taxi.edgeIds),...(extension.discoveryEdgeIds??[])],scoutingRuns:extension.scoutingRuns};
     assignedCount++;
    }
    // Reserve three of four route-planning slots for idle explorers.
@@ -1480,6 +1492,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      planningBackoff.delete(current.id);
     };
     if(proposal.outcome!=='planned'||!proposal.taxi)continue;
+    if(!explorerPlannerResultCurrent(current,{
+     mode:proposal.mode??'idle',role:proposal.requestedRole,
+     scoutingRuns:proposal.expectedScoutingRuns,
+     baseEdgeIds:proposal.baseEdgeIds,
+    })){reject('stale-mission-generation');continue;}
     const route=proposal.taxi;
     const append=proposal.mode==='successor'&&current.status==='EXPLORING'&&
      !!proposal.baseEdgeIds&&proposal.baseEdgeIds.length===current.edgeIds.length&&
@@ -1548,18 +1565,26 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(bb===undefined)return 1;
     return aa-bb;
    });
+   const readyPlannerSlots=planningPool.filter(slot=>slot.ready&&!slot.busy&&slot.roads>0).length;
+   const urgentSuccessors=taxis.some(t=>t.kind==='explorer'&&
+    explorerSuccessorUrgent(t)&&!t.ferryTrip&&!t.deliveryUntil&&!inFlight.has(t.id));
+   const idleSlotQuota=explorerPlannerIdleQuota(readyPlannerSlots,urgentSuccessors);
+   let idleSlotsUsed=0;
    for(const slot of planningPool){
     if(!slot.ready||slot.busy||slot.roads===0)continue;
+    if(idleSlotsUsed>=idleSlotQuota)break;
     const vehicle=explorers.shift();
     if(!vehicle)break;
     const start=purpleStartNear(vehicle.position,explored);
     if(!start){
      explorerPlanSkipReason.set(vehicle.id,'no-purple-start');continue;
     }
-    slot.busy=true;
+    slot.busy=true;idleSlotsUsed++;
     const requestId=++nextPlanningRequest;
     slot.requestId=requestId;
-    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),position:vehicle.position,exploredCount:explored.size,mode:'idle'});
+    planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
+     position:vehicle.position,exploredCount:explored.size,mode:'idle',
+     requestedRole:vehicle.explorerRole,expectedScoutingRuns:vehicle.scoutingRuns??0});
     planningLastSent.set(vehicle.id,performance.now());
     explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
     explorerPlanSkipReason.set(vehicle.id,'pool-search');
@@ -1574,17 +1599,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      explorerPlanSkipReason.set(vehicle.id,'pool-message-error:'+String(error));
     }
    }
-   // Only spend otherwise unused pool capacity on route extensions. Idle
-   // specialists always take precedence over moving explorers' lookahead.
-   if(explorers.length===0){
+   // One slot is reserved for urgent successor work; the other still
+   // serves idle explorers. Nonurgent lookahead uses genuinely free slots.
+   {
     const moving=taxis.filter(t=>t.kind==='explorer'&&t.status==='EXPLORING'&&
      (specialistCanDepart(t,unlockedRoles)||specialistFallbackRoles(t.explorerRole).length>0)&&
      !t.ferryTrip&&!t.deliveryUntil&&t.path.length>=2&&
-     t.edgeIds.length-t.leg<=10&&!inFlight.has(t.id)&&
+     explorerSuccessorDue(t,MISSION_LOOKAHEAD_EDGES)&&!inFlight.has(t.id)&&
      (!planningBackoff.has(t.id)||planningBackoff.get(t.id)!.until<=performance.now()||
       planningBackoff.get(t.id)!.roads!==seenRoadIds.size||
       planningBackoff.get(t.id)!.explored!==explored.size));
-    moving.sort((a,b)=>(planningLastSent.get(a.id)??0)-(planningLastSent.get(b.id)??0));
+    moving.sort((a,b)=>explorerRemainingEdges(a)-explorerRemainingEdges(b)||
+     (planningLastSent.get(a.id)??0)-(planningLastSent.get(b.id)??0));
     for(const slot of planningPool){
      if(!slot.ready||slot.busy||slot.roads===0)continue;
      const vehicle=moving.shift();
@@ -1598,7 +1624,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      slot.busy=true;slot.requestId=requestId;
      planningRequests.set(requestId,{id:vehicle.id,at:performance.now(),
       position:destination,exploredCount:explored.size,mode:'successor',
-      baseEdgeIds:vehicle.edgeIds.slice()});
+      baseEdgeIds:vehicle.edgeIds.slice(),requestedRole:vehicle.explorerRole,
+      expectedScoutingRuns:vehicle.scoutingRuns??0});
      planningLastSent.set(vehicle.id,performance.now());
      explorerPlanningAttempts.set(vehicle.id,(explorerPlanningAttempts.get(vehicle.id)??0)+1);
      explorerPlanSkipReason.set(vehicle.id,'pool-successor');

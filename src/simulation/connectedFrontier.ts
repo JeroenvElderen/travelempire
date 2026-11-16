@@ -1,4 +1,5 @@
 import {meters,type Point,type RoadGraph,type Taxi} from './taxi';
+import {estimateExplorerFrontierGain,scoreExplorerFrontier} from './explorerAutopilot';
 import type {ExplorerRoutePlan,ExplorerRouteDiagnostic} from './explorerRoadPlanner';
 
 /** Shared, directed frontier search. All specialists TRANSIT on discovered
@@ -49,6 +50,9 @@ export function planConnectedFrontier(
  };
  let candidate:{from:string;to:string;id:string}|null=null;
  let bestScore=Infinity;
+ let firstFrontierMeters:number|null=null;
+ let candidatesScored=0;
+ let firstFrontierVisit=0;
  while(heap.length&&diagnostic.visitedPurpleNodes<nodeBudget){
   const item=pop()!;
   if(item.cost!==(dist.get(item.node)??Infinity))continue;
@@ -56,6 +60,12 @@ export function planConnectedFrontier(
   // the saved port. This is a ranking heuristic only; all route edges still
   // come from the legally directed, connected road network.
   if(goal&&item.cost>bestScore)break;
+  // Once a legal frontier is found, compare only a small nearby set.
+  // Never extend a nationwide Dijkstra search just for a scoring bonus.
+  if(!goal&&firstFrontierMeters!==null&&
+   (item.cost>firstFrontierMeters+2300||
+    diagnostic.visitedPurpleNodes-firstFrontierVisit>=480||
+    candidatesScored>=32))break;
   diagnostic.visitedPurpleNodes++;
   const links=graph.edges.get(item.node)??[];
   for(const edge of links){
@@ -66,13 +76,20 @@ export function planConnectedFrontier(
     diagnostic.unsafeOneWaySkipped++;continue;
    }
    const point=graph.nodes.get(edge.to);
-   const score=item.cost+(goal&&point?1.25*meters(point,goal):0);
+   const predicted=goal?0:estimateExplorerFrontierGain(graph,item.node,
+    edge.to,edge.id,eligible,explored,reservedEdges,reservedNodes);
+   const score=goal?item.cost+(point?1.25*meters(point,goal):0):
+    scoreExplorerFrontier(item.cost,predicted);
    if(score<bestScore){
     bestScore=score;candidate={from:item.node,to:edge.to,id:edge.id};
    }
-   if(!goal)break;
+   if(!goal){
+    candidatesScored++;
+    if(firstFrontierMeters===null){
+     firstFrontierMeters=item.cost;firstFrontierVisit=diagnostic.visitedPurpleNodes;
+    }
+   }
   }
-  if(candidate&&!goal)break;
   for(const edge of links){
    if(edge.meters<=0||!explored.has(edge.id))continue;
    const next=item.cost+edge.meters;
