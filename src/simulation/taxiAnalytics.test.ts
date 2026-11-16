@@ -70,16 +70,16 @@ describe('Taxi Phase 4 — truthful game-ledger reporting',()=>{
   taxis:[taxi('A'),taxi('B',{depotId:'second'}),taxi('explorer',{kind:'explorer'})],
   revenue:0,completed:0,vehicleFinanceHistory:entries,
   depotFinanceHistory:[
-   {day,name:'',depotId:'main',depotName:'Athens',
+   {day,depotId:'main',depotName:'Athens',
     revenue:240,vehicleExpenses:95,facilityExpenses:25,allocatedOverhead:10,
     trips:6,km:65},
-   {day,name:'',depotId:'second',depotName:'Corinth',
+   {day,depotId:'second',depotName:'Corinth',
     revenue:70,vehicleExpenses:55,facilityExpenses:10,allocatedOverhead:5,
     trips:2,km:22},
    {day:old,depotId:'main',depotName:'Athens',
     revenue:1000,vehicleExpenses:200,facilityExpenses:20,
     allocatedOverhead:10,trips:20,km:400},
-  ].map(({name:unused,...row})=>row),
+  ],
  });
  it('builds calendar-correct Today/7 days/30 days game time boundaries',()=>{
   expect(taxiAnalyticsDateRange(now,'today')).toEqual({
