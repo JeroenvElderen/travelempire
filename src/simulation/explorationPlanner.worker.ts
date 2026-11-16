@@ -1,9 +1,9 @@
 import {type Taxi,type RoadGraph,type Point} from './taxi';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
-import {planReachableExplorerRoad} from './explorerRoadPlanner';
-import {planConnectedFrontier} from './connectedFrontier';
+import {planSpecialistMission} from './explorerPlanCore';
+import {validateExplorerMission} from './explorerMissionValidation';
 import type {RoadSegment} from '../data/roadTiles';
-import {explorerClassEligible,specialistFallbackRoles} from './explorerRoles';
+import {explorerClassEligible} from './explorerRoles';
 
 type Init={type:'init';revision:number};
 type Roads={type:'addRoads';revision:number;roads:RoadSegment[]};
@@ -62,7 +62,7 @@ function addRoads(roads:RoadSegment[]):void{
   if(road.oneway!==-1)add(a,b);
   if(road.oneway!==1)add(b,a);
   const roles:Taxi['explorerRole'][]=['highway','primary','secondary','residential','poi'];
-  for(const role of roles)if(explorerClassEligible(role,road.highway)){
+  for(const role of roles)if(!road.taxiOnly&&explorerClassEligible(role,road.highway)){
    let set=roadClasses.get(role!);
    if(!set){set=new Set();roadClasses.set(role!,set);}
    set.add(road.id);
@@ -96,34 +96,30 @@ self.onmessage=async(event:MessageEvent<Message>)=>{
  try{
   const reserved=new Set(msg.reservedRoads),reservedDest=new Set(msg.reservedDestinations);
   const role=msg.vehicle.explorerRole;
-  // Search preferred road class over the whole reachable purple network
-  // before considering ANY lower class. Never mix classes in a discovery
-  // assignment. Ferry transfers are handled by the maritime scheduler:
-  // a fallback here must not override a pending higher-class ferry target.
-  const tiers=specialistFallbackRoles(role);
-  let planned:ReturnType<typeof planConnectedFrontier>|null=null;
-  let chosenTier=role;
-  for(const tier of tiers.length?tiers:[role]){
-   const valid=new Set(roleAllowed(tier));
-   const connected=planConnectedFrontier(graph,currentNode,explored,valid,
-    reserved,reservedDest,tier,75000);
-   const candidatePlan=connected.route?connected:
-    planReachableExplorerRoad(graph,currentNode,explored,valid,
-     reserved,reservedDest,tier);
-   planned=candidatePlan;
-   if(candidatePlan.route){chosenTier=tier;break;}
-  }
-  const candidate=planned?.route??null;
+  // Exactly the same specialist decision policy as iPhone's inline worker.
+  // The preferred class is never downgraded after an incomplete search.
+  const decision=planSpecialistMission(graph,currentNode,explored,role,
+   tier=>new Set(roleAllowed(tier)),reserved,reservedDest,{fallbackAllowed:true});
+  const candidate=decision.route;
   const route=candidate?prependPurpleStart(candidate,origin):null;
+  const eligible=roleAllowed(decision.tier);
+  const check=route?validateExplorerMission(graph,{
+   path:route.path,edgeIds:route.edgeIds,
+   discoveryEdgeIds:route.discoveryEdgeIds??[],
+   escapeTransitEdgeIds:candidate?.escapeTransitEdgeIds??[],
+  },msg.vehicle.position,origin,explored,eligible,reserved,reservedDest):null;
+  const valid=!!route&&check?.ok===true;
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,
-   vehicleId:msg.vehicle.id,outcome:route?'planned':planned?.diagnostic.reason??'no-reachable-service-road',
-   preferredRole:role,discoveryTier:chosenTier,
-   taxi:route?{...msg.vehicle,status:'EXPLORING',path:route.path,
-    edgeIds:route.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
+   vehicleId:msg.vehicle.id,
+   outcome:valid?'planned':route?'rejected:'+(check&&!check.ok?check.reason:'invalid-route'):
+    decision.state==='incomplete'?'search-incomplete:'+decision.reason:decision.reason,
+   discoveryTier:decision.tier,searchState:decision.state,
+   taxi:valid?{...msg.vehicle,status:'EXPLORING',path:route!.path,
+    edgeIds:route!.edgeIds,discoveryEdgeIds:route!.discoveryEdgeIds,
     escapeTransitEdgeIds:candidate?.escapeTransitEdgeIds??[],
     journeyEdges:[],leg:0,distanceIntoLeg:0,
     scoutingRuns:(msg.vehicle.scoutingRuns??0)+1}:undefined,
-   diagnostic:planned?.diagnostic,roadCount,ms:performance.now()-started});
+   diagnostic:decision.diagnostic,roadCount,ms:performance.now()-started});
  }catch(error){
   self.postMessage({type:'planResult',revision,requestId:msg.requestId,vehicleId:msg.vehicle.id,
    outcome:'error',error:String(error),roadCount,ms:performance.now()-started});

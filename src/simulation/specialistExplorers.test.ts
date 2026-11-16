@@ -29,7 +29,9 @@ describe('five specialist explorers',()=>{
   expect(explorerClassEligible('primary','secondary')).toBe(false);
   expect(explorerClassEligible('secondary','tertiary')).toBe(true);
   expect(explorerClassEligible('secondary','residential')).toBe(false);
-  expect(explorerClassEligible('residential','service')).toBe(true);
+  // Service roads belong to the dedicated Service Explorer ('poi').
+  expect(explorerClassEligible('residential','service')).toBe(false);
+  expect(explorerClassEligible('poi','service')).toBe(true);
   expect(explorerClassEligible('residential','primary')).toBe(false);
  });
  it('does not start exploration near HQ without a purple road',async()=>{
