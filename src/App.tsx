@@ -36,6 +36,7 @@ import {nearbyExplorerRestStops,reasonableExplorerRestRoute} from './simulation/
 import FleetPanel from "./components/FleetPanel";
 import DealershipPage from './components/DealershipPage';
 import OperationsPanel from "./components/OperationsPanel";
+import {explorerWaitingForRoads,explorerOnActualRest} from './simulation/explorerParking';
 import {mergeExplorerRecoveryHistory,type ExplorerOperationsSnapshot,
  type ExplorerRecoveryEvent,type ExplorerLiveVehicle} from './simulation/explorerOperations';
 import FinancePanel from "./components/FinancePanel";
@@ -903,8 +904,7 @@ export default function App(){
     // cannot cancel it before its deadline.
     if(t.kind==='explorer'&&t.status==='PAUSED'&&t.shiftParked&&
        !t.ferryTrip&&!t.recoveryPending&&
-       (t.scheduledShiftParked||t.restUntilGameMs!==undefined||
-        !!t.restStopId||t.pauseAtHome||assigned?.status==='PAUSED'))return t;
+       (explorerOnActualRest(t)||assigned?.status==='PAUSED'))return t;
     // Worker state is authoritative for automatic Explorer parking. A stale
     // PAUSED snapshot must not survive after the worker clears that state.
     if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&
@@ -913,6 +913,13 @@ export default function App(){
       path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
     if(t.kind==='explorer'&&t.status==='PAUSED'&&!t.recoveryPending&&assigned?.status==='EXPLORING')
      return {...assigned,position:t.position,shiftParked:false,pauseAtHome:false};
+    // After correcting a legacy road-wait to IDLE, discard any delayed
+    // worker snapshot still carrying the obsolete auto-park state.
+    // Real manual/roster rests have an actual rest location or schedule
+    // and are preserved by the checks above.
+    if(t.kind==='explorer'&&t.status==='IDLE'&&
+       assigned?.status==='PAUSED'&&explorerWaitingForRoads(assigned))
+     return t;
     // Accept parking, returning, and automatic wake-up for purple Explorers.
     if(t.kind==='explorer'&&assigned&&
        ((t.status==='IDLE'&&assigned.status==='RETURNING'&&assigned.shiftParked)||
@@ -1407,6 +1414,14 @@ export default function App(){
        return delivered;
       }
      }
+      // A legacy road-wait is not a driver break. Earlier saves could
+      // accidentally acquire a synthetic 30-minute rest timer even though
+      // no rest-stop journey or destination had ever been assigned.
+      if(explorerWaitingForRoads(delivered)){
+       return {...delivered,status:'IDLE' as const,shiftParked:false,
+        pauseAtHome:false,restUntilGameMs:undefined,
+        path:[],edgeIds:[],leg:0,distanceIntoLeg:0,speedKph:0};
+      }
       if(passengerTaxi||delivered.kind==='explorer'){
        const drivingMs=delivered.drivingSinceRestGameMs??0;
        const hotelDrivingMs=delivered.drivingSinceHotelGameMs??0;
