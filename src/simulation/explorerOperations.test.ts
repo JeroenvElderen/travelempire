@@ -67,6 +67,17 @@ describe('Explorer Autopilot phase 4 — actual status precedence',()=>{
   expect(explorerSituation(idle,{...live(),exhaustionProven:false}).label)
    .toBe('Searching');
  });
+ it('shows current idle planner status rather than a stale Checking Route error',()=>{
+  const idle={...explorer(),status:'IDLE' as const};
+  const oldRecovery={...live(),status:'IDLE',
+   recoveryReason:'invalid-saved-route:one-way-or-layer-disconnected',
+   planningSkipReason:'no-purple-segment-near-vehicle',savedRouteHealth:null};
+  const result=explorerSituation(idle,oldRecovery);
+  expect(result.label).toBe('Searching');
+  expect(result.detail).toContain('No discovered start road');
+  expect(explorerSituation(idle,{...oldRecovery,planningSkipReason:'legacy-candidate-rejected:one-way-or-layer-disconnected'}).detail)
+   .toContain('Rejected an unsafe candidate');
+ });
  it('translates internal failure codes without exposing raw epoch or node IDs',()=>{
   expect(reasonForExplorer('preferred-class-search-incomplete:search-node-budget'))
    .toContain('preferred class');
