@@ -1,7 +1,7 @@
 import {specialistFallbackRoles} from './explorerRoles';
 import {energyPercent} from './energy';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
-import {planSpecialistMission} from './explorerPlanCore';
+import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {canRetryStalledExplorer,evaluateExplorerRoute,safeExplorerRoutePrefix,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
  type ExplorerExhaustionProof,type ExplorerProgressWatch,type ExplorerRouteHealth} from './explorerRecoveryController';
@@ -82,6 +82,20 @@ const idleSince=new Map<string,number>();
 const explorerProgressWatch=new Map<string,ExplorerProgressWatch>();
 const explorerRecoveryAttempts=new Map<string,{attempts:number;firstAt:number;lastAt:number}>();
 const explorerRecoveryReason=new Map<string,string>();
+// A known bad frontier is skipped briefly instead of being proposed each
+// dispatch. Keep one edge per vehicle; no road data or save mutation.
+const explorerRejectedCandidate=new Map<string,{edgeId:string;until:number}>();
+function rejectExplorerCandidate(id:string,edgeId:string|undefined):void{
+ if(edgeId)explorerRejectedCandidate.set(id,{edgeId,until:performance.now()+90000});
+}
+function explorerPendingReservations(id:string,reserved:ReadonlySet<string>):Set<string>{
+ const available=new Set(reserved),blocked=explorerRejectedCandidate.get(id);
+ if(blocked){
+  if(blocked.until>performance.now())available.add(blocked.edgeId);
+  else explorerRejectedCandidate.delete(id);
+ }
+ return available;
+}
 const explorerRecoveryEvents:ExplorerRecoveryEvent[]=[];
 let explorerRecoveryEventSeq=0;
 function recordExplorerRecoveryEvent(vehicleId:string,kind:ExplorerRecoveryEvent['kind'],description:string){
@@ -595,7 +609,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
  try{
   if(msg.type==='init'){
    explorerProgressWatch.clear();explorerRecoveryAttempts.clear();
-   explorerRecoveryReason.clear();explorerRecoveryEvents.length=0;explorerRecoveryEventSeq=0;explorerExhaustionProof.clear();parkedProofChecks.clear();parkedExhaustionChecks=0;
+   explorerRecoveryReason.clear();explorerRejectedCandidate.clear();explorerRecoveryEvents.length=0;explorerRecoveryEventSeq=0;explorerExhaustionProof.clear();parkedProofChecks.clear();parkedExhaustionChecks=0;
    stalledExplorerReplans=0;loadedMissionPreservations=0;invalidMissionRecoveries=0;
    idleSince.clear();majorSearches.clear();majorRoadSearchDiagnostics.clear();explorerPlanningAttempts.clear();explorerLastPlanAttempt.clear();explorerLastConsidered.clear();explorerPlanSkipReason.clear();singleWorkerScanAt.clear();singleWorkerScanResult.clear();explorerComponents.clear();explorerStartIssues.clear();frontierFailureCache.clear();legacyFallbackAt.clear();strandedRecoveryRetryAt.clear();explorerConsiderationSequence=0;passengerRequestsCreated=0;passengerRequestsRejected=0;passengerAssignments=0;passengerRouteFailures=0;passengerCompletedByTaxi.clear();passengerTripsCompleted=0;nextExplorerIndex=0;regionalRoads.clear();autoParkedExplorers.clear();failedRouteCache.clear();reachabilityCache.clear();regionalCellVersions.clear();regionalMissionQueues.clear();regionalQueueVersions.clear();poiRetryWallClock.clear();poiCooldownSkips=0;regionalMissionQueueHits=0;regionalMissionQueueBuilds=0;successorNegativeCache.clear();successorNegativeCacheHits=0;explorerSearchTier.clear();negativeScoutCache.clear();negativeScoutCacheHits=0;negativeScoutEmptySkips=0;regionalLookups=0;regionalCandidatesExamined=0;idleFallbackAt.clear();missionSequence.clear();missionPlannedAt.clear();missionLastEndpoint.clear();explorerMissions.clear();completedExplorerMissions=0;interruptedExplorerMissions=0;missionCounter=0;extensionRetryAt.clear();extensionLastDestination.clear();idleRetryAt.clear();idleRetryRoadCount.clear();idleRetryExploredCount.clear();idleRetryPosition.clear();poiRoadCursor=0;byClass.clear();allRoads.clear();classifiedRoads.clear();roadEndpoints.clear();roadInsertionOrder.length=0;roadClassCache.clear();indexedExplored.clear();revealedNodesIndex.clear();completionRoadsIndex.clear();connectedFrontierIndex.clear();discoveredRoleHistory.clear();connectedHqNode=null;discoveryIndexRoads=0;discoveryIndexUpdates=0;discoveryIndexRebuilds=0;discoveryIndexLastMs=0;poiRoadsIndex.clear();nearestHarbourRoads.clear();harbourAccessCandidates.clear();poiTargetsSignature='';poiIndexedRoads=0;pendingLoadedExplored.clear();passengerIndexedRoads.clear();passengerEligibleStops.clear();passengerSpatialStops.clear();taxiOnlyRoadIds.clear();passengerLastSelectedDepot=null;passengerIndexRebuilds=0;passengerIndexAdded=0;
    graph={nodes:new Map(),edges:new Map(),nodeKeys:[]};seenRoadIds.clear();activeRevision=msg.revision;
@@ -839,6 +853,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      (health.edgeId?':road='+health.edgeId:'')+
      (health.leg!==undefined?':leg='+health.leg:''));
     invalidMissionRecoveries++;
+    rejectExplorerCandidate(vehicle.id,health.edgeId);
     recordExplorerRecoveryEvent(vehicle.id,'invalid-route','Saved route rejected; checking a legal alternative');
     continue;
    }
@@ -1371,7 +1386,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       if(fallbackAllowed)legacyFallbackAt.set(idleVehicle.id,timestamp);
       const decision=planSpecialistMission(activeGraph,origin.node,explored,role,
        tier=>discoveryRoads({...idleVehicle,explorerRole:tier}),
-       reservedEdges,reservedTargets,{fallbackAllowed});
+       explorerPendingReservations(idleVehicle.id,reservedEdges),
+       reservedTargets,{fallbackAllowed});
       const planned={route:decision.route,diagnostic:decision.diagnostic};
       const route=decision.route;
       const completed=route?prependPurpleStart(route,origin):null;
@@ -1383,12 +1399,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       },idleVehicle.position,origin,explored,
        discoveryRoads({...idleVehicle,explorerRole:decision.tier}),
        reservedEdges,reservedTargets):null;
-      const routeValid=check?.ok===true;
+      const routeHealthCheck=route&&completed?evaluateExplorerRoute(activeGraph,{
+       ...idleVehicle,status:'EXPLORING',path:completed.path,
+       edgeIds:completed.edgeIds,discoveryEdgeIds:route.discoveryEdgeIds,
+       escapeTransitEdgeIds:route.escapeTransitEdgeIds,leg:0,distanceIntoLeg:0,
+      },seenRoadIds,roadEndpoints,explored):null;
+      const routeValid=check?.ok===true&&routeHealthCheck?.state==='valid';
       singleWorkerScanResult.set(idleVehicle.id,
        'road-frontier:'+decision.state+':'+decision.reason+
        ':tier='+decision.tier+':visited='+decision.diagnostic.visitedPurpleNodes);
       if(completed&&route){
        if(routeValid){
+        explorerRejectedCandidate.delete(idleVehicle.id);
         frontierFailureCache.delete(idleVehicle.id);
         explorerComponents.delete(idleVehicle.id);
         explorerExhaustionProof.delete(idleVehicle.id);
@@ -1416,11 +1438,17 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         assignedCount++;idleMissionPlans++;planningCalls++;
         continue;
        }
-       singleWorkerScanResult.set(idleVehicle.id,'route-rejected:'+ (check&&!check.ok?check.reason:'unknown'));
+       const reason=check&&!check.ok?check.reason:
+        routeHealthCheck?.state==='invalid'?routeHealthCheck.reason:
+        routeHealthCheck?.state==='waiting-for-tiles'?'route-tiles-loading':'unknown';
+       rejectExplorerCandidate(idleVehicle.id,
+        routeHealthCheck?.state==='invalid'?routeHealthCheck.edgeId:undefined);
+       singleWorkerScanResult.set(idleVehicle.id,'route-rejected:'+reason);
       }
       if(route&&!routeValid){
        explorerPlanSkipReason.set(idleVehicle.id,
-        'shared-route-validator-rejected:'+ (check&&!check.ok?check.reason:'invalid'));
+        'shared-route-validator-rejected:'+ (check&&!check.ok?check.reason:
+         routeHealthCheck?.state==='invalid'?routeHealthCheck.reason:'route-tiles-loading'));
        continue;
       }
       if(!route){
@@ -1478,6 +1506,17 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        loadedPurpleRoads:[...explored].filter(id=>roadEndpoints.has(id)).length
       });
      }
+    }
+    // Current specialists never fall through to legacy dispatchScout;
+    // its regional road choices repeatedly violate one-way/layer topology.
+    // On iPhone, one bounded shared-planner search per dispatch is deliberate.
+    if(usesAutopilotRoutePlanner(idleVehicle.explorerRole)){
+     const previous=explorerPlanSkipReason.get(idleVehicle.id)??'';
+     if(!previous.startsWith('shared-route-')&&
+        !previous.startsWith('preferred-class-')&&
+        previous!=='no-purple-segment-near-vehicle')
+      explorerPlanSkipReason.set(idleVehicle.id,'autopilot-planner-queued');
+     continue;
     }
     if(idleVehicle.explorerRole==='poi'){const p=poiRetryWallClock.get(idleVehicle.id);if(p&&performance.now()<p.until&&p.roadCount===seenRoadIds.size&&p.poiSignature===poiTargetsSignature){poiCooldownSkips++;idleSkipped++;explorerPlanSkipReason.set(idleVehicle.id,'poi-cooldown');continue;}}
     const positionKey=idleVehicle.position.join(',');
@@ -1571,6 +1610,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const checked=evaluateExplorerRoute(activeGraph,assignment,seenRoadIds,
       roadEndpoints,explored);
      if(checked.state!=='valid'){
+      rejectExplorerCandidate(idleVehicle.id,checked.edgeId);
       explorerPlanSkipReason.set(idleVehicle.id,
        'legacy-candidate-rejected:'+checked.reason+
        (checked.edgeId?':road='+checked.edgeId:''));
