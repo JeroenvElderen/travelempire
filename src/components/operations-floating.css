@@ -455,3 +455,32 @@
  .nav-v216.ops-overlay-mode .ops-v2 .ops-explorer-pulse article>span{font-size:9px}
  .nav-v216.ops-overlay-mode .ops-v2 .ops-explorer-measures strong{font-size:12px}
 }
+
+
+/* Taxi Autopilot Phase 1 — compact, accessible dispatch preference control. */
+.nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+ margin:9px 0 10px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch button{
+ min-height:40px;min-width:0;padding:7px 6px;
+ border:1px solid var(--ops-line);border-radius:10px;
+ background:rgba(24,35,61,.67);color:var(--ops-muted);
+ font:inherit;font-size:11px;font-weight:650;line-height:1.3;
+ cursor:pointer;white-space:normal;text-align:center;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch button.active{
+ border-color:rgba(197,160,242,.72);background:var(--ops-soft);
+ color:var(--ops-fg);
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch button:focus-visible{
+ outline:2px solid var(--ops-accent);outline-offset:2px;
+}
+.nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch button:disabled{
+ opacity:.65;cursor:default;
+}
+@media(max-width:370px){
+ .nav-v216.ops-overlay-mode .ops-v2 .ops-dispatch-mode-switch button{
+  padding:7px 4px;font-size:10px;
+ }
+}
