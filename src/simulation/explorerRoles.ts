@@ -4,11 +4,11 @@ export type SpecialistExplorerRole='highway'|'primary'|'secondary'|'residential'
 export const SPECIALIST_EXPLORERS:ReadonlyArray<{
  role:SpecialistExplorerRole;name:string;description:string;
 }>=[
- {role:'highway',name:'Highway Explorer',description:'Motorways, trunk roads and their links'},
- {role:'primary',name:'Primary Explorer',description:'Primary roads and primary links'},
- {role:'secondary',name:'Secondary Explorer',description:'Secondary and tertiary roads'},
- {role:'residential',name:'Local Street Explorer',description:'Residential streets and local lanes'},
- {role:'poi',name:'Service Explorer',description:'Parking aisles, service roads and facility access'},
+ {role:'highway',name:'Highway Explorer',description:'Prioritises motorways and trunk roads; can discover all drivable roads'},
+ {role:'primary',name:'Primary Explorer',description:'Prioritises primary roads; can discover all drivable roads'},
+ {role:'secondary',name:'Secondary Explorer',description:'Prioritises secondary and tertiary roads; can discover all drivable roads'},
+ {role:'residential',name:'Local Street Explorer',description:'Prioritises local streets; can discover all drivable roads'},
+ {role:'poi',name:'Service Explorer',description:'Prioritises service and harbour access; can discover all drivable roads'},
 ];
 
 export const explorerClassEligible=(role:Taxi['explorerRole'],highway?:string):boolean=>{
@@ -25,16 +25,15 @@ export const explorerClassEligible=(role:Taxi['explorerRole'],highway?:string):b
 export const specialistLabel=(role:Taxi['explorerRole'])=>
  SPECIALIST_EXPLORERS.find(v=>v.role===role)?.name??'Explorer';
 
-/** Strict discovery fallback. A specialist may drop to a lower class only
- * after exhausting every reachable target in its preferred class.
- * The saved 'poi' role now discovers service roads, not marker targets. */
-export const specialistFallbackRoles=(role:Taxi['explorerRole']):SpecialistExplorerRole[]=>{
+/** Road class is a *priority*, not a discovery restriction.
+ * A specialist first searches its preferred class; when it cannot find
+ * a useful connected mission it may fall back to any other drivable road.
+ * 'balanced' is the all-class search tier, not a new vehicle role.
+ */
+export const specialistFallbackRoles=(role:Taxi['explorerRole']):Taxi['explorerRole'][]=>{
  switch(role){
- case 'highway':return ['highway','primary','secondary','residential'];
- case 'primary':return ['primary','secondary','residential'];
- case 'secondary':return ['secondary','residential'];
- case 'residential':return ['residential'];
- case 'poi':return ['poi'];
+ case 'highway':case 'primary':case 'secondary':case 'residential':case 'poi':
+  return [role,'balanced'];
  default:return [];
  }
 };
