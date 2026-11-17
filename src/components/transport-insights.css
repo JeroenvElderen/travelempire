@@ -1,0 +1,36 @@
+/* Phase 5 — compact transport analytics, within the existing Operations glass. */
+.nav-v216.ops-overlay-mode .te-transport-insights{display:grid;gap:11px;min-width:0;margin:6px 0}
+.nav-v216.ops-overlay-mode .te-transport-insights .ops-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.nav-v216.ops-overlay-mode .te-transport-insights .ops-section-heading h2{margin:0;font-size:15px;color:var(--ops-fg)}
+.nav-v216.ops-overlay-mode .te-transport-insights .ops-section-heading small{font-size:10px;color:var(--ops-muted);text-align:right}
+.nav-v216.ops-overlay-mode .te-transport-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.nav-v216.ops-overlay-mode .te-transport-metrics article{display:flex;flex-direction:column;min-width:0;gap:5px;padding:12px 11px;background:var(--ops-card);border:1px solid var(--ops-line);border-radius:13px}
+.nav-v216.ops-overlay-mode .te-transport-metrics article>span{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ops-muted)}
+.nav-v216.ops-overlay-mode .te-transport-metrics article>span svg{flex:none;color:var(--ops-accent)}
+.nav-v216.ops-overlay-mode .te-transport-metrics article>strong{font-size:19px;line-height:1.2;color:var(--ops-fg);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.nav-v216.ops-overlay-mode .te-transport-metrics article>small{font-size:9px;color:var(--ops-subtle);line-height:1.35}
+.nav-v216.ops-overlay-mode .te-transport-traffic{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;background:rgba(21,36,61,.6);border:1px solid var(--ops-line);border-radius:12px;font-size:11px;color:var(--ops-muted)}
+.nav-v216.ops-overlay-mode .te-transport-traffic span{display:inline-flex;align-items:center;gap:6px}
+.nav-v216.ops-overlay-mode .te-transport-traffic svg{color:var(--ops-accent)}
+.nav-v216.ops-overlay-mode .te-transport-traffic strong{color:var(--ops-fg)}
+.nav-v216.ops-overlay-mode .te-transport-panel{min-width:0;padding:12px 13px!important}
+.nav-v216.ops-overlay-mode .te-transport-category{display:grid;gap:5px;padding:10px 0;border-top:1px solid var(--ops-line)}
+.nav-v216.ops-overlay-mode .te-transport-category-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+.nav-v216.ops-overlay-mode .te-transport-category-top>strong{color:var(--ops-fg)}
+.nav-v216.ops-overlay-mode .te-transport-category-top>span{color:var(--ops-fg);font-variant-numeric:tabular-nums}
+.nav-v216.ops-overlay-mode .te-transport-meter{width:100%;height:5px;border-radius:8px;background:rgba(197,160,242,.13);overflow:hidden}
+.nav-v216.ops-overlay-mode .te-transport-meter>span{display:block;height:100%;border-radius:8px;background:var(--ops-accent)}
+.nav-v216.ops-overlay-mode .te-transport-breakdown{display:flex;gap:6px 13px;flex-wrap:wrap;color:var(--ops-muted);font-size:10px}
+.nav-v216.ops-overlay-mode .te-transport-area{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid var(--ops-line)}
+.nav-v216.ops-overlay-mode .te-transport-area>div{display:grid;min-width:0;gap:3px}
+.nav-v216.ops-overlay-mode .te-transport-area>div:last-child{text-align:right;flex-shrink:0}
+.nav-v216.ops-overlay-mode .te-transport-area strong{font-size:11px;color:var(--ops-fg);overflow-wrap:anywhere}
+.nav-v216.ops-overlay-mode .te-transport-area small{font-size:9px;color:var(--ops-muted)}
+.nav-v216.ops-overlay-mode .te-transport-empty{color:var(--ops-muted);font-size:11px;padding:12px 1px}
+.nav-v216.ops-overlay-mode .te-transport-disclaimer{line-height:1.55;font-size:10px;color:var(--ops-subtle)}
+@media(max-width:680px){
+ .nav-v216.ops-overlay-mode .te-transport-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .nav-v216.ops-overlay-mode .te-transport-metrics article{padding:10px 9px}
+ .nav-v216.ops-overlay-mode .te-transport-metrics article>strong{font-size:17px}
+ .nav-v216.ops-overlay-mode .te-transport-area>div:last-child{max-width:50%}
+}
