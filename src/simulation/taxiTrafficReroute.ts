@@ -2,6 +2,7 @@
  * A route starts at the original current directed road, with progress retained.
  * No teleport, shortcut, road discovery, new passenger, or fare settlement.
  */
+import {setTrafficGameTime} from './trafficConditions';
 import {
  meters,routeTraffic,routeDiscovered,trafficTravelSeconds,
  type RoadGraph,type Point,type Taxi,
@@ -46,6 +47,9 @@ const near=(a:Point,b:Point,limit=3)=>meters(a,b)<=limit;
 export function planTaxiTrafficDetour(
  graph:RoadGraph,s:MovingTrafficSnapshot,discovered:Set<string>,
 ):TrafficDetourOutcome{
+ // The A* router evaluates edge costs using the shared simulated clock.
+ // Set it here too, so direct calls are deterministic without the worker.
+ setTrafficGameTime(s.gameAt);
  const {remainingPath:path,remainingEdgeIds:ids}=s;
  if(!path||!ids||ids.length<2||ids.length!==path.length-1||ids.length>4000||
   !Number.isFinite(s.distanceIntoLeg)||s.distanceIntoLeg<0||
