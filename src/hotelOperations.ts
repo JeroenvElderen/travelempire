@@ -9,6 +9,7 @@ import {type ConstructionState,type HotelSite,type HotelFloor,type Room,type Sup
  type StockBatch,supplies,supplyStock,roomIssues} from './internalConstruction';
 import {hotelGuestRoomQuality,hotelDesignDemandModifier} from './hotelBlueprintEditing';
 import {analyzeHotelFloorAccess} from './hotelAccess';
+import {analyzeHotelBuildingAccess,hotelVerticalCongestionModifier} from './hotelVerticalAccess';
 
 export type HotelRole='reception'|'housekeeping'|'kitchen'|'bar';
 export type HotelStaff=Record<HotelRole,number>;
@@ -76,7 +77,9 @@ function buildingAt(site:HotelSite,hour:number):HotelFloor[]{
  return site.built;
 }
 export type RoomInventory={readyRooms:Array<{room:Room;floor:HotelFloor}>;bathrooms:number;
-  hasLobby:boolean;hasKitchen:boolean;hasRestaurant:boolean;hasBar:boolean;reasons:string[]};
+  hasLobby:boolean;hasKitchen:boolean;hasRestaurant:boolean;hasBar:boolean;reasons:string[];
+  verticalGuestCapacityPerHour:number;verticalPeakGuestMovementsPerHour:number;
+  verticalCongestionModifier:number;};
 export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const floors=buildingAt(site,hour);
  const rooms=floors.flatMap(f=>f.rooms);
@@ -84,6 +87,8 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const bathrooms=rooms.filter(r=>r.type==='bathroom'&&floors.some(f=>f.rooms.includes(r)&&roomIssues(f,r).length===0)).length;
  const groundAccess=site.accessRulesVersion===1&&floors[0]?
   analyzeHotelFloorAccess(floors[0],site,0):null;
+ const buildingAccess=site.accessRulesVersion===2?
+  analyzeHotelBuildingAccess(floors,site):null;
  const reachable=new Set(groundAccess?.guests.filter(g=>g.status==='connected')
   .map(g=>g.roomId)??[]);
  // New plots need a functional ground-floor entrance and reception route.
@@ -91,18 +96,29 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const readyRooms=floors.flatMap((f,floorIndex)=>f.rooms.filter(r=>
   r.type==='guest'&&roomIssues(f,r).length===0&&
   f.rooms.some(b=>b.type==='bathroom'&&roomIssues(f,b).length===0)&&
-  (floorIndex!==0||!groundAccess||reachable.has(r.id))
+  (floorIndex!==0||!groundAccess||reachable.has(r.id))&&
+ (!buildingAccess||buildingAccess.floors[floorIndex]?.guests.some(g=>
+  g.roomId===r.id&&g.status==='connected'))
  ).map(room=>({room,floor:f})));
 
  const hasLobby=exists('lobby'),hasKitchen=exists('kitchen'),hasRestaurant=exists('restaurant'),hasBar=exists('bar');
  const reasons:string[]=[];
  if(!hasLobby)reasons.push('Construct a lobby with a reception desk');
+ if(buildingAccess&&floors.some(f=>f.rooms.some(r=>r.type==='guest'))&&
+  !buildingAccess.receptionConnected)
+  reasons.push('Provide a ground-floor entrance connected to a furnished reception');
+ if(buildingAccess&&buildingAccess.upperGuestRooms>0&&
+  buildingAccess.connectedUpperGuestRooms===0)
+  reasons.push('Align stairwells or elevators on consecutive floors and connect their doorways to corridors');
  if(groundAccess&&!groundAccess.receptionConnected&&floors[0].rooms.some(r=>r.type==='lobby'))
   reasons.push('Connect ground-floor reception to a valid exterior entrance through room or corridor doors');
  if(groundAccess&&groundAccess.guestRooms>0&&groundAccess.connectedGuests===0)
   reasons.push('Give at least one furnished ground-floor guest room a connected doorway to reception');
  if(!readyRooms.length)reasons.push('Furnish at least one guest room and a functioning bathroom on its floor');
- return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons};
+ return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons,
+  verticalGuestCapacityPerHour:buildingAccess?.verticalCapacityPerHour??0,
+  verticalPeakGuestMovementsPerHour:buildingAccess?.peakGuestMovesPerHour??0,
+  verticalCongestionModifier:buildingAccess?hotelVerticalCongestionModifier(buildingAccess):0};
 }
 export function openingIssues(site:HotelSite,hour:number):string[]{
  if(site.kind==='headquarters')return ['Headquarters cannot be operated as a hotel'];
@@ -264,7 +280,10 @@ export function settleHotelOperations(state:ConstructionState,nowHour:number,own
      sum+hotelGuestRoomQuality(item.floor,item.room).score,0)/Math.max(1,validRooms.length);
     const quality=hotelDesignDemandModifier(averageDesign);
     const pricing=clamp((11000-original.rateCents)/18000,-0.26,0.26);
-    const occupancy=clamp(0.60+seasonal+quality+pricing+(random01(dayKey)-.5)*.20,.08,.96);
+    // Real installed and accessible lift/stair throughput limits hotel appeal
+    // when estimated peak guest movements exceed connected shaft capacity.
+    const occupancy=clamp(0.60+seasonal+quality+pricing+
+     inventory.verticalCongestionModifier+(random01(dayKey)-.5)*.20,.08,.96);
     const linen=Math.floor(supplyStock(site,'linen',hour));
     const capacity=Math.min(validRooms.length,linen);
     const desired=Math.min(capacity,Math.round(capacity*occupancy));
