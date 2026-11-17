@@ -14,4 +14,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm test -- src/simulation/taxiDispatchStrategy.test.ts src/simulation/taxiRegionalCoverage.test.ts src/simulation/passengerDepotDemand.test.ts src/simulation/taxiAutopilotPhase3.test.ts src/simulation/taxiAnalytics.test.ts src/simulation/taxiRepositioning.test.ts src/simulation/passengerJourneys.test.ts src/simulation/passengerSettlement.test.ts src/simulation/driverSchedule.test.ts src/simulation/shiftRest.test.ts src/simulation/directedRoadRouting.test.ts
+      - run: npm test -- src/simulation/taxiDispatchStrategy.test.ts src/simulation/taxiRegionalCoverage.test.ts src/simulation/passengerDepotDemand.test.ts src/simulation/taxiAutopilotPhase3.test.ts src/simulation/taxiAnalytics.test.ts src/simulation/taxiRepositioning.test.ts src/simulation/passengerJourneys.test.ts src/simulation/passengerSettlement.test.ts src/simulation/driverSchedule.test.ts src/simulation/taxiProfitFirstRest.test.ts src/simulation/directedRoadRouting.test.ts
