@@ -1,4 +1,4 @@
-import type {HotelFloor,HotelSite,ObjectPlacement,FurnitureCode} from '../internalConstruction';
+import type {HotelFloor,HotelSite,ObjectPlacement} from '../internalConstruction';
 import {furnitureSize} from '../internalConstruction';
 import {ISO_COLORS,roomShortLabel,wallSegment} from '../hotelVisualisation';
 import {accessDoorPair} from '../hotelAccess';
@@ -102,7 +102,7 @@ export function ArchitecturalDetails({site,floor,selectedFurnitureId,furniturePr
       stroke="#20374b" strokeWidth=".20"/>
      <path d={path} fill="none" stroke="#d2f9da" strokeWidth=".045"
       strokeDasharray=".12 .06"/>
-     <line x1={x} y1={y} x2={w.orientation==='h'?x:y===-1?x:x+direction}
+     <line x1={x} y1={y} x2={w.orientation==='h'?x:x+direction}
       y2={w.orientation==='h'?y+direction:y+1} stroke="#e8fff4" strokeWidth=".067"/>
      <circle cx={x} cy={y} r=".105" fill="#9ff0c7"/>
     </g>;
