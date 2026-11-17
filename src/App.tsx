@@ -437,14 +437,24 @@ export default function App(){
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
  const [taxiDispatchMode,setTaxiDispatchMode]=useState<TaxiDispatchMode>(()=>{
   try{const saved=company?.id?localStorage.getItem('travelempire.taxi.dispatch.v1.'+company.id):null;
-   return isTaxiDispatchMode(saved)?saved:'balanced';}catch{return 'balanced';}
+   return isTaxiDispatchMode(saved)?saved:'max-profit';}catch{return 'max-profit';}
  });
  const taxiDispatchModeRef=useRef(taxiDispatchMode);taxiDispatchModeRef.current=taxiDispatchMode;
  useEffect(()=>{
   let saved:string|null=null;
   try{if(company?.id)saved=localStorage.getItem('travelempire.taxi.dispatch.v1.'+company.id);}
   catch{/* preferences are optional if private browsing disallows storage */}
-  const next=isTaxiDispatchMode(saved)?saved:'balanced';
+  // One-time migration: old Balanced was the default before profit-first.
+  // Respect explicit Maximum Jobs and subsequent player choices.
+  let next:TaxiDispatchMode=isTaxiDispatchMode(saved)?saved:'max-profit';
+  try{
+   const key='travelempire.taxi.dispatch.profit-first.v1.'+company?.id;
+   if(company?.id&&!localStorage.getItem(key)){
+    if(next==='balanced')next='max-profit';
+    localStorage.setItem(key,'1');
+    localStorage.setItem('travelempire.taxi.dispatch.v1.'+company.id,next);
+   }
+  }catch{/* continue with in-memory strategy when storage is blocked */}
   taxiDispatchModeRef.current=next;setTaxiDispatchMode(next);
  },[company?.id]);
  const changeTaxiDispatchMode=(mode:TaxiDispatchMode)=>{
