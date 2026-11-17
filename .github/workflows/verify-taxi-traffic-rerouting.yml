@@ -1,0 +1,21 @@
+name: Verify Taxi Traffic Rerouting Phase 1
+on:
+  push:
+    branches:
+      - feature/taxi-traffic-rerouting-phase1
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript and Vite production build
+        run: npm run build
+      - name: Routing, traffic and passenger regression tests
+        run: npm test -- src/simulation/taxiTrafficReroute.test.ts src/simulation/passengerRouteRecovery.test.ts src/simulation/directedRoadRouting.test.ts src/simulation/trafficConditions.test.ts src/simulation/passengerJourneys.test.ts
+      - name: Complete test suite
+        run: npm test
