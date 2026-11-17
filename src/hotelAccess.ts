@@ -135,17 +135,30 @@ export function analyzeHotelFloorAccess(
   }else if(a&&b){graph.get(a.id)!.add(b.id);graph.get(b.id)!.add(a.id);}
  }
  const groundFloor=floorIndex===0;
- const visited=new Set<string>(),queue:string[]=[...entries];
- for(const id of queue)visited.add(id);
- for(let i=0;i<queue.length;i++){
-  for(const next of graph.get(queue[i])??[]){
-   const room=floor.rooms.find(r=>r.id===next);
-   if(!circulation(room)||visited.has(next))continue;
-   visited.add(next);queue.push(next);
+ // Traverse separate circulation components. A guest in an isolated external
+ // hallway must never be marked connected just because some OTHER entrance
+ // reaches reception across the hotel.
+ const visited=new Set<string>(),checked=new Set<string>();
+ let receptionConnected=false;
+ for(const seed of circulations){
+  if(checked.has(seed.id))continue;
+  const component=new Set<string>([seed.id]),queue=[seed.id];
+  checked.add(seed.id);
+  for(let i=0;i<queue.length;i++){
+   for(const next of graph.get(queue[i])??[]){
+    const room=floor.rooms.find(r=>r.id===next);
+    if(!circulation(room)||checked.has(next))continue;
+    checked.add(next);component.add(next);queue.push(next);
+   }
+  }
+  const hasEntrance=[...component].some(id=>entries.has(id));
+  const hasReception=floor.rooms.some(r=>component.has(r.id)&&r.type==='lobby'&&
+   roomIssues(floor,r).length===0);
+  if(hasEntrance&&hasReception){
+   receptionConnected=true;
+   for(const id of component)visited.add(id);
   }
  }
- const receptionConnected=floor.rooms.some(r=>r.type==='lobby'&&
-  roomIssues(floor,r).length===0&&visited.has(r.id));
  const guestAccess:GuestAccess[]=guestRooms.map(room=>{
   const doors=roomDoorCounts.get(room.id)??0;
   let status:AccessStatus='disconnected';
