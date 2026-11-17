@@ -1,11 +1,11 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,Accessibility,AlarmSmoke,FireExtinguisher,Signpost} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
 import {
  type HotelSite,type HotelFloor,type RoomType,type BuilderTool,type FurnitureCode,type TradeMode,type ConstructionState,
- type Wall,type LightingKind,
+ type Wall,type LightingKind,type SafetyFixtureKind,
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
  roomIssues,furnitureSize,supplies,supplyStock,hotelPlotCostCents,validHotelPlotSize,type HotelPlotSize,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS
 } from '../internalConstruction';
@@ -14,6 +14,8 @@ import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRo
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
 import {analyzeHotelFloorAccess,suggestRoomAccessDoor,toggleHotelAccessDoor} from '../hotelAccess';
 import {analyzeHotelBuildingAccess,addVerticalCore,VERTICAL_CORES,type VerticalCoreType} from '../hotelVerticalAccess';
+import {analyzeHotelSafety,toggleHotelSafetyFixture,suggestHotelSafetyFixture,
+ SAFETY_FIXTURE_COST_CENTS,SAFETY_FIXTURE_LABEL} from '../hotelSafety';
 import {analyzeRoomAtmosphere,toggleHotelWindow,toggleHotelLighting,
  suggestRoomWindow,suggestRoomLighting,WINDOW_COST_CENTS,LIGHT_COST_CENTS,
  type WindowKind} from '../hotelAtmosphere';
@@ -62,6 +64,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const [windowKind,setWindowKind]=useState<WindowKind>('window');
  const [lightingKind,setLightingKind]=useState<LightingKind>('ceiling');
  const [showAtmosphereOverlay,setShowAtmosphereOverlay]=useState(false);
+ const [safetyKind,setSafetyKind]=useState<SafetyFixtureKind>('smoke-alarm');
+ const [showSafetyOverlay,setShowSafetyOverlay]=useState(false);
  const [method,setMethod]=useState<TradeMode>('contractor');
  const [supplyCode,setSupplyCode]=useState<SupplyCode>('eggs');
  const [supplyQuantity,setSupplyQuantity]=useState(10);
@@ -123,6 +127,10 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   [r.id,analyzeRoomAtmosphere(floor,r,site)] as const)):new Map<string,ReturnType<typeof analyzeRoomAtmosphere>>(),
  [floor,site]);
  const selectedAtmosphere=selectedRoom?roomAtmospheres.get(selectedRoom.id):null;
+ const safetyReport=useMemo(()=>site?analyzeHotelSafety(site.draft,site):null,[site]);
+ const safetyFloor=safetyReport?.floors[floorIndex]??null;
+ const selectedGuestSafety=selectedRoom?safetyReport?.guests.find(g=>
+  g.floorIndex===floorIndex&&g.roomId===selectedRoom.id):null;
  const buildingAccess=useMemo(()=>site&&site.accessRulesVersion===2?
   analyzeHotelBuildingAccess(site.draft,site):null,[site]);
  const accessReport=useMemo(()=>site&&floor?
@@ -160,7 +168,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   history.current={siteId:idValue,undo:[],redo:[]};
   pointers.current.clear();pinchOrigin.current=null;pendingScroll.current=null;
   setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);setTab('blueprint');setStatus('');
-  setTool('pan');setShowAccessOverlay(true);setShowAtmosphereOverlay(false);setZoom(1);
+  setTool('pan');setShowAccessOverlay(true);setShowAtmosphereOverlay(false);setShowSafetyOverlay(false);setZoom(1);
  };
  const recordEdit=(old:HotelSite)=>{
   if(history.current.siteId!==old.id)history.current={siteId:old.id,undo:[],redo:[]};
@@ -233,6 +241,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   const message=onChangeSite({...site,atmosphereRulesVersion:1});
   if(!message)recordEdit(site);
   setStatus(message??'Hotel atmosphere simulation enabled. Actual booking changes use only your completed rooms and installed fixtures.');
+ };
+ const addSafetyToSelected=(roomId:string,kind:SafetyFixtureKind)=>{
+  if(!site||!floor||active)return;
+  const cell=suggestHotelSafetyFixture(floor,site,kind,roomId,floorIndex);
+  if(!cell){setStatus(kind==='exit-sign'?'Add an exterior doorway to the ground-floor lobby or corridor first.':kind==='fire-extinguisher'?'Select a lobby or corridor to install an extinguisher.':'No free safety equipment position in this room.');return;}
+  modify(f=>toggleHotelSafetyFixture(f,site,{...cell,id:id(),kind},floorIndex));
+ };
+ const enableSafetyForExisting=()=>{
+  if(!site||site.safetyRulesVersion===1||site.kind==='headquarters'||active||currentlyOpen)return;
+  const message=onChangeSite({...site,safetyRulesVersion:1});
+  if(!message)recordEdit(site);
+  setStatus(message??'Safety and accessibility rules enabled. Existing rooms remain on your plan, but only compliant built rooms can take new bookings.');
  };
  const addCore=(type:VerticalCoreType)=>{
   if(!site||active)return;
@@ -391,6 +411,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(tool==='lighting'){
    modify(f=>toggleHotelLighting(f,site,{id:id(),x:where.x,y:where.y,kind:lightingKind}));return;
   }
+  if(tool==='safety'){
+   modify(f=>toggleHotelSafetyFixture(f,site,{id:id(),kind:safetyKind,x:where.x,y:where.y},floorIndex));return;
+  }
   if(tool==='wall'||tool==='door'||tool==='window'){
    const distances=[where.fy,1-where.fx,1-where.fy,where.fx];
    const edge=distances.indexOf(Math.min(...distances));
@@ -400,6 +423,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
     tool==='window'?toggleHotelWindow(f,site,wall):toggleWall(f,wall,site));return;
   }
   if(tool==='erase'){
+   const safetyItem=(floor.safetyFixtures??[]).find(f=>f.x===where.x&&f.y===where.y);
+   if(safetyItem){modify(f=>({...f,safetyFixtures:(f.safetyFixtures??[]).filter(v=>v.id!==safetyItem.id)}));return;}
    const fixture=(floor.lights??[]).find(l=>l.x===where.x&&l.y===where.y);
    if(fixture){modify(f=>({...f,lights:(f.lights??[]).filter(l=>l.id!==fixture.id)}));return;}
    const obj=[...floor.objects].reverse().find(o=>{const sz=furnitureSize(o);return where.x>=o.x&&where.y>=o.y&&where.x<o.x+sz.width&&where.y<o.y+sz.height;});
