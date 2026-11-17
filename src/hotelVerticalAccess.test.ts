@@ -132,6 +132,28 @@ describe('Hotel architecture Phase 2 — true multi-floor routes',()=>{
   }]};
   expect(analyzeHotelBuildingAccess(wrongKind.draft,wrongKind).links).toHaveLength(0);
  });
+ it('connects three floors only through an uninterrupted aligned shaft',()=>{
+  const {site}=hotel();
+  const base=withDoors(site);
+  const third=addFloor(base);
+  const withShaft=addVerticalCore(third,2,'stairwell','stair-third');
+  const linked=updateFloor(withShaft,2,f=>{
+   let upper=drawRoom(f,room('hall-third','corridor',10,3,3,2),withShaft);
+   upper=drawRoom(upper,room('guest-third','guest',13,2,4,4),withShaft);
+   upper=toggleHotelAccessDoor(upper,withShaft,door('stairs-third',10,3));
+   return toggleHotelAccessDoor(upper,withShaft,door('guest-third-door',13,3));
+  });
+  const valid=analyzeHotelBuildingAccess(linked.draft,linked);
+  expect(valid.links).toHaveLength(2);
+  expect(valid.links.every(l=>l.connected)).toBe(true);
+  expect(valid.floors[2].guests[0].status).toBe('connected');
+  expect(valid.verticalCapacityPerHour).toBe(60);
+  const broken={...linked,draft:linked.draft.map((f,i)=>i===1?
+   {...f,rooms:f.rooms.filter(r=>r.type!=='stairwell')}:f)};
+  const disconnected=analyzeHotelBuildingAccess(broken.draft,broken);
+  expect(disconnected.floors[2].guests[0].status).toBe('no-vertical-link');
+  expect(disconnected.connectedUpperGuestRooms).toBe(0);
+ });
  it('does not allow isolated upper-floor exterior entrances to replace reception',()=>{
   const {site}=hotel();
   let first=drawRoom(site.draft[1],room('upper-outer-hall','corridor',0,8,3,2),site);
