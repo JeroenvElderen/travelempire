@@ -8,7 +8,7 @@ import {
   type HotelFloor,type HotelSite,type Room,type Wall,
 } from './internalConstruction';
 
-export type AccessStatus='connected'|'missing-door'|'disconnected'|'no-entry'|'no-reception'|'upper-floor-pending';
+export type AccessStatus='connected'|'missing-door'|'disconnected'|'no-entry'|'no-reception'|'upper-floor-pending'|'no-vertical-link';
 export type DoorPair={
   first:Room|null;second:Room|null;exterior:boolean;clear:boolean;
 };
