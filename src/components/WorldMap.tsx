@@ -663,8 +663,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       const pickup=job.phase==='pickup';
       const distanceClass=vehicle.jobTripType==='intercity'?'Intercity':
        vehicle.jobTripType==='regional'?'Regional':'Local';
-      jobLabel.textContent=pickup?'Driving to passenger · '+distanceClass:
-       distanceClass+' passenger trip · live';
+      const passenger=vehicle.jobPassengerType?
+       vehicle.jobPassengerType.charAt(0).toUpperCase()+vehicle.jobPassengerType.slice(1):'Passenger';
+      const group=vehicle.jobPassengerCount&&vehicle.jobPassengerCount>1?
+       vehicle.jobPassengerCount+' pax':'1 pax';
+      jobLabel.textContent=passenger+' · '+group+' · '+distanceClass;
       jobPhase.textContent=pickup?'Pickup':'On board';
       jobMoney.textContent=euro(job.earnedSoFar);
       jobDistance.textContent=job.drivenKm.toFixed(2)+' / '+job.totalKm.toFixed(2)+' km';
