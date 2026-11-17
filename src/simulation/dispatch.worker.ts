@@ -1010,6 +1010,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      luggageCount:profile.luggageCount,minimumClass:profile.minimumClass,
      fareMultiplier:Math.min(1.5,(request.fareMultiplier??1)*profile.fareBonus),
      fare:Math.round(request.fare*profile.fareBonus*100)/100};
+    // Do not clog the limited mobile queue with bookings no owned taxi can serve.
+    // Unserved specialist demand can be exposed later as an expansion opportunity.
+    if(!passengerTaxis.some(vehicle=>passengerCompatible(vehicle,request)))continue;
     if(request.tripType==='regional')regionalTripsCreated++;
     else if(request.tripType==='intercity')intercityTripsCreated++;
     request.originDepotId=region.id;
