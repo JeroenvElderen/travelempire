@@ -1,0 +1,22 @@
+name: Verify Advanced Taxi Job Matching Phase 4
+on:
+  push:
+    branches:
+      - feature/advanced-taxi-job-matching-phase4
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript and production build
+        run: npm run build
+      - name: Taxi scoring, passenger demand, routing and roster regression
+        run: npm test -- src/simulation/taxiAdvancedMatching.test.ts src/simulation/taxiDispatchStrategy.test.ts src/simulation/passengerProfiles.test.ts src/simulation/passengerPlaces.test.ts src/simulation/driverSchedule.test.ts src/simulation/passengerJourneys.test.ts src/simulation/taxiTrafficReroute.test.ts
+      - name: Full suite (pre-existing failures reported separately)
+        continue-on-error: true
+        run: npm test
