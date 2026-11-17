@@ -1,5 +1,5 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,Accessibility,AlarmSmoke,FireExtinguisher,Signpost} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,AlarmSmoke,FireExtinguisher,Signpost} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -15,7 +15,7 @@ import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} fr
 import {analyzeHotelFloorAccess,suggestRoomAccessDoor,toggleHotelAccessDoor} from '../hotelAccess';
 import {analyzeHotelBuildingAccess,addVerticalCore,VERTICAL_CORES,type VerticalCoreType} from '../hotelVerticalAccess';
 import {analyzeHotelSafety,toggleHotelSafetyFixture,suggestHotelSafetyFixture,
- SAFETY_FIXTURE_COST_CENTS,SAFETY_FIXTURE_LABEL} from '../hotelSafety';
+ SAFETY_FIXTURE_COST_CENTS} from '../hotelSafety';
 import {analyzeRoomAtmosphere,toggleHotelWindow,toggleHotelLighting,
  suggestRoomWindow,suggestRoomLighting,WINDOW_COST_CENTS,LIGHT_COST_CENTS,
  type WindowKind} from '../hotelAtmosphere';
