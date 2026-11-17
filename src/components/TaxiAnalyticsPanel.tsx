@@ -2,6 +2,7 @@ import {useMemo,useState} from 'react';
 import {BarChart3,CarFront,ChevronDown,ChevronUp,Clock3,
  Gauge,MapPin,Route,Wallet} from 'lucide-react';
 import type {FleetState} from '../simulation/taxi';
+import PassengerTrafficInsightsPanel from './PassengerTrafficInsightsPanel';
 import {TAXI_ANALYTICS_RANGES,taxiOperationsReport,
  type TaxiAnalyticsRange,type TaxiOperationsRow} from '../simulation/taxiAnalytics';
 
@@ -74,6 +75,7 @@ export default function TaxiAnalyticsPanel({fleet,gameNow}:Props){
    overhead, finance, taxes and corporate expenses. Distance and utilisation
    tracking starts with Phase 4; older records are not estimated.
   </p>
+  <PassengerTrafficInsightsPanel fleet={fleet} gameNow={gameNow} range={range}/>
   <article className="ops-card ops-taxi-trend">
    <div className="ops-card-head"><div className="ops-card-label"><BarChart3 size={17}/>
     <strong>Income vs. expenses</strong></div><small>{periodLabel}</small></div>
