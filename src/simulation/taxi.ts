@@ -1,5 +1,6 @@
 import {hardcodedRoadSpeedKph} from '../data/hardcodedSpeedLimits';
 import {fareForDistance} from './demand';
+import {regionalTrafficFactor,trafficGameTime,setTrafficGameTime} from './trafficConditions';
 import {passengerCompatible,type PassengerKind} from './passengerProfiles';
 import {explorerClassEligible} from './explorerRoles';
 import type {Company} from '../company';
@@ -190,30 +191,12 @@ export type RoadGraph={nodes:Map<string,Point>;edges:Map<string,{to:string;meter
 const key=(p:Point)=>`${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 export const meters=(a:Point,b:Point)=>{const lat=(a[1]+b[1])*Math.PI/360;return Math.hypot((a[0]-b[0])*111320*Math.cos(lat),(a[1]-b[1])*111320)};
 // Road speeds are fixed by highway category; OSM maxspeed is deliberately ignored.
-// Deterministic, Greece-local traffic model. No external traffic feed or map overlay.
-const trafficHourFormatter=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',hour:'2-digit',hourCycle:'h23'});
-const trafficWeekdayFormatter=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Athens',weekday:'short'});
-let trafficCachedMinute=NaN,trafficCachedHour=0,trafficCachedWeekday='';
-export function trafficFactor(speedKph:number,at=Date.now()):number{
- // Athens traffic classification changes only at hour/day boundaries.
- // Reuse Intl formatting across the integrator's 100ms physics steps.
- const minute=Math.floor(at/60000);
- if(minute!==trafficCachedMinute){
-  trafficCachedMinute=minute;
-  trafficCachedHour=Number(trafficHourFormatter.format(at));
-  trafficCachedWeekday=trafficWeekdayFormatter.format(at);
- }
- const hour=trafficCachedHour;
- const weekday=trafficCachedWeekday;
- const weekend=weekday==='Sat'||weekday==='Sun';
- const rush=!weekend&&((hour>=7&&hour<10)||(hour>=16&&hour<19));
- const busy=!weekend&&hour>=11&&hour<16;
- // Posted speed is never exceeded; slower urban streets experience heavier congestion.
- const density=speedKph<=50?1:speedKph<=80?0.55:0.18;
- return Math.max(0.3,1-density*(rush?0.48:busy?0.22:weekend?0.10:0.07));
+// Routed estimates and actual taxi movement use identical regional congestion.
+export function trafficFactor(speedKph:number,at=trafficGameTime(),point?:Point,roadId?:string):number{
+ return regionalTrafficFactor(speedKph,at,point,roadId);
 }
-export function trafficTravelSeconds(meters:number,speedKph:number,at=Date.now()):number{
- return meters/(Math.max(5,speedKph)*trafficFactor(speedKph,at)/3.6);
+export function trafficTravelSeconds(metres:number,speedKph:number,at=trafficGameTime(),point?:Point,roadId?:string):number{
+ return metres/(Math.max(5,speedKph)*trafficFactor(speedKph,at,point,roadId)/3.6);
 }
 export const GAME_SPEED = 1;
 export function roadSpeedKph(properties:Record<string,unknown>):number {
@@ -399,7 +382,7 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
    if(allowed&&!allowed.has(edge.id)&&!(allowTaxiOnly&&edge.taxiOnly))continue;
    if(edge.taxiOnly&&!allowTaxiOnly)continue;
    if(state.incoming&&forbiddenUTurn(graph,state.incoming,state.node,edge.to,allowed,allowTaxiOnly))continue;
-   const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph):edge.meters);
+   const cost=state.cost+(timed?trafficTravelSeconds(edge.meters,edge.speedKph,trafficGameTime(),graph.nodes.get(state.node),edge.id):edge.meters);
    const k=JSON.stringify([edge.to,state.node]);
    if(cost>=(best.get(k)??Infinity))continue;
    best.set(k,cost);const next=states.length;
@@ -1120,19 +1103,21 @@ function speedForEdge(graph:RoadGraph,id:string|undefined):number{
  }
  return index.get(id)??50;
 }
-export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:Taxi;crossed:string[];distanceMeters:number}{
+export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number,gameAt=trafficGameTime()):{taxi:Taxi;crossed:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.path.length<2||realSeconds<=0)return{taxi,crossed:[],distanceMeters:0};
  const t={...taxi};
  const crossed:string[]=[];
  let distanceMeters=0;
- // Drive at the exact hardcoded road speed: no acceleration, traffic or turn slowdown.
+ // Congestion affects passenger taxis; explorers keep their established speed.
  let time=Math.min(realSeconds,5)*GAME_SPEED;
  while(time>0.00001&&t.leg<t.path.length-1){
   const a=t.path[t.leg],b=t.path[t.leg+1];
   const length=meters(a,b);
   const roadSpeed=clamp(speedForEdge(graph,t.edgeIds[t.leg]),5,160);
-  const metersPerSecond=roadSpeed/3.6;
-  t.speedKph=roadSpeed;
+  const drivingSpeed=(!taxi.kind||taxi.kind==='taxi')?
+   Math.max(5,roadSpeed*trafficFactor(roadSpeed,gameAt,a,t.edgeIds[t.leg])):roadSpeed;
+  const metersPerSecond=drivingSpeed/3.6;
+  t.speedKph=drivingSpeed;
   const remaining=Math.max(0,length-t.distanceIntoLeg);
   const stepSeconds=Math.min(time,remaining/metersPerSecond);
   const moved=metersPerSecond*stepSeconds;
@@ -1154,9 +1139,10 @@ export function advanceTaxi(taxi:Taxi,graph:RoadGraph,realSeconds:number):{taxi:
  }
  return{taxi:t,crossed,distanceMeters};
 }
-export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoads?:Set<string>):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
+export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoads?:Set<string>,gameAt=trafficGameTime()):{taxi:Taxi;earned:number;finished:boolean;discovered:string[];distanceMeters:number}{
  if(taxi.status==='IDLE'||taxi.status==='REFUELLING'||taxi.status==='PAUSED')return{taxi,earned:0,finished:false,discovered:[],distanceMeters:0};
- const advanced=advanceTaxi(taxi,graph,seconds);
+ setTrafficGameTime(gameAt);
+ const advanced=advanceTaxi(taxi,graph,seconds,gameAt);
  // Only completed graph edges are discovered. advanceTaxi reports an edge
  // when the vehicle reaches its destination node, never partway through.
  // Discovery is not the same as driving: transit on another category never reveals it.
