@@ -685,9 +685,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       fill.style.width=(job.progress*100).toFixed(1)+'%';
       const originLabel=vehicle.jobPickupPlaceName?
        'From '+vehicle.jobPickupPlaceName+' · ':'';
+      const service=pickup?
+       (Number.isFinite(vehicle.jobExpectedSatisfaction)?
+        ' · Pickup outlook '+Math.round(vehicle.jobExpectedSatisfaction!)+'/100':'')+
+       (Number.isFinite(vehicle.jobEstimatedPickupSeconds)?
+        ' · ETA '+Math.ceil(vehicle.jobEstimatedPickupSeconds!/60)+' min':''):
+       Number.isFinite(vehicle.jobCustomerSatisfaction)?
+        ' · Pickup satisfaction '+Math.round(vehicle.jobCustomerSatisfaction!)+'/100':'';
       jobFoot.textContent=originLabel+(pickup?
-       'Quoted fare '+euro(job.expectedFare)+' · pickup travel not charged':
-       'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off');
+       'Quoted fare '+euro(job.expectedFare)+' · pickup travel not charged'+service:
+       'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off'+service);
      };
      const restPanel=document.createElement('div');restPanel.className='te-sheet-rest';
      const restHeader=document.createElement('div');restHeader.className='te-sheet-rest-header';
