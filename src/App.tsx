@@ -33,6 +33,8 @@ import DriversPanel from "./components/DriversPanel";
 import {canAcceptPassengerJob,driverSchedule,updateDriverShift,type DriverShiftPatch} from './simulation/driverSchedule';
 import {normalDriverTripPreference,isDriverTripPreference,type DriverTripPreference} from './simulation/driverTripPreferences';
 import {advanceTaxiActivity,TAXI_ACTIVITY_FIELDS} from './simulation/taxiAnalytics';
+import {recordCompletedTransportFares,recordExpiredTransportRequests,recordTransportReroute,
+ type TransportFareEvent,type MissedTransportRequest} from './simulation/transportAnalytics';
 import {automaticallyStaffIdleTaxis,type DriverDepotLocation} from './simulation/driverFleetAutomation';
 import {shiftRestTargets,isAtShiftRestStop} from './simulation/shiftRest';
 import {shouldAutomaticallyRecover} from './simulation/recoveryEligibility';
@@ -843,8 +845,19 @@ export default function App(){
      distanceIntoLeg:snapshot.distanceIntoLeg,destination:snapshot.destination};
     const current=taxisRef.current.find(t=>t.id===pending.vehicleId);
     if(!current||!adoptTaxiTrafficDetour(current,result.plan,expected))return;
-    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===pending.vehicleId?
-     adoptTaxiTrafficDetour(t,result.plan!,expected)??t:t)}));
+    setFleet(old=>{
+     let accepted=false;
+     const taxis=old.taxis.map(t=>{
+      if(t.id!==pending.vehicleId)return t;
+      const adopted=adoptTaxiTrafficDetour(t,result.plan!,expected);
+      if(adopted){accepted=true;return adopted;}
+      return t;
+     });
+     return accepted?{...old,taxis,
+      transportAnalytics:recordTransportReroute(old.transportAnalytics,
+       new Date(gameClockRef.current?.epochMs??Date.now()).toISOString().slice(0,10),
+       result.plan!.savedSeconds)}:old;
+    });
     const watch=passengerRouteWatchRef.current.get(pending.vehicleId);
     if(watch){watch.lastProgressAt=Date.now();watch.pending=false;}
     diagnostic('taxi:traffic-detour',
@@ -938,7 +951,12 @@ export default function App(){
    if(message.type!=='result'||!message.taxis||!message.queue)return;
    if(message.generatedMission)lastMissionAt.current=Date.now();
    const byId=new Map(message.taxis.map(t=>[t.id,t]));
-   setFleet(old=>({...old,taxis:old.taxis.map(t=>{
+   const missed=(message as typeof message & {expiredBookings?:MissedTransportRequest[];
+    expiredGameDay?:string}).expiredBookings??[];
+   const missedDay=(message as typeof message & {expiredGameDay?:string}).expiredGameDay??
+    new Date(gameClockRef.current?.epochMs??Date.now()).toISOString().slice(0,10);
+   setFleet(old=>({...old,transportAnalytics:recordExpiredTransportRequests(
+    old.transportAnalytics,missedDay,missed),taxis:old.taxis.map(t=>{
     const assigned=byId.get(t.id);
     const teleportTarget=resetVehicleTargetsRef.current.get(t.id);
     if(teleportTarget){
@@ -1424,6 +1442,7 @@ export default function App(){
     for(const vehicle of old.taxis){const id=vehicle.depotId??'main';assignedByDepot.set(id,(assignedByDepot.get(id)??0)+1);}
 
     const transactions:FinancialTransaction[]=[];
+    const transportFares:TransportFareEvent[]=[];
     const paidPassengerJobs=new Set(old.paidPassengerJobIds??[]);
     const driverUpdates=new Map<string,{trips:number;km:number;revenue:number;wages:number}>();
     let slowestVehicleMs=0,slowestVehicle='—',routingMs=0,integratorMs=0,discoveryMs=0;
@@ -1877,6 +1896,14 @@ export default function App(){
       working.activeJobId,next.finished,next.earned,fareMultiplier,paidPassengerJobs);
      revenue+=earned;
      if(earned){
+      transportFares.push({id:working.activeJobId??'legacy-'+t.id+'-'+now,
+       fare:earned,pickup:working.pickup??working.position,
+       passengerType:working.jobPassengerType,
+       pickupPlaceKind:working.jobPickupPlaceKind,
+       pickupPlaceName:working.jobPickupPlaceName,
+       estimatedDirectCost:working.jobEstimatedDirectCost,
+       satisfaction:working.jobCustomerSatisfaction,
+       estimatedTrafficDelaySeconds:working.jobTrafficDelaySeconds});
       const tripKm=((working.jobDrivenMeters??0)+next.distanceMeters)/1000;
       transactions.push({id:crypto.randomUUID(),time:now,taxiId:t.id,
        description:`${t.name} · ${working.jobTripType==='intercity'?'intercity ':working.jobTripType==='regional'?'regional ':''}passenger fare · ${tripKm.toFixed(2)} km`,
@@ -2020,7 +2047,9 @@ export default function App(){
      console.warn('[TravelEmpire] Slow simulation tick',{durationMs:Math.round(tickMs),vehicles:old.taxis.length,exploredRoads:discovered.size,averageMs:Math.round(perf.totalMs/perf.samples),maxMs:Math.round(perf.maxMs)});
      perf.lastReport=now;perf.samples=0;perf.totalMs=0;perf.maxMs=0;
     }
-    return{...old,accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,
+    return{...old,transportAnalytics:recordCompletedTransportFares(
+      old.transportAnalytics,tickDay,transportFares),
+      accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,
       creditMisses:(old.creditMisses??0)+securedTick.missed,
       creditDefaults:(old.creditDefaults??0)+securedTick.repossessions.length,
       drivers,taxis:securedTick.taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,paidPassengerJobIds:[...paidPassengerJobs].slice(-512),exploredEdgeIds:updatedIds,
