@@ -9,7 +9,8 @@ import {taxiCanStartRepositioning,taxiCanCompleteRepositioning,
  taxiRepositionWorthwhile,taxiDemandScore,TAXI_REPOSITION_GLOBAL_INTERVAL_MS,
  TAXI_REPOSITION_MIN_METRES,TAXI_REPOSITION_MAX_METRES
 } from './taxiRepositioning';
-import {estimateTaxiJob,taxiDispatchScore,taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode} from './taxiDispatchStrategy';
+import {taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode} from './taxiDispatchStrategy';
+import {advancedTaxiBid,rankPassengerQueue,withPassengerPickupDeadline} from './taxiAdvancedMatching';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
 import {explorerWaitingForRoads} from './explorerParking';
@@ -1059,10 +1060,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     request={...request,pickupPlaceKind:actualPlace?.kind,
      pickupPlaceName:actualPlace?.name};
     const profile=passengerProfileFor(request,msg.gameNow??now);
-    request={...request,passengerType:profile.passengerType,partySize:profile.partySize,
+    request=withPassengerPickupDeadline({...request,
+     quotedGameAt:msg.gameNow??now,
+     passengerType:profile.passengerType,partySize:profile.partySize,
      luggageCount:profile.luggageCount,minimumClass:profile.minimumClass,
      fareMultiplier:Math.min(1.5,(request.fareMultiplier??1)*profile.fareBonus),
-     fare:Math.round(request.fare*profile.fareBonus*100)/100};
+     fare:Math.round(request.fare*profile.fareBonus*100)/100},now);
     // Do not clog the limited mobile queue with bookings no owned taxi can serve.
     // Unserved specialist demand can be exposed later as an expansion opportunity.
     if(!passengerTaxis.some(vehicle=>passengerCompatible(vehicle,request)))continue;
@@ -1085,15 +1088,18 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const preparationMs=performance.now()-dispatchStarted;
   const passengerStarted=performance.now();
-  // Prioritise older waiting passengers. Within each booking select a legal
-  // available taxi by player strategy. Speed and traffic calculations are
-  // unchanged for local, regional and intercity journeys.
+  // Phase 4: order waiting bookings by net opportunity and customer urgency.
+  // Once shortlisted, every taxi bid still requires its own LEGAL OSM pickup
+  // route and exact fuel/energy check. No extra worker or graph is created.
   const taxiMode=isTaxiDispatchMode(msg.taxiDispatchMode)?
    msg.taxiDispatchMode:'max-profit';
-  queue.sort((a,b)=>a.createdAt-b.createdAt);
+  const onDutyIdle=taxis.filter(t=>(!t.kind||t.kind==='taxi')&&
+   t.status==='IDLE'&&availableIds.has(t.id));
+  const rankedQueue=rankPassengerQueue(queue,taxiMode,onDutyIdle,now,msg.gameNow??now);
   const pending:PassengerRequest[]=[];
-  for(const mission of queue){
-   let best:{index:number;taxi:Taxi;etaSeconds:number;score:number;contribution:number|null}|null=null;
+  for(const mission of rankedQueue){
+   let best:{index:number;taxi:Taxi;etaSeconds:number;score:number;
+    contribution:number|null;satisfaction:number}|null=null;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10||!passengerCompatible(taxi,mission))continue;
@@ -1118,23 +1124,28 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // Include the existing acceleration allowance; do not change motion
     // physics or travel speed for different trip categories.
     etaSeconds+=Math.min(12,assigned.edgeIds.length*0.5+4);
-    const estimate=estimateTaxiJob(taxi,mission,approachMetres,etaSeconds);
-    if(!taxiJobAcceptable(taxiMode,estimate)){
+    const preference=normalDriverTripPreference(msg.driverTripPreferences?.[taxi.id]);
+    const bid=advancedTaxiBid(taxiMode,taxi,mission,approachMetres,etaSeconds,
+     now,msg.gameNow??now,msg.driverDutyRemainingSeconds?.[taxi.id],preference);
+    if(!bid)continue;
+    if(!taxiJobAcceptable(taxiMode,bid.estimate)){
      taxiUnprofitableSkips++;continue;
     }
-    const preference=normalDriverTripPreference(msg.driverTripPreferences?.[taxi.id]);
-    const score=taxiDispatchScore(taxiMode,etaSeconds,estimate)+
-     driverTripMatchBonus(taxiMode,preference,mission.tripType);
-    if(!best||score>best.score||
-       score===best.score&&etaSeconds<best.etaSeconds)
-     best={index,taxi:assigned,etaSeconds,score,
-      contribution:estimate?.contribution??null};
+    if(!best||bid.score>best.score||
+       bid.score===best.score&&etaSeconds<best.etaSeconds)
+     best={index,taxi:assigned,etaSeconds,score:bid.score,
+      contribution:bid.estimate?.contribution??null,
+      satisfaction:bid.estimatedSatisfaction};
    }
    if(best){
     if(driverTripMatchBonus(taxiMode,
       normalDriverTripPreference(msg.driverTripPreferences?.[best.taxi.id]),
       mission.tripType)>0)driverPreferenceAssignments++;
-    taxis[best.index]=best.taxi;passengerAssignments++;
+    taxis[best.index]={...best.taxi,
+     jobPickupCreatedAt:mission.createdAt,
+     jobPickupDeadlineAt:mission.pickupDeadlineAt,
+     jobEstimatedPickupSeconds:best.etaSeconds,
+     jobExpectedSatisfaction:best.satisfaction};passengerAssignments++;
     if(best.contribution!==null){
      taxiProfitableAssignments++;
      taxiEstimatedContribution+=best.contribution;
