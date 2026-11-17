@@ -571,6 +571,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <div><TrendingUp size={16}/><small>Room occupancy</small><strong>{preparedRooms?.readyRooms.length?Math.round(100*operations.guests.length/preparedRooms.readyRooms.length):0}%</strong></div>
      <div><CalendarClock size={16}/><small>Total check-ins</small><strong>{operatedTotals.guests}</strong></div>
     </div>
+    {site.accessRulesVersion===2&&site.built.length>1&&<div className="ib-operating-vertical" aria-label="Built hotel vertical access capacity"><div><Layers3 size={16}/><span><strong>Vertical guest access</strong><small>Completed stairwells and elevators · not draft construction</small></span></div><div className="ib-operating-vertical-values"><span><strong>{preparedRooms?.verticalGuestCapacityPerHour||'—'}</strong> guest moves/hour</span><span><strong>{preparedRooms?.verticalPeakGuestMovementsPerHour??0}</strong> peak movements/hour</span>{(preparedRooms?.verticalCongestionModifier??0)<0&&<span className="warning">Congestion reduces room demand</span>}</div></div>}
     {!currentlyOpen&&<div className="ib-hotel-checklist"><strong><ShieldCheck size={16}/> Opening checklist</strong>
      {openProblems.length?openProblems.map((issue,i)=><div className="ib-hotel-issue" key={i}><AlertCircle size={14}/>{issue}</div>):<p><CheckCircle2 size={15}/> Requirements met. Your hotel is ready to receive guests.</p>}
     </div>}
