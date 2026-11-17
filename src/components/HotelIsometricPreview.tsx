@@ -3,7 +3,7 @@ import {Layers3,RotateCw,Eye,Boxes,Info} from 'lucide-react';
 import type {HotelFloor,HotelSite,Room,ObjectPlacement,Wall} from '../internalConstruction';
 import {furnitureSize} from '../internalConstruction';
 import {
- buildIsoScene,isoCorners,isoProject,pointString,roomShortLabel,roomContains,
+ buildIsoScene,isoCorners,isoProject,pointString,roomShortLabel,
  ISO_COLORS,type IsoAngle,type IsoPoint,type IsoScope,
 } from '../hotelVisualisation';
 import './hotel-isometric.css';
@@ -171,7 +171,7 @@ export default function HotelIsometricPreview({site,floorIndex,onExit}:{
   {!scene.detailed&&<p className="ib-iso-warning"><Info size={15}/>
    Large blueprint ({scene.primitiveCount} estimated details): showing room geometry only
    to keep mobile rendering responsive. The editable 2D plan still contains all details.
-   {scene.truncated?' Only the first 350 rooms per floor are shown.':''}
+   {scene.truncated?' Only the first 350 rooms across the preview are shown.':''}
   </p>}
   <p className="ib-iso-caption">Stylised architectural cutaway, not a physically accurate 3D model.
    All visible objects come from your saved draft blueprint; nothing is changed or charged.
