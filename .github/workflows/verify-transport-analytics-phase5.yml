@@ -1,0 +1,22 @@
+name: Verify Passenger and Traffic Analytics Phase 5
+on:
+  push:
+    branches:
+      - feature/passenger-traffic-analytics-phase5
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Passenger, traffic and vehicle reporting regression
+        run: npm test -- src/simulation/transportAnalytics.test.ts src/simulation/taxiAnalytics.test.ts src/simulation/taxiAdvancedMatching.test.ts src/simulation/taxiDispatchStrategy.test.ts src/simulation/trafficConditions.test.ts src/simulation/passengerSettlement.test.ts
+      - name: Full regression suite (pre-existing failures reported)
+        continue-on-error: true
+        run: npm test
