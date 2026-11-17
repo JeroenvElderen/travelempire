@@ -1,0 +1,22 @@
+name: Verify Hotel Architecture Access Phase 1
+on:
+  push:
+    branches:
+      - feature/hotel-architecture-access-phase1
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Hotel access, builder, operations and construction regression
+        run: npm test -- src/hotelAccess.test.ts src/hotelBlueprintEditing.test.ts src/hotelFurnitureQuality.test.ts src/hotelOperations.test.ts src/internalConstruction.test.ts src/components/blueprintViewport.test.ts
+      - name: Full suite (pre-existing failures reported)
+        continue-on-error: true
+        run: npm test
