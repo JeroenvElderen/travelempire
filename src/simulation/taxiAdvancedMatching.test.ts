@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import type {Taxi,PassengerRequest} from './taxi';
+import {tickTaxi,meters,type Taxi,type PassengerRequest,type RoadGraph,type Point} from './taxi';
 import {
  passengerPickupPatienceMinutes,withPassengerPickupDeadline,
  passengerPickupCanArrive,passengerPickupSatisfaction,
@@ -75,6 +75,36 @@ describe('Phase 4 advanced taxi job matching',()=>{
   const mission=job({quotedGameAt:quiet,tripTravelSeconds:1000});
   expect(currentPassengerTripSeconds(mission,rush)).toBeGreaterThan(1000);
   expect(currentPassengerTripSeconds(job({tripTravelSeconds:1000}),rush)).toBe(1000);
+ });
+ it('records actual pickup satisfaction at the road node and once at paid drop-off',()=>{
+  const a:Point=[23,38],b:Point=[23.0001,38],c:Point=[23.0002,38];
+  const graph:RoadGraph={
+   nodes:new Map([['a',a],['b',b],['c',c]]),nodeKeys:['a','b','c'],
+   edges:new Map([
+    ['a',[{to:'b',id:'ab',meters:meters(a,b),speedKph:50}]],
+    ['b',[{to:'c',id:'bc',meters:meters(b,c),speedKph:50}]],
+    ['c',[]],
+   ]),
+  };
+  const now=Date.now();
+  const active=t({
+   status:'TO_PICKUP',path:[a,b],edgeIds:['ab'],position:a,
+   pickup:b,dropoff:c,activeJobId:'ride-1',fare:8,
+   jobPickupCreatedAt:now-120000,jobPickupDeadlineAt:now+600000,
+   jobEstimatedPickupSeconds:25,jobExpectedSatisfaction:85,
+  });
+  const picked=tickTaxi(active,graph,5,new Set(['ab','bc']),baseTime);
+  expect(picked.taxi.status).toBe('TO_DROPOFF');
+  expect(picked.taxi.jobCustomerSatisfaction).toBeGreaterThan(0);
+  expect(picked.earned).toBe(0);
+  const completed=tickTaxi(picked.taxi,graph,5,new Set(['ab','bc']),baseTime);
+  expect(completed.taxi.status).toBe('IDLE');
+  expect(completed.earned).toBeGreaterThan(0);
+  expect(completed.taxi.passengerSatisfactionRatedTrips).toBe(1);
+  expect(completed.taxi.lastPassengerSatisfaction).toBe(picked.taxi.jobCustomerSatisfaction);
+  expect(completed.taxi.passengerSatisfactionTotal).toBe(picked.taxi.jobCustomerSatisfaction);
+  expect(completed.taxi.jobCustomerSatisfaction).toBeUndefined();
+  expect(completed.discovered).toEqual([]);
  });
  it('ranks profitable hourly opportunities ahead of large but inefficient fares',()=>{
   const efficient=job({id:'efficient',fare:50,tripDistanceMeters:8000,tripTravelSeconds:1000});
