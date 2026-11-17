@@ -80,6 +80,41 @@ export function toggleHotelLighting(
   l.id===existing.id?{...existing,kind:light.kind}:l)};
  return {...floor,lights:[...(floor.lights??[]),light]};
 }
+/** Mobile-first suggestions: a room needs no pinch-accurate 1 m tap
+ * to add a window or ceiling lamp. Suggestions do not alter any blueprint.
+ */
+export function suggestRoomWindow(
+ floor:HotelFloor,site:HotelSite,roomId:string,
+):Pick<Wall,'x'|'y'|'orientation'>|null{
+ const room=floor.rooms.find(r=>r.id===roomId);
+ if(!room)return null;
+ const edges:Pick<Wall,'x'|'y'|'orientation'>[]=[];
+ for(let x=room.x;x<room.x+room.width;x++){
+  edges.push({x,y:room.y+room.height,orientation:'h'});
+  edges.push({x,y:room.y,orientation:'h'});
+ }
+ for(let y=room.y;y<room.y+room.height;y++){
+  edges.push({x:room.x+room.width,y,orientation:'v'});
+  edges.push({x:room.x,y,orientation:'v'});
+ }
+ return edges.find(edge=>windowAdjacentRoom(floor,site,edge)?.id===room.id&&
+  !floor.walls.some(w=>w.x===edge.x&&w.y===edge.y&&
+   w.orientation===edge.orientation))??null;
+}
+export function suggestRoomLighting(
+ floor:HotelFloor,roomId:string,
+):{x:number;y:number}|null{
+ const room=floor.rooms.find(r=>r.id===roomId);
+ if(!room||room.type==='stairwell'||room.type==='elevator')return null;
+ const centerX=room.x+(room.width-1)/2,centerY=room.y+(room.height-1)/2;
+ const cells:Array<{x:number;y:number;dist:number}>=[];
+ for(let y=room.y;y<room.y+room.height;y++)for(let x=room.x;x<room.x+room.width;x++)
+  cells.push({x,y,dist:Math.abs(x-centerX)+Math.abs(y-centerY)});
+ cells.sort((a,b)=>a.dist-b.dist);
+ const free=cells.find(c=>!(floor.lights??[]).some(l=>l.x===c.x&&l.y===c.y));
+ return free?{x:free.x,y:free.y}:null;
+}
+
 /** Light does not leave a room; no cross-room lighting, sunlight passing
  * through solid walls or 3D rendering is invented.
  */
