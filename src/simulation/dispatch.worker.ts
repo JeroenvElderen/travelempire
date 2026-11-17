@@ -1008,6 +1008,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const profile=passengerProfileFor(request,msg.gameNow??now);
     request={...request,passengerType:profile.passengerType,partySize:profile.partySize,
      luggageCount:profile.luggageCount,minimumClass:profile.minimumClass,
+     fareMultiplier:Math.min(1.5,(request.fareMultiplier??1)*profile.fareBonus),
      fare:Math.round(request.fare*profile.fareBonus*100)/100};
     if(request.tripType==='regional')regionalTripsCreated++;
     else if(request.tripType==='intercity')intercityTripsCreated++;
