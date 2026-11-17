@@ -1,0 +1,17 @@
+name: Verify Living Transport Simulation
+on:
+  push:
+    branches:
+      - feature/living-transport-simulation
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- src/simulation/passengerProfiles.test.ts src/simulation/trafficConditions.test.ts src/simulation/livingWorld.test.ts src/simulation/passengerJourneys.test.ts
