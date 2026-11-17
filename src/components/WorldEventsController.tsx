@@ -1,6 +1,7 @@
 import {useEffect,useRef} from 'react';
 import type {GameClock} from '../simulation/gameClock';
 import {GAME_TIME_SCALE} from '../simulation/gameClock';
+import type {TrafficIncident} from '../simulation/trafficConditions';
 import type {Point,RoadGraph} from '../simulation/taxi';
 import type {RoadFeature} from './purpleRoadDiff';
 import {advanceWorldState,incidentStatus,newWorldState,weatherAt,
@@ -22,6 +23,7 @@ type Props={
  discovered:()=>Set<string>;
  center:()=>Point;
  onStatus:(summary:WorldActivitySnapshot|null)=>void;
+ onTrafficChange?:(incidents:TrafficIncident[])=>void;
 };
 const storageKey=(companyId:string)=>'travelempire.world.v1.'+companyId;
 function restore(companyId:string):WorldState{
@@ -45,7 +47,7 @@ export function snapshotOfWorld(state:WorldState,at:number,center:Point):WorldAc
     responders:i.responders.map(r=>r.kind),roadId:i.roadId})),
  };
 }
-export default function WorldEventsController({companyId,gameClock,graph,roads,discovered,center,onStatus}:Props){
+export default function WorldEventsController({companyId,gameClock,graph,roads,discovered,center,onStatus,onTrafficChange}:Props){
  const stateRef=useRef<WorldState>(newWorldState());
  const clockRef=useRef(gameClock);clockRef.current=gameClock;
  const graphRef=useRef(graph);graphRef.current=graph;
@@ -53,10 +55,11 @@ export default function WorldEventsController({companyId,gameClock,graph,roads,d
  const discoveryRef=useRef(discovered);discoveryRef.current=discovered;
  const centerRef=useRef(center);centerRef.current=center;
  const publishRef=useRef(onStatus);publishRef.current=onStatus;
+ const trafficRef=useRef(onTrafficChange);trafficRef.current=onTrafficChange;
  useEffect(()=>{
   if(!companyId){publishRef.current(null);return;}
   let stopped=false;
-  let lastSummary='';
+  let lastSummary='',lastTraffic='';
   stateRef.current=restore(companyId);
   const update=()=>{
    if(stopped||document.hidden)return;
@@ -66,6 +69,11 @@ export default function WorldEventsController({companyId,gameClock,graph,roads,d
    const next=advanceWorldState(previous,at,
     [...roadsRef.current().values()],graphRef.current??null,discoveryRef.current(),companyId);
    stateRef.current=next;
+   const active=next.incidents.filter(i=>i.startedAt<=at&&i.endsAt>at).map(i=>({
+    roadId:i.roadId,kind:i.kind,startedAt:i.startedAt,endsAt:i.endsAt,
+   }));
+   const signature=JSON.stringify(active);
+   if(signature!==lastTraffic){lastTraffic=signature;trafficRef.current?.(active);}
    if(next.lastBucket!==previous.lastBucket||next.incidents.length!==previous.incidents.length)
     save(companyId,next);
    const snapshot=snapshotOfWorld(next,at,centerRef.current());
@@ -77,6 +85,7 @@ export default function WorldEventsController({companyId,gameClock,graph,roads,d
   const onVisible=()=>{if(!document.hidden)update();};
   document.addEventListener('visibilitychange',onVisible);
   return()=>{
+   trafficRef.current?.([]);
    stopped=true;
    window.clearInterval(timer);
    document.removeEventListener('visibilitychange',onVisible);
