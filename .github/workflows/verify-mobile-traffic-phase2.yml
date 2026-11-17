@@ -1,0 +1,22 @@
+name: Verify Mobile Traffic Layer Phase 2
+on:
+  push:
+    branches:
+      - feature/mobile-traffic-map-phase2
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript and Vite build
+        run: npm run build
+      - name: Traffic layer and routing safety regression
+        run: npm test -- src/components/trafficRoadColors.test.ts src/simulation/trafficConditions.test.ts src/simulation/taxiTrafficReroute.test.ts src/simulation/passengerRouteRecovery.test.ts src/components/purpleRoadDiff.test.ts
+      - name: Full suite (existing unrelated failures tracked separately)
+        continue-on-error: true
+        run: npm test
