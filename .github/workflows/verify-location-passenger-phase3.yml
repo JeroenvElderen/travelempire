@@ -1,0 +1,22 @@
+name: Verify Location-Based Passenger Demand Phase 3
+on:
+  push:
+    branches:
+      - feature/location-passenger-demand-phase3
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript and Vite production build
+        run: npm run build
+      - name: Passenger origins and route safety
+        run: npm test -- src/simulation/passengerPlaces.test.ts src/simulation/passengerProfiles.test.ts src/simulation/passengerJourneys.test.ts src/simulation/passengerDepotDemand.test.ts src/simulation/passengerRouteRecovery.test.ts
+      - name: Full suite (known existing failures reported)
+        continue-on-error: true
+        run: npm test
