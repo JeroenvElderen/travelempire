@@ -3,7 +3,7 @@
  */
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
-export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting';
+export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
 export type BuilderTool='room'|'wall'|'door'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
 export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table';
@@ -41,8 +41,8 @@ export type HotelSite={
  draft:HotelFloor[];built:HotelFloor[];projects:ConstructionProject[];createdHour:number;
  supplyOrders?:SupplyOrder[];stock?:Partial<Record<SupplyCode,StockBatch[]>>;
  operations?:HotelOperations;
- /** New hotels enforce connected ground-floor entrances; old saves are grandfathered. */
- accessRulesVersion?:1;
+ /** v1 checks ground-floor rooms, v2 adds aligned vertical access. Old saves are grandfathered. */
+ accessRulesVersion?:1|2;
 };
 export type ConstructionState={version:1;sites:Record<string,HotelSite>;workers:number;lastPayrollHour:number};
 export const HOTEL_GRID_WIDTH=24;
@@ -77,6 +77,8 @@ export const roomTypes:ReadonlyArray<{id:RoomType;label:string;minWidth:number;m
  {id:'storage',label:'Storage',minWidth:2,minHeight:2},
  {id:'staff',label:'Staff room',minWidth:2,minHeight:2},
  {id:'corridor',label:'Corridor',minWidth:2,minHeight:2},
+ {id:'stairwell',label:'Stairwell',minWidth:2,minHeight:3},
+ {id:'elevator',label:'Elevator shaft',minWidth:2,minHeight:2},
  {id:'office',label:'Office',minWidth:3,minHeight:3},
  {id:'meeting',label:'Meeting room',minWidth:3,minHeight:3}
 ];
@@ -181,11 +183,14 @@ const materialData=[
  {id:'flooring',name:'Floor finish',unit:'m²',unitCents:2100},
  {id:'paint',name:'Paint',unit:'L',unitCents:1550}
 ] as const;
+const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
+const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
 const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
  let area=0,wallCount=0,bathrooms=0,objectsCents=0,newFloors=0,changes=0,demolition=0;
+ let stairModules=0,liftModules=0,verticalWork=0;
  for(let i=0;i<site.draft.length;i++){
   const draft=site.draft[i],built=site.built[i]??blankFloor(i);
   if(floorMetric(draft)===floorMetric(built))continue;
@@ -196,6 +201,9 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
    const old=builtRooms.get(r.id);
    if(old&&old.x===r.x&&old.y===r.y&&old.width===r.width&&old.height===r.height&&old.type===r.type)continue;
    area+=r.width*r.height;wallCount+=2*(r.width+r.height);
+   if(r.type==='stairwell')stairModules++;
+   if(r.type==='elevator')liftModules++;
+   verticalWork+=verticalCoreWork(r.type);
    if(r.type==='bathroom'||r.type==='kitchen'||r.type==='bar')bathrooms+=r.type==='bathroom'?1:2;
   }
   demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+r.width*r.height,0);
@@ -216,9 +224,16 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   Math.ceil(area),
   Math.ceil(area*0.3)
  ];
- const materials=materialData.map((data,i)=>({...data,quantity:quantities[i],totalCents:quantities[i]*data.unitCents})).filter(x=>x.quantity>0);
+ const materials:MaterialLine[]=materialData.map((data,i)=>({...data,quantity:quantities[i],totalCents:quantities[i]*data.unitCents})).filter(x=>x.quantity>0);
+ // Prefabricated stairs and lift machinery enter normal material procurement,
+ // scheduled deliveries, project quotes and bank/company accounting.
+ for(const [type,count,label] of [['stairwell',stairModules,'Stairwell module'],['elevator',liftModules,'Elevator equipment']] as const){
+  if(count>0){const unitCents=verticalCorePrice(type);
+   materials.push({id:type+'-module',name:label,unit:'floor',quantity:count,
+    unitCents,totalCents:unitCents*count});}
+ }
  const materialCents=materials.reduce((sum,m)=>sum+m.totalCents,0)+newFloors*1200000+demolition*5000;
- const workUnits=Math.max(0,area*1.4+wallCount*0.65+changes*2+demolition+newFloors*35);
+ const workUnits=Math.max(0,area*1.4+wallCount*0.65+changes*2+demolition+newFloors*35+verticalWork);
  const labourCents=method==='contractor'?Math.ceil(workUnits*6200):Math.ceil(workUnits*1400);
  const deliveryHours=changes?8+Math.ceil(materials.length/3):0;
  const constructionHours=changes?Math.max(8,Math.ceil(workUnits/(method==='contractor'?4.8:Math.max(2,workers)*0.8))):0;
