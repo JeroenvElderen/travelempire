@@ -12,6 +12,8 @@ import {
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
  type HotelRole} from '../hotelOperations';
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
+import {BLUEPRINT_ROOM_TEMPLATES,addBlueprintTemplate,editBlueprintRoom,hotelBlueprintHealth,
+ type BlueprintRoomGeometry,type RoomTemplateId} from '../hotelBlueprintEditing';
 import {freightStage,freightStatusLabel,freightProgress} from '../constructionLogistics';
 import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import './internal-builder.css';
@@ -60,6 +62,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const plotPrice=plotValid?hotelPlotCostCents(plotSize):0;
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
+ const [selectedRoomId,setSelectedRoomId]=useState<string|null>(null);
  const scrollerRef=useRef<HTMLDivElement|null>(null);
  const zoomRef=useRef(zoom);zoomRef.current=zoom;
  const pendingScroll=useRef<PlanScroll|null>(null);
@@ -99,6 +102,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const sites=Object.values(state.sites);
  const site=selectedId?state.sites[selectedId]??null:null;
  const floor=site?.draft[Math.min(floorIndex,site.draft.length-1)]??null;
+ const selectedRoom=floor?.rooms.find(r=>r.id===selectedRoomId)??null;
+ const blueprintHealth=site&&floor?hotelBlueprintHealth(floor,site):null;
  const active=site?.projects.find(p=>p.status==='active');
  const quote=useMemo(()=>{if(!site||active)return null;try{return constructionQuote(site,method,state.workers);}catch{return null;}},[site,method,state.workers,active]);
  const selectedFurniture=furniture.find(f=>f.code===itemCode)!;
@@ -126,7 +131,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const choose=(idValue:string)=>{
   history.current={siteId:idValue,undo:[],redo:[]};
   pointers.current.clear();pinchOrigin.current=null;pendingScroll.current=null;
-  setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setTab('blueprint');setStatus('');
+  setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setSelectedRoomId(null);setTab('blueprint');setStatus('');
   setTool('pan');setZoom(1);
  };
  const recordEdit=(old:HotelSite)=>{
@@ -146,11 +151,38 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(issue){stack.push(restore);setStatus(issue);return;}
   (direction==='undo'?h.redo:h.undo).push(site);
   setStatus(direction==='undo'?'Last blueprint change undone.':'Blueprint change redone.');
-  setAnchor(null);
+  setAnchor(null);setSelectedRoomId(null);
  };
  const modify=(fn:(old:HotelFloor)=>HotelFloor)=>{
   if(!site||!floor)return;
   try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
+ };
+ const focusRoom=(room:HotelFloor['rooms'][number])=>{
+  const scroller=scrollerRef.current;
+  if(!scroller)return;
+  const px=30*zoomRef.current;
+  scroller.scrollTo({left:(room.x+room.width/2)*px-scroller.clientWidth/2,
+   top:(room.y+room.height/2)*px-scroller.clientHeight/2,behavior:'smooth'});
+ };
+ const adjustSelectedRoom=(changes:Partial<BlueprintRoomGeometry>)=>{
+  if(!site||!selectedRoom||active)return;
+  modify(f=>editBlueprintRoom(f,site,selectedRoom.id,{
+   x:changes.x??selectedRoom.x,y:changes.y??selectedRoom.y,
+   width:changes.width??selectedRoom.width,height:changes.height??selectedRoom.height,
+  }));
+ };
+ const addTemplate=(templateId:RoomTemplateId)=>{
+  if(!site||!floor||active)return;
+  const newRoomId=id();
+  try{
+   const next=updateFloor(site,floorIndex,f=>addBlueprintTemplate(
+    f,site,templateId,newRoomId,()=>id()));
+   const message=onChangeSite(next);
+   if(message){setStatus(message);return;}
+   recordEdit(site);
+   setSelectedRoomId(newRoomId);setTool('select');setAnchor(null);
+   setStatus('Furnished room placed. Select it to resize or move. Construction costs will be quoted before approval.');
+  }catch(e){setStatus(e instanceof Error?e.message:'Unable to fit this room template.');}
  };
  const cellFromEvent=(e:PointerEvent<SVGSVGElement>):Cell|null=>{
   if(!site)return null;
@@ -242,7 +274,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  };
  const interact=(where:Cell,from:Cell|null)=>{
   if(!site||!floor||active)return;
-  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
+  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
   if(tool==='room'){
    if(from&&(from.x!==where.x||from.y!==where.y)){makeRoom(from,where);return;}
    if(anchor){makeRoom(anchor,where);return;}
@@ -338,12 +370,13 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
    <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
-   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
+   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);setSelectedRoomId(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
     {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
    <div className="ib-hint ib-pan-guide"><Hand size={14}/> {tool==='room'?'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.':'Swipe the plan to move without placing objects. Tap to '+(tool==='furniture'?'place furniture':tool==='select'?'inspect':tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
    <div className="ib-navigation-row"><span>Move around your plan — works while furnishing</span><div className="ib-pan-arrows" role="group" aria-label="Move floor plan"><button type="button" onClick={()=>panBy(-160,0)} aria-label="Pan left"><ArrowLeft size={16}/></button><button type="button" onClick={()=>panBy(0,-160)} aria-label="Pan up"><ArrowUp size={16}/></button><button type="button" onClick={centerPlan} aria-label="Centre floor plan" title="Centre floor plan"><Crosshair size={16}/></button><button type="button" onClick={()=>panBy(0,160)} aria-label="Pan down"><ArrowDown size={16}/></button><button type="button" onClick={()=>panBy(160,0)} aria-label="Pan right"><ArrowRight size={16}/></button></div></div>
+   {tool==='room'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
    {tool==='furniture'&&<div className="ib-controls"><label>Furniture<select value={itemCode} disabled={!!active} onChange={e=>setItemCode(e.target.value as FurnitureCode)}>{furniture.map(f=><option key={f.code} value={f.code}>{f.name} · {euros(f.priceCents)}</option>)}</select></label><button type="button" onClick={()=>setRotate(v=>!v)} className={rotate?'selected ib-secondary':'ib-secondary'}><RotateCw size={15}/> {rotate?'Rotated':'Rotate'}</button><span className="ib-muted">{selectedFurniture.width} × {selectedFurniture.height} cells</span></div>}
    {(tool==='wall'||tool==='door')&&<div className="ib-hint">Tap near the edge of a grid cell to {tool==='door'?'add or remove a doorway':'draw or remove a wall segment'}.</div>}
@@ -353,13 +386,17 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      {Array.from({length:site.width+1},(_,i)=><line key={'x'+i} x1={i} y1={0} x2={i} y2={site.height} stroke="#42506c" strokeWidth=".025"/>)}
      {Array.from({length:site.height+1},(_,i)=><line key={'y'+i} x1={0} y1={i} x2={site.width} y2={i} stroke="#42506c" strokeWidth=".025"/>)}
      {floor.rooms.map(r=><g key={r.id}><rect x={r.x} y={r.y} width={r.width} height={r.height} fill={tone[r.type]} fillOpacity=".87" stroke="#d3d5e6" strokeWidth=".10"/><text x={r.x+r.width/2} y={r.y+.65} fontSize=".40" textAnchor="middle" fill="#ffffff">{r.name}</text></g>)}
+     {selectedRoom&&<rect x={selectedRoom.x+.07} y={selectedRoom.y+.07} width={selectedRoom.width-.14} height={selectedRoom.height-.14} fill="none" stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>}
      {floor.walls.map(w=><line key={w.id} x1={w.x} y1={w.y} x2={w.orientation==='h'?w.x+1:w.x} y2={w.orientation==='v'?w.y+1:w.y} stroke={w.type==='door'?'#89d9b6':'#f5eeff'} strokeWidth={w.type==='door'?'.22':'.14'} strokeDasharray={w.type==='door'?'.26 .12':undefined}/>)}
      {floor.objects.map(o=>{const size=furnitureSize(o);return <g key={o.id}><rect x={o.x+.08} y={o.y+.08} width={size.width-.16} height={size.height-.16} rx=".13" fill="#c1a0ed" stroke="#e7daff" strokeWidth=".035"/><text x={o.x+size.width/2} y={o.y+size.height/2+.1} fontSize=".35" fill="#201735" textAnchor="middle">{furniture.find(f=>f.code===o.code)?.name.slice(0,11)}</text></g>})}
      {anchor&&<rect x={anchor.x} y={anchor.y} width="1" height="1" fill="none" stroke="#ffdc84" strokeDasharray=".15 .12" strokeWidth=".1"/>}
     </svg></div>
    <div className="ib-plan-footer"><span>{floor.rooms.length} rooms · {floor.objects.length} objects · {floor.walls.length} custom walls</span><span>Grid: 1 m · {floor.label}</span></div>
+   {blueprintHealth&&<div className="ib-blueprint-health" aria-label="Draft floor readiness"><span><strong>{blueprintHealth.plannedArea} m²</strong> rooms drawn</span><span><strong>{blueprintHealth.usablePercent}%</strong> plot used</span><span><strong>{blueprintHealth.readyGuestRooms}/{blueprintHealth.guestRooms}</strong> equipped guest rooms</span><span><strong>{blueprintHealth.roomsWithIssues}</strong> rooms missing items</span></div>}
+   {selectedRoom&&<section className="ib-room-inspector" aria-label="Selected room editor"><div className="ib-room-inspector-head"><div><strong>{selectedRoom.name}</strong><small>{selectedRoom.type} · 1 m building grid · furnishings retained</small></div><button type="button" className="ib-secondary" onClick={()=>focusRoom(selectedRoom)}><Crosshair size={14}/> Centre</button></div><div className="ib-room-inspector-controls"><div><strong>Position</strong><small>X {selectedRoom.x} · Y {selectedRoom.y}</small><div className="ib-room-nudge"><button type="button" disabled={!!active} aria-label="Move selected room left" onClick={()=>adjustSelectedRoom({x:selectedRoom.x-1})}><ArrowLeft size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room up" onClick={()=>adjustSelectedRoom({y:selectedRoom.y-1})}><ArrowUp size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room down" onClick={()=>adjustSelectedRoom({y:selectedRoom.y+1})}><ArrowDown size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room right" onClick={()=>adjustSelectedRoom({x:selectedRoom.x+1})}><ArrowRight size={15}/></button></div></div><div><strong>Dimensions</strong><small>{selectedRoom.width} × {selectedRoom.height} m</small><div className="ib-room-resize"><button type="button" disabled={!!active} aria-label="Reduce selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width-1})}>W −</button><button type="button" disabled={!!active} aria-label="Increase selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width+1})}>W +</button><button type="button" disabled={!!active} aria-label="Reduce selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height-1})}>H −</button><button type="button" disabled={!!active} aria-label="Increase selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height+1})}>H +</button></div></div></div><small>Furniture moves with its room. Any invalid overlap, missing space or attached wall is blocked without altering the layout.</small></section>}
+
    <div className="ib-heading"><div><h2>Room requirements</h2><small>Check equipment before opening your hotel</small></div></div>
-   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.width}×{r.height} m · {r.type}</small></div><span className={issues.length?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:'Equipped'}</span><button className="ib-room-duplicate" aria-label={'Duplicate '+r.name} title={'Duplicate '+r.name} disabled={!!active} onClick={()=>duplicateRoom(r.id)}><Copy size={16}/></button></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
+   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.width}×{r.height} m · {r.type}</small></div><span className={issues.length?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:'Equipped'}</span><button type="button" className="ib-room-edit" onClick={()=>{setTool('select');setSelectedRoomId(r.id);focusRoom(r);}} aria-label={'Edit '+r.name}>Edit</button><button className="ib-room-duplicate" aria-label={'Duplicate '+r.name} title={'Duplicate '+r.name} disabled={!!active} onClick={()=>duplicateRoom(r.id)}><Copy size={16}/></button></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
    <div className="ib-build-actions"><div><strong>Approve the blueprint</strong><small>Check a material quote, choose workers and start a timed project.</small></div><button className="ib-primary" disabled={!!active} onClick={()=>setTab('projects')}><HardHat size={15}/> View quote</button></div>
   </div>}
   {company&&tab==='projects'&&<div className="ib-section">
