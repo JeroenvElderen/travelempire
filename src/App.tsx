@@ -71,6 +71,7 @@ import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
 import LiveFinanceTicker from "./components/LiveFinanceTicker";
+import {postFinance,type FinancePosting} from "./simulation/financeJournal";
 import DailySummaryModal from './components/DailySummaryModal';
 import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBaseline,type DailySummary} from './simulation/dailySummary';
 import * as Research from "./research";
@@ -271,6 +272,10 @@ export default function App(){
       ferryRevenueByDay:(()=>{const days={...(old.ferryRevenueByDay??{})};days[day]=Math.round(((days[day]??0)+gross)*100)/100;const keys=Object.keys(days).sort();for(const oldDay of keys.slice(0,-45))delete days[oldDay];return days;})(),
       ferryOperatingCostByDay:(()=>{const days={...(old.ferryOperatingCostByDay??{})};days[day]=Math.round(((days[day]??0)+costs)*100)/100;for(const oldDay of Object.keys(days).sort().slice(0,-45))delete days[oldDay];return days;})(),
       financeHistory:history.slice(-365),
+      financeJournal:postFinance(old.financeJournal,[
+       {day,side:'income',category:'ferry.fares',amount:gross},
+       {day,side:'expense',category:'ferry.operations',amount:costs},
+      ]),
       transactions:[...partnership.settlements.map(item=>({id:crypto.randomUUID(),time:nowGame,description:'Revenue partnership · '+item.bank,amount:-item.amount})),...events.map(event=>({id:crypto.randomUUID(),...event})),
        ...(old.transactions??[])].slice(0,100)};
     });
@@ -1909,6 +1914,15 @@ export default function App(){
       fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
+      financeJournal:postFinance(old.financeJournal,([
+       ['income','taxi.fares',revenue],['expense','taxi.fuel',fuelExpense],
+       ['expense','taxi.maintenance',maintenanceExpense+serviceExpense],
+       ['expense','exploration.operations',explorationExpense],
+       ['expense','taxi.payroll',driverWages],['expense','taxi.insurance',insuranceExpense],
+       ['expense','company.overhead',overhead],['expense','depot.facilities',facilityCost],
+       ['expense','finance.interest',loanTick.interest],
+       ['expense','vehicle.leases',leaseTick.payments],
+      ] as const).map(([side,category,amount])=>({day:tickDay,side,category,amount} satisfies FinancePosting))),
       financeHistory:(()=>{const day=tickDay;const list=[...(old.financeHistory??[])];const last=list[list.length-1];const categories={fuel:fuelExpense,maintenance:maintenanceExpense+serviceExpense,exploration:explorationExpense,payroll:driverWages,insurance:insuranceExpense,overhead:overhead+facilityCost,interest:loanTick.interest};const cost=Object.values(categories).reduce((a,b)=>a+b,0)+leaseTick.payments;if(last?.day===day){const previous=last.categories;list[list.length-1]={...last,revenue:last.revenue+revenue,expenses:last.expenses+cost,trips:last.trips+completed,categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v+(previous?.[k as keyof typeof categories]??0)])) as typeof categories};}else list.push({day,revenue,expenses:cost,trips:completed,categories});return list.slice(-365);})(),
       vehicleFinanceHistory:(()=>{const list=[...(old.vehicleFinanceHistory??[])];const dailyIndexes=new Map<string,number>();for(let i=list.length-1;i>=0;i--){if(list[i].day===tickDay)dailyIndexes.set(list[i].taxiId,i);else if(list[i].day<tickDay)break;}for(const entry of vehicleFinanceDeltas){const index=dailyIndexes.get(entry.taxiId)??-1;if(index>=0){const previous=list[index];list[index]={...previous,revenue:previous.revenue+entry.revenue,expenses:previous.expenses+entry.expenses,km:previous.km+entry.km,trips:previous.trips+entry.trips,...Object.fromEntries(TAXI_ACTIVITY_FIELDS.map(k=>[k,(previous[k]??0)+entry[k]])),fuelCost:(previous.fuelCost??0)+entry.fuelCost,maintenanceCost:(previous.maintenanceCost??0)+entry.maintenanceCost,wageCost:(previous.wageCost??0)+entry.wageCost,insuranceCost:(previous.insuranceCost??0)+entry.insuranceCost};}else {dailyIndexes.set(entry.taxiId,list.length);list.push(entry);}}const cutoff=new Date(gameNow-365*86400000).toISOString().slice(0,10);return list.filter(v=>v.day>=cutoff).slice(-5000);})(),
       bank:loanTick.payments>0||leaseTick.payments>0||taxPaid>0||partnership.paid>0?appendBankEntries(bankOf(updatedBank),[...(partnership.settlements.map(item=>bankEntry('Revenue partnership · '+item.bank,-item.amount,'operating','repayment'))),...(loanTick.payments>0?[bankEntry('Scheduled loan repayment',-loanTick.payments,'operating','repayment')]:[]),...(leaseTick.payments>0?[bankEntry('Vehicle lease instalments',-leaseTick.payments,'operating','repayment')]:[]),...(taxSettlement.paidVat>0?[bankEntry('Monthly VAT settlement',-taxSettlement.paidVat,'operating','repayment')]:[]),...(taxSettlement.paidCorporate>0?[bankEntry('Monthly corporate tax settlement',-taxSettlement.paidCorporate,'operating','repayment')]:[])]):updatedBank,
@@ -2879,6 +2893,7 @@ export default function App(){
      return {...old,
       accounting:bookAccounting(old.accounting,periodMonth(now),income,0,0,0),
       financeHistory:history.slice(-365),
+      financeJournal:postFinance(old.financeJournal,[{day:date,side:'income',category:'property.rental',amount:income}]),
       transactions:[{id:crypto.randomUUID(),time:now,description:`Property income · ${result.hours} simulated hour(s)`,amount:income},...(old.transactions??[])].slice(0,100)
      };
     });
@@ -3054,6 +3069,7 @@ export default function App(){
    if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
    else history.push({day:date,revenue:0,expenses:cost,trips:0});
    return {...oldFleet,financeHistory:history.slice(-365),
+    financeJournal:postFinance(oldFleet.financeJournal,[{day:date,side:'expense',category:'construction.supplies',amount:cost}]),
     accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
     transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
   });
@@ -3084,6 +3100,7 @@ export default function App(){
     if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
     else history.push({day:date,revenue:0,expenses:cost,trips:0});
     return {...oldFleet,financeHistory:history.slice(-365),
+     financeJournal:postFinance(oldFleet.financeJournal,[{day:date,side:'expense',category:'hotel.staff',amount:cost}]),
      accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
      transactions:[{id:crypto.randomUUID(),time:clock,description:'Hotel staffing · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
    });
@@ -3165,6 +3182,11 @@ export default function App(){
       ...(old.transactions??[])
      ];
      return {...old,financeHistory:history.slice(-365),
+      financeJournal:postFinance(old.financeJournal,[
+       {day:date,side:'income',category:'hotel.rooms',amount:hotelGross},
+       {day:date,side:'expense',category:'hotel.operations',amount:hotelExpense},
+       {day:date,side:'expense',category:'construction.crew',amount:crewExpense},
+      ]),
       accounting:bookAccounting(old.accounting,periodMonth(epoch),hotelGross,expenses,0,0),
       transactions:transactions.slice(0,100)};
     });
@@ -3195,7 +3217,7 @@ export default function App(){
   <span className="research-header-progress-info"><span className="research-header-progress-title">{`RESEARCH · ${activeResearchProject.name} · LVL ${activeResearch?.level}`}</span><span className="research-header-progress-time">{`${Math.floor(researchProgress)}% · ${researchRemainingLabel}`}</span></span>
   <span className="research-header-progress-track"><span style={{width:`${researchProgress}%`}}/></span>
  </button>:
- <LiveFinanceTicker history={fleet.financeHistory??[]} transactions={fleet.transactions??[]}
+ <LiveFinanceTicker history={fleet.financeHistory??[]} transactions={fleet.transactions??[]} financeJournal={fleet.financeJournal}
   bankCollectionsByDay={fleet.bankPartnershipPaidByDay} gameNow={gameClock?.epochMs??Date.now()}/> )}
  {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
  </div>{page==='Company'&&(!company||showSetup)&&<div className="company-map-overlay" role="dialog" aria-label="Create company"><button type="button" className="company-map-close" aria-label="Close company setup and return to map" onClick={()=>go('World')}><X size={20}/></button><CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/></div>}
