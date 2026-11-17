@@ -813,3 +813,23 @@
  .internal-builder .ib-safety-picker button{min-height:72px}
  .internal-builder .ib-room-safety-actions button{flex:1;justify-content:center}
 }
+
+
+/* Phase 5: premium, editable architectural blueprint and read-only preview. */
+.internal-builder .ib-visual-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;border:1px solid rgba(127,184,213,.32);background:linear-gradient(135deg,rgba(32,62,78,.8),rgba(25,35,62,.84))}
+.internal-builder .ib-visual-mode>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:125px}
+.internal-builder .ib-visual-mode strong{font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-visual-mode small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-visual-mode-buttons,.internal-builder .ib-visual-style{display:flex;align-items:center;gap:6px}
+.internal-builder .ib-visual-mode-buttons button,.internal-builder .ib-visual-style button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border:1px solid var(--ib-line);border-radius:8px;padding:7px 10px;background:rgba(32,53,73,.85);color:var(--ib-muted);font-size:10px;font-weight:700;white-space:nowrap}
+.internal-builder .ib-visual-mode-buttons button.selected,.internal-builder .ib-visual-style button.selected{color:#ebfaff;background:rgba(66,117,140,.66);border-color:#a3d8eb}
+.internal-builder .ib-visual-style span{font-size:10px;color:var(--ib-muted);white-space:nowrap}
+.internal-builder .ib-floor-architectural{background:linear-gradient(160deg,#15283d,#18243a);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.internal-builder .ib-iso-loading{display:grid;place-items:center;min-height:280px;color:var(--ib-muted);border:1px solid var(--ib-line);border-radius:11px;font-size:12px}
+@media(max-width:700px){
+ .internal-builder .ib-visual-mode{align-items:stretch;flex-direction:column}
+ .internal-builder .ib-visual-mode-buttons{width:100%}
+ .internal-builder .ib-visual-mode-buttons button{flex:1;min-width:0;min-height:44px}
+ .internal-builder .ib-visual-style{width:100%;flex-wrap:wrap}
+ .internal-builder .ib-visual-style button{flex:1;min-height:39px}
+}
