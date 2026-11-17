@@ -1060,6 +1060,66 @@ export default function App(){
    ?IOS_DISPATCH_INTERVAL_MS:DESKTOP_DISPATCH_INTERVAL_MS);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
+ // Traffic detours are evaluated off the main thread and outside animation ticks.
+ // One bounded search at a time avoids cloning the graph or stalling iPhone Safari.
+ useEffect(()=>{
+  if(!company||!graph)return;
+  const evaluate=()=>{
+   if(document.visibilityState!=='visible'||!workerReadyRef.current)return;
+   const worker=dispatchWorkerRef.current;
+   if(!worker)return;
+   const now=Date.now();
+   for(const [requestId,pending] of trafficDetourPendingRef.current){
+    if(now-pending.requestedAt>16000)trafficDetourPendingRef.current.delete(requestId);
+   }
+   if(trafficDetourPendingRef.current.size||now-trafficDetourGlobalAtRef.current<7000)return;
+   const affected=new Set(trafficIncidentsRef.current.map(i=>i.roadId));
+   const taxis=taxisRef.current;
+   const candidates=taxis.filter(t=>
+    (!t.kind||t.kind==='taxi')&&
+    (t.status==='TO_PICKUP'||t.status==='TO_DROPOFF')&&
+    !t.ferryTrip&&!passengerRouteIssue(t)&&
+    t.edgeIds.length-t.leg>=2&&t.edgeIds.length-t.leg<=4000&&
+    !passengerRouteWatchRef.current.get(t.id)?.pending
+   ).sort((a,b)=>{
+    const hits=(t:Taxi)=>t.edgeIds.slice(t.leg,t.leg+120).some(id=>affected.has(id));
+    return Number(hits(b))-Number(hits(a))||
+     (trafficDetourLastByTaxiRef.current.get(a.id)??0)-
+      (trafficDetourLastByTaxiRef.current.get(b.id)??0);
+   });
+   for(const taxi of candidates){
+    const incidentOnRoute=taxi.edgeIds.slice(taxi.leg,taxi.leg+120).some(id=>affected.has(id));
+    const cooldown=incidentOnRoute?12000:30000;
+    if(now-(trafficDetourLastByTaxiRef.current.get(taxi.id)??0)<cooldown)continue;
+    const destination=taxi.status==='TO_PICKUP'?taxi.pickup:taxi.dropoff;
+    const roadId=taxi.edgeIds[taxi.leg];
+    const start=taxi.path[taxi.leg],end=taxi.path[taxi.leg+1];
+    if(!destination||!roadId||!start||!end)continue;
+    const snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>={
+     status:taxi.status,jobId:taxi.activeJobId,roadId,
+     segmentStart:[...start],segmentEnd:[...end],position:[...taxi.position],
+     distanceIntoLeg:taxi.distanceIntoLeg,
+     remainingPath:taxi.path.slice(taxi.leg),
+     remainingEdgeIds:taxi.edgeIds.slice(taxi.leg),
+     destination:[...destination],gameAt:gameClockRef.current?.epochMs??now,
+    };
+    const requestId=++routeSequenceRef.current;
+    trafficDetourPendingRef.current.set(requestId,{vehicleId:taxi.id,requestedAt:now,snapshot});
+    trafficDetourLastByTaxiRef.current.set(taxi.id,now);
+    trafficDetourGlobalAtRef.current=now;
+    try{
+     worker.postMessage({type:'trafficReroute',revision:graphRevisionRef.current,
+      requestId,vehicleId:taxi.id,snapshot,trafficIncidents:trafficIncidentsRef.current});
+    }catch(error){
+     trafficDetourPendingRef.current.delete(requestId);
+     diagnostic('taxi:traffic-detour-request-error',String(error));
+    }
+    break;
+   }
+  };
+  const interval=window.setInterval(evaluate,7000);
+  return()=>window.clearInterval(interval);
+ },[company?.id,graph]);
  // Prefetch roads near active vehicles and destinations without resetting their routes.
  useEffect(()=>{
   if(!company||!graph)return;
