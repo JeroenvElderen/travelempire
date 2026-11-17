@@ -8,6 +8,7 @@
 import {type ConstructionState,type HotelSite,type HotelFloor,type Room,type SupplyCode,
  type StockBatch,supplies,supplyStock,roomIssues} from './internalConstruction';
 import {hotelGuestRoomQuality,hotelDesignDemandModifier} from './hotelBlueprintEditing';
+import {analyzeHotelFloorAccess} from './hotelAccess';
 
 export type HotelRole='reception'|'housekeeping'|'kitchen'|'bar';
 export type HotelStaff=Record<HotelRole,number>;
@@ -81,12 +82,25 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const rooms=floors.flatMap(f=>f.rooms);
  const exists=(type:Room['type'])=>floors.some(f=>f.rooms.some(r=>r.type===type&&roomIssues(f,r).length===0));
  const bathrooms=rooms.filter(r=>r.type==='bathroom'&&floors.some(f=>f.rooms.includes(r)&&roomIssues(f,r).length===0)).length;
- const readyRooms=floors.flatMap(f=>f.rooms.filter(r=>r.type==='guest'&&roomIssues(f,r).length===0&&
-   f.rooms.some(b=>b.type==='bathroom'&&roomIssues(f,b).length===0)
+ const groundAccess=site.accessRulesVersion===1&&floors[0]?
+  analyzeHotelFloorAccess(floors[0],site,0):null;
+ const reachable=new Set(groundAccess?.guests.filter(g=>g.status==='connected')
+  .map(g=>g.roomId)??[]);
+ // New plots need a functional ground-floor entrance and reception route.
+ // Existing saved hotels remain grandfathered. Upper-floor linking is Phase 2.
+ const readyRooms=floors.flatMap((f,floorIndex)=>f.rooms.filter(r=>
+  r.type==='guest'&&roomIssues(f,r).length===0&&
+  f.rooms.some(b=>b.type==='bathroom'&&roomIssues(f,b).length===0)&&
+  (floorIndex!==0||!groundAccess||reachable.has(r.id))
  ).map(room=>({room,floor:f})));
+
  const hasLobby=exists('lobby'),hasKitchen=exists('kitchen'),hasRestaurant=exists('restaurant'),hasBar=exists('bar');
  const reasons:string[]=[];
  if(!hasLobby)reasons.push('Construct a lobby with a reception desk');
+ if(groundAccess&&!groundAccess.receptionConnected&&floors[0].rooms.some(r=>r.type==='lobby'))
+  reasons.push('Connect ground-floor reception to a valid exterior entrance through room or corridor doors');
+ if(groundAccess&&groundAccess.guestRooms>0&&groundAccess.connectedGuests===0)
+  reasons.push('Give at least one furnished ground-floor guest room a connected doorway to reception');
  if(!readyRooms.length)reasons.push('Furnish at least one guest room and a functioning bathroom on its floor');
  return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons};
 }
