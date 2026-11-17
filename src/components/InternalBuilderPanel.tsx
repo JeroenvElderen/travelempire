@@ -13,7 +13,8 @@ import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRo
  type HotelRole} from '../hotelOperations';
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
 import {BLUEPRINT_ROOM_TEMPLATES,addBlueprintTemplate,editBlueprintRoom,hotelBlueprintHealth,
- type BlueprintRoomGeometry,type RoomTemplateId} from '../hotelBlueprintEditing';
+ type BlueprintRoomGeometry,type RoomTemplateId,
+ editBlueprintFurniture,furnitureAtCell,furnitureDragPosition,hotelGuestRoomQuality} from '../hotelBlueprintEditing';
 import {freightStage,freightStatusLabel,freightProgress} from '../constructionLogistics';
 import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import './internal-builder.css';
@@ -63,11 +64,14 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const [status,setStatus]=useState('');
  const [anchor,setAnchor]=useState<Cell|null>(null);
  const [selectedRoomId,setSelectedRoomId]=useState<string|null>(null);
+ const [selectedFurnitureId,setSelectedFurnitureId]=useState<string|null>(null);
+ const [furniturePreview,setFurniturePreview]=useState<{id:string;x:number;y:number}|null>(null);
  const scrollerRef=useRef<HTMLDivElement|null>(null);
  const zoomRef=useRef(zoom);zoomRef.current=zoom;
  const pendingScroll=useRef<PlanScroll|null>(null);
  const pinchOrigin=useRef<PinchOrigin|null>(null);
- type DragPointer={startX:number;startY:number;lastX:number;lastY:number;cell:Cell|null;moved:boolean;gesture:boolean;panOverride:boolean};
+ type DragPointer={startX:number;startY:number;lastX:number;lastY:number;cell:Cell|null;moved:boolean;gesture:boolean;panOverride:boolean;
+  furnitureId?:string;furnitureOrigin?:{x:number;y:number}};
  const pointers=useRef(new Map<number,DragPointer>());
  // Apply the scroll offset only once the SVG's new dimensions have committed.
  // Otherwise Safari clamps it to the old (smaller) scrollable area on zoom-in.
@@ -103,6 +107,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const site=selectedId?state.sites[selectedId]??null:null;
  const floor=site?.draft[Math.min(floorIndex,site.draft.length-1)]??null;
  const selectedRoom=floor?.rooms.find(r=>r.id===selectedRoomId)??null;
+ const selectedPlacedFurniture=floor?.objects.find(o=>o.id===selectedFurnitureId)??null;
+ const selectedPlacedType=selectedPlacedFurniture?furniture.find(f=>f.code===selectedPlacedFurniture.code):null;
  const blueprintHealth=site&&floor?hotelBlueprintHealth(floor,site):null;
  const active=site?.projects.find(p=>p.status==='active');
  const quote=useMemo(()=>{if(!site||active)return null;try{return constructionQuote(site,method,state.workers);}catch{return null;}},[site,method,state.workers,active]);
@@ -131,7 +137,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const choose=(idValue:string)=>{
   history.current={siteId:idValue,undo:[],redo:[]};
   pointers.current.clear();pinchOrigin.current=null;pendingScroll.current=null;
-  setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setSelectedRoomId(null);setTab('blueprint');setStatus('');
+  setSelectedId(idValue);setFloorIndex(0);setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);setTab('blueprint');setStatus('');
   setTool('pan');setZoom(1);
  };
  const recordEdit=(old:HotelSite)=>{
@@ -151,11 +157,16 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(issue){stack.push(restore);setStatus(issue);return;}
   (direction==='undo'?h.redo:h.undo).push(site);
   setStatus(direction==='undo'?'Last blueprint change undone.':'Blueprint change redone.');
-  setAnchor(null);setSelectedRoomId(null);
+  setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);
  };
  const modify=(fn:(old:HotelFloor)=>HotelFloor)=>{
   if(!site||!floor)return;
   try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
+ };
+ const adjustPlacedFurniture=(changes:{x?:number;y?:number;rotated?:boolean})=>{
+  if(!site||!selectedPlacedFurniture||active)return;
+  const furnitureId=selectedPlacedFurniture.id;
+  modify(f=>editBlueprintFurniture(f,site,furnitureId,changes));
  };
  const focusRoom=(room:HotelFloor['rooms'][number])=>{
   const scroller=scrollerRef.current;
@@ -180,7 +191,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    const message=onChangeSite(next);
    if(message){setStatus(message);return;}
    recordEdit(site);
-   setSelectedRoomId(newRoomId);setTool('select');setAnchor(null);
+   setSelectedRoomId(newRoomId);setSelectedFurnitureId(null);setTool('select');setAnchor(null);
    setStatus('Furnished room placed. Select it to resize or move. Construction costs will be quoted before approval.');
   }catch(e){setStatus(e instanceof Error?e.message:'Unable to fit this room template.');}
  };
@@ -195,10 +206,15 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const onPlanPointerDown=(e:PointerEvent<SVGSVGElement>)=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
   const cell=cellFromEvent(e);
+  const candidate=cell&&(tool==='select'||tool==='furniture')&&!active&&!e.shiftKey&&floor?
+   furnitureAtCell(floor,cell.x,cell.y):null;
   const point:DragPointer={startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,
-   cell,moved:false,gesture:false,panOverride:e.shiftKey};
+   cell,moved:false,gesture:false,panOverride:e.shiftKey,
+   furnitureId:candidate?.id,furnitureOrigin:candidate?{x:candidate.x,y:candidate.y}:undefined};
+  if(candidate){setSelectedFurnitureId(candidate.id);setSelectedRoomId(null);}
   pointers.current.set(e.pointerId,point);
   if(pointers.current.size>1){
+   setFurniturePreview(null);
    for(const p of pointers.current.values())p.gesture=true;
    const [first,second]=[...pointers.current.values()];
    const box=scrollerRef.current;
@@ -223,6 +239,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   point.lastX=e.clientX;point.lastY=e.clientY;
   if(Math.hypot(e.clientX-point.startX,e.clientY-point.startY)>7)point.moved=true;
   if(pointers.current.size>1){
+   setFurniturePreview(null);
    for(const p of pointers.current.values())p.gesture=true;
    const [first,second]=[...pointers.current.values()];
    const origin=pinchOrigin.current;
@@ -246,6 +263,17 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   }
   // After a pinch, ignore the remaining pointer until it has been lifted.
   if(point.gesture)return;
+  // Existing furniture can be dragged in Inspect or Furnish mode. Commit only
+  // on pointer-up, so a long gesture never generates repeated saves/quotes.
+  if(point.furnitureId&&point.furnitureOrigin&&point.moved){
+   const target=furnitureDragPosition(point.furnitureOrigin,
+    {x:e.clientX-point.startX,y:e.clientY-point.startY},zoomRef.current);
+   setFurniturePreview(current=>current?.id===point.furnitureId&&
+    current.x===target.x&&current.y===target.y?current:
+    {id:point.furnitureId!,...target});
+   return;
+  }
+  if(point.furnitureId)return;
   // Room drawing uses one finger to draw. In every other tool, swiping
   // moves the viewport instead of accidentally placing multiple objects.
   if(tool!=='room'||point.panOverride){
@@ -261,7 +289,19 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(pointers.current.size<2)pinchOrigin.current=null;
   try{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}
   catch{/* Cancelled capture. */}
-  if(cancel||point.gesture||point.panOverride||tool==='pan'||(point.moved&&tool!=='room'))return;
+  setFurniturePreview(null);
+  if(cancel||point.gesture||point.panOverride)return;
+  if(point.furnitureId&&point.furnitureOrigin){
+   setSelectedFurnitureId(point.furnitureId);setSelectedRoomId(null);
+   if(point.moved&&site&&!active){
+    const target=furnitureDragPosition(point.furnitureOrigin,
+     {x:e.clientX-point.startX,y:e.clientY-point.startY},zoomRef.current);
+    if(target.x!==point.furnitureOrigin.x||target.y!==point.furnitureOrigin.y)
+     modify(f=>editBlueprintFurniture(f,site,point.furnitureId!,target));
+   }
+   return;
+  }
+  if(tool==='pan'||(point.moved&&tool!=='room'))return;
   const at=cellFromEvent(e);
   if(at)interact(at,point.cell);
  };
@@ -274,7 +314,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  };
  const interact=(where:Cell,from:Cell|null)=>{
   if(!site||!floor||active)return;
-  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
+  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setSelectedFurnitureId(null);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
   if(tool==='room'){
    if(from&&(from.x!==where.x||from.y!==where.y)){makeRoom(from,where);return;}
    if(anchor){makeRoom(anchor,where);return;}
@@ -370,7 +410,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   {company&&tab==='blueprint'&&(!site||!floor)?<div className="ib-empty"><Grid2X2 size={22}/><strong>Select a building site first</strong><button className="ib-primary" onClick={()=>setTab('sites')}>Choose property</button></div>:null}
   {company&&tab==='blueprint'&&site&&floor&&<div className="ib-section ib-editor">
    <div className="ib-heading"><div><h2>{site.name}</h2><small>{site.width} × {site.height} m · {site.kind==='new'?'New development':site.kind==='headquarters'?'Headquarters interior':'Hotel renovation'}</small></div><button className="ib-secondary" onClick={()=>setTab('sites')}>All sites</button></div>
-   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);setSelectedRoomId(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
+   <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
    <div className="ib-tools" role="group" aria-label="Building tools">
     {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
