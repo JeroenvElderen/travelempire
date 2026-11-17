@@ -196,6 +196,15 @@ export function hotelGuestRoomQuality(floor:HotelFloor,room:Room):HotelDesignQua
  return {score,tier,suggestions};
 }
 
+/** Convert design score to a modest bounded occupancy effect. Equipment and
+ * generous room sizes improve bookings; unfinished designs do worse. The
+ * canonical room availability, prices and staffing checks remain unchanged.
+ */
+export function hotelDesignDemandModifier(score:number):number{
+ if(!Number.isFinite(score))return 0;
+ return Math.max(-.06,Math.min(.10,(score-60)*.0025));
+}
+
 export type HotelBlueprintHealth={
  rooms:number;guestRooms:number;readyGuestRooms:number;
  furnishedRooms:number;roomsWithIssues:number;
