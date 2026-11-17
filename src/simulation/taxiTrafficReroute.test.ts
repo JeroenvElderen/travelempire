@@ -1,5 +1,5 @@
 import {afterEach,describe,expect,it} from 'vitest';
-import {meters,type Point,type RoadGraph,type Taxi} from './taxi';
+import {meters,tickTaxi,type Point,type RoadGraph,type Taxi} from './taxi';
 import {setTrafficIncidents} from './trafficConditions';
 import {planTaxiTrafficDetour,adoptTaxiTrafficDetour,type MovingTrafficSnapshot} from './taxiTrafficReroute';
 
@@ -59,6 +59,12 @@ describe('traffic-aware passenger rerouting',()=>{
   expect(result?.activeJobId).toBe('ride-1');
   expect(result?.jobDrivenMeters).toBe(230);
   expect(result?.completed).toBe(8);
+  const moving=tickTaxi(result!,graph,1,discovered,clock);
+  expect(moving.taxi.status).toBe('TO_DROPOFF');
+  expect(moving.taxi.position[0]).toBeGreaterThan(advance.position[0]);
+  expect(moving.taxi.leg).toBe(0);
+  expect(moving.earned).toBe(0);
+  expect(moving.discovered).toEqual([]);
  });
  it('never crosses undiscovered road links with a passenger aboard',()=>{
   setTrafficIncidents([{roadId:'bc',kind:'collision',startedAt:clock-60000,endsAt:clock+600000}]);
