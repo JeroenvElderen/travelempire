@@ -111,7 +111,7 @@ export default function OperationsPanel({fleet,graph,missionCount,roadPackages,d
     </div>
     <span className="ops-card-note">{
      taxiDispatchMode==='max-jobs'?'Prioritises the fastest legal pickup and accepts every feasible booking.':
-     taxiDispatchMode==='max-profit'?'Prefers higher estimated contribution and declines low-margin requests.':
+     taxiDispatchMode==='max-profit'?'Prioritises expected net profit per working hour, including unpaid pickup time. Depots are storage and delivery points, not demand centres.':
      'Balances passenger pickup times with estimated operating profit.'
     } Idle taxis can establish service in distant discovered-road regions without a depot. Driver journey preferences influence matching, but don't override pickup time, fuel, shifts or legal road connections. All trip distances retain the same driving speeds.</span>
    </article>

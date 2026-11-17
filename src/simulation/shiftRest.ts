@@ -10,11 +10,9 @@ export type ShiftRestTarget={id:string;name:string;kind:'hotel'|'parking'|'depot
  */
 export function shiftRestTargets(taxi:Taxi,stops:readonly RestStop[],
  company:Company,overnight:boolean):ShiftRestTarget[]{
- const depot=company.depots?.find(d=>d.id===taxi.depotId);
- const home:ShiftRestTarget=depot?
-  {id:'depot:'+depot.id,name:depot.name,kind:'depot',position:[depot.lng,depot.lat]}:
-  {id:'depot:main',name:'Headquarters',kind:'depot',
-   position:[company.headquarters.lng,company.headquarters.lat]};
+ // Depot is headquarters/delivery/storage only; an off-duty taxi stays
+ // in its current operating region instead of driving back to headquarters.
+ void company;
  // Overnight hotel first when reasonably close; otherwise local parking
  // and the assigned depot are valid. All candidates must be road-accessible.
  const hotels:ShiftRestTarget[]=[];
@@ -29,13 +27,14 @@ export function shiftRestTargets(taxi:Taxi,stops:readonly RestStop[],
  const nearby=(a:ShiftRestTarget,b:ShiftRestTarget)=>
   meters(taxi.position,a.position)-meters(taxi.position,b.position);
  hotels.sort(nearby);parking.sort(nearby);
- // Keep the assigned depot as a reliable fallback, but don't force a distant
- // headquarters journey when a valid local hotel or parking area exists.
+ // Use local hotels or parking only; never automatically send an
+ // off-duty taxi across the island to a depot. If none is reachable,
+ // it remains off duty and retries finding a legal local rest stop.
  const preferred=overnight?[
   ...hotels.filter(s=>meters(taxi.position,s.position)<=5000),
   ...parking.filter(s=>meters(taxi.position,s.position)<=3000),
-  home,...hotels,...parking
- ]:[...parking,home];
+  ...hotels,...parking
+ ]:parking;
  const seen=new Set<string>();
  return preferred.filter(s=>{if(seen.has(s.id))return false;seen.add(s.id);return true;}).slice(0,12);
 }
