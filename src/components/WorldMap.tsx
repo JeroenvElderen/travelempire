@@ -683,9 +683,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
       jobFareText.textContent=pickup?'Fare starts at pickup':'Fare accumulated';
       jobDistanceText.textContent=pickup?'To pickup':'Job distance';
       fill.style.width=(job.progress*100).toFixed(1)+'%';
-      jobFoot.textContent=pickup?
+      const originLabel=vehicle.jobPickupPlaceName?
+       'From '+vehicle.jobPickupPlaceName+' · ':'';
+      jobFoot.textContent=originLabel+(pickup?
        'Quoted fare '+euro(job.expectedFare)+' · pickup travel not charged':
-       'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off';
+       'Expected fare '+euro(job.expectedFare)+' · credited only at drop-off');
      };
      const restPanel=document.createElement('div');restPanel.className='te-sheet-rest';
      const restHeader=document.createElement('div');restHeader.className='te-sheet-rest-header';
