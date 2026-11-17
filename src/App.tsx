@@ -1059,7 +1059,9 @@ export default function App(){
    const taxis=taxisRef.current;
    if(!taxis.length)return;
    const revision=graphRevisionRef.current;
-   const queue=queueRef.current.filter(q=>q.expiresAt>now);
+   // Pass the bounded existing queue INCLUDING expired entries. The worker
+   // removes them and reports their stable IDs once for missed-booking metrics.
+   const queue=queueRef.current;
    const discovered=discoveredCacheRef.current?.ids??fleetSaveRef.current.exploredEdgeIds??[];
    dispatchBusyRef.current=true;
    dispatchStartedRef.current=performance.now();
