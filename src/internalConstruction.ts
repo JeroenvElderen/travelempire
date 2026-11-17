@@ -41,6 +41,8 @@ export type HotelSite={
  draft:HotelFloor[];built:HotelFloor[];projects:ConstructionProject[];createdHour:number;
  supplyOrders?:SupplyOrder[];stock?:Partial<Record<SupplyCode,StockBatch[]>>;
  operations?:HotelOperations;
+ /** New hotels enforce connected ground-floor entrances; old saves are grandfathered. */
+ accessRulesVersion?:1;
 };
 export type ConstructionState={version:1;sites:Record<string,HotelSite>;workers:number;lastPayrollHour:number};
 export const HOTEL_GRID_WIDTH=24;
