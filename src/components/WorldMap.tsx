@@ -337,6 +337,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   try{return localStorage.getItem('travelempire.map.traffic-layer')==='on';}catch{return false;}
  });
  useEffect(()=>{try{localStorage.setItem('travelempire.map.traffic-layer',showTrafficOverlay?'on':'off');}catch{/* optional preference */}},[showTrafficOverlay]);
+ const showTrafficOverlayRef=useRef(showTrafficOverlay);showTrafficOverlayRef.current=showTrafficOverlay;
  const [trafficRoadRevision,setTrafficRoadRevision]=useState(0);
  const [trafficIncidentRevision,setTrafficIncidentRevision]=useState(0);
 
@@ -1037,7 +1038,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   }
   if(!changed)return;
   purpleRevision.current++;
-  if(showTrafficOverlay)setTrafficRoadRevision(v=>v+1);
+  if(showTrafficOverlayRef.current)setTrafficRoadRevision(v=>v+1);
   // Coalesce continuous discoveries without indefinitely postponing source updates.
   if(purpleRefreshTimer.current===null){
    const delay=Math.max(0,150-(performance.now()-lastPurpleSourceUpdate.current));
@@ -1211,7 +1212,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Always keep the purple network above the red road network and basemap.
    // This changes rendering only; vehicle simulation and discovery stay intact.
    if(instance.getLayer(exploredLayerId))instance.moveLayer(exploredLayerId);
-   if(showTrafficOverlay)setTrafficRoadRevision(v=>v+1);
+   if(showTrafficOverlayRef.current)setTrafficRoadRevision(v=>v+1);
    // Diagnostics belong above the normal blue exploration network so their
    // colour-coded geometry can be inspected without changing discovery.
    if(showRoadLevelsDebug)for(const id of ROAD_LEVEL_DEBUG_LAYER_IDS)
