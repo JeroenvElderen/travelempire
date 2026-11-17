@@ -4,17 +4,20 @@
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
-export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'furniture'|'erase';
+export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
 export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table';
 export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number};
 export type Wall={id:string;x:number;y:number;orientation:'h'|'v';type:'wall'|'door'|'window'|'panoramic-window'};
 export type LightingKind='ceiling'|'ambient';
 export type LightingFixture={id:string;kind:LightingKind;x:number;y:number};
+/** Equipment is ceiling/wall-mounted in the local 1 m floor grid, not floor furniture. */
+export type SafetyFixtureKind='smoke-alarm'|'fire-extinguisher'|'exit-sign';
+export type SafetyFixture={id:string;kind:SafetyFixtureKind;x:number;y:number};
 export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rotated:boolean};
 export type HotelFloor={id:string;label:string;rooms:Room[];walls:Wall[];objects:ObjectPlacement[];
  /** Optional so every existing saved blueprint remains readable. */
- lights?:LightingFixture[];};
+ lights?:LightingFixture[];safetyFixtures?:SafetyFixture[];};
 export type MaterialLine={id:string;name:string;unit:string;quantity:number;unitCents:number;totalCents:number};
 export type BuildQuote={materials:MaterialLine[];materialCents:number;furnitureCents:number;labourCents:number;totalCents:number;workUnits:number;deliveryHours:number;constructionHours:number;changes:number};
 export type ConstructionProject={id:string;method:TradeMode;startHour:number;deliveryHour:number;finishHour:number;budgetCents:number;materials:MaterialLine[];furnitureCents:number;labourCents:number;target:HotelFloor[];freight?:ConstructionFreight;status:'active'|'complete'};
@@ -49,6 +52,8 @@ export type HotelSite={
  accessRulesVersion?:1|2;
  /** New plots opt in to window/lighting-driven atmosphere; legacy hotels preserve demand. */
  atmosphereRulesVersion?:1;
+ /** Opt-in simulated fire escape and wheelchair access for new hotels only. */
+ safetyRulesVersion?:1;
 };
 export type ConstructionState={version:1;sites:Record<string,HotelSite>;workers:number;lastPayrollHour:number};
 export const HOTEL_GRID_WIDTH=24;
@@ -191,13 +196,14 @@ const materialData=[
 ] as const;
 const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
 const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
-const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated]),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind])});
+const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated]),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
  let area=0,wallCount=0,bathrooms=0,objectsCents=0,newFloors=0,changes=0,demolition=0;
  let stairModules=0,liftModules=0,verticalWork=0;
  let newWindows=0,newPanoramicWindows=0,newLights=0;
+ let newSafety=0;
  for(let i=0;i<site.draft.length;i++){
   const draft=site.draft[i],built=site.built[i]??blankFloor(i);
   if(floorMetric(draft)===floorMetric(built))continue;
@@ -231,12 +237,20 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
    newLights++;
    objectsCents+=light.kind==='ceiling'?22000:12000;
   }
+  const installed=new Map((built.safetyFixtures??[]).map(f=>[f.id,f]));
+  for(const fixture of draft.safetyFixtures??[]){
+   const previous=installed.get(fixture.id);
+   if(previous?.kind===fixture.kind)continue;
+   newSafety++;
+   objectsCents+=fixture.kind==='smoke-alarm'?9500:
+    fixture.kind==='fire-extinguisher'?18000:12000;
+  }
  }
  const quantities=[
   Math.ceil(area*0.13+newFloors*22),
   Math.ceil(wallCount*9),
   Math.ceil(wallCount*0.9),
-  Math.ceil(area*1.1)+newLights*2,
+  Math.ceil(area*1.1)+newLights*2+newSafety,
   bathrooms*3,
   Math.ceil(area),
   Math.ceil(area*0.3)
@@ -254,7 +268,7 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
  }
  const materialCents=materials.reduce((sum,m)=>sum+m.totalCents,0)+newFloors*1200000+demolition*5000;
  const workUnits=Math.max(0,area*1.4+wallCount*0.65+changes*2+demolition+newFloors*35+verticalWork+
- newWindows*1.5+newPanoramicWindows*2.5+newLights*2);
+ newWindows*1.5+newPanoramicWindows*2.5+newLights*2+newSafety*1.5);
  const labourCents=method==='contractor'?Math.ceil(workUnits*6200):Math.ceil(workUnits*1400);
  const deliveryHours=changes?8+Math.ceil(materials.length/3):0;
  const constructionHours=changes?Math.max(8,Math.ceil(workUnits/(method==='contractor'?4.8:Math.max(2,workers)*0.8))):0;
