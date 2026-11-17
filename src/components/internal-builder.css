@@ -654,3 +654,38 @@
  .internal-builder .ib-furniture-inspector-footer{align-items:flex-start;flex-direction:column}
  .internal-builder .ib-design-summary p{align-items:flex-start;flex-direction:column;gap:3px}
 }
+
+
+/* Functional ground-floor guest circulation checks. All geometry stays on the
+ * existing local 2D SVG; no additional map renderer or route worker. */
+.internal-builder .ib-access-mode{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--ib-line);border-radius:11px;background:rgba(41,51,78,.76)}
+.internal-builder .ib-access-mode>div{display:grid;gap:4px;min-width:0}
+.internal-builder .ib-access-mode strong{font-size:11px;color:var(--ib-fg)}
+.internal-builder .ib-access-mode small{font-size:10px;line-height:1.45;color:var(--ib-muted)}
+.internal-builder .ib-access-mode button{flex-shrink:0}
+.internal-builder .ib-access-checker{display:grid;gap:8px;padding:12px;border-radius:12px;border:1px solid rgba(114,217,175,.24);background:rgba(22,38,52,.80)}
+.internal-builder .ib-access-checker-heading{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.internal-builder .ib-access-checker-heading>div{display:grid;gap:4px}
+.internal-builder .ib-access-checker-heading strong{font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-access-checker-heading small{font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-access-checker-heading button.selected{border-color:rgba(96,221,177,.65);background:rgba(42,91,83,.5)}
+.internal-builder .ib-access-counts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.internal-builder .ib-access-counts span{display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:8px;background:rgba(40,59,73,.9);font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-access-counts strong{color:var(--ib-fg)}
+.internal-builder .ib-access-counts .good{color:#9de3bc}
+.internal-builder .ib-access-counts .bad{color:#f1c194}
+.internal-builder .ib-access-warning{display:flex;align-items:flex-start;gap:7px;padding:3px 0;font-size:10px;line-height:1.45;color:#f1c194}
+.internal-builder .ib-access-warning svg{flex-shrink:0;margin-top:1px}
+.internal-builder .ib-access-grandfather{font-size:10px;line-height:1.5;color:var(--ib-muted)}
+.internal-builder .ib-room-access-actions{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 12px;border:1px solid var(--ib-line);border-radius:10px;background:rgba(34,50,74,.85)}
+.internal-builder .ib-room-access-actions>div{display:grid;gap:4px;min-width:0}
+.internal-builder .ib-room-access-actions strong{color:var(--ib-fg);font-size:11px}
+.internal-builder .ib-room-access-actions small{color:var(--ib-muted);font-size:10px;text-transform:capitalize}
+.internal-builder .ib-room-access-actions button{flex-shrink:0}
+@media(max-width:680px){
+ .internal-builder .ib-access-mode{align-items:stretch;flex-direction:column}
+ .internal-builder .ib-access-mode button{align-self:flex-start}
+ .internal-builder .ib-access-checker-heading{align-items:flex-start}
+ .internal-builder .ib-room-access-actions button{min-height:42px}
+ .internal-builder .ib-access-counts span{font-size:9px}
+}
