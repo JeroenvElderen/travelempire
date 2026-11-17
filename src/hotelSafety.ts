@@ -4,7 +4,7 @@
  * Only sites with safetyRulesVersion=1 enforce booking eligibility.
  */
 import {
- furnitureSize,roomIssues,type HotelFloor,type HotelSite,type Room,
+ furnitureSize,type HotelFloor,type HotelSite,type Room,
  type SafetyFixture,type SafetyFixtureKind,
 } from './internalConstruction';
 import {accessDoorPair,hotelAccessDoorValid} from './hotelAccess';
@@ -128,7 +128,6 @@ export function analyzeHotelSafety(
  floors:readonly HotelFloor[],site:HotelSite,
 ):HotelSafetyReport{
  const evacuation:Graph=new Map(),wheelchair:Graph=new Map();
- const byFloor=floors.map(f=>new Map(f.rooms.map(r=>[r.id,r])));
  const roomsByKey=new Map<string,{floorIndex:number;room:Room}>();
  const guestDoors=new Map<string,Array<{other:string;otherType:Room['type']}>>();
  for(const [fi,floor] of floors.entries()){
@@ -179,7 +178,21 @@ export function analyzeHotelSafety(
  });
  const evacuationReach=walk(evacuation,exitsKeys);
  const signedReach=walk(evacuation,signedKeys);
- const wheelchairReach=walk(wheelchair,exitsKeys);
+ // A barrier-free path must lead to BOTH a building entrance and a
+ // furnished ground-floor reception; an isolated external corridor fails.
+ const wheelchairReach=new Set<string>(),processed=new Set<string>();
+ for(const entrance of exitsKeys){
+  if(processed.has(entrance))continue;
+  const component=walk(wheelchair,[entrance]);
+  for(const member of component)processed.add(member);
+  const hasFurnishedReception=[...component].some(n=>{
+   const node=roomsByKey.get(n);
+   return node?.floorIndex===0&&node.room.type==='lobby'&&
+    floors[0].objects.some(o=>o.code==='reception'&&
+     inRoom(node.room,o.x,o.y));
+  });
+  if(hasFurnishedReception)for(const n of component)wheelchairReach.add(n);
+ }
  const floorReports:HotelSafetyFloor[]=[];
  const allGuests:HotelSafetyGuest[]=[];
  for(const [fi,floor] of floors.entries()){
