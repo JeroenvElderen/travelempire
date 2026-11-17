@@ -16,12 +16,12 @@ export const SAFETY_FIXTURE_LABEL:Readonly<Record<SafetyFixtureKind,string>>={
  'smoke-alarm':'Smoke alarm','fire-extinguisher':'Fire extinguisher',
  'exit-sign':'Illuminated exit sign',
 };
-const circulation=(r:Room|null|undefined):r is Room=>
+const circulation=(r:Room|null|undefined):boolean=>
  r!=null&&(r.type==='corridor'||r.type==='lobby');
-const egressRoom=(r:Room|null|undefined):r is Room=>
- circulation(r)||r?.type==='stairwell';
-const wheelchairRoom=(r:Room|null|undefined):r is Room=>
- (circulation(r)||r?.type==='elevator')&&!!r&&r.width>=2&&r.height>=2;
+const egressRoom=(r:Room|null|undefined):boolean=>
+ r!=null&&(circulation(r)||r.type==='stairwell');
+const wheelchairRoom=(r:Room|null|undefined):boolean=>
+ r!=null&&(circulation(r)||r.type==='elevator')&&r.width>=2&&r.height>=2;
 const inRoom=(room:Room,x:number,y:number)=>
  x>=room.x&&y>=room.y&&x<room.x+room.width&&y<room.y+room.height;
 const key=(fi:number,id:string)=>fi+':'+id;
@@ -33,8 +33,8 @@ const exteriorDoorRoom=(floor:HotelFloor,site:HotelSite):Set<string>=>{
   if(door.type!=='door'||!hotelAccessDoorValid(floor,site,door))continue;
   const side=accessDoorPair(floor,site,door);
   if(side.exterior){
-   if(circulation(side.first))entries.add(side.first.id);
-   if(circulation(side.second))entries.add(side.second.id);
+   if(side.first&&circulation(side.first))entries.add(side.first.id);
+   if(side.second&&circulation(side.second))entries.add(side.second.id);
   }
  }
  return entries;
