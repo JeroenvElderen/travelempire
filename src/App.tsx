@@ -1088,6 +1088,7 @@ export default function App(){
       (trafficDetourLastByTaxiRef.current.get(b.id)??0);
    });
    for(const taxi of candidates){
+    if(taxi.status!=='TO_PICKUP'&&taxi.status!=='TO_DROPOFF')continue;
     const incidentOnRoute=taxi.edgeIds.slice(taxi.leg,taxi.leg+120).some(id=>affected.has(id));
     const cooldown=incidentOnRoute?12000:30000;
     if(now-(trafficDetourLastByTaxiRef.current.get(taxi.id)??0)<cooldown)continue;
