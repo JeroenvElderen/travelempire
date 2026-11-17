@@ -65,6 +65,7 @@ import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
 import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
+import {adoptTaxiTrafficDetour,type TaxiTrafficDetour,type MovingTrafficSnapshot} from './simulation/taxiTrafficReroute';
 import {createDepotStarterExplorers,reconcileDepotStarterExplorers,type DepotStarterAnchor} from './simulation/depotStarterExplorers';
 import {missingDepotAccessSeeds} from './simulation/depotRoadSeeds';
 import {depotParkingChoices,requireDepotParking} from './simulation/depotParking';
@@ -421,6 +422,10 @@ export default function App(){
   lastProgressAt:number;lastAttemptAt:number;pending:boolean
  }>());
  // Ignore dispatcher responses computed before a manual vehicle reset.
+ const trafficDetourPendingRef=useRef(new Map<number,{vehicleId:string;requestedAt:number;
+  snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>}>());
+ const trafficDetourLastByTaxiRef=useRef(new Map<string,number>());
+ const trafficDetourGlobalAtRef=useRef(0);
  const resetVehicleTargetsRef=useRef(new Map<string,[number,number]>());
  const shiftRestRetryRef=useRef(new Map<string,number>());
  const operationalRoutesRef=useRef(new Map<string,{requestId:number;purpose:'shift'|'service';position:[number,number];status:string;at:number;graph:RoadGraph;path:[number,number][]|null;edgeIds:string[]|null;target?:[number,number]|null;ready:boolean}>());
@@ -787,6 +792,7 @@ export default function App(){
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
   pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();passengerRouteWatchRef.current.clear();
+  trafficDetourPendingRef.current.clear();trafficDetourLastByTaxiRef.current.clear();trafficDetourGlobalAtRef.current=0;
   for(const ack of roadSyncAcksRef.current.splice(0))ack();dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
@@ -811,6 +817,28 @@ export default function App(){
     if(!current||meters(current.position,pending.position)>300)return;
     fuelPlanCacheRef.current.set(result.vehicleId,{at:Date.now(),position:pending.position,graph:pending.graph,stationCount:stationsRef.current.size,target:result.target});
     if(result.durationMs>100){diagnostic('routing:fuel-slow',`durationMs=${Math.round(result.durationMs)} vehicle=${result.vehicleId} targets=${result.perf?.targets??'unknown'} nearestMs=${Math.round(result.perf?.nearestMs??0)} roadSyncPending=${roadSyncPendingRef.current}`);console.warn('[TravelEmpire] Slow fuel routing',{durationMs:Math.round(result.durationMs),vehicleId:result.vehicleId,roadSyncPending:roadSyncPendingRef.current});}
+    return;
+   }
+   if(message.type==='trafficRerouteResult'){
+    const result=message as typeof message & {
+     requestId:number;vehicleId:string;plan:TaxiTrafficDetour|null;reason?:string;durationMs?:number;
+    };
+    const pending=trafficDetourPendingRef.current.get(result.requestId);
+    if(!pending)return;
+    trafficDetourPendingRef.current.delete(result.requestId);
+    if(pending.vehicleId!==result.vehicleId||!result.plan)return;
+    const {snapshot}=pending;
+    const expected={jobId:snapshot.jobId,status:snapshot.status,roadId:snapshot.roadId,
+     segmentStart:snapshot.segmentStart,segmentEnd:snapshot.segmentEnd,
+     distanceIntoLeg:snapshot.distanceIntoLeg,destination:snapshot.destination};
+    const current=taxisRef.current.find(t=>t.id===pending.vehicleId);
+    if(!current||!adoptTaxiTrafficDetour(current,result.plan,expected))return;
+    setFleet(old=>({...old,taxis:old.taxis.map(t=>t.id===pending.vehicleId?
+     adoptTaxiTrafficDetour(t,result.plan!,expected)??t:t)}));
+    const watch=passengerRouteWatchRef.current.get(pending.vehicleId);
+    if(watch){watch.lastProgressAt=Date.now();watch.pending=false;}
+    diagnostic('taxi:traffic-detour',
+     `taxi=${pending.vehicleId} status=${snapshot.status} saving=${Math.round(result.plan.savedSeconds)}s previous=${Math.round(result.plan.previousSeconds)}s new=${Math.round(result.plan.proposedSeconds)}s edges=${result.plan.edgeIds.length} compute=${Math.round(result.durationMs??0)}ms`);
     return;
    }
    if(message.type==='routeResult'){
