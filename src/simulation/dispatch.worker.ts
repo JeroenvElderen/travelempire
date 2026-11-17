@@ -920,7 +920,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
   const demand=demandAt(msg.gameNow??now,passengerTaxis.length);
   const availableIds=new Set(msg.availableTaxiIds??passengerTaxis.filter(t=>t.status==='IDLE').map(t=>t.id));
-  const configuredDepots=msg.depots?.length?msg.depots:[{id:'main',position:hq}];
+  // Depots are headquarters, deliveries, maintenance and vehicle storage,
+  // not passenger-demand magnets. Markets follow discovered roads and taxis.
+  const configuredDepots=msg.depots??[];
   // Count an available taxi in ONE geographical demand region. After
   // a long intercity drop-off it may be far from its original depot;
   // the actual position determines the next passenger pickup area.
@@ -936,10 +938,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const distance=meters(taxi.position,depot.position);
     if(distance<closestMetres){closestMetres=distance;nearestDepot=depot;}
    }
-   if(nearestDepot&&closestMetres<=5200){
-    depotTaxiCounts.set(nearestDepot.id,(depotTaxiCounts.get(nearestDepot.id)??0)+1);
-    continue;
-   }
+   // A taxi operating beside its HQ still creates a roaming passenger
+   // market at its REAL position, not a privileged depot demand zone.
    // No new depot is created. Roaming demand follows the real taxi
    // position after drop-off, grouped into a few geographic regions.
    const zone='roaming:'+Math.floor(taxi.position[0]*10)+':'+
@@ -958,12 +958,23 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    inboundCoverage.set(taxi.coverageRegionId,{id:taxi.coverageRegionId,
     position:taxi.repositionTarget,available:1});
   }
-  const regionalOrigins:PassengerDepotRegion[]=configuredDepots.map(depot=>({
-   id:depot.id,position:depot.position,
-   available:depotTaxiCounts.get(depot.id)??0,
-  }));
+  // Seed independent discovered-road passenger markets even where no taxi
+  // is currently operating. This breaks the old depot/roaming demand loop.
+  // Only one remote cell is offered per generation tick, and the index
+  // samples a bounded number of cells; no new road graph or depot is made.
+  const potentialMarkets=passengerSpatialStops.coverageRegions(
+   hq,node=>activeGraph.nodes.get(node),0,120000,32);
+  const remoteMarkets=potentialMarkets.filter(region=>
+   ![...roamingRegions.values(),...inboundCoverage.values()].some(r=>
+    meters(r.position,region.position)<3500));
+  const rotatingMarket=remoteMarkets.length?
+   remoteMarkets[passengerGenerationAttempts%remoteMarkets.length]:null;
+  const regionalOrigins:PassengerDepotRegion[]=rotatingMarket?[{
+   id:rotatingMarket.id,position:rotatingMarket.position,available:1,
+  }]:[];
   const regionStates=regionalPassengerDemand(
-   [...regionalOrigins,...roamingRegions.values(),...inboundCoverage.values()],queue,passengerLastSelectedDepot);
+   [...roamingRegions.values(),...inboundCoverage.values(),...regionalOrigins],
+   queue,passengerLastSelectedDepot);
   const passengerLocalStops=new Map<string,number>();
   if(msg.allowMission&&queue.length<demand.queueLimit){
    for(const [pair,created] of recentPassengerPairs)
@@ -1004,7 +1015,9 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     else if(request.tripType==='intercity')intercityTripsCreated++;
     request.originDepotId=region.id;
     if(region.id.startsWith('coverage:')){
-     request.expiresAt=Math.max(request.expiresAt,now+5*60000);
+     // Longer-lived genuine waiting customer; no artificial fare is paid
+     // for the drive toward this discovered-road market.
+     request.expiresAt=Math.max(request.expiresAt,now+10*60000);
      coverageWaitingJobs++;
     }
     for(const pair of [passengerPairKey(request.pickup,request.dropoff),
@@ -1021,7 +1034,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   // available taxi by player strategy. Speed and traffic calculations are
   // unchanged for local, regional and intercity journeys.
   const taxiMode=isTaxiDispatchMode(msg.taxiDispatchMode)?
-   msg.taxiDispatchMode:'balanced';
+   msg.taxiDispatchMode:'max-profit';
   queue.sort((a,b)=>a.createdAt-b.createdAt);
   const pending:PassengerRequest[]=[];
   for(const mission of queue){
@@ -1116,7 +1129,15 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       const regionalCandidates=rankUnservedCoverage(
        passengerSpatialStops.coverageRegions(
         longDriver.position,lookup,6500,65000,32),
-       longDriver,taxis,8);
+       longDriver,taxis,24).sort((a,b)=>{
+        const expected=(r:typeof a)=>queue.filter(q=>
+         meters(q.pickup,r.position)<3500).reduce((sum,q)=>
+         sum+Math.max(0,q.fare-(q.tripDistanceMeters??0)/1000*.2),0);
+        // Confirmed waiting passenger value beats road-density potential.
+        // Distance remains an empty-driving cost even with waiting fares.
+        return (expected(b)-meters(longDriver.position,b.position)/1000*2)-
+         (expected(a)-meters(longDriver.position,a.position)/1000*2);
+       }).slice(0,8);
       if(regionalCandidates.length)coverageAttempts++;
       let routeAttempts=0;
       for(const region of regionalCandidates){
