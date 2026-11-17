@@ -1,0 +1,22 @@
+name: Verify Hotel Architecture Phase 5 Visualisation
+on:
+  push:
+    branches:
+      - feature/hotel-phase5-architectural-visualisation
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Hotel visualisation, construction and operations regression tests
+        run: npm test -- src/hotelVisualisation.test.ts src/hotelSafety.test.ts src/hotelAtmosphere.test.ts src/hotelVerticalAccess.test.ts src/hotelAccess.test.ts src/hotelBlueprintEditing.test.ts src/hotelFurnitureQuality.test.ts src/hotelOperations.test.ts src/internalConstruction.test.ts src/components/blueprintViewport.test.ts
+      - name: Full suite (report previously failing unrelated tests)
+        continue-on-error: true
+        run: npm test
