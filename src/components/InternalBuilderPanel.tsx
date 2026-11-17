@@ -12,7 +12,7 @@ import {
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
  type HotelRole} from '../hotelOperations';
 import {planZoom,zoomScrollAt,pinchViewport,type PinchOrigin,type PlanScroll} from './blueprintViewport';
-import {analyzeHotelFloorAccess,suggestRoomAccessDoor,toggleHotelAccessDoor,type AccessStatus} from '../hotelAccess';
+import {analyzeHotelFloorAccess,suggestRoomAccessDoor,toggleHotelAccessDoor} from '../hotelAccess';
 import {BLUEPRINT_ROOM_TEMPLATES,addBlueprintTemplate,editBlueprintRoom,hotelBlueprintHealth,
  type BlueprintRoomGeometry,type RoomTemplateId,
  editBlueprintFurniture,furnitureAtCell,furnitureDragPosition,hotelGuestRoomQuality} from '../hotelBlueprintEditing';
