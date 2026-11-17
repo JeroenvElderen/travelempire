@@ -388,14 +388,20 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    modify(f=>placeFurniture(f,{id:id(),code:itemCode,x:where.x,y:where.y,rotated:rotate},site));
    return;
   }
-  if(tool==='wall'||tool==='door'){
+  if(tool==='lighting'){
+   modify(f=>toggleHotelLighting(f,site,{id:id(),x:where.x,y:where.y,kind:lightingKind}));return;
+  }
+  if(tool==='wall'||tool==='door'||tool==='window'){
    const distances=[where.fy,1-where.fx,1-where.fy,where.fx];
    const edge=distances.indexOf(Math.min(...distances));
    const wall:Wall={id:id(),x:edge===1?where.x+1:where.x,y:edge===2?where.y+1:where.y,
-    orientation:edge%2===0?'h':'v',type:tool==='door'?'door':'wall'};
-   modify(f=>tool==='door'?toggleHotelAccessDoor(f,site,wall):toggleWall(f,wall,site));return;
+    orientation:edge%2===0?'h':'v',type:tool==='door'?'door':tool==='window'?windowKind:'wall'};
+   modify(f=>tool==='door'?toggleHotelAccessDoor(f,site,wall):
+    tool==='window'?toggleHotelWindow(f,site,wall):toggleWall(f,wall,site));return;
   }
   if(tool==='erase'){
+   const fixture=(floor.lights??[]).find(l=>l.x===where.x&&l.y===where.y);
+   if(fixture){modify(f=>({...f,lights:(f.lights??[]).filter(l=>l.id!==fixture.id)}));return;}
    const obj=[...floor.objects].reverse().find(o=>{const sz=furnitureSize(o);return where.x>=o.x&&where.y>=o.y&&where.x<o.x+sz.width&&where.y<o.y+sz.height;});
    if(obj){modify(f=>({...f,objects:f.objects.filter(o=>o.id!==obj.id)}));return;}
    const wall=floor.walls.find(w=>w.orientation==='h'?Math.abs(w.y-(where.y+where.fy))<0.3&&w.x===where.x:Math.abs(w.x-(where.x+where.fx))<0.3&&w.y===where.y);
