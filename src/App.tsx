@@ -425,6 +425,7 @@ export default function App(){
  const trafficDetourPendingRef=useRef(new Map<number,{vehicleId:string;requestedAt:number;
   snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>}>());
  const trafficDetourLastByTaxiRef=useRef(new Map<string,number>());
+ const trafficDetourLastBucketRef=useRef(new Map<string,string>());
  const trafficDetourGlobalAtRef=useRef(0);
  const resetVehicleTargetsRef=useRef(new Map<string,[number,number]>());
  const shiftRestRetryRef=useRef(new Map<string,number>());
@@ -792,7 +793,7 @@ export default function App(){
   if(!company)return;
   const worker=new Worker(new URL('./simulation/dispatch.worker.ts',import.meta.url),{type:'module'});
   pendingRoutesRef.current.clear();pendingFuelRef.current.clear();operationalRoutesRef.current.clear();fuelPlanCacheRef.current.clear();passengerRouteWatchRef.current.clear();
-  trafficDetourPendingRef.current.clear();trafficDetourLastByTaxiRef.current.clear();trafficDetourGlobalAtRef.current=0;
+  trafficDetourPendingRef.current.clear();trafficDetourLastByTaxiRef.current.clear();trafficDetourLastBucketRef.current.clear();trafficDetourGlobalAtRef.current=0;
   for(const ack of roadSyncAcksRef.current.splice(0))ack();dispatchWorkerRef.current=worker;workerReadyRef.current=false;dispatchBusyRef.current=false;roadSyncPendingRef.current=0;workerRoadCountRef.current=0;
   const revision=++graphRevisionRef.current;
   worker.onmessage=(event:MessageEvent<{type:string;revision:number;taxis?:Taxi[];queue?:PassengerRequest[];error?:string;roadCount?:number;assignedCount?:number;generatedMission?:boolean;discoveryEligible?:string[]}>)=>{
@@ -1090,6 +1091,12 @@ export default function App(){
    for(const taxi of candidates){
     if(taxi.status!=='TO_PICKUP'&&taxi.status!=='TO_DROPOFF')continue;
     const incidentOnRoute=taxi.edgeIds.slice(taxi.leg,taxi.leg+120).some(id=>affected.has(id));
+    // Recheck immediately for incidents, otherwise only once per traffic
+    // half-hour or new job. This avoids wasted nationwide searches on iOS.
+    const gameAt=gameClockRef.current?.epochMs??now;
+    const bucketKey=(taxi.activeJobId??'legacy')+':'+taxi.status+':'+
+     Math.floor(gameAt/(30*60000));
+    if(!incidentOnRoute&&trafficDetourLastBucketRef.current.get(taxi.id)===bucketKey)continue;
     const cooldown=incidentOnRoute?12000:30000;
     if(now-(trafficDetourLastByTaxiRef.current.get(taxi.id)??0)<cooldown)continue;
     const destination=taxi.status==='TO_PICKUP'?taxi.pickup:taxi.dropoff;
@@ -1102,11 +1109,12 @@ export default function App(){
      distanceIntoLeg:taxi.distanceIntoLeg,
      remainingPath:taxi.path.slice(taxi.leg),
      remainingEdgeIds:taxi.edgeIds.slice(taxi.leg),
-     destination:[...destination],gameAt:gameClockRef.current?.epochMs??now,
+     destination:[...destination],gameAt,
     };
     const requestId=++routeSequenceRef.current;
     trafficDetourPendingRef.current.set(requestId,{vehicleId:taxi.id,requestedAt:now,snapshot});
     trafficDetourLastByTaxiRef.current.set(taxi.id,now);
+    trafficDetourLastBucketRef.current.set(taxi.id,bucketKey);
     trafficDetourGlobalAtRef.current=now;
     try{
      worker.postMessage({type:'trafficReroute',revision:graphRevisionRef.current,
