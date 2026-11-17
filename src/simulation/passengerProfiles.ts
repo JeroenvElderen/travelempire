@@ -4,16 +4,28 @@ export type PassengerKind='commuter'|'business'|'tourist'|'family'|'nightlife'|'
 export type PassengerProfile={passengerType:PassengerKind;partySize:number;luggageCount:number;minimumClass?:'Premium';fareBonus:number};
 const timeFormat=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Athens',weekday:'short',month:'numeric',hour:'2-digit',hourCycle:'h23'});
 function hash(s:string){let v=2166136261;for(const c of s)v=Math.imul(v^c.charCodeAt(0),16777619);return v>>>0;}
-export function passengerProfileFor(job:Pick<PassengerRequest,'id'|'pickup'|'tripType'>,gameAt:number):PassengerProfile{
+export function passengerProfileFor(job:Pick<PassengerRequest,'id'|'pickup'|'tripType'|'pickupPlaceKind'>,gameAt:number):PassengerProfile{
  const parts=timeFormat.formatToParts(new Date(gameAt)),get=(t:string)=>parts.find(p=>p.type===t)?.value??'';
  const hour=Number(get('hour')),month=Number(get('month')),weekend=['Sat','Sun'].includes(get('weekday'));
  const rush=!weekend&&(hour>=7&&hour<10||hour>=16&&hour<19),night=hour>=21||hour<4;
  const seed=hash(job.id+':'+job.pickup[0].toFixed(4)+':'+job.pickup[1].toFixed(4));
- const scores:Array<[PassengerKind,number]>=[
+ // Venue affects WHY a real passenger asks for a taxi, not road access.
+ // Without a classified pickup the original general-market behaviour remains.
+ const baseline:Array<[PassengerKind,number]>=[
   ['commuter',rush?36:weekend?7:13],['business',!weekend&&hour>=7&&hour<20?22:7],
   ['tourist',(month>=5&&month<=9?23:12)+(job.tripType!=='local'?12:0)],
   ['family',weekend?20:14],['nightlife',night?30:3],['local',22],
  ];
+ const venueScores:Partial<Record<NonNullable<typeof job.pickupPlaceKind>,Array<[PassengerKind,number]>>> = {
+  airport:[['tourist',54],['business',23],['family',17],['local',6]],
+  harbour:[['tourist',52],['family',22],['local',18],['business',8]],
+  hotel:[['tourist',46],['business',25],['family',21],['local',8]],
+  business:[['business',50],['commuter',35],['local',15]],
+  nightlife:[['nightlife',night?75:50],['tourist',night?15:25],['local',night?10:25]],
+  residential:[['commuter',rush?44:20],['family',weekend?28:18],
+   ['local',rush?28:weekend?52:62]],
+ };
+ const scores=job.pickupPlaceKind?venueScores[job.pickupPlaceKind]??baseline:baseline;
  let selection=seed%scores.reduce((sum,v)=>sum+v[1],0),kind:PassengerKind='local';
  for(const [name,weight] of scores){if(selection<weight){kind=name;break;}selection-=weight;}
  const partySize=kind==='family'?4+(seed>>>8)%3:kind==='tourist'||kind==='nightlife'?1+(seed>>>8)%4:1+(seed>>>8)%2;
