@@ -9,6 +9,7 @@ import {type ConstructionState,type HotelSite,type HotelFloor,type Room,type Sup
  type StockBatch,supplies,supplyStock,roomIssues} from './internalConstruction';
 import {hotelGuestRoomQuality,hotelDesignDemandModifier} from './hotelBlueprintEditing';
 import {analyzeRoomAtmosphere,hotelAtmosphereDemandModifier} from './hotelAtmosphere';
+import {analyzeHotelSafety} from './hotelSafety';
 import {analyzeHotelFloorAccess} from './hotelAccess';
 import {analyzeHotelBuildingAccess,hotelVerticalCongestionModifier} from './hotelVerticalAccess';
 
@@ -80,7 +81,8 @@ function buildingAt(site:HotelSite,hour:number):HotelFloor[]{
 export type RoomInventory={readyRooms:Array<{room:Room;floor:HotelFloor}>;bathrooms:number;
   hasLobby:boolean;hasKitchen:boolean;hasRestaurant:boolean;hasBar:boolean;reasons:string[];
   verticalGuestCapacityPerHour:number;verticalPeakGuestMovementsPerHour:number;
-  verticalCongestionModifier:number;atmosphereDemandModifier:number;};
+  verticalCongestionModifier:number;atmosphereDemandModifier:number;
+  fireReadyRooms:number;wheelchairAccessibleRooms:number;safetyScore:number|null;};
 export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const floors=buildingAt(site,hour);
  const rooms=floors.flatMap(f=>f.rooms);
@@ -90,6 +92,10 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
   analyzeHotelFloorAccess(floors[0],site,0):null;
  const buildingAccess=site.accessRulesVersion===2?
   analyzeHotelBuildingAccess(floors,site):null;
+ const safetyReport=site.safetyRulesVersion===1?
+  analyzeHotelSafety(floors,site):null;
+ const safeRooms=new Set(safetyReport?.fireReadyKeys??[]);
+ const accessibleRooms=new Set(safetyReport?.accessibleKeys??[]);
  const reachable=new Set(groundAccess?.guests.filter(g=>g.status==='connected')
   .map(g=>g.roomId)??[]);
  // New plots need a functional ground-floor entrance and reception route.
@@ -99,11 +105,19 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
   f.rooms.some(b=>b.type==='bathroom'&&roomIssues(f,b).length===0)&&
   (floorIndex!==0||!groundAccess||reachable.has(r.id))&&
  (!buildingAccess||buildingAccess.floors[floorIndex]?.guests.some(g=>
-  g.roomId===r.id&&g.status==='connected'))
+  g.roomId===r.id&&g.status==='connected'))&&
+  (!safetyReport||safeRooms.has(floorIndex+':'+r.id))
  ).map(room=>({room,floor:f})));
 
  const hasLobby=exists('lobby'),hasKitchen=exists('kitchen'),hasRestaurant=exists('restaurant'),hasBar=exists('bar');
  const reasons:string[]=[];
+ if(safetyReport){
+  reasons.push(...safetyReport.issues);
+  const compliantAccessible=readyRooms.some(({room,floor})=>
+   accessibleRooms.has(floors.indexOf(floor)+':'+room.id));
+  if(readyRooms.length>0&&!compliantAccessible)
+   reasons.push('Prepare at least one furnished, fire-safe wheelchair-accessible guest room.');
+ }
  if(!hasLobby)reasons.push('Construct a lobby with a reception desk');
  if(buildingAccess&&floors.some(f=>f.rooms.some(r=>r.type==='guest'))&&
   !buildingAccess.receptionConnected)
@@ -117,6 +131,9 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
   reasons.push('Give at least one furnished ground-floor guest room a connected doorway to reception');
  if(!readyRooms.length)reasons.push('Furnish at least one guest room and a functioning bathroom on its floor');
  return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons,
+  fireReadyRooms:safetyReport?.fireReadyRooms??0,
+  wheelchairAccessibleRooms:safetyReport?.wheelchairRooms??0,
+  safetyScore:safetyReport?.score??null,
   verticalGuestCapacityPerHour:buildingAccess?.verticalCapacityPerHour??0,
   verticalPeakGuestMovementsPerHour:buildingAccess?.peakGuestMovesPerHour??0,
   atmosphereDemandModifier:site.atmosphereRulesVersion===1&&readyRooms.length?
