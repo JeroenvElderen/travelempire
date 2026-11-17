@@ -8,6 +8,7 @@
 import {type ConstructionState,type HotelSite,type HotelFloor,type Room,type SupplyCode,
  type StockBatch,supplies,supplyStock,roomIssues} from './internalConstruction';
 import {hotelGuestRoomQuality,hotelDesignDemandModifier} from './hotelBlueprintEditing';
+import {analyzeRoomAtmosphere,hotelAtmosphereDemandModifier} from './hotelAtmosphere';
 import {analyzeHotelFloorAccess} from './hotelAccess';
 import {analyzeHotelBuildingAccess,hotelVerticalCongestionModifier} from './hotelVerticalAccess';
 
@@ -79,7 +80,7 @@ function buildingAt(site:HotelSite,hour:number):HotelFloor[]{
 export type RoomInventory={readyRooms:Array<{room:Room;floor:HotelFloor}>;bathrooms:number;
   hasLobby:boolean;hasKitchen:boolean;hasRestaurant:boolean;hasBar:boolean;reasons:string[];
   verticalGuestCapacityPerHour:number;verticalPeakGuestMovementsPerHour:number;
-  verticalCongestionModifier:number;};
+  verticalCongestionModifier:number;atmosphereDemandModifier:number;};
 export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  const floors=buildingAt(site,hour);
  const rooms=floors.flatMap(f=>f.rooms);
@@ -118,6 +119,9 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons,
   verticalGuestCapacityPerHour:buildingAccess?.verticalCapacityPerHour??0,
   verticalPeakGuestMovementsPerHour:buildingAccess?.peakGuestMovesPerHour??0,
+  atmosphereDemandModifier:site.atmosphereRulesVersion===1&&readyRooms.length?
+   hotelAtmosphereDemandModifier(readyRooms.reduce((sum,{room,floor})=>
+    sum+analyzeRoomAtmosphere(floor,room,site).score,0)/readyRooms.length):0,
   verticalCongestionModifier:buildingAccess?hotelVerticalCongestionModifier({
    ...buildingAccess,
    connectedUpperGuestRooms:readyRooms.filter(({floor})=>floors.indexOf(floor)>0).length,
@@ -281,13 +285,14 @@ export function settleHotelOperations(state:ConstructionState,nowHour:number,own
     // Furnishings, room size, bathroom availability and usable floor space
     // drive customer appeal, instead of simply counting decorative objects.
     const averageDesign=inventory.readyRooms.reduce((sum,item)=>
-     sum+hotelGuestRoomQuality(item.floor,item.room).score,0)/Math.max(1,validRooms.length);
+     sum+hotelGuestRoomQuality(item.floor,item.room,site).score,0)/Math.max(1,validRooms.length);
     const quality=hotelDesignDemandModifier(averageDesign);
     const pricing=clamp((11000-original.rateCents)/18000,-0.26,0.26);
     // Real installed and accessible lift/stair throughput limits hotel appeal
     // when estimated peak guest movements exceed connected shaft capacity.
     const occupancy=clamp(0.60+seasonal+quality+pricing+
-     inventory.verticalCongestionModifier+(random01(dayKey)-.5)*.20,.08,.96);
+     inventory.verticalCongestionModifier+inventory.atmosphereDemandModifier+
+     (random01(dayKey)-.5)*.20,.08,.96);
     const linen=Math.floor(supplyStock(site,'linen',hour));
     const capacity=Math.min(validRooms.length,linen);
     const desired=Math.min(capacity,Math.round(capacity*occupancy));
