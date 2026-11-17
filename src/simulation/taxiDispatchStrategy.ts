@@ -67,10 +67,9 @@ export function taxiJobAcceptable(mode:TaxiDispatchMode,
  return estimate.contribution>=Math.max(2,estimate.fare*.12);
 }
 
-/** Larger scores win. Same-class speed and time models are untouched.
- * Jobs mode preserves the previous fastest-pickup behaviour.
- * Balanced favours shorter pickups while accepting worthwhile net gains.
- * Profit mode optimises estimated contribution with a small ETA penalty.
+/** Larger scores win. No change to legal route, speed or fare settlement.
+ * Maximum Profit optimises direct contribution PER WORKING HOUR, including
+ * the unpaid pickup drive. A big gross fare is not necessarily efficient.
  */
 export function taxiDispatchScore(mode:TaxiDispatchMode,
  pickupEtaSeconds:number,estimate:TaxiJobEstimate|null):number{
@@ -79,7 +78,8 @@ export function taxiDispatchScore(mode:TaxiDispatchMode,
  const minutes=pickupEtaSeconds/60;
  return mode==='balanced'?
   estimate.contribution*.45-minutes:
-  estimate.contribution-minutes*.12;
+  estimate.contribution/Math.max(1/12,
+   (estimate.pickupEtaSeconds+estimate.tripEtaSeconds)/3600);
 }
 
 /** Do not redo the expensive passenger-routing check if another worker
