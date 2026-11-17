@@ -1,46 +1,22 @@
 import {useState} from 'react';
 import {Activity,ChevronDown,ChevronUp} from 'lucide-react';
 import type {FinancePeriod,FinancialTransaction} from '../simulation/taxi';
-import {dayFinance,dayExpenseBreakdown,classifyActivity} from '../simulation/liveFinance';
+import {detailedFinanceBreakdown,type FinanceJournal} from '../simulation/financeJournal';
+import {dayFinance} from '../simulation/liveFinance';
 import './live-finance-ticker.css';
 
 const euros=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(Math.abs(value));
-type Category={label:string;value:number};
-function incomeCategories(transactions:readonly FinancialTransaction[],gameDay:string,revenue:number):Category[]{
- const sums=new Map<string,number>();
- for(const transaction of transactions){
-  if(!Number.isFinite(transaction.time)||!Number.isFinite(transaction.amount)||transaction.amount<=0||
-   new Date(transaction.time).toISOString().slice(0,10)!==gameDay||classifyActivity(transaction)!=='income')continue;
-  const description=transaction.description.toLowerCase();
-  const category=/ferry|passenger.*boat|ticket.*boat/.test(description)?'Ferry fares':
-   /taxi|passenger|trip|fare/.test(description)?'Taxi fares':
-   /hotel|room|property|rent|real estate/.test(description)?'Properties & hotels':
-   /investment|dividend|interest/.test(description)?'Investments':'Other income';
-  sums.set(category,(sums.get(category)??0)+transaction.amount);
- }
- // The saved transaction ledger is capped. Reconcile to the authoritative
- // daily operating revenue rather than presenting partial ledger totals.
- const captured=[...sums.values()].reduce((a,b)=>a+b,0);
- if(captured>revenue+.01&&captured>0){
-  const factor=revenue/captured;
-  for(const [key,value] of sums)sums.set(key,value*factor);
- }else if(revenue-captured>.01){
-  sums.set('Other / unclassified revenue',(sums.get('Other / unclassified revenue')??0)+revenue-captured);
- }
- return [...sums].filter(([,value])=>value>.005).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
-}
-export default function LiveFinanceTicker({history,transactions,bankCollectionsByDay,gameNow}:{
- history:readonly FinancePeriod[];transactions:readonly FinancialTransaction[];bankCollectionsByDay?:Readonly<Record<string,number>>;gameNow:number
+export default function LiveFinanceTicker({history,transactions,financeJournal,bankCollectionsByDay,gameNow}:{
+ history:readonly FinancePeriod[];transactions:readonly FinancialTransaction[];financeJournal?:FinanceJournal;bankCollectionsByDay?:Readonly<Record<string,number>>;gameNow:number
 }){
  const [expanded,setExpanded]=useState(false);
  const [view,setView]=useState<'expense'|'income'>('expense');
  const gameDay=new Date(gameNow).toISOString().slice(0,10);
+ void transactions;
  const totals=dayFinance(history,gameNow);
  const bankPaid=bankCollectionsByDay?.[gameDay]??0;
  const afterBanks=totals.net-bankPaid;
- const categories=expanded?(view==='expense'
-  ?dayExpenseBreakdown(history,gameNow).map(({label,value})=>({label,value}))
-  :incomeCategories(transactions,gameDay,totals.income)):[];
+ const categories=expanded?detailedFinanceBreakdown(financeJournal,history,gameNow,view==='income'?'income':'expense'):[];
  const categoryTotal=view==='expense'?totals.expenses:totals.income;
  const renderAmount=(amount:number)=>(amount>=0?'+':'−')+euros(amount);
  return <div className="live-finance-wrap">
