@@ -66,8 +66,8 @@ export function greekDemandPeriod(at:number):{hour:number;month:number;weekend:b
 /** Relative origin demand at a place, by Greece-local clock. A zero weight
  * suppresses the venue rather than fabricating opening hours or timetable data.
  */
-export function passengerPlaceWeight(kind:PassengerPlaceKind,at:number):number{
- const {hour,month,weekend}=greekDemandPeriod(at);
+export function passengerPlaceWeight(kind:PassengerPlaceKind,at:number,period=greekDemandPeriod(at)):number{
+ const {hour,month,weekend}=period;
  const rush=!weekend&&(hour>=7&&hour<10||hour>=16&&hour<20);
  const late=hour>=21||hour<4;
  switch(kind){
@@ -93,11 +93,12 @@ export function passengerHotspotCandidates(
  limit=3,
 ):PassengerDemandPlace[]{
  const options:Array<{place:PassengerDemandPlace;score:number}>=[];
+ const period=greekDemandPeriod(at);
  for(const place of places){
   if(!place.position?.every(Number.isFinite))continue;
   const distance=meters(region,place.position),radius=passengerPlaceAccessRadius(place.kind);
   if(distance>5200+radius)continue;
-  const weight=passengerPlaceWeight(place.kind,at);
+  const weight=passengerPlaceWeight(place.kind,at,period);
   if(!weight)continue;
   const jitter=.5+(hash(place.id+':'+Math.floor(sequence)+':'+Math.floor(at/3600000))%1000)/1000;
   options.push({place,score:weight*jitter/(1+distance/3000)});
