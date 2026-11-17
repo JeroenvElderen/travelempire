@@ -21,8 +21,8 @@ export type FloorAccessReport={
   guests:GuestAccess[];reachableRoomIds:string[];
   warnings:string[];
 };
-const circulation=(room:Room|null):room is Room=>
-  room!==null&&(room.type==='corridor'||room.type==='lobby');
+const circulation=(room:Room|null|undefined):room is Room=>
+  room!=null&&(room.type==='corridor'||room.type==='lobby');
 const within=(room:Room,x:number,y:number)=>x>=room.x&&x<room.x+room.width&&
   y>=room.y&&y<room.y+room.height;
 const roomAt=(floor:HotelFloor,x:number,y:number):Room|null=>
