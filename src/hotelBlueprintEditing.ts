@@ -6,6 +6,7 @@ import {
  drawRoom,placeFurniture,furnitureSize,roomIssues,roomTypes,
  type Room,type RoomType,type HotelFloor,type HotelSite,type FurnitureCode,type ObjectPlacement,
 } from './internalConstruction';
+import {analyzeRoomAtmosphere} from './hotelAtmosphere';
 
 export type BlueprintRoomGeometry=Pick<Room,'x'|'y'|'width'|'height'>;
 export type RoomTemplateId=
@@ -161,7 +162,7 @@ export type HotelDesignQuality={
  * free circulation area. A GAME balancing metric, not a real building code.
  * It does not change room validity or demolish older saved hotel layouts.
  */
-export function hotelGuestRoomQuality(floor:HotelFloor,room:Room):HotelDesignQuality{
+export function hotelGuestRoomQuality(floor:HotelFloor,room:Room,site?:HotelSite):HotelDesignQuality{
  if(room.type!=='guest')return {score:0,tier:'Needs work',suggestions:[]};
  const objects=floor.objects.filter(o=>
   contained(room,{...o,...furnitureSize(o)}));
@@ -179,6 +180,10 @@ export function hotelGuestRoomQuality(floor:HotelFloor,room:Room):HotelDesignQua
  if(bathroom)score+=10;else score-=14;
  const occupied=objects.reduce((n,o)=>{const a=furnitureSize(o);return n+a.width*a.height;},0);
  if(size>0&&occupied/size>.65)score-=12;
+ // Only atmosphere-enabled plots use the new quality adjustment. Existing
+ // hotels and older builds retain their previous score and booking demand.
+ const atmosphere=site?.atmosphereRulesVersion===1?analyzeRoomAtmosphere(floor,room,site):null;
+ if(atmosphere)score+=Math.round((atmosphere.score-50)*.14);
  if(!hasBed)score=Math.min(score,32);
  if(!bathroom)score=Math.min(score,49);
  score=Math.round(Math.min(100,Math.max(0,score)));
@@ -193,6 +198,7 @@ export function hotelGuestRoomQuality(floor:HotelFloor,room:Room):HotelDesignQua
  if(!codes.has('lamp'))suggestions.push('Add a lamp');
  if(size<15)suggestions.push('Consider a larger room');
  if(size>0&&occupied/size>.65)suggestions.push('Leave more free floor space');
+ if(atmosphere)suggestions.push(...atmosphere.advice.filter(t=>!t.startsWith('Well-lit')));
  return {score,tier,suggestions};
 }
 
@@ -220,7 +226,7 @@ export function hotelBlueprintHealth(floor:HotelFloor,site:HotelSite):HotelBluep
  const unfinished=new Set(issues.map(item=>item.roomId));
  const plannedArea=floor.rooms.reduce((total,r)=>total+r.width*r.height,0);
  const guestRoomQuality=floor.rooms.filter(r=>r.type==='guest').map(room=>({
-  roomId:room.id,name:room.name,quality:hotelGuestRoomQuality(floor,room),
+  roomId:room.id,name:room.name,quality:hotelGuestRoomQuality(floor,room,site),
  }));
  return {rooms:floor.rooms.length,
   guestRoomQuality,
