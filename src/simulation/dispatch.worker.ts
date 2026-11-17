@@ -26,6 +26,7 @@ import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole}
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
 import {setTrafficGameTime,setTrafficIncidents,type TrafficIncident} from './trafficConditions';
+import {planTaxiTrafficDetour,type MovingTrafficSnapshot} from './taxiTrafficReroute';
 import {passengerProfileFor,passengerCompatible} from './passengerProfiles';
 import {PassengerStopSpatialIndex,regionalPassengerDemand,type PassengerDepotRegion} from './passengerDepotDemand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
@@ -623,8 +624,10 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[];allowTaxiOnly?:boolean};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[];allowTaxiOnly?:boolean};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
+type TrafficRerouteRequest={type:'trafficReroute';revision:number;requestId:number;vehicleId:string;
+ snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>;trafficIncidents:TrafficIncident[]};
 type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;trafficIncidents?:TrafficIncident[]};
-self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
+self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest|TrafficRerouteRequest>)=>{
  const msg=event.data;
  try{
   if(msg.type==='init'){
@@ -717,6 +720,28 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     path:{path:result.path,edgeIds:result.edgeIds}
    }:null;
    self.postMessage({type:'fuelPlanResult',revision:activeRevision,requestId:msg.requestId,vehicleId:msg.vehicleId,position:msg.from,target:best,durationMs:performance.now()-started,perf:{nearestMs,targets:msg.targets.length}});return;
+  }
+  if(msg.type==='trafficReroute'){
+   const started=performance.now();
+   const snapshot=msg.snapshot;
+   setTrafficGameTime(snapshot.gameAt);
+   setTrafficIncidents(msg.trafficIncidents??[]);
+   const endpoints=roadEndpoints.get(snapshot.roadId);
+   let outcome:ReturnType<typeof planTaxiTrafficDetour>={plan:null,reason:'invalid-anchor'};
+   if(endpoints){
+    const [a,b]=endpoints,pa=graph.nodes.get(a),pb=graph.nodes.get(b);
+    const forward=!!pa&&!!pb&&meters(pa,snapshot.segmentStart)<3&&meters(pb,snapshot.segmentEnd)<3;
+    const reverse=!!pa&&!!pb&&meters(pb,snapshot.segmentStart)<3&&meters(pa,snapshot.segmentEnd)<3;
+    if(forward||reverse){
+     outcome=planTaxiTrafficDetour(graph,{
+      ...snapshot,fromNode:forward?a:b,toNode:forward?b:a,
+     },indexedExplored);
+    }
+   }
+   self.postMessage({type:'trafficRerouteResult',revision:activeRevision,
+    requestId:msg.requestId,vehicleId:msg.vehicleId,
+    plan:outcome.plan,reason:outcome.reason,durationMs:performance.now()-started});
+   return;
   }
   if(msg.type==='routeRequest'){
    const started=performance.now();
