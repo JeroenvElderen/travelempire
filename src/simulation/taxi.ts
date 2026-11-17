@@ -397,7 +397,9 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
 }
 export function route(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true){return turnAwareRoute(graph,from,to,undefined,false,incoming,allowTaxiOnly);}
 /** Time-weighted directed pickup routing; no new roads are discovered. */
-export function routeTraffic(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true){return turnAwareRoute(graph,from,to,undefined,true,incoming,allowTaxiOnly);}
+export function routeTraffic(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true,maxVisits=150000){
+ return turnAwareRoute(graph,from,to,undefined,true,incoming,allowTaxiOnly,maxVisits,maxVisits<150000);
+}
 
 /** Reroute from the exact directed OSM segment being driven, NOT from the
  * geographically nearest intersection (which can be an upper/lower road).
