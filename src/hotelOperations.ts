@@ -108,7 +108,7 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
   !buildingAccess.receptionConnected)
   reasons.push('Provide a ground-floor entrance connected to a furnished reception');
  if(buildingAccess&&buildingAccess.upperGuestRooms>0&&
-  buildingAccess.connectedUpperGuestRooms===0)
+  buildingAccess.connectedUpperGuestRooms===0&&readyRooms.length===0)
   reasons.push('Align stairwells or elevators on consecutive floors and connect their doorways to corridors');
  if(groundAccess&&!groundAccess.receptionConnected&&floors[0].rooms.some(r=>r.type==='lobby'))
   reasons.push('Connect ground-floor reception to a valid exterior entrance through room or corridor doors');
@@ -118,7 +118,11 @@ export function roomInventory(site:HotelSite,hour:number):RoomInventory{
  return {readyRooms,bathrooms,hasLobby,hasKitchen,hasRestaurant,hasBar,reasons,
   verticalGuestCapacityPerHour:buildingAccess?.verticalCapacityPerHour??0,
   verticalPeakGuestMovementsPerHour:buildingAccess?.peakGuestMovesPerHour??0,
-  verticalCongestionModifier:buildingAccess?hotelVerticalCongestionModifier(buildingAccess):0};
+  verticalCongestionModifier:buildingAccess?hotelVerticalCongestionModifier({
+   ...buildingAccess,
+   connectedUpperGuestRooms:readyRooms.filter(({floor})=>floors.indexOf(floor)>0).length,
+   peakGuestMovesPerHour:readyRooms.filter(({floor})=>floors.indexOf(floor)>0).length*4,
+  }):0};
 }
 export function openingIssues(site:HotelSite,hour:number):string[]{
  if(site.kind==='headquarters')return ['Headquarters cannot be operated as a hotel'];
