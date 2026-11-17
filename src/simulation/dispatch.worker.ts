@@ -1127,7 +1127,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
         // Distance remains an empty-driving cost even with waiting fares.
         return (expected(b)-meters(longDriver.position,b.position)/1000*2)-
          (expected(a)-meters(longDriver.position,a.position)/1000*2);
-       }).slice(0,8);
+       });
       if(regionalCandidates.length)coverageAttempts++;
       let routeAttempts=0;
       for(const region of regionalCandidates){
