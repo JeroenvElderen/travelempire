@@ -3069,6 +3069,7 @@ export default function App(){
    if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
    else history.push({day:date,revenue:0,expenses:cost,trips:0});
    return {...oldFleet,financeHistory:history.slice(-365),
+    financeJournal:postFinance(oldFleet.financeJournal,[{day:date,side:'expense',category:'construction.supplies',amount:cost}]),
     accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
     transactions:[{id:crypto.randomUUID(),time:clock,description:'Building supplies · '+code+' · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
   });
@@ -3099,6 +3100,7 @@ export default function App(){
     if(previous?.day===date)history[history.length-1]={...previous,expenses:previous.expenses+cost};
     else history.push({day:date,revenue:0,expenses:cost,trips:0});
     return {...oldFleet,financeHistory:history.slice(-365),
+     financeJournal:postFinance(oldFleet.financeJournal,[{day:date,side:'expense',category:'hotel.staff',amount:cost}]),
      accounting:bookAccounting(oldFleet.accounting,periodMonth(clock),0,cost,0,0),
      transactions:[{id:crypto.randomUUID(),time:clock,description:'Hotel staffing · '+site.name,amount:-cost},...(oldFleet.transactions??[])].slice(0,100)};
    });
