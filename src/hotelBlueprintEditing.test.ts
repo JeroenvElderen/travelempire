@@ -55,7 +55,8 @@ describe('precision hotel floor-plan editing',()=>{
  it('detects when a small plot cannot accommodate another template',()=>{
   const s=site(12,12);
   let f=s.draft[0];
-  for(let i=0;i<4;i++)f=add(f,s,'guest-double',String(i));
+  // Six 5×4 m rooms fit into a 12×12 m plot; the seventh must be rejected.
+  for(let i=0;i<6;i++)f=add(f,s,'guest-double',String(i));
   expect(()=>add(f,s,'guest-double','extra')).toThrow('No space');
  });
  it('moves a furnished room atomically and preserves equipment IDs and relative coordinates',()=>{
