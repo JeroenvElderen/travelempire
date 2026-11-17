@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {
  newHotelSite,drawRoom,placeFurniture,addFloor,constructionQuote,updateFloor,
- type HotelSite,type HotelFloor,type Room,type Wall,
+ type HotelSite,type Room,type Wall,
 } from './internalConstruction';
 import {toggleHotelAccessDoor} from './hotelAccess';
 import {
@@ -134,8 +134,8 @@ describe('Hotel architecture Phase 2 — true multi-floor routes',()=>{
  });
  it('does not allow isolated upper-floor exterior entrances to replace reception',()=>{
   const {site}=hotel();
-  let first=site.draft[1];
-  first=toggleHotelAccessDoor(first,site,door('upper-outer',10,2,'h'));
+  let first=drawRoom(site.draft[1],room('upper-outer-hall','corridor',0,8,3,2),site);
+  first=toggleHotelAccessDoor(first,site,door('upper-outer',0,8));
   const report=analyzeHotelBuildingAccess([site.draft[0],first],site);
   expect(report.connectedUpperGuestRooms).toBe(0);
   expect(report.floors[0].entranceDoors).toBe(0);
