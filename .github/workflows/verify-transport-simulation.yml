@@ -15,3 +15,6 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test -- src/simulation/passengerProfiles.test.ts src/simulation/trafficConditions.test.ts src/simulation/livingWorld.test.ts src/simulation/passengerJourneys.test.ts
+      - name: Full regression suite (report pre-existing failures separately)
+        continue-on-error: true
+        run: npm test
