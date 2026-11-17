@@ -922,24 +922,14 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const availableIds=new Set(msg.availableTaxiIds??passengerTaxis.filter(t=>t.status==='IDLE').map(t=>t.id));
   // Depots are headquarters, deliveries, maintenance and vehicle storage,
   // not passenger-demand magnets. Markets follow discovered roads and taxis.
-  const configuredDepots=msg.depots??[];
-  // Count an available taxi in ONE geographical demand region. After
-  // a long intercity drop-off it may be far from its original depot;
-  // the actual position determines the next passenger pickup area.
-  const depotTaxiCounts=new Map<string,number>();
+  // Count available taxis by their actual location, regardless of where
+  // they were delivered or which depot is their registered home.
   const roamingRegions=new Map<string,PassengerDepotRegion>();
   for(const taxi of passengerTaxis){
    if(taxi.status!=='IDLE'||!availableIds.has(taxi.id)||taxi.shiftParked||
     taxi.restStopId||taxi.deliveryUntil||taxi.refillRequested||
     energyPercent(taxi)<=10)continue;
-   let nearestDepot:typeof configuredDepots[number]|undefined;
-   let closestMetres=Infinity;
-   for(const depot of configuredDepots){
-    const distance=meters(taxi.position,depot.position);
-    if(distance<closestMetres){closestMetres=distance;nearestDepot=depot;}
-   }
-   // A taxi operating beside its HQ still creates a roaming passenger
-   // market at its REAL position, not a privileged depot demand zone.
+   // Headquarters proximity does not influence the passenger market.
    // No new depot is created. Roaming demand follows the real taxi
    // position after drop-off, grouped into a few geographic regions.
    const zone='roaming:'+Math.floor(taxi.position[0]*10)+':'+
