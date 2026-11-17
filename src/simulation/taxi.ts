@@ -44,6 +44,10 @@ export type Taxi = {
   jobPickupCreatedAt?:number;
   jobPickupDeadlineAt?:number;
   jobEstimatedPickupSeconds?:number;
+  /** Original worker estimate, never posted as an actual expense. */
+  jobEstimatedDirectCost?:number;
+  /** Timed discovered route versus free-flow estimate at boarding. */
+  jobTrafficDelaySeconds?:number;
   jobExpectedSatisfaction?:number;
   jobCustomerSatisfaction?:number;
   lastPassengerSatisfaction?:number;
@@ -704,7 +708,8 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
   jobTripType:mission.tripType??'local',jobPassengerType:mission.passengerType,jobPassengerCount:mission.partySize,
   jobPickupPlaceKind:mission.pickupPlaceKind,jobPickupPlaceName:mission.pickupPlaceName,
   jobPickupCreatedAt:mission.createdAt,jobPickupDeadlineAt:mission.pickupDeadlineAt,
-  jobEstimatedPickupSeconds:undefined,jobExpectedSatisfaction:undefined,
+  jobEstimatedPickupSeconds:undefined,jobEstimatedDirectCost:undefined,
+  jobTrafficDelaySeconds:undefined,jobExpectedSatisfaction:undefined,
   jobCustomerSatisfaction:undefined,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
@@ -1226,12 +1231,24 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
    route(graph,from,to,t.lastRoadTo===from?t.lastRoadFrom??'':'');
   if(next&&next.path.length>1){
    const actualMeters=next.path.slice(1).reduce((sum,p,i)=>sum+meters(next.path[i],p),0);
+   // One-time predicted congestion on the *verified passenger route*;
+   // historical traffic is not claimed to be measured GPS data.
+   let estimatedTrafficDelaySeconds=0;
+   for(let i=0;i<next.edgeIds.length;i++){
+    const distance=meters(next.path[i],next.path[i+1]);
+    if(!(distance>0))continue;
+    const speed=speedForEdge(graph,next.edgeIds[i]);
+    const freeFlow=distance/(Math.max(5,speed)/3.6);
+    const congested=trafficTravelSeconds(distance,speed,gameAt,next.path[i],next.edgeIds[i]);
+    if(Number.isFinite(congested))estimatedTrafficDelaySeconds+=Math.max(0,congested-freeFlow);
+   }
    const actualSatisfaction=t.jobPickupCreatedAt!==undefined?
     passengerPickupSatisfaction({createdAt:t.jobPickupCreatedAt,
      pickupDeadlineAt:t.jobPickupDeadlineAt,passengerType:t.jobPassengerType,
      pickupPlaceKind:t.jobPickupPlaceKind},Date.now(),0):undefined;
    t={...t,status:'TO_DROPOFF',path:next.path,edgeIds:next.edgeIds,leg:0,distanceIntoLeg:0,
     jobCustomerSatisfaction:actualSatisfaction,
+    jobTrafficDelaySeconds:Math.round(estimatedTrafficDelaySeconds),
     fare:pricedPassengerFare(actualMeters,t.jobSurgeMultiplier??1),
     jobDistanceMeters:actualMeters,jobDrivenMeters:0,jobFareTotal:undefined,
     jobTripType:actualMeters>=50000?'intercity':actualMeters>=10000?'regional':'local'};
@@ -1271,6 +1288,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
   recoveryTransitOnly:undefined,repositionTarget:undefined,coverageRegionId:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
   jobDistanceMeters:undefined,jobTripType:undefined,jobPassengerType:undefined,jobPassengerCount:undefined,jobPickupPlaceKind:undefined,jobPickupPlaceName:undefined,
   jobPickupCreatedAt:undefined,jobPickupDeadlineAt:undefined,jobEstimatedPickupSeconds:undefined,
+  jobEstimatedDirectCost:undefined,jobTrafficDelaySeconds:undefined,
   jobExpectedSatisfaction:undefined,jobCustomerSatisfaction:undefined,
   lastPassengerSatisfaction:completedSatisfaction??t.lastPassengerSatisfaction,
   passengerSatisfactionTotal:(t.passengerSatisfactionTotal??0)+(completedSatisfaction??0),
