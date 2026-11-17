@@ -396,6 +396,8 @@ function turnAwareRoute(graph:RoadGraph,from:string,to:string,allowed?:Set<strin
  return{path:keys.map(k=>graph.nodes.get(k)!),edgeIds:ids,length:states[finish].cost};
 }
 export function route(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true){return turnAwareRoute(graph,from,to,undefined,false,incoming,allowTaxiOnly);}
+/** Time-weighted directed pickup routing; no new roads are discovered. */
+export function routeTraffic(graph:RoadGraph,from:string,to:string,incoming='',allowTaxiOnly=true){return turnAwareRoute(graph,from,to,undefined,true,incoming,allowTaxiOnly);}
 
 /** Reroute from the exact directed OSM segment being driven, NOT from the
  * geographically nearest intersection (which can be an upper/lower road).
@@ -679,8 +681,8 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  // Empty taxis may return from fuel, hotels or rest stops on undiscovered roads.
  // The pickup transfer is operational travel, not exploration; passenger trips
  // remain restricted to discovered roads in the TO_PICKUP -> TO_DROPOFF transition.
- const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
- if(!toPickup||toPickup.length>6500)return null;
+ const toPickup=routeTraffic(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
+ if(!toPickup||passengerRouteMetres(toPickup.path)>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,activeJobId:mission.id,jobSurgeMultiplier:mission.fareMultiplier??1,
   jobTripType:mission.tripType??'local',jobPassengerType:mission.passengerType,jobPassengerCount:mission.partySize,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
