@@ -948,6 +948,11 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   // Purple Explorer's driven roads are valid for taxi jobs regardless of Black Explorer territory.
   const validDiscovered=explored;
   const eligibleStops=passengerStopsFor(validDiscovered);
+  // Report *actual expired* bookings only; not every rejected route attempt.
+  // The client idempotently records these IDs once in its bounded ledger.
+  const expiredBookings=msg.queue.filter(m=>m.expiresAt<=now)
+   .slice(0,30).map(m=>({id:m.id,passengerType:m.passengerType}));
+  const expiredGameDay=new Date(msg.gameNow??now).toISOString().slice(0,10);
   const queue=msg.queue.filter(m=>m.expiresAt>now&&eligibleStops.has(nearest(activeGraph,m.pickup))&&eligibleStops.has(nearest(activeGraph,m.dropoff)));
   let generatedMission=false;
   const passengerTaxis=taxis.filter(t=>(!t.kind||t.kind==='taxi'));
@@ -1099,7 +1104,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const pending:PassengerRequest[]=[];
   for(const mission of rankedQueue){
    let best:{index:number;taxi:Taxi;etaSeconds:number;score:number;
-    contribution:number|null;satisfaction:number}|null=null;
+    contribution:number|null;directCost:number|undefined;satisfaction:number}|null=null;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
     if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10||!passengerCompatible(taxi,mission))continue;
@@ -1135,6 +1140,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        bid.score===best.score&&etaSeconds<best.etaSeconds)
      best={index,taxi:assigned,etaSeconds,score:bid.score,
       contribution:bid.estimate?.contribution??null,
+      directCost:bid.estimate?.operatingCost,
       satisfaction:bid.estimatedSatisfaction};
    }
    if(best){
@@ -1145,6 +1151,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      jobPickupCreatedAt:mission.createdAt,
      jobPickupDeadlineAt:mission.pickupDeadlineAt,
      jobEstimatedPickupSeconds:best.etaSeconds,
+     jobEstimatedDirectCost:best.directCost,
      jobExpectedSatisfaction:best.satisfaction};passengerAssignments++;
     if(best.contribution!==null){
      taxiProfitableAssignments++;
@@ -2242,7 +2249,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const scoutMs=performance.now()-scoutStarted;
   const workerMs=performance.now()-dispatchStarted;
-  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,plannerPool:{workers:planningPool.length,busy:planningPool.filter(p=>p.busy).length,
+  self.postMessage({type:'result',revision:activeRevision,taxis,queue,assignedCount,generatedMission,expiredBookings,expiredGameDay,roadCount:seenRoadIds.size,perf:{workerMs,preparationMs,passengerMs,scoutMs,graphNodes:graph.nodes.size,graphRoads:seenRoadIds.size,vehicles:taxis.length,missions:msg.queue.length,plannerPool:{workers:planningPool.length,busy:planningPool.filter(p=>p.busy).length,
  pending:planningRequests.size,results:planningResults.size,
  vehicles:taxis.filter(t=>t.kind==='explorer').map(t=>({
  id:t.id,role:t.explorerRole??'balanced',
