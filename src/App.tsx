@@ -19,6 +19,7 @@ import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
+import type {PassengerDemandPlace} from './simulation/passengerPlaces';
 import type {TrafficIncident} from './simulation/trafficConditions';
 import {isTaxiDispatchMode,type TaxiDispatchMode} from './simulation/taxiDispatchStrategy';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
@@ -127,6 +128,7 @@ export default function App(){
  const [freightFocus,setFreightFocus]=useState<{id:string;token:number}|null>(null);
  const [vehicleFocus,setVehicleFocus]=useState<{id:string;token:number}|null>(null);
  const [constructionFerryNetwork,setConstructionFerryNetwork]=useState<FerryNetwork|null>(null);
+ const harbourDemandPlacesRef=useRef<PassengerDemandPlace[]>([]);
  const [gameClock,setGameClock]=useState<GameClock|null>(()=>company?loadGameClock(company.id):null);
  const gameClockRef=useRef(gameClock);gameClockRef.current=gameClock;
  useEffect(()=>{
@@ -163,9 +165,16 @@ export default function App(){
   let ferryRoutes=new Map<string,{durationMinutes:number;name:string;from:string;to:string}>();
   let portNames=new Map<string,string>();
   let knownPortIds=new Set<string>();
+  harbourDemandPlacesRef.current=[];
   void loadFerryNetwork().then(network=>{
    if(cancelled)return;
    setConstructionFerryNetwork(network);
+   // Use the game's real named ferry terminals, including those already
+   // explored. Explorer harbour missions are not the demand source.
+   harbourDemandPlacesRef.current=network.ports.map(port=>({
+    id:'harbour:'+port.id,name:port.name,kind:'harbour' as const,
+    position:port.position,
+   }));
    portNames=new Map(network.ports.map(port=>[port.id,port.name]));
    knownPortIds=new Set(network.ports.map(port=>port.id));
    const positions=new Map(network.ports.map(port=>[port.id,port.position]));
@@ -1047,7 +1056,12 @@ export default function App(){
    const driverTripPreferences=Object.fromEntries(taxis.filter(t=>
     !t.kind||t.kind==='taxi').map(t=>[t.id,normalDriverTripPreference(
     fleetSaveRef.current.drivers?.find(d=>d.name.toLowerCase()===t.driver.toLowerCase())?.tripPreference)]));
+   const activeHotelDemandPlaces:PassengerDemandPlace[]=Object.values(constructionRef.current.sites)
+    .filter(site=>hotelActiveAt(site.operations,Math.floor(gameTime/HOUR_MS)))
+    .map(site=>({id:'hotel:'+site.id,name:site.name,kind:'hotel' as const,
+     position:[site.longitude,site.latitude] as [number,number]}));
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
+    demandPlaces:[...harbourDemandPlacesRef.current,...activeHotelDemandPlaces],
     trafficIncidents:trafficIncidentsRef.current,driverTripPreferences,driverDutyRemainingSeconds,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
