@@ -7,6 +7,7 @@
  */
 import {type ConstructionState,type HotelSite,type HotelFloor,type Room,type SupplyCode,
  type StockBatch,supplies,supplyStock,roomIssues} from './internalConstruction';
+import {hotelGuestRoomQuality,hotelDesignDemandModifier} from './hotelBlueprintEditing';
 
 export type HotelRole='reception'|'housekeeping'|'kitchen'|'bar';
 export type HotelStaff=Record<HotelRole,number>;
@@ -56,7 +57,6 @@ const hash=(str:string):number=>{
  let h=2166136261;for(let i=0;i<str.length;i++)h=Math.imul(h^str.charCodeAt(i),16777619);return h>>>0;
 };
 const random01=(key:string)=>hash(key)/4294967296;
-const inRoom=(r:Room,obj:{x:number;y:number})=>obj.x>=r.x&&obj.y>=r.y&&obj.x<r.x+r.width&&obj.y<r.y+r.height;
 export function hotelActiveAt(ops:HotelOperations|undefined,hour:number):boolean{
  return (ops?.periods??[]).some(p=>p.fromHour<=hour&&(p.toHour===undefined||hour<p.toHour));
 }
@@ -244,7 +244,11 @@ export function settleHotelOperations(state:ConstructionState,nowHour:number,own
     const dayKey=site.id+':'+day;
     const season=new Date(day*24*3600000).getUTCMonth();
     const seasonal=season>=5&&season<=8?0.12:season>=10||season<=2?-0.12:0;
-    const quality=clamp((inventory.readyRooms.reduce((sum,item)=>sum+item.floor.objects.filter(obj=>inRoom(item.room,obj)).length,0)/Math.max(1,validRooms.length)-2)*0.025,-0.05,0.12);
+    // Furnishings, room size, bathroom availability and usable floor space
+    // drive customer appeal, instead of simply counting decorative objects.
+    const averageDesign=inventory.readyRooms.reduce((sum,item)=>
+     sum+hotelGuestRoomQuality(item.floor,item.room).score,0)/Math.max(1,validRooms.length);
+    const quality=hotelDesignDemandModifier(averageDesign);
     const pricing=clamp((11000-original.rateCents)/18000,-0.26,0.26);
     const occupancy=clamp(0.60+seasonal+quality+pricing+(random01(dayKey)-.5)*.20,.08,.96);
     const linen=Math.floor(supplyStock(site,'linen',hour));
