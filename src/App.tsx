@@ -3094,7 +3094,7 @@ export default function App(){
   if(Object.values(constructionRef.current.sites).some(site=>meters([site.longitude,site.latitude],[location.lng,location.lat])<90)){
    setConstructionError('You already have a construction site too close to this location.');return;
   }
-  const site:HotelSite={...newHotelSite('plot:'+crypto.randomUUID(),'New hotel · '+(location.label||'Development plot'),'new',location.lat,location.lng,Math.floor(clock/HOUR_MS),undefined,hotelPlotSize),accessRulesVersion:2};
+  const site:HotelSite={...newHotelSite('plot:'+crypto.randomUUID(),'New hotel · '+(location.label||'Development plot'),'new',location.lat,location.lng,Math.floor(clock/HOUR_MS),undefined,hotelPlotSize),accessRulesVersion:2,atmosphereRulesVersion:1};
   const next={...constructionRef.current,sites:{...constructionRef.current.sites,[site.id]:site}};
   try{saveConstruction(current.id,next);}catch{setConstructionError('Could not save the new plot in your browser.');return;}
   constructionRef.current=next;setConstruction(next);
