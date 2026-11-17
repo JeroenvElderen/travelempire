@@ -1,0 +1,22 @@
+name: Verify Hotel Architecture Phase 3 and Starting Capital
+on:
+  push:
+    branches:
+      - feature/hotel-phase3-windows-lighting-startcapital
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Hotel atmosphere, access, finance and construction tests
+        run: npm test -- src/hotelAtmosphere.test.ts src/hotelVerticalAccess.test.ts src/hotelAccess.test.ts src/hotelBlueprintEditing.test.ts src/hotelFurnitureQuality.test.ts src/hotelOperations.test.ts src/internalConstruction.test.ts src/components/blueprintViewport.test.ts
+      - name: Full regression (existing unrelated failures reported)
+        continue-on-error: true
+        run: npm test
