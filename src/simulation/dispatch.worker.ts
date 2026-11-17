@@ -25,6 +25,7 @@ import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
+import {setTrafficGameTime,setTrafficIncidents,type TrafficIncident} from './trafficConditions';
 import {passengerProfileFor,passengerCompatible} from './passengerProfiles';
 import {PassengerStopSpatialIndex,regionalPassengerDemand,type PassengerDepotRegion} from './passengerDepotDemand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
@@ -622,7 +623,7 @@ let poiRoadCursor=0;
 type OperationalRouteRequest={type:'operationalRoute';revision:number;requestId:number;vehicleId:string;purpose:'shift'|'service';from:Point;targets:Point[];allowTaxiOnly?:boolean};
 type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId:string;from:Point;targets:{point:Point;depot:boolean}[];allowTaxiOnly?:boolean};
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
-type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>};
+type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;trafficIncidents?:TrafficIncident[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest>)=>{
  const msg=event.data;
  try{
@@ -800,6 +801,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   }
   const dispatchStarted=performance.now();
   const {now,hq}=msg;
+  setTrafficGameTime(msg.gameNow??now);
+  setTrafficIncidents(msg.trafficIncidents??[]);
   const explored=new Set(msg.discovered);
   // Resting explorers remain parked until the main simulation releases them.
   const taxis=msg.taxis.map(t=>{
@@ -1053,7 +1056,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const to=nearest(activeGraph,assigned.path[j+1]);
      const edge=activeGraph.edges.get(from)?.find(e=>e.to===to&&e.id===assigned.edgeIds[j]);
      const distance=edge?.meters??meters(assigned.path[j],assigned.path[j+1]);
-     etaSeconds+=trafficTravelSeconds(distance,edge?.speedKph??50,msg.gameNow??now);
+     etaSeconds+=trafficTravelSeconds(distance,edge?.speedKph??50,msg.gameNow??now,assigned.path[j],edge?.id);
     }
     // Include the existing acceleration allowance; do not change motion
     // physics or travel speed for different trip categories.
