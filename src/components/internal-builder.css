@@ -759,3 +759,57 @@
  .internal-builder .ib-atmosphere-toolrow>button{min-height:42px}
  .internal-builder .ib-atmosphere-shortcuts button{flex:1;justify-content:center}
 }
+
+
+/* Phase 4: mobile-friendly safety tools and transparent game-only warnings. */
+.internal-builder .ib-safety-tools{display:grid;gap:10px;padding:12px;border:1px solid rgba(121,209,177,.36);border-radius:12px;background:rgba(22,43,53,.81)}
+.internal-builder .ib-safety-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.internal-builder .ib-safety-head>div{display:grid;gap:5px}
+.internal-builder .ib-safety-head strong{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-safety-head strong svg{color:#99dfbd}
+.internal-builder .ib-safety-head small{color:var(--ib-muted);font-size:10px;line-height:1.5}
+.internal-builder .ib-safety-head>button.selected{border-color:rgba(121,209,177,.7);background:rgba(40,103,81,.42)}
+.internal-builder .ib-safety-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.internal-builder .ib-safety-picker button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;min-height:69px;min-width:0;padding:9px 6px;border:1px solid rgba(156,184,196,.31);border-radius:9px;background:rgba(40,63,75,.89);color:var(--ib-fg);touch-action:manipulation}
+.internal-builder .ib-safety-picker button.selected{background:rgba(59,111,86,.72);border-color:rgba(153,223,189,.75)}
+.internal-builder .ib-safety-picker button:disabled{opacity:.45}
+.internal-builder .ib-safety-picker button strong{font-size:10px;text-align:center}
+.internal-builder .ib-safety-picker button small{color:var(--ib-muted);font-size:9px;text-align:center}
+.internal-builder .ib-safety-help,.internal-builder .ib-safety-legal{font-size:10px;color:var(--ib-muted);line-height:1.5}
+.internal-builder .ib-safety-score{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.internal-builder .ib-safety-score>div{display:grid;gap:5px;min-width:0;padding:9px 10px;border-radius:9px;border:1px solid var(--ib-line);background:rgba(39,58,66,.78)}
+.internal-builder .ib-safety-score strong{font-size:17px;color:var(--ib-fg);font-variant-numeric:tabular-nums}
+.internal-builder .ib-safety-score span{font-size:9px;color:var(--ib-muted);line-height:1.45}
+.internal-builder .ib-safety-warning{display:flex;align-items:flex-start;gap:7px;font-size:10px;color:#f1c194;line-height:1.45}
+.internal-builder .ib-safety-warning svg{flex-shrink:0}
+.internal-builder .ib-safety-optin{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--ib-line);padding-top:9px}
+.internal-builder .ib-safety-optin small{font-size:10px;color:var(--ib-muted);line-height:1.5}
+.internal-builder .ib-safety-optin button{flex-shrink:0}
+.internal-builder .ib-room-safety{display:grid;gap:10px;padding:12px;border-radius:11px;background:rgba(37,57,57,.82);border:1px solid rgba(118,202,161,.35)}
+.internal-builder .ib-room-safety-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.internal-builder .ib-room-safety-heading strong{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-room-safety-heading span{font-size:10px}
+.internal-builder .ib-room-safety .good{color:#a5e2bc}
+.internal-builder .ib-room-safety .bad{color:#f3b5a8}
+.internal-builder .ib-room-safety-flags{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.internal-builder .ib-room-safety-flags>span{padding:6px 8px;border-radius:7px;background:rgba(24,43,54,.75);font-size:10px}
+.internal-builder .ib-room-safety-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.internal-builder .ib-room-safety-actions button{display:flex;align-items:center;gap:5px;min-height:39px;font-size:10px}
+.internal-builder .ib-room-safety>small{color:var(--ib-muted);font-size:10px;line-height:1.45}
+.internal-builder .ib-safety-note{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid var(--ib-line);border-radius:9px;background:var(--ib-card);font-size:10px;color:var(--ib-muted);line-height:1.5}
+.internal-builder .ib-safety-note svg{flex-shrink:0;color:#ffb4a8}
+.internal-builder .ib-operations-safety{display:grid;gap:8px;padding:11px 12px;border:1px solid rgba(118,202,161,.31);border-radius:11px;background:rgba(30,58,51,.75)}
+.internal-builder .ib-operations-safety>div{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.internal-builder .ib-operations-safety>div:first-child{justify-content:flex-start}
+.internal-builder .ib-operations-safety>div:first-child svg{color:#9be0bb}
+.internal-builder .ib-operations-safety strong{color:var(--ib-fg);font-size:12px}
+.internal-builder .ib-operations-safety span{color:var(--ib-muted);font-size:10px}
+.internal-builder .ib-operations-safety b{color:var(--ib-fg)}
+.internal-builder .ib-operations-safety>small{font-size:10px;color:var(--ib-muted)}
+@media(max-width:680px){
+ .internal-builder .ib-safety-score{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .internal-builder .ib-safety-head,.internal-builder .ib-safety-optin{align-items:stretch;flex-direction:column}
+ .internal-builder .ib-safety-head>button,.internal-builder .ib-safety-optin>button{align-self:flex-start;min-height:42px}
+ .internal-builder .ib-safety-picker button{min-height:72px}
+ .internal-builder .ib-room-safety-actions button{flex:1;justify-content:center}
+}
