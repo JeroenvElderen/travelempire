@@ -101,6 +101,20 @@ describe('Taxi Autopilot 2.0 Phase 1 — profitable but unchanged driving',()=>{
   expect(taxiDispatchScore('balanced',120,low.estimate)).toBeGreaterThan(
    taxiDispatchScore('balanced',520,low.estimate));
  });
+ it('Maximum Profit compares contribution per working hour, not gross fare',()=>{
+  const short=estimateTaxiJob(taxi(),mission({
+   fare:40,tripDistanceMeters:5000,tripTravelSeconds:900}),500,60)!;
+  const long=estimateTaxiJob(taxi(),mission({
+   fare:100,tripDistanceMeters:30000,tripTravelSeconds:7200}),500,60)!;
+  expect(long.fare).toBeGreaterThan(short.fare);
+  expect(long.contribution).toBeGreaterThan(short.contribution);
+  expect(taxiDispatchScore('max-profit',60,short)).toBeGreaterThan(
+   taxiDispatchScore('max-profit',60,long));
+  expect(selectTaxiJobCandidate('max-profit',[
+   {name:'high-fare-slow',pickupEtaSeconds:60,estimate:long},
+   {name:'lower-fare-efficient',pickupEtaSeconds:60,estimate:short},
+  ])?.name).toBe('lower-fare-efficient');
+ });
  it('Maximum Profit refuses jobs that tie up a driver for negligible margin',()=>{
   const t=taxi();
   const low=estimateTaxiJob(t,mission({fare:8,tripTravelSeconds:800}),2500,300)!;
