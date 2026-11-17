@@ -1,0 +1,22 @@
+name: Verify Hotel Architecture Phase 4 Safety
+on:
+  push:
+    branches:
+      - feature/hotel-architecture-phase4-safety-accessibility
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Hotel safety, accessibility, operations and construction tests
+        run: npm test -- src/hotelSafety.test.ts src/hotelAtmosphere.test.ts src/hotelVerticalAccess.test.ts src/hotelAccess.test.ts src/hotelBlueprintEditing.test.ts src/hotelFurnitureQuality.test.ts src/hotelOperations.test.ts src/internalConstruction.test.ts src/components/blueprintViewport.test.ts
+      - name: Full suite (report pre-existing unrelated failures)
+        continue-on-error: true
+        run: npm test
