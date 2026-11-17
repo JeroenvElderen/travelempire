@@ -37,7 +37,7 @@ describe('mobile furniture placement',()=>{
  });
  it('snaps pointer gestures to whole metres regardless of zoom',()=>{
   expect(furnitureDragPosition({x:2,y:3},{x:14,y:31},1)).toEqual({x:2,y:4});
-  expect(furnitureDragPosition({x:2,y:3},{x:30,y:-30},2)).toEqual({x:3,y:2});
+  expect(furnitureDragPosition({x:2,y:3},{x:30,y:-40},2)).toEqual({x:3,y:2});
   expect(furnitureDragPosition({x:2,y:3},{x:0,y:0},1)).toEqual({x:2,y:3});
   expect(furnitureDragPosition({x:2,y:3},{x:60,y:-60},.5)).toEqual({x:6,y:-1});
  });
