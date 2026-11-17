@@ -125,13 +125,14 @@ export function analyzeHotelFloorAccess(
  const graph=new Map<string,Set<string>>(floor.rooms.map(r=>[r.id,new Set()]));
  const roomDoorCounts=new Map<string,number>();
  const entries=new Set<string>();
+ let exteriorDoorCount=0;
  for(const wall of floor.walls){
   if(wall.type!=='door'||!hotelAccessDoorValid(floor,site,wall))continue;
   const pair=accessDoorPair(floor,site,wall),a=pair.first,b=pair.second;
   if(a)roomDoorCounts.set(a.id,(roomDoorCounts.get(a.id)??0)+1);
   if(b)roomDoorCounts.set(b.id,(roomDoorCounts.get(b.id)??0)+1);
   if(pair.exterior){const circulationRoom=circulation(a)?a:circulation(b)?b:null;
-   if(circulationRoom)entries.add(circulationRoom.id);
+   if(circulationRoom){entries.add(circulationRoom.id);exteriorDoorCount++;}
   }else if(a&&b){graph.get(a.id)!.add(b.id);graph.get(b.id)!.add(a.id);}
  }
  const groundFloor=floorIndex===0;
@@ -182,7 +183,7 @@ export function analyzeHotelFloorAccess(
   warnings.push('Upper-floor stairs and lifts are planned for Phase 2. Vertical access is not enforced yet.');
  }
  return {floorIndex,legacy:site.accessRulesVersion!==1,groundFloor,
-  entranceDoors:entries.size,receptionConnected,
+  entranceDoors:exteriorDoorCount,receptionConnected,
   guestRooms:guestRooms.length,connectedGuests,
   pendingUpperGuests:groundFloor?0:guestRooms.length,
   circulationRooms:circulations.length,connectedCirculation:visited.size,
