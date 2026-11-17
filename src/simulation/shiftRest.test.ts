@@ -15,10 +15,10 @@ const stops:RestStop[]=[
  {id:'r1',name:'Rest area',kind:'rest_area',position:[23.9007,37.9]}
 ];
 describe('scheduled taxi rest destinations',()=>{
- it('uses nearby hotels for overnight rest and keeps assigned depot as fallback',()=>{
+ it('uses nearby hotels and parking without returning to depot',()=>{
   const choices=shiftRestTargets(taxi,stops,company,true);
   expect(choices[0].id).toBe('h1');
-  expect(choices.map(c=>c.kind)).toEqual(['hotel','parking','parking','depot']);
+  expect(choices.map(c=>c.kind)).toEqual(['hotel','parking','parking']);
  });
  it('prefers nearby parking for short breaks and excludes hotels',()=>{
   const choices=shiftRestTargets(taxi,stops,company,false);
@@ -30,10 +30,9 @@ describe('scheduled taxi rest destinations',()=>{
   expect(isAtShiftRestStop({...taxi,position:[23.95,37.95]},stop)).toBe(false);
   expect(isAtShiftRestStop({...taxi,position:[23.9005,37.9]},stop)).toBe(true);
  });
- it('falls back to headquarters if no other depot or stop exists',()=>{
+ it('does not force an off-duty taxi back to headquarters when no stop exists',()=>{
   const result=shiftRestTargets({...taxi,depotId:'missing'},[],company,true);
-  expect(result).toHaveLength(1);
-  expect(result[0].name).toBe('Headquarters');
+  expect(result).toHaveLength(0);
  });
  it('waits until a returning taxi reaches the hotel before switching to PAUSED',()=>{
   const nodes=new Map([
