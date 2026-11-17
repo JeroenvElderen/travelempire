@@ -2,6 +2,7 @@ import {hardcodedRoadSpeedKph} from '../data/hardcodedSpeedLimits';
 import {fareForDistance} from './demand';
 import {regionalTrafficFactor,trafficGameTime,setTrafficGameTime} from './trafficConditions';
 import {passengerCompatible,type PassengerKind} from './passengerProfiles';
+import type {PassengerPlaceKind} from './passengerPlaces';
 import {explorerClassEligible} from './explorerRoles';
 import type {Company} from '../company';
 export type Point=[number,number];
@@ -37,6 +38,8 @@ export type Taxi = {
   jobTripType?:'local'|'regional'|'intercity';
   jobPassengerType?:PassengerKind;
   jobPassengerCount?:number;
+  jobPickupPlaceKind?:PassengerPlaceKind;
+  jobPickupPlaceName?:string;
   /** Actual passenger-carrying distance travelled on the current job. */
   jobDrivenMeters?:number;
   /** Expected final payment including fleet/research modifiers (not yet paid). */
@@ -610,7 +613,7 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 }
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
-export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string;tripType?:'local'|'regional'|'intercity';tripDistanceMeters?:number;tripTravelSeconds?:number;passengerType?:PassengerKind;partySize?:number;luggageCount?:number;minimumClass?:'Premium'};
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string;tripType?:'local'|'regional'|'intercity';tripDistanceMeters?:number;tripTravelSeconds?:number;passengerType?:PassengerKind;partySize?:number;luggageCount?:number;minimumClass?:'Premium';pickupPlaceKind?:PassengerPlaceKind;pickupPlaceName?:string};
 /** Discovered timed routes return time in seconds, not distance in metres. */
 export function passengerRouteMetres(path:readonly Point[]):number{
  let total=0;
@@ -630,12 +633,15 @@ export function passengerRoadNodes(graph:RoadGraph,discovered:Set<string>):Set<s
  }
  return eligible;
 }
-export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1,eligibleStops?:Set<string>,recentPairs:ReadonlySet<string>=new Set()):PassengerRequest|null{
+export function createPassengerRequest(graph:RoadGraph,explored:Set<string>,_hq:Point,now=Date.now(),fareMultiplier=1,eligibleStops?:Set<string>,recentPairs:ReadonlySet<string>=new Set(),preferredPickupStops:readonly string[]=[]):PassengerRequest|null{
  const allEligible=[...(eligibleStops??passengerRoadNodes(graph,explored))];
  if(allEligible.length<2)return null;
  const eligible=allEligible.length>3000?Array.from({length:3000},()=>allEligible[Math.floor(Math.random()*allEligible.length)]):allEligible;
+ const available=preferredPickupStops.length?new Set(allEligible):null;
+ const preferred=available?preferredPickupStops.filter(id=>available.has(id)):[];
  for(let attempt=0;attempt<35;attempt++){
-  const from=eligible[Math.floor(Math.random()*eligible.length)];
+  const origins=attempt<25&&preferred.length?preferred:eligible;
+  const from=origins[Math.floor(Math.random()*origins.length)];
   const near=eligible.filter(k=>{const d=meters(graph.nodes.get(k)!,graph.nodes.get(from)!);return d>=350&&d<=9500;});
   if(!near.length)continue;
   const to=near[Math.floor(Math.random()*near.length)];
@@ -686,7 +692,8 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  const toPickup=routeTraffic(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||passengerRouteMetres(toPickup.path)>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,activeJobId:mission.id,jobSurgeMultiplier:mission.fareMultiplier??1,
-  jobTripType:mission.tripType??'local',jobPassengerType:mission.passengerType,jobPassengerCount:mission.partySize,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
+  jobTripType:mission.tripType??'local',jobPassengerType:mission.passengerType,jobPassengerCount:mission.partySize,
+  jobPickupPlaceKind:mission.pickupPlaceKind,jobPickupPlaceName:mission.pickupPlaceName,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
@@ -1243,7 +1250,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
   recoveryTransitOnly:undefined,repositionTarget:undefined,coverageRegionId:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
-  jobDistanceMeters:undefined,jobTripType:undefined,jobPassengerType:undefined,jobPassengerCount:undefined,
+  jobDistanceMeters:undefined,jobTripType:undefined,jobPassengerType:undefined,jobPassengerCount:undefined,jobPickupPlaceKind:undefined,jobPickupPlaceName:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
  return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
