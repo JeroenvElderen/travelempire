@@ -28,6 +28,9 @@ import {demandAt} from './demand';
 import {setTrafficGameTime,setTrafficIncidents,type TrafficIncident} from './trafficConditions';
 import {planTaxiTrafficDetour,type MovingTrafficSnapshot} from './taxiTrafficReroute';
 import {passengerProfileFor,passengerCompatible} from './passengerProfiles';
+import {GREEK_AIRPORT_DEMAND_PLACES,GREEK_DISTRICT_DEMAND_PLACES,
+ passengerHotspotCandidates,passengerPlaceAccessRadius,pickupPlaceForRoad,
+ type PassengerDemandPlace} from './passengerPlaces';
 import {PassengerStopSpatialIndex,regionalPassengerDemand,type PassengerDepotRegion} from './passengerDepotDemand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
 import {createPassengerRequest,passengerPairKey,passengerRouteMetres,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,nearbyRoadNodes,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
@@ -626,7 +629,7 @@ type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
 type TrafficRerouteRequest={type:'trafficReroute';revision:number;requestId:number;vehicleId:string;
  snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>;trafficIncidents:TrafficIncident[]};
-type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;trafficIncidents?:TrafficIncident[]};
+type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;trafficIncidents?:TrafficIncident[];demandPlaces?:PassengerDemandPlace[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest|TrafficRerouteRequest>)=>{
  const msg=event.data;
  try{
@@ -994,6 +997,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
   const regionStates=regionalPassengerDemand(
    [...roamingRegions.values(),...inboundCoverage.values(),...regionalOrigins],
    queue,passengerLastSelectedDepot);
+  // Named terminals, actually operating hotels and fixed urban centres.
+  // No extra graph, POI tile downloads or civilian map vehicles are created.
+  const passengerDemandPlaces:readonly PassengerDemandPlace[]=[
+   ...GREEK_AIRPORT_DEMAND_PLACES,...GREEK_DISTRICT_DEMAND_PLACES,
+   ...(msg.demandPlaces??[]),
+  ];
   const passengerLocalStops=new Map<string,number>();
   if(msg.allowMission&&queue.length<demand.queueLimit){
    for(const [pair,created] of recentPassengerPairs)
@@ -1012,13 +1021,24 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      node=>activeGraph.nodes.get(node),5200,1600);
     passengerLocalStops.set(region.id,localKeys.length);
     if(localKeys.length<2)continue;
+    const localSet=new Set(localKeys);
+    const hotspots=passengerHotspotCandidates(region.position,passengerDemandPlaces,
+     msg.gameNow??now,passengerGenerationAttempts,3);
+    let preferredPickupStops:string[]=[];
+    let selectedPlace:PassengerDemandPlace|null=null;
+    for(const place of hotspots){
+     const nearby=passengerSpatialStops.near(place.position,
+      node=>activeGraph.nodes.get(node),passengerPlaceAccessRadius(place.kind),80);
+     const eligible=nearby.filter(node=>localSet.has(node));
+     if(eligible.length){preferredPickupStops=eligible;selectedPlace=place;break;}
+    }
     // Try the intended 75/20/5 journey mix. Intercity destinations
     // are sampled from distant already-discovered nodes across Greece.
     // Bounded A* checks prove the *actual* directed connection, not a
     // straight-line connection or a ferry shortcut.
     const band=passengerTripTypeForAttempt(passengerGenerationAttempts++);
     let request=band==='local'?null:createLongPassengerRequest(
-     activeGraph,validDiscovered,localKeys,
+     activeGraph,validDiscovered,preferredPickupStops.length?preferredPickupStops:localKeys,
      (origin,min,max,limit)=>passengerSpatialStops.distant(
       origin,node=>activeGraph.nodes.get(node),min,max,limit),
      band,now,demand.fareMultiplier,exclude,
@@ -1028,8 +1048,16 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     // not yet exist. Fall back to local fares rather than fabricating
     // connections or permanently starving the passenger queue.
     if(!request)request=createPassengerRequest(activeGraph,validDiscovered,hq,now,
-     demand.fareMultiplier,new Set(localKeys),exclude);
+     demand.fareMultiplier,localSet,exclude,preferredPickupStops);
     if(!request)continue;
+    const pickupNode=nearest(activeGraph,request.pickup);
+    const residentialRoad=(activeGraph.edges.get(pickupNode)??[]).some(edge=>
+     validDiscovered.has(edge.id)&&
+     (edge.highway==='residential'||edge.highway==='living_street'));
+    const actualPlace=pickupPlaceForRoad(request.pickup,
+     selectedPlace?[selectedPlace]:[],residentialRoad);
+    request={...request,pickupPlaceKind:actualPlace?.kind,
+     pickupPlaceName:actualPlace?.name};
     const profile=passengerProfileFor(request,msg.gameNow??now);
     request={...request,passengerType:profile.passengerType,partySize:profile.partySize,
      luggageCount:profile.luggageCount,minimumClass:profile.minimumClass,
