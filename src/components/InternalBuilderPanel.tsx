@@ -271,7 +271,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(point.furnitureId&&point.furnitureOrigin&&point.moved){
    const target=furnitureDragPosition(point.furnitureOrigin,
     {x:e.clientX-point.startX,y:e.clientY-point.startY},zoomRef.current);
-   setFurniturePreview(current=>current?.id===point.furnitureId&&
+   setFurniturePreview(current=>current&&current.id===point.furnitureId&&
     current.x===target.x&&current.y===target.y?current:
     {id:point.furnitureId!,...target});
    return;
@@ -418,7 +418,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
     {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
    <div className="ib-hint ib-pan-guide"><Hand size={14}/> {(tool==='select'||tool==='furniture')?
-   'Tap existing furniture to edit it, or drag it to a new grid cell. Swipe empty space to pan; use two fingers to pinch-zoom.':tool==='room'?'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.':'Swipe the plan to move without placing objects. Tap to '+(tool==='furniture'?'place furniture':tool==='select'?'inspect':tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
+   'Tap existing furniture to edit it, or drag it to a new grid cell. Swipe empty space to pan; use two fingers to pinch-zoom.':tool==='room'?'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.':'Swipe the plan to move without placing objects. Tap to '+(tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
    <div className="ib-navigation-row"><span>Move around your plan — works while furnishing</span><div className="ib-pan-arrows" role="group" aria-label="Move floor plan"><button type="button" onClick={()=>panBy(-160,0)} aria-label="Pan left"><ArrowLeft size={16}/></button><button type="button" onClick={()=>panBy(0,-160)} aria-label="Pan up"><ArrowUp size={16}/></button><button type="button" onClick={centerPlan} aria-label="Centre floor plan" title="Centre floor plan"><Crosshair size={16}/></button><button type="button" onClick={()=>panBy(0,160)} aria-label="Pan down"><ArrowDown size={16}/></button><button type="button" onClick={()=>panBy(160,0)} aria-label="Pan right"><ArrowRight size={16}/></button></div></div>
    {tool==='room'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
@@ -435,7 +435,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      {floor.objects.map(o=>{const preview=furniturePreview?.id===o.id?{...o,x:furniturePreview.x,y:furniturePreview.y}:o;
       const size=furnitureSize(preview),selected=selectedFurnitureId===o.id;
       const dragging=furniturePreview?.id===o.id;
-      return <g key={o.id} pointerEvents="none" opacity={dragging?.72:1}>
+      return <g key={o.id} pointerEvents="none" opacity={dragging?0.72:1}>
        <rect x={preview.x+.08} y={preview.y+.08} width={size.width-.16} height={size.height-.16}
         rx=".13" fill={selected?'#efce89':'#c1a0ed'}
         stroke={selected?'#fff2be':'#e7daff'} strokeWidth={selected?'.11':'.035'}
