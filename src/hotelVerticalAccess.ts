@@ -182,8 +182,12 @@ export function analyzeHotelBuildingAccess(
    else if([...floor.walls].some(w=>{
     if(w.type!=='door'||!hotelAccessDoorValid(floor,site,w))return false;
     const pair=accessDoorPair(floor,site,w);
-    return (pair.first?.id===room.id&&pair.second&&visited.has(node(fi,pair.second.id)))||
-     (pair.second?.id===room.id&&pair.first&&visited.has(node(fi,pair.first.id)));
+    return (pair.first?.id===room.id&&pair.second&&
+     (pair.second.type==='corridor'||pair.second.type==='lobby')&&
+     visited.has(node(fi,pair.second.id)))||
+     (pair.second?.id===room.id&&pair.first&&
+     (pair.first.type==='corridor'||pair.first.type==='lobby')&&
+     visited.has(node(fi,pair.first.id)));
    }))status='connected';
    else if(fi>0&&!floorHasVertical)status='no-vertical-link';
    else if(fi>0&&!floorReached)status='no-vertical-link';
@@ -240,6 +244,6 @@ export function hotelVerticalCongestionModifier(
 ):number{
  if(!report.connectedUpperGuestRooms)return 0;
  if(report.verticalCapacityPerHour<=0)return -.1;
- const excess=report.peakGuestMovesPerHour/report.verticalCapacityPerHour-1;
- return Math.max(-.1,Math.min(0,-Math.max(0,excess)*.05));
+ const excess=Math.max(0,report.peakGuestMovesPerHour/report.verticalCapacityPerHour-1);
+ return excess>0?-Math.min(.1,excess*.05):0;
 }
