@@ -25,6 +25,7 @@ import {isObsoleteExplorerReturn} from './savedReturnJourney';
 import {unlockedSpecialistRoles,specialistCanDepart,type RestrictedExplorerRole} from './specialistAccess';
 import {hasInvalidRedApproach} from './roundaboutTransit';
 import {demandAt} from './demand';
+import {passengerProfileFor,passengerCompatible} from './passengerProfiles';
 import {PassengerStopSpatialIndex,regionalPassengerDemand,type PassengerDepotRegion} from './passengerDepotDemand';
 import {HARBOUR_ACCESS_RADIUS_METERS,HARBOUR_ACCESS_EXTRA_METERS} from '../maritime/harbourUnlocks';
 import {createPassengerRequest,passengerPairKey,passengerRouteMetres,assignPassenger,dispatchScout,route,routeDiscovered,routeFromDirectedRoad,routeToNearestTarget,nearest,nearbyRoadNodes,meters,trafficTravelSeconds,type RoadGraph,type Taxi,type PassengerRequest,type Point} from './taxi';
@@ -1001,6 +1002,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     if(!request)request=createPassengerRequest(activeGraph,validDiscovered,hq,now,
      demand.fareMultiplier,new Set(localKeys),exclude);
     if(!request)continue;
+    const profile=passengerProfileFor(request,msg.gameNow??now);
+    request={...request,passengerType:profile.passengerType,partySize:profile.partySize,
+     luggageCount:profile.luggageCount,minimumClass:profile.minimumClass,
+     fare:Math.round(request.fare*profile.fareBonus*100)/100};
     if(request.tripType==='regional')regionalTripsCreated++;
     else if(request.tripType==='intercity')intercityTripsCreated++;
     request.originDepotId=region.id;
@@ -1031,7 +1036,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    let best:{index:number;taxi:Taxi;etaSeconds:number;score:number;contribution:number|null}|null=null;
    for(let index=0;index<taxis.length;index++){
     const taxi=taxis[index];
-    if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10)continue;
+    if(!msg.allowTaxiShift||(msg.availableTaxiIds&&!msg.availableTaxiIds.includes(taxi.id))||(taxi.kind&&taxi.kind!=='taxi')||taxi.status!=='IDLE'||taxi.deliveryUntil||taxi.refillRequested||energyPercent(taxi)<=10||!passengerCompatible(taxi,mission))continue;
     const assigned=assignPassenger(taxi,activeGraph,mission,validDiscovered,eligibleStops);
     if(!assigned){passengerRouteFailures++;continue;}
     // The job must fit the real fuel/charge range, including empty

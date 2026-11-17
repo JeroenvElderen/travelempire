@@ -1,5 +1,6 @@
 import {hardcodedRoadSpeedKph} from '../data/hardcodedSpeedLimits';
 import {fareForDistance} from './demand';
+import {passengerCompatible,type PassengerKind} from './passengerProfiles';
 import {explorerClassEligible} from './explorerRoles';
 import type {Company} from '../company';
 export type Point=[number,number];
@@ -33,6 +34,8 @@ export type Taxi = {
   jobDistanceMeters?:number;
   /** Local/regional/intercity quoted distance class, retained until drop-off. */
   jobTripType?:'local'|'regional'|'intercity';
+  jobPassengerType?:PassengerKind;
+  jobPassengerCount?:number;
   /** Actual passenger-carrying distance travelled on the current job. */
   jobDrivenMeters?:number;
   /** Expected final payment including fleet/research modifiers (not yet paid). */
@@ -104,6 +107,7 @@ export type Taxi = {
   vehicleYear?: number;
   vehicleFuel?: string;
   vehicleClass?: string;
+  vehicleSeats?:number;
   vehicleCondition?: number;
   vehicleMileage?: number;
   operatingKm?: number;
@@ -619,7 +623,7 @@ export function dispatch(taxi:Taxi,graph:RoadGraph,explored:Set<string>,hq:Point
 }
 
 // A shared pool of passenger requests, independent of the number of idle taxis.
-export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string;tripType?:'local'|'regional'|'intercity';tripDistanceMeters?:number;tripTravelSeconds?:number};
+export type PassengerRequest={id:string;pickup:Point;dropoff:Point;fare:number;fareMultiplier?:number;createdAt:number;expiresAt:number;originDepotId?:string;tripType?:'local'|'regional'|'intercity';tripDistanceMeters?:number;tripTravelSeconds?:number;passengerType?:PassengerKind;partySize?:number;luggageCount?:number;minimumClass?:'Premium'};
 /** Discovered timed routes return time in seconds, not distance in metres. */
 export function passengerRouteMetres(path:readonly Point[]):number{
  let total=0;
@@ -679,7 +683,7 @@ export function routeDiscovered(graph:RoadGraph,from:string,to:string,discovered
  return turnAwareRoute(graph,from,to,discovered,true,incoming,allowTaxiOnly,maxVisits,maxVisits<150000);
 }
 export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerRequest,discovered?:Set<string>,eligibleStops?:Set<string>):Taxi|null{
- if(taxi.status!=='IDLE')return null;
+ if(taxi.status!=='IDLE'||!passengerCompatible(taxi,mission))return null;
  const start=nearest(graph,taxi.position),pickup=nearest(graph,mission.pickup);
  if(!start||!pickup)return null;
  if(discovered){
@@ -695,7 +699,7 @@ export function assignPassenger(taxi:Taxi,graph:RoadGraph,mission:PassengerReque
  const toPickup=route(graph,start,pickup,taxi.lastRoadTo===start?taxi.lastRoadFrom??'':'');
  if(!toPickup||toPickup.length>6500)return null;
  return{...taxi,status:'TO_PICKUP',path:toPickup.path,edgeIds:toPickup.edgeIds,journeyEdges:[],leg:0,distanceIntoLeg:0,pickup:mission.pickup,dropoff:mission.dropoff,fare:mission.fare,activeJobId:mission.id,jobSurgeMultiplier:mission.fareMultiplier??1,
-  jobTripType:mission.tripType??'local',jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
+  jobTripType:mission.tripType??'local',jobPassengerType:mission.passengerType,jobPassengerCount:mission.partySize,jobDistanceMeters:undefined,jobDrivenMeters:0,jobFareTotal:undefined};
 }
 // Systematic exploration: finish undiscovered streets connected to the revealed
 // network before pushing the frontier outward. Never choose random destinations.
@@ -1249,7 +1253,7 @@ export function tickTaxi(taxi:Taxi,graph:RoadGraph,seconds:number,_discoveredRoa
  t={...t,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,
   pickup:undefined,dropoff:undefined,fare:0,activeJobId:undefined,
   recoveryTransitOnly:undefined,repositionTarget:undefined,coverageRegionId:undefined,repositionStopPending:undefined,jobSurgeMultiplier:undefined,
-  jobDistanceMeters:undefined,jobTripType:undefined,
+  jobDistanceMeters:undefined,jobTripType:undefined,jobPassengerType:undefined,jobPassengerCount:undefined,
   jobDrivenMeters:undefined,jobFareTotal:undefined,journeyEdges:[],speedKph:0,
   completed:t.completed+(earned?1:0)};
  return{taxi:t,earned,finished:earned>0,discovered,distanceMeters:advanced.distanceMeters};
