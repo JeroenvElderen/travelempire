@@ -82,16 +82,19 @@ export function buildIsoScene(
   (floor.lights?.length??0)+(floor.safetyFixtures?.length??0),0);
  const roomCount=floors.reduce((n,{floor})=>n+floor.rooms.length,0);
  const detailed=raw<=MAX_PREVIEW_PRIMITIVES&&roomCount<=MAX_PREVIEW_ROOMS;
- const levels=floors.map(({floor,index})=>({
-  index,
-  floor:detailed?floor:{
-   ...floor,
-   // The simplified overview contains only shell geometry.
-   rooms:floor.rooms.slice(0,MAX_PREVIEW_ROOMS),
-   objects:[],walls:[],lights:[],safetyFixtures:[],
-  },
-  z:index*24,
- }));
+ let remaining=MAX_PREVIEW_ROOMS;
+ const levels=floors.map(({floor,index})=>{
+  const rooms=detailed?floor.rooms:floor.rooms.slice(0,remaining);
+  if(!detailed)remaining=Math.max(0,remaining-rooms.length);
+  return {index,
+   floor:detailed?floor:{
+    ...floor,
+    // The simplified overview contains ONLY capped room shell geometry.
+    rooms,objects:[],walls:[],lights:[],safetyFixtures:[],
+   },
+   z:index*24,
+  };
+ });
  const cornerCoordinates:IsoPoint[]=[];
  const top=Math.max(0,...levels.map(l=>l.z));
  for(const z of [0,top+10]){
