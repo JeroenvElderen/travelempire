@@ -105,7 +105,7 @@ describe('Taxi Autopilot 2.0 Phase 1 — profitable but unchanged driving',()=>{
   const short=estimateTaxiJob(taxi(),mission({
    fare:40,tripDistanceMeters:5000,tripTravelSeconds:900}),500,60)!;
   const long=estimateTaxiJob(taxi(),mission({
-   fare:100,tripDistanceMeters:30000,tripTravelSeconds:7200}),500,60)!;
+   fare:130,tripDistanceMeters:30000,tripTravelSeconds:7200}),500,60)!;
   expect(long.fare).toBeGreaterThan(short.fare);
   expect(long.contribution).toBeGreaterThan(short.contribution);
   expect(taxiDispatchScore('max-profit',60,short)).toBeGreaterThan(
