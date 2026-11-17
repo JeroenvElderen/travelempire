@@ -48,7 +48,7 @@ describe('precision hotel floor-plan editing',()=>{
   const first=add(s.draft[0],s,'guest-double','a');
   const second=add(first,s,'guest-double','b');
   expect(first.rooms[0].x).toBe(0);
-  expect(second.rooms[0].x).toBeGreaterThan(0);
+  expect(second.rooms[1].x>0||second.rooms[1].y>0).toBe(true);
   expect(second.rooms).toHaveLength(2);
   expect(second.objects).toHaveLength(first.objects.length*2);
  });
