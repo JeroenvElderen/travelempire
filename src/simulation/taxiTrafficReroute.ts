@@ -44,7 +44,7 @@ const near=(a:Point,b:Point,limit=3)=>meters(a,b)<=limit;
  * EVERY edge must remain previously discovered (and no taxi-only shortcuts).
  */
 export function planTaxiTrafficDetour(
- graph:RoadGraph,s:MovingTrafficSnapshot,discovered:ReadonlySet<string>,
+ graph:RoadGraph,s:MovingTrafficSnapshot,discovered:Set<string>,
 ):TrafficDetourOutcome{
  const {remainingPath:path,remainingEdgeIds:ids}=s;
  if(!path||!ids||ids.length<2||ids.length!==path.length-1||ids.length>4000||
@@ -82,7 +82,7 @@ export function planTaxiTrafficDetour(
  // Work starts at the NEXT real junction, not the current interpolation point.
  // Incoming fromNode preserves turn-aware one-way and U-turn restrictions.
  const alternative=s.status==='TO_DROPOFF'
-  ?routeDiscovered(graph,s.toNode,cursor,new Set(discovered),s.fromNode,false,65000)
+  ?routeDiscovered(graph,s.toNode,cursor,discovered,s.fromNode,false,65000)
   :routeTraffic(graph,s.toNode,cursor,s.fromNode,true,45000);
  if(!alternative||alternative.edgeIds.length===0)return failed('no-legal-alternative');
  const proposedPath=[first,...alternative.path];
