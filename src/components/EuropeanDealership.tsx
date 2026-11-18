@@ -14,7 +14,7 @@ type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:numb
 export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const brand=initialBrand;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
- const [selected,setSelected]=useState(initialModel??'Toyota Corolla Saloon');
+ const [selected,setSelected]=useState(initialModel??(models[0]?models[0].brand+' '+models[0].name:'Toyota Corolla Touring Sports'));
  const model:VehicleModel=models.find(m=>m.brand+' '+m.name===selected)??models[0];
  const [selectedYear,setYear]=useState(2026);
  const year=model.years.includes(selectedYear)?selectedYear:model.years[0];
