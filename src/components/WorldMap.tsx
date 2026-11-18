@@ -588,6 +588,10 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     audiA5PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
    if(audiPaint){
     img.dataset.audiPaint=audiPaint.id;
+    const defaultCarIcon=img.src;
+    img.addEventListener('error',()=>{
+     if(img.src!==defaultCarIcon)img.src=defaultCarIcon;
+    },{once:true});
     void audiA5SpriteUrl(audiPaint.id).then(url=>{
      if(url&&img.isConnected)img.src=url;
     });
