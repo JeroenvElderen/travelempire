@@ -381,6 +381,7 @@ export function roomIssues(floor:HotelFloor,room:Room):string[]{
   guest:[['bed','single-bed','sofa-bed']],bathroom:[['toilet'],['sink'],['shower','bathtub']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
   bar:[['bar-counter']],restaurant:[['table','booth'],['chair','booth']],lobby:[['reception']],storage:[['shelves']]
  };
- return (needs[room.type]??[]).filter(group=>!group.some(code=>codes.has(code))).map(group=>'Missing '+group.join(' or '));
+ return (needs[room.type]??[]).filter(group=>!group.some(code=>codes.has(code))).map(group=>
+  room.type==='guest'?'Missing bed or single-bed':'Missing '+group.join(' or '));
 }
 export const euros=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(cents/100);
