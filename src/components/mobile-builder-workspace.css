@@ -210,6 +210,7 @@
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-visual-mode,
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-navigation-row,
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-safety-tools,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-access-mode,
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-access-checker,
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-blueprint-health,
  .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-design-summary,
