@@ -16,8 +16,8 @@ export const AUDI_A6_PAINT_SPRITES:readonly AudiPaintSprite[]=[
  {id:'audi-a6-paint-10',name:'Grenadine Red Metallic (game custom)',hex:'#8E2633',index:8,slug:'grenadine-red'},
 ];
 export const AUDI_A6_ATLAS_COLUMNS=9;
-export const AUDI_A6_SPRITE_WIDTH=80;
-export const AUDI_A6_SPRITE_HEIGHT=170;
+export const AUDI_A6_SPRITE_WIDTH=64;
+export const AUDI_A6_SPRITE_HEIGHT=136;
 const BY_ID=new Map(AUDI_A6_PAINT_SPRITES.map(p=>[p.id,p]));
 const BY_HEX=new Map(AUDI_A6_PAINT_SPRITES.map(p=>[p.hex.toUpperCase(),p]));
 export const isAudiA6Avant=(model:string|undefined):boolean=>
