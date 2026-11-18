@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {BedDouble,Check,CheckCircle2,Info,Layers3,Paintbrush,ShieldAlert,ShoppingCart} from 'lucide-react';
 import type {HotelFloor,HotelSite,Room} from '../internalConstruction';
-import {euros} from '../internalConstruction';
+import {euros,furnitureSize} from '../internalConstruction';
 import {
  COLLECTION_STYLES,ROOM_COLLECTIONS,curatedCollectionPieces,
  planRoomFurnitureCollection,furnitureCollectionFor,
@@ -49,17 +49,12 @@ export default function HotelRoomCollections({
  const pieces=useMemo(()=>room?curatedCollectionPieces(room.type,style):[],
   [room,style]);
  const oldPieces=room?floor.objects.filter(obj=>{
-  const spec=pieces.find(p=>p.code===obj.code)?.model;
-  // All existing placements were already constrained to their rooms.
-  // Containment, rather than matching codes, is the preservation boundary.
-  const size=spec&&obj.modelId===spec.id?{width:spec.width,height:spec.height}:null;
-  const actual=size??null;
-  return actual?floorItemInside(room,obj.x,obj.y,actual.width,actual.height):
-   obj.x>=room.x&&obj.y>=room.y&&obj.x<room.x+room.width&&obj.y<room.y+room.height;
+  const size=furnitureSize(obj);
+  return floorItemInside(room,obj.x,obj.y,size.width,size.height);
  }):[];
- const allShown=planned?planned.floor.objects.filter(obj=>{
-  return obj.x>=room!.x&&obj.y>=room!.y&&obj.x<room!.x+room!.width&&
-   obj.y<room!.y+room!.height;
+ const allShown=planned&&room?planned.floor.objects.filter(obj=>{
+  const size=furnitureSize(obj);
+  return floorItemInside(room,obj.x,obj.y,size.width,size.height);
  }):[];
  const roomsLabel=room?room.name:'No room selected';
  const totalNew=planned?.added.length??0;
@@ -123,10 +118,8 @@ export default function HotelRoomCollections({
      x1={room.x} x2={room.x+room.width} y1={room.y+i+1} y2={room.y+i+1}
      stroke="#6e8298" strokeWidth=".018" opacity=".5"/>)}
     {allShown.map(obj=>{
-     const piece=pieces.find(p=>p.model.id===obj.modelId);
      const legacy=oldPieces.some(o=>o.id===obj.id);
-     const width=piece?.model.width??1,height=piece?.model.height??1;
-     const w=obj.rotated?height:width,h=obj.rotated?width:height;
+     const {width:w,height:h}=furnitureSize(obj);
      return <g key={obj.id}>
       <rect x={obj.x+.04} y={obj.y+.04} width={w-.08} height={h-.08}
        rx=".08" fill={obj.finish?furnitureFinishColor(obj.finish):'#b3bdc8'}
