@@ -632,20 +632,39 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <rect width={site.width} height={site.height} fill="#111c31"/>
      {Array.from({length:site.width+1},(_,i)=><line key={'x'+i} x1={i} y1={0} x2={i} y2={site.height} stroke="#42506c" strokeWidth=".025"/>)}
      {Array.from({length:site.height+1},(_,i)=><line key={'y'+i} x1={0} y1={i} x2={site.width} y2={i} stroke="#42506c" strokeWidth=".025"/>)}
-     {planStyle==='architectural'?<ArchitecturalRooms floor={floor}/>:floor.rooms.map(r=><g key={r.id}><rect x={r.x} y={r.y} width={r.width} height={r.height} fill={tone[r.type]} fillOpacity=".87" stroke="#d3d5e6" strokeWidth=".10"/><text x={r.x+r.width/2} y={r.y+.65} fontSize=".40" textAnchor="middle" fill="#ffffff">{r.type==='stairwell'?'STAIRS':r.type==='elevator'?'LIFT':r.name}</text></g>)}
+     {planStyle==='architectural'?<ArchitecturalRooms floor={floor}/>:floor.rooms.map(r=><g key={r.id}>
+      {roomSections(r).map((part,i)=><rect key={i} x={part.x} y={part.y}
+       width={part.width} height={part.height} fill={tone[r.type]} fillOpacity=".87"
+       stroke={r.sections?.length?'none':'#d3d5e6'} strokeWidth=".10"/>)}
+      {!!r.sections?.length&&<path d={roomBoundaryEdges(r).map(edge=>edge.orientation==='h'?
+       `M ${edge.x} ${edge.y} h 1`:`M ${edge.x} ${edge.y} v 1`).join(' ')}
+       fill="none" stroke="#d3d5e6" strokeWidth=".10"/>}
+      <text x={r.x+r.width/2} y={r.y+.65} fontSize=".40" textAnchor="middle" fill="#ffffff">
+       {r.type==='stairwell'?'STAIRS':r.type==='elevator'?'LIFT':r.name}
+      </text></g>)}
      {showAtmosphereOverlay&&floor.rooms.map(room=>{
       const lighting=roomAtmospheres.get(room.id);if(!lighting)return null;
       const shade=lighting.score>=65?'#f9c977':lighting.score>=40?'#e3e6a6':lighting.score>=20?'#889ab9':'#31466a';
-      return <g key={'atmo-'+room.id} pointerEvents="none"><rect x={room.x+.12} y={room.y+.12} width={room.width-.24} height={room.height-.24} fill={shade} fillOpacity=".23"/><text x={room.x+room.width/2} y={room.y+room.height-.35} fontSize=".39" fill="#fff6df" textAnchor="middle">Light {lighting.score}/100</text></g>;
+      return <g key={'atmo-'+room.id} pointerEvents="none">
+       {roomSections(room).map((part,i)=><rect key={i} x={part.x+.12} y={part.y+.12}
+        width={Math.max(.1,part.width-.24)} height={Math.max(.1,part.height-.24)}
+        fill={shade} fillOpacity=".23"/>)}
+       <text x={room.x+room.width/2} y={room.y+room.height-.35} fontSize=".39"
+        fill="#fff6df" textAnchor="middle">Light {lighting.score}/100</text></g>;
      })}
      {showAccessOverlay&&accessReport&&floor.rooms.map(room=>{
       const guest=accessReport.guests.find(g=>g.roomId===room.id);
       const traversable=accessReport.reachableRoomIds.includes(room.id);
       const color=guest?(guest.status==='connected'?'#60ddb1':guest.status==='upper-floor-pending'?'#b0b9dd':'#efb179'):
        room.type==='lobby'||room.type==='corridor'||room.type==='stairwell'||room.type==='elevator'?(traversable?'#60ddb1':'#efb179'):null;
-      return color?<rect key={'access-'+room.id} x={room.x+.07} y={room.y+.07}
-       width={room.width-.14} height={room.height-.14} rx=".12" fill="none"
-       stroke={color} strokeWidth=".12" strokeDasharray=".24 .13" pointerEvents="none"/>:null;
+      return color?<g key={'access-'+room.id} pointerEvents="none">
+       {room.sections?.length?<path d={roomBoundaryEdges(room).map(edge=>edge.orientation==='h'?
+        `M ${edge.x} ${edge.y} h 1`:`M ${edge.x} ${edge.y} v 1`).join(' ')}
+        stroke={color} strokeWidth=".12" strokeDasharray=".24 .13" fill="none"/>:
+        <rect x={room.x+.07} y={room.y+.07}
+         width={room.width-.14} height={room.height-.14} rx=".12" fill="none"
+         stroke={color} strokeWidth=".12" strokeDasharray=".24 .13"/>}
+       </g>:null;
      })}
      {showSafetyOverlay&&safetyReport&&floor.rooms.map(room=>{
       const guest=safetyReport.guests.find(g=>g.floorIndex===floorIndex&&g.roomId===room.id);
@@ -654,7 +673,13 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
        guest.evacuationRoute?'#ffd07b':'#f48b84';
       return <g key={'safety-'+room.id} pointerEvents="none"><rect x={room.x+.11} y={room.y+.11} width={room.width-.22} height={room.height-.22} stroke={color} strokeWidth=".13" strokeDasharray=".18 .11" fill={color} fillOpacity=".12"/><text x={room.x+room.width/2} y={room.y+room.height-.36} fontSize=".40" textAnchor="middle" fill="#fff">{guest.fireReady?'FIRE OK':'ESCAPE !'}{guest.accessible?' · ♿':''}</text></g>;
      })}
-     {selectedRoom&&<rect x={selectedRoom.x+.07} y={selectedRoom.y+.07} width={selectedRoom.width-.14} height={selectedRoom.height-.14} fill="none" stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>}
+     {selectedRoom&&(selectedRoom.sections?.length?
+      <path d={roomBoundaryEdges(selectedRoom).map(edge=>edge.orientation==='h'?
+       `M ${edge.x} ${edge.y} h 1`:`M ${edge.x} ${edge.y} v 1`).join(' ')}
+       fill="none" stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>:
+      <rect x={selectedRoom.x+.07} y={selectedRoom.y+.07}
+       width={selectedRoom.width-.14} height={selectedRoom.height-.14} fill="none"
+       stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/> )}
      {planStyle==='architectural'&&<ArchitecturalDetails site={site} floor={floor} selectedFurnitureId={selectedFurnitureId} furniturePreview={furniturePreview}/>}
      {planStyle==='classic'&&floor.walls.map(w=><g key={w.id} pointerEvents="none"><line x1={w.x} y1={w.y} x2={w.orientation==='h'?w.x+1:w.x} y2={w.orientation==='v'?w.y+1:w.y} stroke={w.type==='door'?'#89d9b6':w.type==='panoramic-window'?'#75efff':w.type==='window'?'#8ccffe':'#f5eeff'} strokeWidth={w.type==='door'?'.22':w.type==='panoramic-window'?'.30':w.type==='window'?'.23':'.14'} strokeDasharray={w.type==='door'?'.25 .12':undefined}/>{w.type==='door'&&<circle cx={w.x} cy={w.y} r=".12" fill="#89d9b6"/>}{(w.type==='window'||w.type==='panoramic-window')&&<line x1={w.orientation==='h'?w.x+.13:w.x} y1={w.orientation==='v'?w.y+.13:w.y} x2={w.orientation==='h'?w.x+.87:w.x} y2={w.orientation==='v'?w.y+.87:w.y} stroke="#e9faff" strokeWidth=".07"/>}</g>)}
      {planStyle==='classic'&&floor.objects.map(o=>{const preview=furniturePreview?.id===o.id?{...o,x:furniturePreview.x,y:furniturePreview.y}:o;
@@ -684,7 +709,30 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <Sofa size={15}/> Browse room collections
     </button>
    </div>}
-   {selectedRoom&&<section className="ib-room-inspector" aria-label="Selected room editor"><div className="ib-room-inspector-head"><div><strong>{selectedRoom.name}</strong><small>{selectedRoom.type} · 1 m building grid · furnishings retained</small></div><button type="button" className="ib-secondary" onClick={()=>focusRoom(selectedRoom)}><Crosshair size={14}/> Centre</button></div><div className="ib-room-inspector-controls"><div><strong>Position</strong><small>X {selectedRoom.x} · Y {selectedRoom.y}</small><div className="ib-room-nudge"><button type="button" disabled={!!active} aria-label="Move selected room left" onClick={()=>adjustSelectedRoom({x:selectedRoom.x-1})}><ArrowLeft size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room up" onClick={()=>adjustSelectedRoom({y:selectedRoom.y-1})}><ArrowUp size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room down" onClick={()=>adjustSelectedRoom({y:selectedRoom.y+1})}><ArrowDown size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room right" onClick={()=>adjustSelectedRoom({x:selectedRoom.x+1})}><ArrowRight size={15}/></button></div></div><div><strong>Dimensions</strong><small>{selectedRoom.width} × {selectedRoom.height} m</small><div className="ib-room-resize"><button type="button" disabled={!!active} aria-label="Reduce selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width-1})}>W −</button><button type="button" disabled={!!active} aria-label="Increase selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width+1})}>W +</button><button type="button" disabled={!!active} aria-label="Reduce selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height-1})}>H −</button><button type="button" disabled={!!active} aria-label="Increase selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height+1})}>H +</button></div></div></div><small>Furniture moves with its room. Any invalid overlap, missing space or attached wall is blocked without altering the layout.</small></section>}
+   {selectedRoom&&<section className="ib-room-inspector" aria-label="Selected room editor"><div className="ib-room-inspector-head"><div><strong>{selectedRoom.name}</strong><small>{selectedRoom.type==='corridor'?
+      `${roomArea(selectedRoom)} m² · ${roomSections(selectedRoom).length} connected section(s)`:
+      selectedRoom.type+' · 1 m building grid · furnishings retained'}</small></div><button type="button" className="ib-secondary" onClick={()=>focusRoom(selectedRoom)}><Crosshair size={14}/> Centre</button></div>
+    {selectedRoom.type==='corridor'&&<div className="ib-corridor-section-editor">
+     <div><strong>Corridor shape</strong><small>{roomArea(selectedRoom)} m² total · One continuous route</small></div>
+     <button type="button" className="ib-secondary" disabled={!!active}
+      onClick={()=>{setTool('room');setRoomType('corridor');setAnchor(null);}}>
+      <Plus size={14}/> Extend this corridor
+     </button>
+     {roomSections(selectedRoom).length>1&&<div className="ib-corridor-sections">
+      {roomSections(selectedRoom).map((part,i)=><div key={i}>
+       <span>Section {i+1} · {part.width} × {part.height} m · ({part.x}, {part.y})</span>
+       <button type="button" disabled={!!active} aria-label={'Remove corridor section '+(i+1)}
+        onClick={()=>modify(f=>removeHotelCorridorSection(f,site,selectedRoom.id,i),
+         'Corridor section removed.')}>Remove</button>
+      </div>)}
+     </div>}
+    </div>}
+    {!(selectedRoom.type==='corridor'&&selectedRoom.sections?.length)&&
+    <div className="ib-room-inspector-controls"><div><strong>Position</strong><small>X {selectedRoom.x} · Y {selectedRoom.y}</small><div className="ib-room-nudge"><button type="button" disabled={!!active} aria-label="Move selected room left" onClick={()=>adjustSelectedRoom({x:selectedRoom.x-1})}><ArrowLeft size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room up" onClick={()=>adjustSelectedRoom({y:selectedRoom.y-1})}><ArrowUp size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room down" onClick={()=>adjustSelectedRoom({y:selectedRoom.y+1})}><ArrowDown size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room right" onClick={()=>adjustSelectedRoom({x:selectedRoom.x+1})}><ArrowRight size={15}/></button></div></div><div><strong>Dimensions</strong><small>{selectedRoom.width} × {selectedRoom.height} m</small><div className="ib-room-resize"><button type="button" disabled={!!active} aria-label="Reduce selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width-1})}>W −</button><button type="button" disabled={!!active} aria-label="Increase selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width+1})}>W +</button><button type="button" disabled={!!active} aria-label="Reduce selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height-1})}>H −</button><button type="button" disabled={!!active} aria-label="Increase selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height+1})}>H +</button></div></div></div>}
+    <small>{selectedRoom.type==='corridor'?
+     'Draw additional sections to form L-shapes, T-junctions and branches. Rooms, doors and fixtures remain intact; removal is validated.':
+     'Furniture moves with its room. Any invalid overlap, missing space or attached wall is blocked without altering the layout.'}</small>
+   </section>}
 
    {selectedPlacedFurniture&&<section className="ib-furniture-inspector" aria-label="Selected furniture editor">
     <div className="ib-room-inspector-head"><div><strong>{selectedPlacedType?.name??selectedPlacedFurniture.code}</strong>
@@ -725,7 +773,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    {site.atmosphereRulesVersion===1&&floor.rooms.some(r=>r.type==='guest')&&<div className="ib-atmosphere-note"><Sun size={15}/><span>Glazing and room lighting affect guest comfort and future bookings only after construction is complete. Windows require an exposed exterior wall. No real-world sun or view map is simulated.</span></div>}
    {site.safetyRulesVersion===1&&<div className="ib-safety-note"><Flame size={15}/><span>Fire-safe room eligibility and accessible reception routes are checked after construction. Elevators support wheelchair travel but never count as simulated emergency escape stairs. Not a legal compliance assessment.</span></div>}
    <div className="ib-heading"><div><h2>Room requirements</h2><small>Check equipment before opening your hotel</small></div></div>
-   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);const access=accessReport?.guests.find(g=>g.roomId===r.id);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.width}×{r.height} m · {r.type}</small></div><span className={issues.length||access&&access.status!=='connected'&&access.status!=='upper-floor-pending'?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:access?access.status==='connected'?'Accessible':access.status==='upper-floor-pending'?'Upper-floor review':access.status==='missing-door'?'Needs doorway':access.status==='no-entry'?'Needs entrance':access.status==='no-vertical-link'?'Needs stairs/lift':'No reception route':'Equipped'}</span><button type="button" className="ib-room-edit" onClick={()=>{setTool('select');setSelectedRoomId(r.id);focusRoom(r);}} aria-label={'Edit '+r.name}>Edit</button><button className="ib-room-duplicate" aria-label={'Duplicate '+r.name} title={'Duplicate '+r.name} disabled={!!active} onClick={()=>duplicateRoom(r.id)}><Copy size={16}/></button></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
+   <div className="ib-room-list">{floor.rooms.map(r=>{const issues=roomIssues(floor,r);const access=accessReport?.guests.find(g=>g.roomId===r.id);return <div className="ib-room" key={r.id}><span className="ib-room-dot" style={{background:tone[r.type]}}/><div><strong>{r.name}</strong><small>{r.sections?.length?`${roomArea(r)} m² · ${roomSections(r).length} sections`:`${r.width}×${r.height} m`} · {r.type}</small></div><span className={issues.length||access&&access.status!=='connected'&&access.status!=='upper-floor-pending'?'ib-room-warning':'ib-room-success'}>{issues.length?issues[0]:access?access.status==='connected'?'Accessible':access.status==='upper-floor-pending'?'Upper-floor review':access.status==='missing-door'?'Needs doorway':access.status==='no-entry'?'Needs entrance':access.status==='no-vertical-link'?'Needs stairs/lift':'No reception route':'Equipped'}</span><button type="button" className="ib-room-edit" onClick={()=>{setTool('select');setSelectedRoomId(r.id);focusRoom(r);}} aria-label={'Edit '+r.name}>Edit</button><button className="ib-room-duplicate" aria-label={'Duplicate '+r.name} title={'Duplicate '+r.name} disabled={!!active} onClick={()=>duplicateRoom(r.id)}><Copy size={16}/></button></div>})}{floor.rooms.length===0&&<p className="ib-muted">Use Draw Room to add your first room.</p>}</div>
    </>}
    {previewMode==='isometric'&&<Suspense fallback={<div className="ib-iso-loading">Loading lightweight architectural preview…</div>}><HotelIsometricPreview site={site} floorIndex={floorIndex} onExit={()=>setPreviewMode('editor')}/></Suspense>}
    <div className="ib-build-actions"><div><strong>Approve the blueprint</strong><small>Check a material quote, choose workers and start a timed project.</small></div><button className="ib-primary" disabled={!!active} onClick={()=>setTab('projects')}><HardHat size={15}/> View quote</button></div>
