@@ -4,7 +4,7 @@
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
 import {furnitureProductForPlacement,FURNITURE_REFINISH_CENTS} from './furnitureCatalog';
-import {roomsOverlap,containsRoomRect,containsRoomCell,roomArea,roomPerimeter,roomShapeEqual,type RoomSection} from './hotelRoomGeometry';
+import {roomsOverlap,containsRoomRect,containsRoomCell,roomArea,roomPerimeter,roomShapeEqual,roomCellKeys,roomSections,type RoomSection} from './hotelRoomGeometry';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
 export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
@@ -245,17 +245,43 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   changes++;
   if(i>=site.built.length)newFloors++;
   const builtRooms=new Map(built.rooms.map(r=>[r.id,r]));
+  // Corridor room IDs can merge without constructing new floor. Price only
+  // the newly occupied cells across ALL corridor IDs on this floor.
+  const corridorCells=(rooms:readonly Room[])=>{
+   const keys=new Set<string>();
+   for(const room of rooms)if(room.type==='corridor')
+    for(const cell of roomCellKeys(room))keys.add(cell);
+   return keys;
+  };
+  const builtCorridorCells=corridorCells(built.rooms);
+  const draftCorridorCells=corridorCells(draft.rooms);
+  area+=[...draftCorridorCells].filter(cell=>!builtCorridorCells.has(cell)).length;
+  const corridorPerimeter=(rooms:readonly Room[])=>{
+   const pieces=rooms.filter(room=>room.type==='corridor').flatMap(room=>roomSections(room));
+   return pieces.length?roomPerimeter({
+    id:'corridor-union',name:'Corridor union',type:'corridor',
+    x:0,y:0,width:1,height:1,sections:pieces.map(r=>({...r})),
+   }):0;
+  };
+  wallCount+=Math.max(0,corridorPerimeter(draft.rooms)-corridorPerimeter(built.rooms));
   for(const r of draft.rooms){
    const old=builtRooms.get(r.id);
    if(old&&roomShapeEqual(old,r))continue;
-   area+=Math.max(0,roomArea(r)-(old?roomArea(old):0));
-   wallCount+=Math.max(0,roomPerimeter(r)-(old?roomPerimeter(old):0));
+   if(r.type!=='corridor'){
+    // Keep the original relocation and structural rework pricing for
+    // ordinary rooms; only corridor combinations get the union discount.
+    area+=r.width*r.height;
+    wallCount+=2*(r.width+r.height);
+   }
    if(r.type==='stairwell')stairModules++;
    if(r.type==='elevator')liftModules++;
    verticalWork+=verticalCoreWork(r.type);
    if(r.type==='bathroom'||r.type==='kitchen'||r.type==='bar')bathrooms+=r.type==='bathroom'?1:2;
   }
-  demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+roomArea(r),0);
+  demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>
+   total+(r.type==='corridor'?
+    [...roomCellKeys(r)].filter(cell=>!draftCorridorCells.has(cell)).length:
+    roomArea(r)),0);
   const existed=new Map(built.objects.map(o=>[o.id,o]));
   for(const item of draft.objects){
    const prior=existed.get(item.id);
