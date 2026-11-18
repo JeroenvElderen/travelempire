@@ -45,6 +45,12 @@ export function roomBoundaryEdges(room:Room):GridEdge[]{
  }
  return edges;
 }
+/** SVG outline of the occupied 1m cells, excluding every interior seam. */
+export const roomOutlinePath=(room:Room):string=>
+ roomBoundaryEdges(room).map(edge=>
+  edge.orientation==='h'?
+   `M ${edge.x} ${edge.y} L ${edge.x+1} ${edge.y}`:
+   `M ${edge.x} ${edge.y} L ${edge.x} ${edge.y+1}`).join(' ');
 export const roomPerimeter=(room:Room)=>roomBoundaryEdges(room).length;
 export function edgeTouchesRoom(a:Room,b:Room):boolean{
  const other=roomCellKeys(b);
