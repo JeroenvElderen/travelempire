@@ -30,6 +30,7 @@ import {advanceTaxi,type Taxi,type DriverRecord,type RoadGraph} from '../simulat
 import {vehicleActivity} from '../simulation/vehicleActivity';
 import {liveJobMeter} from '../simulation/liveJobMeter';
 import {deliveryPosition} from '../dealership';
+import {audiA5PaintForVehicle,audiA5SpriteUrl} from '../audiA5Sprites';
 import {loadStationTile,stationTileKey,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
 import type {RestStop} from '../simulation/driverRest';
@@ -582,8 +583,17 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const from=sameRoute&&displayed?{...previous!.to,position:displayed}:sameRoute?previous!.to:renderTaxi;
    taxiSnapshots.current.set(taxi.id,{from,to:renderTaxi,forecast,at:now});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;
-   // Cache one recoloured SVG per HEX, rather than fetching or regenerating on each animation frame.
-   if((taxi.kind??'taxi')==='taxi'&&taxi.vehiclePaintHex&&/^#[0-9a-fA-F]{6}$/.test(taxi.vehiclePaintHex)){
+   // Selected real PNG paint for Audi A5 Avant, without any per-frame redraw.
+   const audiPaint=(taxi.kind??'taxi')==='taxi'?
+    audiA5PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
+   if(audiPaint){
+    img.dataset.audiPaint=audiPaint.id;
+    void audiA5SpriteUrl(audiPaint.id).then(url=>{
+     if(url&&img.isConnected)img.src=url;
+    });
+   }
+   // Other taxis retain the existing SVG tinting.
+   else if((taxi.kind??'taxi')==='taxi'&&taxi.vehiclePaintHex&&/^#[0-9a-fA-F]{6}$/.test(taxi.vehiclePaintHex)){
     const hex=taxi.vehiclePaintHex.toUpperCase();
     const cache=taxiPaintCache.current;
     const cached=cache.get(hex);
