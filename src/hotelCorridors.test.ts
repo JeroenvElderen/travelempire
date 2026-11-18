@@ -167,7 +167,7 @@ describe('Actual hotel navigation and quote consistency',()=>{
   expect(q.changes).toBe(1);
   expect(q.furnitureCents).toBe(0);
   const area=roomArea(extension.rooms[0])-roomArea(f.rooms[0]);
-  expect(area).toBe(16);
+  expect(area).toBe(14); // 9×2 section overlaps existing 2×2 corridor cells.
   expect(q.materials.find(m=>m.id==='flooring')?.quantity).toBe(area);
   expect(constructionQuote({...updated,built:updated.draft},'contractor',0).changes).toBe(0);
  });
