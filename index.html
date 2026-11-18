@@ -17,32 +17,59 @@
  <script>
   (function(){
    var failed=false;
+   function rootHasContent(){
+    var root=document.getElementById('root');
+    return !!(root&&root.children.length);
+   }
+   function clearWarning(){
+    if(!rootHasContent())return;
+    failed=false;
+    var panel=document.getElementById('startup-failure');
+    if(panel)panel.classList.remove('visible');
+   }
    function report(message){
-    if(failed)return;failed=true;
+    if(failed||rootHasContent())return;
+    failed=true;
     var panel=document.getElementById('startup-failure');
     var detail=document.getElementById('startup-error-detail');
-    if(detail)detail.textContent=String(message||'Application failed to load').slice(0,300);
-    if(panel)panel.className='visible';
+    if(detail)detail.textContent=String(message||'The app bundle did not load').slice(0,300);
+    if(panel)panel.classList.add('visible');
    }
-   window.addEventListener('error',function(e){
-    if(!document.getElementById('root')?.children.length)report(e.message||'A script failed to load');
+   // Watch actual DOM mount, not just elapsed time: an old warning must
+   // vanish if Safari eventually finishes loading the game.
+   document.addEventListener('DOMContentLoaded',function(){
+    var root=document.getElementById('root');
+    if(root&&typeof MutationObserver!=='undefined'){
+     new MutationObserver(clearWarning).observe(root,{childList:true});
+    }
+    clearWarning();
    });
+   window.addEventListener('error',function(e){
+    if(rootHasContent())return;
+    var resource=e.target;
+    if(resource&&resource!==window&&resource.tagName){
+     var kind=String(resource.tagName).toLowerCase();
+     if(kind==='script'||kind==='link'){
+      report('An application file failed to load ('+kind+'). Reload the latest version without clearing site data.');
+      return;
+     }
+    }
+    report(e.message||'An application script failed to load');
+   },true);
    window.addEventListener('unhandledrejection',function(e){
-    if(!document.getElementById('root')?.children.length)report(e.reason&&e.reason.message||'Startup promise failed');
+    if(!rootHasContent())report(e.reason&&e.reason.message||'An application file failed to load');
    });
    window.setTimeout(function(){
-    var root=document.getElementById('root');
-    if(root&&!root.children.length)report('The application did not start. Check whether the latest deployment completed successfully.');
-   },12000);
+    if(!rootHasContent())report('The application has not rendered yet. Check whether the deployment completed and try reloading.');
+   },45000);
   })();
- </script>
-</head>
+ </script></head>
 <body>
  <div id="root"></div>
  <div id="startup-failure" role="alert"><article><h1>TravelEmpire could not start</h1>
   <p id="startup-error-detail">The latest application bundle did not load.</p>
   <p>Your saved company and discoveries have not been cleared.</p>
-  <button type="button" onclick="location.reload()">Try again</button>
+  <button type="button" onclick="var u=new URL(location.href);u.searchParams.set('te_refresh',String(Date.now()));location.replace(u.toString())">Reload latest game</button>
  </article></div>
  <script type="module" src="/src/main.tsx"></script>
 </body>
