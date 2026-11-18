@@ -16,8 +16,8 @@ export const AUDI_A5_PAINT_SPRITES:readonly AudiPaintSprite[]=[
  {id:'audi-a5-paint-9',name:'Daytona Grey Pearl Effect',hex:'#666A70',index:8,slug:'daytona-grey'},
 ] as const;
 export const AUDI_A5_ATLAS_COLUMNS=9;
-export const AUDI_A5_SPRITE_WIDTH=80;
-export const AUDI_A5_SPRITE_HEIGHT=170;
+export const AUDI_A5_SPRITE_WIDTH=56;
+export const AUDI_A5_SPRITE_HEIGHT=119;
 const PAINT_BY_ID=new Map(AUDI_A5_PAINT_SPRITES.map(p=>[p.id,p]));
 const PAINT_BY_HEX=new Map(AUDI_A5_PAINT_SPRITES.map(p=>[p.hex.toUpperCase(),p]));
 export const isAudiA5Avant=(model:string|undefined):boolean=>
