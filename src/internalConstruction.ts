@@ -18,7 +18,9 @@ export type SafetyFixtureKind='smoke-alarm'|'fire-extinguisher'|'exit-sign';
 export type SafetyFixture={id:string;kind:SafetyFixtureKind;x:number;y:number};
 export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rotated:boolean;
  /** Optional catalogue choice and finish; missing values are valid historical saves. */
- modelId?:string;finish?:string;};
+ modelId?:string;finish?:string;
+ /** Optional themed collection identity; legacy objects retain catalogue style. */
+ designStyle?:import('./furnitureCatalog').FurnitureStyle;};
 export type HotelFloor={id:string;label:string;rooms:Room[];walls:Wall[];objects:ObjectPlacement[];
  /** Optional so every existing saved blueprint remains readable. */
  lights?:LightingFixture[];safetyFixtures?:SafetyFixture[];};
@@ -226,7 +228,7 @@ const materialData=[
 ] as const;
 const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
 const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
-const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
+const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'',o.designStyle??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
@@ -254,7 +256,8 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   for(const item of draft.objects){
    const prior=existed.get(item.id);
    if(prior&&prior.code===item.code&&prior.modelId===item.modelId){
-    if(prior.finish!==item.finish)objectsCents+=FURNITURE_REFINISH_CENTS;
+    if(prior.finish!==item.finish||prior.designStyle!==item.designStyle)
+     objectsCents+=FURNITURE_REFINISH_CENTS;
     continue;
    }
    // Buying or replacing a furniture model is priced at the new model's full
