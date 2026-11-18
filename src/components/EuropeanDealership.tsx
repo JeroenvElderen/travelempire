@@ -3,6 +3,8 @@ import {CarFront,ChevronDown,ChevronRight} from 'lucide-react';
 import {EUROPEAN_MODELS,configuredOffer,trimChoices,trimPricing,verifiedVariants,paintChoices,wheelChoices,individualOptions,type VehicleModel} from '../europeanVehicleCatalog';
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
+import {AUDI_A5_PAINT_SPRITES,audiA5PaintForConfigurator} from '../audiA5Sprites';
+import {AudiA5PaintThumb,AudiA5VehicleImage} from './AudiA5VehicleImage';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
@@ -29,6 +31,7 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const paints=paintChoices(model,year,currentTrim);
  const wheels=wheelChoices(model,year,currentTrim,activeVariant?.id);
  const paint=paints.find(p=>p.id===paintId)??paints[0];
+ const audiSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id);
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
  const extras=useMemo(()=>{
   const options=individualOptions(model,year,currentTrim);
@@ -64,6 +67,15 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
     <section className="eu-config-group">
       <div className="eu-config-group-heading"><span className="eu-step-number">02</span><h3>Appearance</h3></div>
       <div className="eu-two"><label>Paint<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name}{p.price?' · +'+eur(p.price):''}</option>)}</select></label><label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name}{w.price?' · +'+eur(w.price):''}</option>)}</select></label></div>
+      {model.brand==='Audi'&&model.name==='A5 Avant e-hybrid'&&<div className="eu-audi-paint-section">
+       <div className="eu-audi-paint-choices" role="group" aria-label="Audi A5 Avant paint preview choices">
+        {AUDI_A5_PAINT_SPRITES.filter(sprite=>paints.some(p=>p.id===sprite.id)).map(sprite=><button type="button" key={sprite.id}
+         aria-pressed={paint?.id===sprite.id} title={sprite.name} onClick={()=>setPaintId(sprite.id)}>
+         <AudiA5PaintThumb paint={sprite}/><span>{sprite.name}</span>
+        </button>)}
+       </div>
+       <small className="eu-audi-paint-choices-note">Nine top-down paint previews. Other Audi exclusive finishes retain the standard icon.</small>
+      </div>}
     </section>
     <details className="eu-extras-panel eu-config-group">
      <summary><span className="eu-extras-title"><span className="eu-step-number">03</span><strong>Optional equipment</strong></span><span className="eu-extras-count">{extraIds.length} selected <ChevronDown size={16}/></span></summary>
@@ -87,7 +99,12 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
     </details>
    </div>}
    <aside className="eu-config-summary" ref={summaryRef}>
-    <div className="eu-vehicle-stage"><CarFront size={29} aria-hidden="true"/><small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small></div>
+    <div className="eu-vehicle-stage">
+     {audiSprite?<AudiA5VehicleImage model={model.brand+' '+model.name} paintId={audiSprite.id}
+       className="eu-audi-preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
+       alt={audiSprite.name+' Audi A5 Avant top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
+     <small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small>
+    </div>
     <h3>{year} {model.brand} {model.name}</h3><p>{currentTrim} grade · {paint?.name??'Standard paint'} · {wheel?.name??'Standard wheels'}</p>
     <details className="eu-price-breakdown"><summary>Price breakdown <span>View details <ChevronDown size={15}/></span></summary><div>
       <div className="eu-price-line"><span>Base vehicle</span><strong>{eur(activeVariant?.price??priceBreakdown.base)}</strong></div>
