@@ -2,7 +2,7 @@
  * blueprint grid. Nothing moves on the world map or allocates guest NPCs.
  * Only sites with accessRulesVersion===2 enforce vertical room eligibility.
  */
-import {drawRoom,roomIssues,type HotelFloor,type HotelSite,type Room,type RoomType} from './internalConstruction';
+import {drawRoom,roomIssues,roomIntersectsRect,roomSections,type HotelFloor,type HotelSite,type Room,type RoomType} from './internalConstruction';
 import {accessDoorPair,hotelAccessDoorValid,type AccessStatus,type FloorAccessReport} from './hotelAccess';
 
 export type VerticalCoreType='stairwell'|'elevator';
@@ -36,9 +36,6 @@ const sameCore=(a:Room,b:Room)=>
  a.type===b.type&&a.x===b.x&&a.y===b.y&&
  a.width===b.width&&a.height===b.height;
 const node=(floor:number,id:string)=>floor+':'+id;
-const overlaps=(a:Pick<Room,'x'|'y'|'width'|'height'>,
- b:Pick<Room,'x'|'y'|'width'|'height'>)=>
- a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
 /** A matching shaft on the adjacent floor is mandatory. New positions prefer
  * the boundary of an existing lobby/corridor for convenient manual doors.
  * Never places an overlapping shaft or silently changes the other floors.
@@ -63,21 +60,20 @@ export function addVerticalCore(
    x:other.x,y:other.y,width:other.width,height:other.height,
   });
  }else{
-  for(const room of floor.rooms.filter(r=>r.type==='corridor'||r.type==='lobby')){
-   candidatePositions.push(
-    {x:room.x+room.width,y:room.y,width:spec.width,height:spec.height},
-    {x:room.x-spec.width,y:room.y,width:spec.width,height:spec.height},
-    {x:room.x,y:room.y+room.height,width:spec.width,height:spec.height},
-    {x:room.x,y:room.y-spec.height,width:spec.width,height:spec.height},
+  for(const room of floor.rooms.filter(r=>r.type==='corridor'||r.type==='lobby'))
+   for(const part of roomSections(room))candidatePositions.push(
+    {x:part.x+part.width,y:part.y,width:spec.width,height:spec.height},
+    {x:part.x-spec.width,y:part.y,width:spec.width,height:spec.height},
+    {x:part.x,y:part.y+part.height,width:spec.width,height:spec.height},
+    {x:part.x,y:part.y-spec.height,width:spec.width,height:spec.height},
    );
-  }
   for(let y=0;y<=site.height-spec.height;y++)
    for(let x=0;x<=site.width-spec.width;x++)
     candidatePositions.push({x,y,width:spec.width,height:spec.height});
  }
  const position=candidatePositions.find(c=>c.x>=0&&c.y>=0&&
   c.x+c.width<=site.width&&c.y+c.height<=site.height&&
-  !floor.rooms.some(existing=>overlaps(existing,c)));
+  !floor.rooms.some(existing=>roomIntersectsRect(existing,c)));
  if(!position)throw Error(expected.length?
   'Cannot align this shaft with the adjacent floor. Move conflicting rooms or use a different location.':
   'No space for a stairwell or elevator. Make room next to a corridor.');
