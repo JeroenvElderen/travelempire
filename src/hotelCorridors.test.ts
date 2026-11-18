@@ -167,7 +167,7 @@ describe('Actual hotel navigation and quote consistency',()=>{
   expect(merged.rooms).toHaveLength(1);
   const quote=constructionQuote({...paid,draft:[merged]},'contractor',0);
   expect(quote.changes).toBe(1);
-  expect(quote.materials.find(m=>m.id==='flooring')?.quantity).toBe(0);
+  expect(quote.materials.find(m=>m.id==='flooring')?.quantity??0).toBe(0);
   expect(quote.materialCents).toBe(0);
   expect(quote.furnitureCents).toBe(0);
  });
