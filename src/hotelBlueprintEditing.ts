@@ -7,6 +7,8 @@ import {
  type Room,type RoomType,type HotelFloor,type HotelSite,type FurnitureCode,type ObjectPlacement,
 } from './internalConstruction';
 import {analyzeRoomAtmosphere} from './hotelAtmosphere';
+import {furnitureRoomStyleBonus} from './furnitureCatalog';
+import {furniture} from './internalConstruction';
 
 export type BlueprintRoomGeometry=Pick<Room,'x'|'y'|'width'|'height'>;
 export type RoomTemplateId=
@@ -127,7 +129,7 @@ export function furnitureAtCell(floor:HotelFloor,x:number,y:number):ObjectPlacem
  }
  return null;
 }
-export type FurnitureEdit=Partial<Pick<ObjectPlacement,'x'|'y'|'rotated'>>;
+export type FurnitureEdit=Partial<Pick<ObjectPlacement,'x'|'y'|'rotated'|'modelId'|'finish'>>;
 /** Edit atomically using the SAME room and overlap constraints as adding it.
  * This never buys furniture again, changes its stable ID or reorders the save.
  */
@@ -168,7 +170,7 @@ export function hotelGuestRoomQuality(floor:HotelFloor,room:Room,site?:HotelSite
   contained(room,{...o,...furnitureSize(o)}));
  const codes=new Set(objects.map(o=>o.code));
  const bathroom=floor.rooms.some(r=>r.type==='bathroom'&&roomIssues(floor,r).length===0);
- const hasBed=codes.has('bed')||codes.has('single-bed');
+ const hasBed=codes.has('bed')||codes.has('single-bed')||codes.has('sofa-bed');
  const size=room.width*room.height;
  let score=38+Math.min(17,Math.max(0,size-9));
  if(hasBed)score+=18;else score-=20;
@@ -177,6 +179,13 @@ export function hotelGuestRoomQuality(floor:HotelFloor,room:Room,site?:HotelSite
  if(codes.has('desk'))score+=6;
  if(codes.has('lamp'))score+=4;
  if(codes.has('sofa'))score+=5;
+ if(codes.has('minibar'))score+=3;
+ if(codes.has('safe'))score+=2;
+ if(codes.has('armchair')||codes.has('reading-chair'))score+=3;
+ if(codes.has('rug')||codes.has('plant'))score+=2;
+ // New coordinated furniture sets earn a small capped score bonus.
+ // Older layouts without model IDs keep the exact previous style result.
+ score+=furnitureRoomStyleBonus(objects,furniture);
  if(bathroom)score+=10;else score-=14;
  const occupied=objects.reduce((n,o)=>{const a=furnitureSize(o);return n+a.width*a.height;},0);
  if(size>0&&occupied/size>.65)score-=12;
