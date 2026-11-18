@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {
  AUDI_A5_PAINT_SPRITES,AUDI_A5_SPRITE_WIDTH,AUDI_A5_SPRITE_HEIGHT,
- AUDI_A5_ATLAS_COLUMNS,audiA5PaintForConfigurator,
+ AUDI_A5_ATLAS_COLUMNS,audiA5MapSpriteUrl,audiA5PreviewSpriteUrl,audiA5PaintForConfigurator,
  audiA5PaintForVehicle,audiA5SpriteUrl,isAudiA5Avant,
 } from './audiA5Sprites';
 import {EUROPEAN_MODELS,paintChoices,configuredOffer} from './europeanVehicleCatalog';
@@ -53,8 +53,15 @@ describe('Audi A5 Avant official paint sprite integration',()=>{
   expect(audiA5PaintForVehicle('Volvo V60',undefined,'#15171B')).toBeNull();
   expect(isAudiA5Avant('Audi A5 Avant e-hybrid 2.0 TFSI e-hybrid 299 hp 7-speed S tronic')).toBe(true);
  });
- it('does not access DOM image APIs on the server',async()=>{
-  expect(await audiA5SpriteUrl('audi-a5-paint-2')).toBeNull();
+ it('uses real static PNG URLs, not browser canvas or runtime recolouring',async()=>{
+  for(const sprite of AUDI_A5_PAINT_SPRITES){
+   const map=audiA5MapSpriteUrl(sprite.id);
+   const preview=audiA5PreviewSpriteUrl(sprite.id);
+   expect(map).toContain('/assets/vehicles/audi-a5-avant/'+sprite.slug+'.png');
+   expect(preview).toContain('/assets/vehicles/audi-a5-avant/'+sprite.slug+'-preview.png');
+   expect(await audiA5SpriteUrl(sprite.id)).toBe(map);
+   expect(await audiA5SpriteUrl(sprite.id,'preview')).toBe(preview);
+  }
   expect(await audiA5SpriteUrl('unsupported')).toBeNull();
  });
 });
