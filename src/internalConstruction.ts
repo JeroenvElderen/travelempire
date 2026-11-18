@@ -3,10 +3,12 @@
  */
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
+import {furnitureProductForPlacement,FURNITURE_REFINISH_CENTS} from './furnitureCatalog';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
 export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
-export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table';
+export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table'|
+ 'nightstand'|'minibar'|'safe'|'headboard'|'vanity'|'bathtub'|'mirror'|'towel-rack'|'armchair'|'coffee-table'|'tv-stand'|'bench'|'water-cooler'|'reading-chair'|'dishwasher'|'microwave'|'kitchen-island'|'bar-stool'|'booth'|'plant'|'rug'|'sculpture'|'sofa-bed'|'luggage-rack';
 export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number};
 export type Wall={id:string;x:number;y:number;orientation:'h'|'v';type:'wall'|'door'|'window'|'panoramic-window'};
 export type LightingKind='ceiling'|'ambient';
@@ -14,7 +16,9 @@ export type LightingFixture={id:string;kind:LightingKind;x:number;y:number};
 /** Equipment is ceiling/wall-mounted in the local 1 m floor grid, not floor furniture. */
 export type SafetyFixtureKind='smoke-alarm'|'fire-extinguisher'|'exit-sign';
 export type SafetyFixture={id:string;kind:SafetyFixtureKind;x:number;y:number};
-export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rotated:boolean};
+export type ObjectPlacement={id:string;code:FurnitureCode;x:number;y:number;rotated:boolean;
+ /** Optional catalogue choice and finish; missing values are valid historical saves. */
+ modelId?:string;finish?:string;};
 export type HotelFloor={id:string;label:string;rooms:Room[];walls:Wall[];objects:ObjectPlacement[];
  /** Optional so every existing saved blueprint remains readable. */
  lights?:LightingFixture[];safetyFixtures?:SafetyFixture[];};
@@ -117,7 +121,31 @@ export const furniture:ReadonlyArray<{code:FurnitureCode;name:string;priceCents:
  {code:'computer',name:'Office computer',priceCents:78000,width:1,height:1,requires:['office','meeting','lobby']},
  {code:'printer',name:'Printer',priceCents:28000,width:1,height:1,requires:['office','staff']},
  {code:'office-chair',name:'Office chair',priceCents:19000,width:1,height:1,requires:['office','meeting']},
- {code:'conference-table',name:'Conference table',priceCents:150000,width:3,height:2,requires:['meeting']}
+ {code:'conference-table',name:'Conference table',priceCents:150000,width:3,height:2,requires:['meeting']},
+ {code:'nightstand',name:'Bedside table',priceCents:19000,width:1,height:1,requires:['guest']},
+ {code:'minibar',name:'Guest minibar',priceCents:74000,width:1,height:1,requires:['guest']},
+ {code:'safe',name:'Room safe',priceCents:32000,width:1,height:1,requires:['guest','office']},
+ {code:'headboard',name:'Headboard console',priceCents:40000,width:2,height:1,requires:['guest']},
+ {code:'vanity',name:'Dressing table',priceCents:65000,width:2,height:1,requires:['guest','bathroom']},
+ {code:'bathtub',name:'Bathtub',priceCents:125000,width:2,height:1,requires:['bathroom']},
+ {code:'mirror',name:'Standing mirror',priceCents:17000,width:1,height:1,requires:['guest','bathroom','lobby','staff']},
+ {code:'towel-rack',name:'Towel stand',priceCents:9500,width:1,height:1,requires:['bathroom']},
+ {code:'armchair',name:'Armchair',priceCents:45000,width:1,height:1,requires:['guest','lobby','staff','office']},
+ {code:'coffee-table',name:'Coffee table',priceCents:34000,width:2,height:1,requires:['guest','lobby','staff']},
+ {code:'tv-stand',name:'Media console',priceCents:38000,width:2,height:1,requires:['guest','lobby','bar']},
+ {code:'bench',name:'Lobby bench',priceCents:28000,width:2,height:1,requires:['lobby','staff']},
+ {code:'water-cooler',name:'Water dispenser',priceCents:44000,width:1,height:1,requires:['lobby','office','staff']},
+ {code:'reading-chair',name:'Reading chair',priceCents:44000,width:1,height:1,requires:['guest','lobby']},
+ {code:'dishwasher',name:'Dishwasher',priceCents:96000,width:1,height:1,requires:['kitchen']},
+ {code:'microwave',name:'Microwave',priceCents:28000,width:1,height:1,requires:['kitchen','bar']},
+ {code:'kitchen-island',name:'Kitchen island',priceCents:130000,width:2,height:2,requires:['kitchen']},
+ {code:'bar-stool',name:'Bar stool',priceCents:16000,width:1,height:1,requires:['bar']},
+ {code:'booth',name:'Dining booth',priceCents:88000,width:2,height:2,requires:['restaurant','bar']},
+ {code:'plant',name:'Potted plant',priceCents:11000,width:1,height:1,requires:['guest','lobby','restaurant','bar','office','staff']},
+ {code:'rug',name:'Area rug',priceCents:26000,width:2,height:2,requires:['guest','lobby','staff','office']},
+ {code:'sculpture',name:'Decorative sculpture',priceCents:55000,width:1,height:1,requires:['lobby','restaurant','bar']},
+ {code:'sofa-bed',name:'Sofa bed',priceCents:93000,width:2,height:2,requires:['guest','staff']},
+ {code:'luggage-rack',name:'Luggage rack',priceCents:14000,width:1,height:1,requires:['guest']}
 ];
 const storagePrefix='travelempire.internal-buildings.v1.';
 const rectOverlaps=(a:{x:number;y:number;width:number;height:number},b:{x:number;y:number;width:number;height:number})=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
