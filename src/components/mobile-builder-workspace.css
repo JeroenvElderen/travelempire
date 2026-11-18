@@ -1,0 +1,268 @@
+/* Phase 8: Mobile hotel builder workspace.
+ * The existing 2D SVG, calculations, rooms and save schema are untouched.
+ * All advanced controls remain reachable in task-specific sheets.
+ */
+.internal-builder .ib-mobile-topbar,
+.internal-builder .ib-mobile-tool-dock,
+.internal-builder .ib-mobile-drawer-heading,
+.internal-builder .ib-mobile-drawer-footer,
+.internal-builder .ib-mobile-build-groups,
+.internal-builder .ib-mobile-build-palette,
+.internal-builder .ib-mobile-add-floor,
+.internal-builder .ib-mobile-furnish-palette,
+.internal-builder .ib-mobile-more-nav,
+.internal-builder .ib-mobile-inspect-placeholder,
+.internal-builder .ib-mobile-canvas-guide{display:none}
+.internal-builder .ib-builder-workspace{display:flex;flex-direction:column;min-width:0;gap:12px}
+.internal-builder .ib-builder-stage{position:relative;min-width:0}
+.internal-builder .ib-builder-drawer{min-width:0;display:flex;flex-direction:column}
+.internal-builder .ib-builder-drawer-scroll{display:flex;flex-direction:column;gap:12px;min-width:0}
+.internal-builder .ib-builder-stage>.ib-plan-scroller{height:clamp(330px,58dvh,720px)}
+.internal-builder .ib-builder-stage .ib-plan-footer{margin-top:7px}
+.internal-builder .ib-mobile-sheet-backdrop{display:none}
+@media(max-width:800px){
+ .internal-builder .ib-editor{
+  position:fixed;inset:0;z-index:10020;
+  width:100%;height:100dvh;max-height:100dvh;min-width:0;max-width:none;
+  display:flex;flex-direction:column;gap:0;overflow:hidden;
+  padding:0!important;margin:0!important;border:0!important;border-radius:0!important;
+  background:#101a2b;color:var(--ib-fg);
+  overscroll-behavior:contain;isolation:isolate;
+ }
+ .internal-builder .ib-editor>.ib-heading:first-child,
+ .internal-builder .ib-editor>.ib-access-mode{display:none}
+ .internal-builder .ib-mobile-topbar{
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  height:calc(56px + env(safe-area-inset-top));
+  min-height:calc(56px + env(safe-area-inset-top));
+  padding:env(safe-area-inset-top) 12px 0;
+  background:#17243a;border-bottom:1px solid rgba(148,173,208,.23);
+  z-index:12;
+ }
+ .internal-builder .ib-mobile-topbar button{
+  width:39px;height:39px;flex:0 0 39px;display:grid;place-items:center;
+  border:1px solid rgba(148,173,208,.21);border-radius:11px;
+  background:rgba(50,68,97,.55);color:#eff5fd;
+ }
+ .internal-builder .ib-mobile-topbar .ib-mobile-back{background:transparent}
+ .internal-builder .ib-mobile-title{min-width:0;flex:1;display:grid;gap:3px}
+ .internal-builder .ib-mobile-title strong{font-size:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+ .internal-builder .ib-mobile-title small{font-size:10px;color:#a4b8d1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+ .internal-builder .ib-floor-bar{
+  position:absolute;left:10px;right:10px;top:calc(63px + env(safe-area-inset-top));z-index:5;
+  min-height:44px;display:flex;flex-wrap:nowrap;align-items:center;
+  padding:5px 6px;gap:5px;border-radius:11px;border:1px solid rgba(151,186,213,.32);
+  background:rgba(26,42,67,.95);box-shadow:0 7px 24px rgba(0,0,0,.26);
+ }
+ .internal-builder .ib-floor-bar>.ib-floor-switch{flex:1 1 auto;min-width:0}
+ .internal-builder .ib-floor-bar>.ib-floor-switch select{min-width:0;max-width:100%;width:100%;font-size:12px;padding:6px 4px}
+ .internal-builder .ib-floor-bar>button{display:none}
+ .internal-builder .ib-floor-bar .ib-history-controls{order:initial;flex:0 0 auto;margin:0;gap:2px}
+ .internal-builder .ib-floor-bar .ib-history-controls button{min-width:29px;width:29px;height:32px;padding:5px}
+ .internal-builder .ib-floor-bar .ib-zoom{order:initial;flex:0 0 auto;margin:0;gap:3px}
+ .internal-builder .ib-floor-bar .ib-zoom button{width:28px;min-width:28px;height:32px;padding:2px;font-size:16px}
+ .internal-builder .ib-floor-bar .ib-zoom .ib-fit-button{width:auto;min-width:30px;font-size:10px;padding:2px 5px}
+ .internal-builder .ib-floor-bar .ib-zoom span{display:none}
+ .internal-builder .ib-builder-workspace{
+  flex:1 1 0;display:flex;flex-direction:column;min-width:0;min-height:0;
+  margin:0;gap:0;overflow:hidden;position:relative;
+ }
+ .internal-builder .ib-builder-stage{flex:1 1 0;min-height:0;min-width:0;position:relative;background:#101c30}
+ .internal-builder .ib-builder-stage>.ib-plan-scroller{
+  width:100%;height:100%;max-height:none;min-height:0;
+  overflow:auto;scrollbar-width:thin;overscroll-behavior:contain;
+  border:0!important;border-radius:0!important;padding:58px 0 14px;
+  background:radial-gradient(ellipse at 45% 40%,#1d314a 0%,#101c30 86%);
+  -webkit-overflow-scrolling:touch;
+ }
+ .internal-builder .ib-builder-stage>.ib-plan-scroller>svg{margin:auto;flex:0 0 auto}
+ .internal-builder .ib-builder-stage .ib-plan-footer{display:none}
+ .internal-builder .ib-builder-stage>.ib-isometric{
+  height:100%;max-height:none;min-height:0;overflow:auto;
+  padding:61px 11px 14px;gap:10px;border:0;border-radius:0;
+  background:radial-gradient(ellipse at 50% 35%,#20354d,#111e34);
+ }
+ .internal-builder .ib-builder-stage .ib-iso-viewport{min-height:230px;max-height:47dvh}
+ .internal-builder .ib-mobile-canvas-guide{
+  display:block;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  z-index:3;max-width:calc(100% - 24px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  padding:7px 12px;border-radius:99px;border:1px solid rgba(150,181,211,.25);
+  background:rgba(21,38,58,.88);color:#d5e4f5;font-size:11px;
+  box-shadow:0 5px 18px rgba(0,0,0,.2);pointer-events:none;
+ }
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-mobile-canvas-guide{display:none}
+ .internal-builder .ib-mobile-tool-dock{
+  z-index:11;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  flex:0 0 auto;gap:7px;min-height:calc(70px + env(safe-area-inset-bottom));
+  padding:7px 10px calc(7px + env(safe-area-inset-bottom));
+  border-top:1px solid rgba(143,164,194,.27);background:#152239;
+ }
+ .internal-builder .ib-mobile-tool-dock button{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  min-height:52px;min-width:0;padding:5px 3px;border-radius:11px;
+  border:1px solid transparent;background:transparent;color:#9eb2cc;
+  font-size:10px;font-weight:650;touch-action:manipulation;
+ }
+ .internal-builder .ib-mobile-tool-dock button.selected{
+  background:rgba(110,80,155,.6);border-color:rgba(172,147,224,.8);color:#f7f0ff;
+ }
+ .internal-builder .ib-mobile-tool-dock button:focus-visible,
+ .internal-builder .ib-mobile-topbar button:focus-visible,
+ .internal-builder .ib-builder-drawer button:focus-visible{
+  outline:2px solid #c4aefa;outline-offset:2px;
+ }
+ .internal-builder .ib-mobile-sheet-backdrop{
+  display:block;position:absolute;inset:0 0 calc(70px + env(safe-area-inset-bottom));
+  border:0;padding:0;background:rgba(9,17,31,.48);z-index:6;
+ }
+ .internal-builder .ib-builder-drawer{
+  position:absolute;z-index:9;left:0;right:0;
+  bottom:calc(70px + env(safe-area-inset-bottom));
+  height:auto;max-height:min(67dvh,690px);
+  padding:0;overflow:hidden;
+  display:flex;flex-direction:column;gap:0;
+  border:1px solid rgba(163,183,211,.37);border-radius:18px 18px 0 0;
+  background:#1c2941;box-shadow:0 -9px 36px rgba(0,0,0,.4);
+  transition:transform .16s ease-out,opacity .16s ease-out;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="closed"] .ib-builder-drawer,
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-builder-drawer{
+  transform:translateY(28px);opacity:0;visibility:hidden;pointer-events:none;
+ }
+ .internal-builder .ib-mobile-drawer-heading{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex:0 0 auto;padding:13px 13px 11px;border-bottom:1px solid rgba(154,179,207,.18);
+ }
+ .internal-builder .ib-mobile-drawer-heading>div{min-width:0;display:grid;gap:4px}
+ .internal-builder .ib-mobile-drawer-heading strong{font-size:14px;color:#f0f4fb}
+ .internal-builder .ib-mobile-drawer-heading small{font-size:10px;color:#adbed2}
+ .internal-builder .ib-mobile-drawer-heading button{
+  width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;
+  border:1px solid rgba(153,175,201,.29);border-radius:9px;
+  background:rgba(47,68,94,.7);color:#f2f5fc;
+ }
+ .internal-builder .ib-builder-drawer-scroll{
+  display:flex;flex-direction:column;flex:1 1 auto;min-height:0;gap:11px;
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;padding:10px 12px 14px;scrollbar-width:thin;
+ }
+ /* Context controls render only for their owning task, not as a long page. */
+ .internal-builder .ib-builder-drawer-scroll>*{display:none!important}
+ .internal-builder .ib-mobile-build-groups,
+ .internal-builder .ib-mobile-build-palette,
+ .internal-builder .ib-mobile-furnish-palette,
+ .internal-builder .ib-mobile-more-nav{gap:6px}
+ .internal-builder .ib-builder-workspace[data-panel="build"] .ib-mobile-build-groups,
+ .internal-builder .ib-builder-workspace[data-panel="build"] .ib-mobile-build-palette,
+ .internal-builder .ib-builder-workspace[data-panel="build"] .ib-mobile-add-floor,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"] .ib-mobile-furnish-palette,
+ .internal-builder .ib-builder-workspace[data-panel="more"] .ib-mobile-more-nav{
+  display:grid!important;
+ }
+ .internal-builder .ib-mobile-build-groups{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .internal-builder .ib-mobile-build-palette{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .internal-builder .ib-mobile-furnish-palette{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .internal-builder .ib-mobile-more-nav{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .internal-builder .ib-mobile-build-groups button,
+ .internal-builder .ib-mobile-build-palette button,
+ .internal-builder .ib-mobile-furnish-palette button,
+ .internal-builder .ib-mobile-more-nav button{
+  display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;min-height:40px;
+  padding:8px 5px;background:rgba(51,68,94,.67);color:#d6e3f3;
+  border:1px solid rgba(151,177,207,.28);border-radius:9px;
+  font-size:10px;touch-action:manipulation;
+ }
+ .internal-builder .ib-mobile-build-palette button{flex-direction:column}
+ .internal-builder .ib-mobile-build-groups button.selected,
+ .internal-builder .ib-mobile-build-palette button.selected,
+ .internal-builder .ib-mobile-furnish-palette button.selected,
+ .internal-builder .ib-mobile-more-nav button.selected{
+  color:#f4eeff;border-color:#aa94e2;background:rgba(103,78,144,.7);
+ }
+ .internal-builder .ib-mobile-add-floor{
+  display:flex;align-items:center;justify-content:center;gap:7px;min-height:39px;
+  border:1px dashed rgba(146,185,209,.45);border-radius:9px;
+  color:#d1e7f8;background:rgba(45,72,92,.33);font-size:11px;
+ }
+ .internal-builder .ib-mobile-inspect-placeholder{
+  align-items:center;justify-content:center;min-height:95px;
+  border:1px dashed rgba(156,180,212,.39);border-radius:10px;
+  padding:13px;color:#bdc9da;font-size:12px;text-align:center;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-mobile-inspect-placeholder{display:flex!important}
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"] .ib-room-templates,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"][data-tool="room"] .ib-controls,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"] .ib-corridor-builder,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="systems"] .ib-vertical-picker,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="systems"] .ib-atmosphere-tools,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="structure"] .ib-hint,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"][data-furnish-group="catalogue"] .ib-furn-catalog,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"][data-furnish-group="collections"] .ib-room-collections,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"] .ib-controls,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"][data-tool="lighting"] .ib-atmosphere-tools,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-room-inspector,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-furniture-inspector,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-room-access-actions,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-collection-shortcut,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-atmosphere-inspector,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-room-safety,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-design-hint,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-visual-mode,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-navigation-row,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-safety-tools,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-access-checker,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-blueprint-health,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-design-summary,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-atmosphere-note,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-safety-note,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-room-list,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-heading{
+  display:flex!important;flex-direction:column;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-navigation-row,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"] .ib-controls,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"] .ib-controls{
+  display:flex!important;flex-direction:row;flex-wrap:wrap;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-blueprint-health{
+  display:grid!important;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"] .ib-room-templates,
+ .internal-builder .ib-builder-workspace[data-panel="build"][data-build-group="layout"] .ib-corridor-builder,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"][data-furnish-group="catalogue"] .ib-furn-catalog,
+ .internal-builder .ib-builder-workspace[data-panel="furnish"][data-furnish-group="collections"] .ib-room-collections,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="view"] .ib-visual-mode,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-safety-tools,
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="safety"] .ib-access-checker,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-room-inspector,
+ .internal-builder .ib-builder-workspace[data-panel="inspect"] .ib-furniture-inspector{
+  display:grid!important;
+ }
+ .internal-builder .ib-builder-workspace[data-panel="more"][data-more-group="reports"] .ib-room-list{display:flex!important}
+ .internal-builder .ib-builder-drawer-scroll>.ib-tools,
+ .internal-builder .ib-builder-drawer-scroll>.ib-pan-guide{display:none!important}
+ .internal-builder .ib-mobile-drawer-footer{
+  display:flex;flex:0 0 auto;padding:9px 12px calc(9px + env(safe-area-inset-bottom)*.2);
+  border-top:1px solid rgba(150,171,204,.19);background:#1b2b43;
+ }
+ .internal-builder .ib-mobile-drawer-footer button{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:42px;border-radius:10px;border:1px solid #769fbc;
+  background:#396a88;color:#f6fbff;font-weight:750;font-size:12px;
+ }
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-mobile-tool-dock{display:none}
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-builder-stage{height:100%}
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-mobile-sheet-backdrop{display:none}
+ .internal-builder .ib-builder-workspace.ib-previewing .ib-builder-drawer{display:none}
+ .internal-builder .ib-editor>.ib-build-actions{display:none}
+}
+@media(max-width:380px){
+ .internal-builder .ib-floor-bar{left:5px;right:5px;padding:4px;gap:3px}
+ .internal-builder .ib-floor-bar .ib-history-controls button{width:27px;min-width:27px}
+ .internal-builder .ib-floor-bar .ib-zoom button{width:25px;min-width:25px}
+ .internal-builder .ib-mobile-topbar{padding-left:8px;padding-right:8px;gap:5px}
+ .internal-builder .ib-mobile-build-groups button{font-size:9px;padding:5px 3px}
+}
+@media(prefers-reduced-motion:reduce){
+ .internal-builder .ib-builder-drawer{transition:none}
+}
