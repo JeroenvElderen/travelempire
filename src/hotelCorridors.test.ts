@@ -15,7 +15,6 @@ import {
  roomCenterCell,
 } from './hotelRoomGeometry';
 import {toggleHotelAccessDoor,accessDoorPair,hotelAccessDoorValid,suggestRoomAccessDoor} from './hotelAccess';
-import {analyzeHotelFloorAccess} from './hotelAccess';
 import {ArchitecturalRooms} from './components/HotelArchitecturalPlan';
 import {buildIsoScene} from './hotelVisualisation';
 import HotelIsometricPreview from './components/HotelIsometricPreview';
