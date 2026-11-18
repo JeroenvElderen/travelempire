@@ -32,6 +32,7 @@ import {liveJobMeter} from '../simulation/liveJobMeter';
 import {deliveryPosition} from '../dealership';
 import {audiA5PaintForVehicle,audiA5SpriteUrl} from '../audiA5Sprites';
 import {audiA6PaintForVehicle,audiA6SpriteUrl} from '../audiA6Sprites';
+import {skodaOctaviaPaintForVehicle,skodaOctaviaSpriteUrl} from '../skodaOctaviaSprites';
 import {loadStationTile,stationTileKey,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
 import type {RestStop} from '../simulation/driverRest';
@@ -587,15 +588,20 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Model-specific PNGs for Audi A5 and A6 Avants; no per-frame recolouring.
    const a6Paint=(taxi.kind??'taxi')==='taxi'?
     audiA6PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
+   const skodaPaint=(taxi.kind??'taxi')==='taxi'?
+    skodaOctaviaPaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
    const audiPaint=(taxi.kind??'taxi')==='taxi'?
     a6Paint??audiA5PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
-   if(audiPaint){
-    img.dataset.audiPaint=audiPaint.id;
+   const vehiclePaint=skodaPaint??audiPaint;
+   if(vehiclePaint){
+    img.dataset.vehiclePaint=vehiclePaint.id;
     const defaultCarIcon=img.src;
     img.addEventListener('error',()=>{
      if(img.src!==defaultCarIcon)img.src=defaultCarIcon;
     },{once:true});
-    void (a6Paint?audiA6SpriteUrl(audiPaint.id):audiA5SpriteUrl(audiPaint.id)).then(url=>{
+    const source=skodaPaint?skodaOctaviaSpriteUrl(skodaPaint.id):
+     a6Paint?audiA6SpriteUrl(a6Paint.id):audiA5SpriteUrl(audiPaint!.id);
+    void source.then(url=>{
      if(url&&img.isConnected)img.src=url;
     });
    }
