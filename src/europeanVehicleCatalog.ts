@@ -4,7 +4,28 @@ import type {VehicleOffer} from './dealership';
 export type VehicleModel={brand:string;name:string;segment:'Economy'|'Standard'|'Comfort'|'Premium'|'XL';basePrice:number;seats:number;fuel:'Petrol'|'Hybrid'|'Diesel'|'Electric';years:number[]};
 const AUDI_A6_MODELS:VehicleModel[]=[{"brand":"Audi","name":"A6 Limousine e-hybrid","segment":"Premium","basePrice":73900,"seats":5,"fuel":"Hybrid","years":[2027]},{"brand":"Audi","name":"A6 Avant e-hybrid","segment":"Premium","basePrice":76800,"seats":5,"fuel":"Hybrid","years":[2027]}] as VehicleModel[];
 export const DEALERSHIP_BRANDS=['Toyota','Audi','Skoda','Volvo'] as const;
-export const EUROPEAN_MODELS:VehicleModel[]=[{brand:'Volvo',name:'XC90',segment:'XL',basePrice:93995,seats:7,fuel:'Hybrid',years:[2027]},{brand:'Volvo',name:'XC60',segment:'Premium',basePrice:66795,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Volvo',name:'V60',segment:'Premium',basePrice:67045,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Superb',segment:'Comfort',basePrice:49975,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Superb Combi',segment:'Comfort',basePrice:50900,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Octavia',segment:'Comfort',basePrice:33430,seats:5,fuel:'Petrol',years:[2027]},{brand:'Skoda',name:'Octavia Combi',segment:'Comfort',basePrice:35055,seats:5,fuel:'Petrol',years:[2027]},{brand:'Skoda',name:'Kodiaq',segment:'XL',basePrice:54235,seats:7,fuel:'Hybrid',years:[2027]},{brand:'Audi',name:'Q9 SUV',segment:'XL',basePrice:114100,seats:7,fuel:'Diesel',years:[2027]},{brand:'Audi',name:'Q7 SUV TFSI e',segment:'Premium',basePrice:83200,seats:5,fuel:'Hybrid',years:[2026]},...AUDI_A6_MODELS,{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Corolla Touring Sports',segment:'Standard',basePrice:37200,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Toyota',name:'RAV4 Hybrid',segment:'Comfort',basePrice:45900,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Audi',name:'A5 Limousine e-hybrid',segment:'Premium',basePrice:67400,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Audi',name:'A5 Avant e-hybrid',segment:'Premium',basePrice:69300,seats:5,fuel:'Hybrid',years:[2027]}];
+/** The current taxi dealership offers only estate/wagon models, with
+ * explicitly requested Volvo and Audi Q7/Q9 exceptions.
+ * Keep removed models' factory configurations in this file for compatibility
+ * with saved vehicles. Do not delete owned fleet records.
+ */
+export const DEALERSHIP_MODEL_ALLOWLIST:readonly string[]=[
+ 'Toyota|Corolla Touring Sports',
+ 'Skoda|Superb Combi',
+ 'Skoda|Octavia Combi',
+ 'Audi|A5 Avant e-hybrid',
+ 'Audi|A6 Avant e-hybrid',
+ 'Audi|Q7 SUV TFSI e',
+ 'Audi|Q9 SUV',
+ 'Volvo|XC90',
+ 'Volvo|XC60',
+ 'Volvo|V60',
+] as const;
+const allowedDealerModels=new Set(DEALERSHIP_MODEL_ALLOWLIST);
+export const isDealershipModelAllowed=(model:Pick<VehicleModel,'brand'|'name'>):boolean=>
+ allowedDealerModels.has(model.brand+'|'+model.name);
+const ALL_SOURCE_MODELS:VehicleModel[]=[{brand:'Volvo',name:'XC90',segment:'XL',basePrice:93995,seats:7,fuel:'Hybrid',years:[2027]},{brand:'Volvo',name:'XC60',segment:'Premium',basePrice:66795,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Volvo',name:'V60',segment:'Premium',basePrice:67045,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Superb',segment:'Comfort',basePrice:49975,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Superb Combi',segment:'Comfort',basePrice:50900,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Skoda',name:'Octavia',segment:'Comfort',basePrice:33430,seats:5,fuel:'Petrol',years:[2027]},{brand:'Skoda',name:'Octavia Combi',segment:'Comfort',basePrice:35055,seats:5,fuel:'Petrol',years:[2027]},{brand:'Skoda',name:'Kodiaq',segment:'XL',basePrice:54235,seats:7,fuel:'Hybrid',years:[2027]},{brand:'Audi',name:'Q9 SUV',segment:'XL',basePrice:114100,seats:7,fuel:'Diesel',years:[2027]},{brand:'Audi',name:'Q7 SUV TFSI e',segment:'Premium',basePrice:83200,seats:5,fuel:'Hybrid',years:[2026]},...AUDI_A6_MODELS,{brand:'Toyota',name:'Corolla Saloon',segment:'Standard',basePrice:34605,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Toyota',name:'Corolla Touring Sports',segment:'Standard',basePrice:37200,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Toyota',name:'RAV4 Hybrid',segment:'Comfort',basePrice:45900,seats:5,fuel:'Hybrid',years:[2026]},{brand:'Audi',name:'A5 Limousine e-hybrid',segment:'Premium',basePrice:67400,seats:5,fuel:'Hybrid',years:[2027]},{brand:'Audi',name:'A5 Avant e-hybrid',segment:'Premium',basePrice:69300,seats:5,fuel:'Hybrid',years:[2027]}];;
+export const EUROPEAN_MODELS:VehicleModel[]=ALL_SOURCE_MODELS.filter(isDealershipModelAllowed)
 export const BRANDS=['Toyota','Audi','Skoda','Volvo'];
 export type FactoryOption={id:string;group:'Exterior'|'Wheels'|'Interior'|'Comfort'|'Technology'|'Safety';label:string;price:number;bonus:number;minimum?:VehicleModel['segment'];trims?:string[];years?:number[];variantIds?:string[];included?:boolean;includedTrims?:string[];requires?:string[];excludes?:string[];includes?:string[]};
 export type VehicleColor={id:string;name:string;hex:string;price:number;trims?:string[];years?:number[];variantIds?:string[];bonus?:number};
