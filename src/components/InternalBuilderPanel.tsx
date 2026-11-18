@@ -27,7 +27,7 @@ import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
 import {drawCorridorSection,joinAdjacentCorridors,corridorSectionCount,removeLastCorridorSection} from '../hotelCorridors';
-import {containsRoomCell,roomSections,roomArea,roomCenterCell,roomBoundaryEdges} from '../hotelRoomGeometry';
+import {containsRoomCell,roomSections,roomArea,roomCenterCell,roomOutlinePath} from '../hotelRoomGeometry';
 import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
 import HotelRoomCollections from './HotelRoomCollections';
 import {planRoomFurnitureCollection} from '../hotelFurnitureCollections';
@@ -597,20 +597,32 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <rect width={site.width} height={site.height} fill="#111c31"/>
      {Array.from({length:site.width+1},(_,i)=><line key={'x'+i} x1={i} y1={0} x2={i} y2={site.height} stroke="#42506c" strokeWidth=".025"/>)}
      {Array.from({length:site.height+1},(_,i)=><line key={'y'+i} x1={0} y1={i} x2={site.width} y2={i} stroke="#42506c" strokeWidth=".025"/>)}
-     {planStyle==='architectural'?<ArchitecturalRooms floor={floor}/>:floor.rooms.map(r=><g key={r.id}><rect x={r.x} y={r.y} width={r.width} height={r.height} fill={tone[r.type]} fillOpacity=".87" stroke="#d3d5e6" strokeWidth=".10"/><text x={r.x+r.width/2} y={r.y+.65} fontSize=".40" textAnchor="middle" fill="#ffffff">{r.type==='stairwell'?'STAIRS':r.type==='elevator'?'LIFT':r.name}</text></g>)}
+     {planStyle==='architectural'?<ArchitecturalRooms floor={floor}/>:floor.rooms.map(r=><g key={r.id}>{r.type==='corridor'&&r.sections?.length?
+ <>{roomSections(r).map((part,i)=><rect key={i} {...part} fill={tone.corridor} fillOpacity=".87" stroke="none"/>)}
+ <path d={roomOutlinePath(r)} fill="none" stroke="#d3d5e6" strokeWidth=".10"/>
+ <text x={roomCenterCell(r).x+.5} y={roomCenterCell(r).y+.65} fontSize=".40" textAnchor="middle" fill="#fff">{r.name}</text></>:
+ <><rect x={r.x} y={r.y} width={r.width} height={r.height} fill={tone[r.type]} fillOpacity=".87" stroke="#d3d5e6" strokeWidth=".10"/>
+ <text x={r.x+r.width/2} y={r.y+.65} fontSize=".40" textAnchor="middle" fill="#ffffff">{r.type==='stairwell'?'STAIRS':r.type==='elevator'?'LIFT':r.name}</text></>}</g>)}
      {showAtmosphereOverlay&&floor.rooms.map(room=>{
       const lighting=roomAtmospheres.get(room.id);if(!lighting)return null;
       const shade=lighting.score>=65?'#f9c977':lighting.score>=40?'#e3e6a6':lighting.score>=20?'#889ab9':'#31466a';
-      return <g key={'atmo-'+room.id} pointerEvents="none"><rect x={room.x+.12} y={room.y+.12} width={room.width-.24} height={room.height-.24} fill={shade} fillOpacity=".23"/><text x={room.x+room.width/2} y={room.y+room.height-.35} fontSize=".39" fill="#fff6df" textAnchor="middle">Light {lighting.score}/100</text></g>;
+       const center=roomCenterCell(room);
+       return <g key={'atmo-'+room.id} pointerEvents="none">
+        {roomSections(room).map((part,i)=><rect key={i} {...part} fill={shade} fillOpacity=".23"/>)}
+        <text x={center.x+.5} y={center.y+.65} fontSize=".39" fill="#fff6df" textAnchor="middle">Light {lighting.score}/100</text></g>;
      })}
      {showAccessOverlay&&accessReport&&floor.rooms.map(room=>{
       const guest=accessReport.guests.find(g=>g.roomId===room.id);
       const traversable=accessReport.reachableRoomIds.includes(room.id);
       const color=guest?(guest.status==='connected'?'#60ddb1':guest.status==='upper-floor-pending'?'#b0b9dd':'#efb179'):
        room.type==='lobby'||room.type==='corridor'||room.type==='stairwell'||room.type==='elevator'?(traversable?'#60ddb1':'#efb179'):null;
-      return color?<rect key={'access-'+room.id} x={room.x+.07} y={room.y+.07}
-       width={room.width-.14} height={room.height-.14} rx=".12" fill="none"
-       stroke={color} strokeWidth=".12" strokeDasharray=".24 .13" pointerEvents="none"/>:null;
+return color?<g key={'access-'+room.id} pointerEvents="none">
+        {room.type==='corridor'&&room.sections?.length?<path d={roomOutlinePath(room)} fill="none"
+         stroke={color} strokeWidth=".12" strokeDasharray=".24 .13"/>:
+         <rect x={room.x+.07} y={room.y+.07}
+         width={room.width-.14} height={room.height-.14} rx=".12" fill="none"
+         stroke={color} strokeWidth=".12" strokeDasharray=".24 .13"/>}
+        </g>:null;
      })}
      {showSafetyOverlay&&safetyReport&&floor.rooms.map(room=>{
       const guest=safetyReport.guests.find(g=>g.floorIndex===floorIndex&&g.roomId===room.id);
@@ -619,7 +631,12 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
        guest.evacuationRoute?'#ffd07b':'#f48b84';
       return <g key={'safety-'+room.id} pointerEvents="none"><rect x={room.x+.11} y={room.y+.11} width={room.width-.22} height={room.height-.22} stroke={color} strokeWidth=".13" strokeDasharray=".18 .11" fill={color} fillOpacity=".12"/><text x={room.x+room.width/2} y={room.y+room.height-.36} fontSize=".40" textAnchor="middle" fill="#fff">{guest.fireReady?'FIRE OK':'ESCAPE !'}{guest.accessible?' · ♿':''}</text></g>;
      })}
-     {selectedRoom&&<rect x={selectedRoom.x+.07} y={selectedRoom.y+.07} width={selectedRoom.width-.14} height={selectedRoom.height-.14} fill="none" stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>}
+      {selectedRoom&&(selectedRoom.type==='corridor'&&selectedRoom.sections?.length?
+       <path d={roomOutlinePath(selectedRoom)} fill="none" stroke="#ffd37a"
+        strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>:
+       <rect x={selectedRoom.x+.07} y={selectedRoom.y+.07}
+        width={selectedRoom.width-.14} height={selectedRoom.height-.14}
+        fill="none" stroke="#ffd37a" strokeWidth=".16" strokeDasharray=".32 .14" pointerEvents="none"/>)} 
      {planStyle==='architectural'&&<ArchitecturalDetails site={site} floor={floor} selectedFurnitureId={selectedFurnitureId} furniturePreview={furniturePreview}/>}
      {planStyle==='classic'&&floor.walls.map(w=><g key={w.id} pointerEvents="none"><line x1={w.x} y1={w.y} x2={w.orientation==='h'?w.x+1:w.x} y2={w.orientation==='v'?w.y+1:w.y} stroke={w.type==='door'?'#89d9b6':w.type==='panoramic-window'?'#75efff':w.type==='window'?'#8ccffe':'#f5eeff'} strokeWidth={w.type==='door'?'.22':w.type==='panoramic-window'?'.30':w.type==='window'?'.23':'.14'} strokeDasharray={w.type==='door'?'.25 .12':undefined}/>{w.type==='door'&&<circle cx={w.x} cy={w.y} r=".12" fill="#89d9b6"/>}{(w.type==='window'||w.type==='panoramic-window')&&<line x1={w.orientation==='h'?w.x+.13:w.x} y1={w.orientation==='v'?w.y+.13:w.y} x2={w.orientation==='h'?w.x+.87:w.x} y2={w.orientation==='v'?w.y+.87:w.y} stroke="#e9faff" strokeWidth=".07"/>}</g>)}
      {planStyle==='classic'&&floor.objects.map(o=>{const preview=furniturePreview?.id===o.id?{...o,x:furniturePreview.x,y:furniturePreview.y}:o;
