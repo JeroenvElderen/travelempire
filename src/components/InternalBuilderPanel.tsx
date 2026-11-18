@@ -27,7 +27,7 @@ import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
 import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
-import {buildFurnitureCatalogue,FURNITURE_FINISHES,furnitureProductForPlacement,
+import {buildFurnitureCatalogue,FURNITURE_FINISHES,furnitureFinishColor,furnitureProductForPlacement,
  type FurnitureFinish} from '../furnitureCatalog';
 const FURNITURE_MODELS=buildFurnitureCatalogue(furniture);
 const HotelIsometricPreview=lazy(()=>import('./HotelIsometricPreview'));
@@ -603,12 +603,12 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
       const dragging=furniturePreview?.id===o.id;
       return <g key={o.id} pointerEvents="none" opacity={dragging?0.72:1}>
        <rect x={preview.x+.08} y={preview.y+.08} width={size.width-.16} height={size.height-.16}
-        rx=".13" fill={selected?'#efce89':'#c1a0ed'}
+        rx=".13" fill={selected?'#efce89':o.finish?furnitureFinishColor(o.finish):'#c1a0ed'}
         stroke={selected?'#fff2be':'#e7daff'} strokeWidth={selected?'.11':'.035'}
         strokeDasharray={dragging?'.2 .08':undefined}/>
        <text x={preview.x+size.width/2} y={preview.y+size.height/2+.1}
         fontSize=".35" fill="#201735" textAnchor="middle">
-        {furniture.find(f=>f.code===o.code)?.name.slice(0,11)}</text></g>})}
+        {furnitureProductForPlacement(furniture,o).name.slice(0,11)}</text></g>})}
      {(floor.safetyFixtures??[]).map(item=><g key={item.id} pointerEvents="none"><rect x={item.x+.22} y={item.y+.22} width=".56" height=".56" rx=".13" fill={item.kind==='smoke-alarm'?'#8bcdfa':item.kind==='fire-extinguisher'?'#f6a19b':'#9ce5b6'} stroke="#f4f9ff" strokeWidth=".06"/><text x={item.x+.5} y={item.y+.60} textAnchor="middle" fontSize=".27" fontWeight="700" fill="#183045">{item.kind==='smoke-alarm'?'ALM':item.kind==='fire-extinguisher'?'EXT':'EXIT'}</text></g>)}
      {(floor.lights??[]).map(light=><g key={light.id} pointerEvents="none"><circle cx={light.x+.5} cy={light.y+.5} r={light.kind==='ceiling'?'.19':'.16'} fill={light.kind==='ceiling'?'#ffe0a0':'#f4b6db'} stroke="#fff4d3" strokeWidth=".05"/><path d={`M ${light.x+.5} ${light.y+.16} V ${light.y+.29} M ${light.x+.5} ${light.y+.71} V ${light.y+.84} M ${light.x+.16} ${light.y+.5} H ${light.x+.29} M ${light.x+.71} ${light.y+.5} H ${light.x+.84}`} stroke="#fff4d3" strokeWidth=".055"/></g>)}
      {anchor&&<rect x={anchor.x} y={anchor.y} width="1" height="1" fill="none" stroke="#ffdc84" strokeDasharray=".15 .12" strokeWidth=".1"/>}
