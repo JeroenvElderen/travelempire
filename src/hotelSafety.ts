@@ -22,7 +22,8 @@ const circulation=(r:Room|null|undefined):boolean=>
 const egressRoom=(r:Room|null|undefined):boolean=>
  r!=null&&(circulation(r)||r.type==='stairwell');
 const wheelchairRoom=(r:Room|null|undefined):boolean=>
- r!=null&&(circulation(r)||r.type==='elevator')&&r.width>=2&&r.height>=2;
+ r!=null&&(circulation(r)||r.type==='elevator')&&r.width>=2&&r.height>=2&&
+ (r.type!=='corridor'||roomSections(r).every(s=>s.width>=2&&s.height>=2));
 const inRoom=(room:Room,x:number,y:number)=>containsRoomCell(room,x,y);
 const key=(fi:number,id:string)=>fi+':'+id;
 const roomAt=(f:HotelFloor,x:number,y:number)=>
@@ -83,7 +84,7 @@ export function suggestHotelSafetyFixture(
  const cx=room.x+(room.width-1)/2,cy=room.y+(room.height-1)/2;
  const cells=[] as {x:number;y:number;dist:number}[];
  for(let y=room.y;y<room.y+room.height;y++)for(let x=room.x;x<room.x+room.width;x++)
-  cells.push({x,y,dist:Math.abs(cx-x)+Math.abs(cy-y)});
+  if(containsRoomCell(room,x,y))cells.push({x,y,dist:Math.abs(cx-x)+Math.abs(cy-y)});
  cells.sort((a,b)=>a.dist-b.dist);
  const candidate=cells.find(c=>!(floor.safetyFixtures??[]).some(f=>f.x===c.x&&f.y===c.y));
  return candidate?{x:candidate.x,y:candidate.y}:null;
