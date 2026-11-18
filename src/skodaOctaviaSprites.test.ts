@@ -12,7 +12,8 @@ import {audiA5PaintForVehicle} from './audiA5Sprites';
 import {audiA6PaintForVehicle} from './audiA6Sprites';
 
 const combi=EUROPEAN_MODELS.find(m=>m.brand==='Skoda'&&m.name==='Octavia Combi')!;
-const saloon=EUROPEAN_MODELS.find(m=>m.brand==='Skoda'&&m.name==='Octavia')!;
+// Historical metadata remains readable, but the Octavia saloon is no longer in the showroom.
+const saloon={...combi,name:'Octavia'};
 describe('Octavia Combi PNG integration',()=>{
  it('has all ten original factory shades and one explicitly game-only orange',()=>{
   expect(SKODA_OCTAVIA_PAINT_SPRITES).toHaveLength(11);
