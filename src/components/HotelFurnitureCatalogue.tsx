@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {Archive,Bath,BedDouble,BriefcaseBusiness,Check,ChevronDown,Flower2,
  Heart,Lamp,Search,SlidersHorizontal,Sofa,UtensilsCrossed,ChefHat,RotateCw,
- Star,Package,ArrowUpDown} from 'lucide-react';
+ Star,Package} from 'lucide-react';
 import type {FurnitureProduct,FurnitureCategory,FurnitureStyle,FurnitureFinish} from '../furnitureCatalog';
 import {FURNITURE_CATEGORIES,FURNITURE_FINISHES,FURNITURE_STYLES,
  furnitureFinishColor,furnitureIsCompatible} from '../furnitureCatalog';
