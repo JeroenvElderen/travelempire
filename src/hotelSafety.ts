@@ -4,7 +4,7 @@
  * Only sites with safetyRulesVersion=1 enforce booking eligibility.
  */
 import {
- furnitureSize,type HotelFloor,type HotelSite,type Room,
+ furnitureSize,roomContainsCell,roomSections,type HotelFloor,type HotelSite,type Room,
  type SafetyFixture,type SafetyFixtureKind,
 } from './internalConstruction';
 import {accessDoorPair,hotelAccessDoorValid} from './hotelAccess';
@@ -21,9 +21,9 @@ const circulation=(r:Room|null|undefined):boolean=>
 const egressRoom=(r:Room|null|undefined):boolean=>
  r!=null&&(circulation(r)||r.type==='stairwell');
 const wheelchairRoom=(r:Room|null|undefined):boolean=>
- r!=null&&(circulation(r)||r.type==='elevator')&&r.width>=2&&r.height>=2;
-const inRoom=(room:Room,x:number,y:number)=>
- x>=room.x&&y>=room.y&&x<room.x+room.width&&y<room.y+room.height;
+ r!=null&&(circulation(r)||r.type==='elevator')&&
+ roomSections(r).some(part=>part.width>=2&&part.height>=2);
+const inRoom=(room:Room,x:number,y:number)=>roomContainsCell(room,x,y);
 const key=(fi:number,id:string)=>fi+':'+id;
 const roomAt=(f:HotelFloor,x:number,y:number)=>
  f.rooms.find(r=>inRoom(r,x,y))??null;
@@ -82,8 +82,9 @@ export function suggestHotelSafetyFixture(
  if(kind==='smoke-alarm'&&(room.type==='elevator'||room.type==='stairwell'))return null;
  const cx=room.x+(room.width-1)/2,cy=room.y+(room.height-1)/2;
  const cells=[] as {x:number;y:number;dist:number}[];
- for(let y=room.y;y<room.y+room.height;y++)for(let x=room.x;x<room.x+room.width;x++)
-  cells.push({x,y,dist:Math.abs(cx-x)+Math.abs(cy-y)});
+ for(const part of roomSections(room))for(let y=part.y;y<part.y+part.height;y++)
+  for(let x=part.x;x<part.x+part.width;x++)
+   cells.push({x,y,dist:Math.abs(cx-x)+Math.abs(cy-y)});
  cells.sort((a,b)=>a.dist-b.dist);
  const candidate=cells.find(c=>!(floor.safetyFixtures??[]).some(f=>f.x===c.x&&f.y===c.y));
  return candidate?{x:candidate.x,y:candidate.y}:null;
