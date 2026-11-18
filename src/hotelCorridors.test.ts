@@ -3,7 +3,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {
  newHotelSite,drawRoom,placeFurniture,updateFloor,constructionQuote,
- roomIssues,type Room,type HotelSite,type HotelFloor,
+ type Room,type HotelSite,type HotelFloor,
 } from './internalConstruction';
 import {
  drawCorridorSection,joinAdjacentCorridors,removeLastCorridorSection,
