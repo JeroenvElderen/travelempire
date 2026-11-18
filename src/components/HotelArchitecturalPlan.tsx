@@ -3,6 +3,7 @@ import {furnitureSize} from '../internalConstruction';
 import {ISO_COLORS,roomShortLabel,wallSegment} from '../hotelVisualisation';
 import {accessDoorPair} from '../hotelAccess';
 import {furnitureFinishColor} from '../furnitureCatalog';
+import {roomSections,roomOutlinePath,roomCenterCell,roomArea} from '../hotelRoomGeometry';
 
 /** Architectural blueprint: light-weight, fully SVG, non-interactive layers.
  * Coordinates use exactly the same 1 m grid as the editable hit targets.
@@ -13,6 +14,19 @@ export function ArchitecturalRooms({floor}:{floor:HotelFloor}){
   {floor.rooms.map(room=>{
    const x=room.x,y=room.y,w=room.width,h=room.height;
    const isShaft=room.type==='stairwell'||room.type==='elevator';
+   if(room.type==='corridor'&&room.sections?.length){
+    const center=roomCenterCell(room);
+    return <g key={room.id}>
+     {roomSections(room).map((section,i)=><rect key={i} {...section}
+      fill={ISO_COLORS.corridor} fillOpacity=".49" stroke="none"/>)}
+     <path d={roomOutlinePath(room)} fill="none" stroke="#e9f5ff"
+      strokeWidth=".14" strokeLinecap="round"/>
+     <text x={center.x+.5} y={center.y+.32} fontSize=".42" fontWeight="700"
+      textAnchor="middle" fill="#f5faff">{roomShortLabel(room)}</text>
+     <text x={center.x+.5} y={center.y+.7} fontSize=".28"
+      textAnchor="middle" fill="#cbdce8">{roomArea(room)} m²</text>
+    </g>;
+   }
    return <g key={room.id}>
     <rect x={x+.04} y={y+.04} width={w-.08} height={h-.08} rx=".05"
      fill={ISO_COLORS[room.type]} fillOpacity=".43" stroke="#e9f5ff"
