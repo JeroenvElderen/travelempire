@@ -191,10 +191,12 @@ export function toggleWall(floor:HotelFloor,wall:Wall,site:HotelSite):HotelFloor
  const old=floor.walls.find(w=>w.x===wall.x&&w.y===wall.y&&w.orientation===wall.orientation);
  return {...floor,walls:old?old.type===wall.type?floor.walls.filter(w=>w.id!==old.id):floor.walls.map(w=>w.id===old.id?wall:w):[...floor.walls,wall]};
 }
-export const furnitureSize=(item:ObjectPlacement)=>{const spec=furniture.find(f=>f.code===item.code);if(!spec)throw Error('Unknown furniture.');return {width:item.rotated?spec.height:spec.width,height:item.rotated?spec.width:spec.height};};
+export const furnitureSize=(item:ObjectPlacement)=>{const spec=furnitureProductForPlacement(furniture,item);return {width:item.rotated?spec.height:spec.width,height:item.rotated?spec.width:spec.height};};
 export function placeFurniture(floor:HotelFloor,item:ObjectPlacement,site:HotelSite):HotelFloor{
  if(!Number.isInteger(item.x)||!Number.isInteger(item.y)||item.x<0||item.y<0)throw Error('Invalid furniture position.');
- const spec=furniture.find(f=>f.code===item.code);if(!spec)throw Error('Furniture does not exist.');
+ const base=furniture.find(f=>f.code===item.code);if(!base)throw Error('Furniture does not exist.');
+ const spec=furnitureProductForPlacement(furniture,item);
+ if(item.modelId&&!spec.catalogueModel)throw Error('This furniture model does not exist.');
  const size=furnitureSize(item),box={x:item.x,y:item.y,...size};
  if(item.x+size.width>site.width||item.y+size.height>site.height)throw Error('Object exceeds the building boundary.');
  const room=floor.rooms.find(r=>box.x>=r.x&&box.y>=r.y&&box.x+box.width<=r.x+r.width&&box.y+box.height<=r.y+r.height);
@@ -224,7 +226,7 @@ const materialData=[
 ] as const;
 const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
 const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
-const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated]),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
+const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
@@ -251,8 +253,13 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   const existed=new Map(built.objects.map(o=>[o.id,o]));
   for(const item of draft.objects){
    const prior=existed.get(item.id);
-   if(prior&&prior.code===item.code)continue;
-   objectsCents+=furniture.find(f=>f.code===item.code)?.priceCents??0;
+   if(prior&&prior.code===item.code&&prior.modelId===item.modelId){
+    if(prior.finish!==item.finish)objectsCents+=FURNITURE_REFINISH_CENTS;
+    continue;
+   }
+   // Buying or replacing a furniture model is priced at the new model's full
+   // cost. Pure moves and rotations do not buy it a second time.
+   objectsCents+=furnitureProductForPlacement(furniture,item).priceCents;
   }
   const addedWalls=draft.walls.filter(w=>!built.walls.some(old=>old.x===w.x&&old.y===w.y&&old.orientation===w.orientation&&old.type===w.type));
   wallCount+=addedWalls.length;
