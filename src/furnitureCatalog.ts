@@ -155,13 +155,14 @@ export function furnitureRoomStyleBonus(
  roomObjects:ReadonlyArray<ObjectPlacement>,
  specs:ReadonlyArray<FurnitureBase>,
 ):number{
- const selected=roomObjects.filter(o=>!!o.modelId);
+ const selected=roomObjects.filter(o=>!!o.modelId||!!o.designStyle);
  if(selected.length<2)return 0;
  const counts=new Map<FurnitureStyle,number>();
  for(const obj of selected){
   const model=furnitureProductForPlacement(specs,obj);
-  if(!model.catalogueModel)continue;
-  counts.set(model.style,(counts.get(model.style)??0)+1);
+  if(!model.catalogueModel&&!obj.designStyle)continue;
+  const style=obj.designStyle??model.style;
+  counts.set(style,(counts.get(style)??0)+1);
  }
  const strongest=Math.max(0,...counts.values());
  const total=[...counts.values()].reduce((a,b)=>a+b,0);
