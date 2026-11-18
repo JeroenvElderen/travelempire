@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {
  BRANDS,EUROPEAN_MODELS,DEALERSHIP_MODEL_ALLOWLIST,
- isDealershipModelAllowed,vehicleConfiguration,verifiedVariants,
+ isDealershipModelAllowed,isPurchasableVehicleOffer,vehicleConfiguration,verifiedVariants,
  type VehicleModel,
 } from './europeanVehicleCatalog';
 import {OFFERS} from './dealership';
@@ -53,8 +53,11 @@ describe('Estate-only dealership inventory',()=>{
    expect(isDealershipModelAllowed({brand,name:model})).toBe(false);
   }
  });
- it('retires the old generic marketplace without deleting owned taxis',()=>{
-  expect(OFFERS).toEqual([]);
+ it('does not offer legacy non-estates while keeping historical offer data for forecasts',()=>{
+  expect(OFFERS.length).toBeGreaterThan(0);
+  expect(OFFERS.filter(isPurchasableVehicleOffer)).toEqual([]);
+  expect(isPurchasableVehicleOffer({model:'Skoda Octavia Combi'})).toBe(true);
+  expect(isPurchasableVehicleOffer({model:'Toyota Corolla'})).toBe(false);
  });
  it('does not remove historical vehicle configs or engine variants for old saves',()=>{
   for(const compound of retired){
