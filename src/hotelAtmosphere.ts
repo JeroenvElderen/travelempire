@@ -4,7 +4,7 @@
  * Legacy hotels keep their previous demand until atmosphereRulesVersion=1.
  */
 import {
- toggleWall,furnitureSize,type HotelFloor,type HotelSite,type Room,type Wall,
+ toggleWall,furnitureSize,roomContainsCell,roomContainsRect,roomBoundaryEdges,roomSections,roomArea,type HotelFloor,type HotelSite,type Room,type Wall,
  type LightingFixture,type LightingKind,
 } from './internalConstruction';
 
@@ -17,7 +17,7 @@ export const LIGHT_COST_CENTS:Readonly<Record<LightingKind,number>>={
 };
 
 const roomAt=(floor:HotelFloor,x:number,y:number):Room|null=>
- floor.rooms.find(r=>x>=r.x&&x<r.x+r.width&&y>=r.y&&y<r.y+r.height)??null;
+ floor.rooms.find(r=>roomContainsCell(r,x,y))??null;
 const onPlot=(site:HotelSite,x:number,y:number)=>
  x>=0&&y>=0&&x<site.width&&y<site.height;
 
@@ -88,15 +88,7 @@ export function suggestRoomWindow(
 ):Pick<Wall,'x'|'y'|'orientation'>|null{
  const room=floor.rooms.find(r=>r.id===roomId);
  if(!room)return null;
- const edges:Pick<Wall,'x'|'y'|'orientation'>[]=[];
- for(let x=room.x;x<room.x+room.width;x++){
-  edges.push({x,y:room.y+room.height,orientation:'h'});
-  edges.push({x,y:room.y,orientation:'h'});
- }
- for(let y=room.y;y<room.y+room.height;y++){
-  edges.push({x:room.x+room.width,y,orientation:'v'});
-  edges.push({x:room.x,y,orientation:'v'});
- }
+ const edges:Pick<Wall,'x'|'y'|'orientation'>[]=roomBoundaryEdges(room);
  return edges.find(edge=>windowAdjacentRoom(floor,site,edge)?.id===room.id&&
   !floor.walls.some(w=>w.x===edge.x&&w.y===edge.y&&
    w.orientation===edge.orientation))??null;
@@ -108,8 +100,9 @@ export function suggestRoomLighting(
  if(!room||room.type==='stairwell'||room.type==='elevator')return null;
  const centerX=room.x+(room.width-1)/2,centerY=room.y+(room.height-1)/2;
  const cells:Array<{x:number;y:number;dist:number}>=[];
- for(let y=room.y;y<room.y+room.height;y++)for(let x=room.x;x<room.x+room.width;x++)
-  cells.push({x,y,dist:Math.abs(x-centerX)+Math.abs(y-centerY)});
+ for(const part of roomSections(room))for(let y=part.y;y<part.y+part.height;y++)
+  for(let x=part.x;x<part.x+part.width;x++)
+   cells.push({x,y,dist:Math.abs(x-centerX)+Math.abs(y-centerY)});
  cells.sort((a,b)=>a.dist-b.dist);
  const free=cells.find(c=>!(floor.lights??[]).some(l=>l.x===c.x&&l.y===c.y));
  return free?{x:free.x,y:free.y}:null;
@@ -132,17 +125,14 @@ export function analyzeRoomAtmosphere(
   windowAdjacentRoom(floor,site,w)?.id===room.id);
  const windowCount=validWindows.filter(w=>w.type==='window').length;
  const panoramicCount=validWindows.filter(w=>w.type==='panoramic-window').length;
- const area=Math.max(1,room.width*room.height);
+ const area=Math.max(1,roomArea(room));
  // A metre of larger glazing admits more light. Larger rooms require more.
  const naturalLight=Math.min(100,Math.round(
   ((windowCount+panoramicCount*1.75)*600)/Math.max(12,area)));
  const lights=(floor.lights??[]).filter(light=>
-  light.x>=room.x&&light.x<room.x+room.width&&
-  light.y>=room.y&&light.y<room.y+room.height);
+  roomContainsCell(room,light.x,light.y));
  const floorLamps=floor.objects.filter(o=>o.code==='lamp'&&
-  o.x>=room.x&&o.y>=room.y&&
-  o.x+furnitureSize(o).width<=room.x+room.width&&
-  o.y+furnitureSize(o).height<=room.y+room.height).length;
+  roomContainsRect(room,{...o,...furnitureSize(o)})).length;
  const lightPower=lights.reduce((n,l)=>n+(l.kind==='ceiling'?65:40),0)+floorLamps*22;
  const artificialLight=Math.min(100,Math.round(lightPower*18/Math.max(12,area)));
  const score=Math.round(naturalLight*.60+artificialLight*.40);
