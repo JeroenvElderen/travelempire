@@ -2,6 +2,7 @@ import {useMemo,useState} from 'react';
 import {Layers3,RotateCw,Eye,Boxes,Info} from 'lucide-react';
 import type {HotelFloor,HotelSite,Room,ObjectPlacement,Wall} from '../internalConstruction';
 import {furnitureSize} from '../internalConstruction';
+import {furnitureFinishColor} from '../furnitureCatalog';
 import {
  buildIsoScene,isoCorners,isoProject,pointString,roomShortLabel,
  ISO_COLORS,type IsoAngle,type IsoPoint,type IsoScope,
@@ -51,14 +52,15 @@ function FurnitureBox({item,site,z,angle}:{
  item:ObjectPlacement;site:HotelSite;z:number;angle:IsoAngle;
 }){
  const size=furnitureSize(item);
- const height=item.code==='wardrobe'||item.code==='fridge'?5:2.1;
+ const height=['wardrobe','fridge','freezer','headboard','mirror','sculpture','shelves'].includes(item.code)?5:2.1;
  const face=isoCorners(item.x+.12,item.y+.12,size.width-.24,size.height-.24,z+height,
   site.width,site.height,angle);
  const lower=isoCorners(item.x+.12,item.y+.12,size.width-.24,size.height-.24,z,
   site.width,site.height,angle);
  const isBed=item.code==='bed'||item.code==='single-bed';
- const color=isBed?'#f3e5d6':item.code==='shower'||item.code==='toilet'||item.code==='sink'?'#eaf7fc':
-  item.code==='lamp'?'#ffdb91':'#b9a28c';
+ const color=item.finish?furnitureFinishColor(item.finish):isBed?'#f3e5d6':
+  ['shower','toilet','sink','bathtub','mirror'].includes(item.code)?'#eaf7fc':
+  item.code==='lamp'?'#ffdb91':item.code==='plant'?'#74a184':'#b9a28c';
  return <g>
   <polygon points={pnts([face[1],face[2],lower[2],lower[1]])}
    fill="#65748b" stroke="#526d80" strokeWidth=".5"/>
