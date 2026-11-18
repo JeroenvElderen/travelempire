@@ -7,6 +7,7 @@ import {FURNITURE_CATEGORIES,FURNITURE_FINISHES,FURNITURE_STYLES,
  furnitureFinishColor,furnitureIsCompatible} from '../furnitureCatalog';
 import type {RoomType} from '../internalConstruction';
 import {euros} from '../internalConstruction';
+import './hotel-furniture-catalog.css';
 
 const ICONS={
  bedroom:BedDouble,bathroom:Bath,lounge:Sofa,kitchen:ChefHat,
