@@ -101,7 +101,7 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
    <aside className="eu-config-summary" ref={summaryRef}>
     <div className="eu-vehicle-stage">
      {audiSprite?<AudiA5VehicleImage model={model.brand+' '+model.name} paintId={audiSprite.id}
-       className="eu-audi-preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
+       className="eu-audi-preview" quality="preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
        alt={audiSprite.name+' Audi A5 Avant top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
      <small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small>
     </div>
