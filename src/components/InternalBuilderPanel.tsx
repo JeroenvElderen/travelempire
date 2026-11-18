@@ -26,6 +26,10 @@ import {freightStage,freightStatusLabel,freightProgress} from '../constructionLo
 import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
+import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
+import {buildFurnitureCatalogue,FURNITURE_FINISHES,furnitureProductForPlacement,
+ type FurnitureFinish} from '../furnitureCatalog';
+const FURNITURE_MODELS=buildFurnitureCatalogue(furniture);
 const HotelIsometricPreview=lazy(()=>import('./HotelIsometricPreview'));
 
 import './internal-builder.css';
@@ -64,6 +68,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const [tool,setTool]=useState<BuilderTool|'select'|'pan'>('pan');
  const [roomType,setRoomType]=useState<RoomType>('guest');
  const [itemCode,setItemCode]=useState<FurnitureCode>('bed');
+ const [itemModelId,setItemModelId]=useState('bed:essential');
+ const [itemFinish,setItemFinish]=useState<FurnitureFinish>('oak');
  const [rotate,setRotate]=useState(false);
  const [windowKind,setWindowKind]=useState<WindowKind>('window');
  const [lightingKind,setLightingKind]=useState<LightingKind>('ceiling');
@@ -127,7 +133,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const floor=site?.draft[Math.min(floorIndex,site.draft.length-1)]??null;
  const selectedRoom=floor?.rooms.find(r=>r.id===selectedRoomId)??null;
  const selectedPlacedFurniture=floor?.objects.find(o=>o.id===selectedFurnitureId)??null;
- const selectedPlacedType=selectedPlacedFurniture?furniture.find(f=>f.code===selectedPlacedFurniture.code):null;
+ const selectedPlacedType=selectedPlacedFurniture?furnitureProductForPlacement(furniture,selectedPlacedFurniture):null;
  const blueprintHealth=site&&floor?hotelBlueprintHealth(floor,site):null;
  const floorVisualCounts=useMemo(()=>floor?planCounts(floor):null,[floor]);
  const roomAtmospheres=useMemo(()=>site&&floor?new Map(floor.rooms.map(r=>
@@ -146,7 +152,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   [site,floor,floorIndex,buildingAccess]);
  const active=site?.projects.find(p=>p.status==='active');
  const quote=useMemo(()=>{if(!site||active)return null;try{return constructionQuote(site,method,state.workers);}catch{return null;}},[site,method,state.workers,active]);
- const selectedFurniture=furniture.find(f=>f.code===itemCode)!;
+ const selectedFurniture=furnitureProductForPlacement(furniture,{code:itemCode,modelId:itemModelId});
  const selectedSupply=supplies.find(f=>f.code===supplyCode)!;
  const operations=site?.operations??defaultHotelOperations(gameHour);
  const currentlyOpen=hotelActiveAt(site?.operations,gameHour);
@@ -200,7 +206,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(!site||!floor)return;
   try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
  };
- const adjustPlacedFurniture=(changes:{x?:number;y?:number;rotated?:boolean})=>{
+ const adjustPlacedFurniture=(changes:{x?:number;y?:number;rotated?:boolean;modelId?:string;finish?:string})=>{
   if(!site||!selectedPlacedFurniture||active)return;
   const furnitureId=selectedPlacedFurniture.id;
   modify(f=>editBlueprintFurniture(f,site,furnitureId,changes));
@@ -412,7 +418,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    setAnchor(where);setStatus('Choose the opposite corner, or drag to draw a room.');return;
   }
   if(tool==='furniture'){
-   modify(f=>placeFurniture(f,{id:id(),code:itemCode,x:where.x,y:where.y,rotated:rotate},site));
+   modify(f=>placeFurniture(f,{id:id(),code:itemCode,modelId:itemModelId,finish:itemFinish,x:where.x,y:where.y,rotated:rotate},site));
    return;
   }
   if(tool==='lighting'){
@@ -550,7 +556,16 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    </section>}
    {tool==='room'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
-   {tool==='furniture'&&<div className="ib-controls"><label>Furniture<select value={itemCode} disabled={!!active} onChange={e=>setItemCode(e.target.value as FurnitureCode)}>{furniture.map(f=><option key={f.code} value={f.code}>{f.name} · {euros(f.priceCents)}</option>)}</select></label><button type="button" onClick={()=>setRotate(v=>!v)} className={rotate?'selected ib-secondary':'ib-secondary'}><RotateCw size={15}/> {rotate?'Rotated':'Rotate'}</button><span className="ib-muted">{selectedFurniture.width} × {selectedFurniture.height} cells</span></div>}
+   {tool==='furniture'&&<><HotelFurnitureCatalogue products={FURNITURE_MODELS}
+    selectedId={itemModelId} finish={itemFinish}
+    selectedRoomType={selectedRoom?.type??null} disabled={!!active}
+    onSelect={model=>{setItemCode(model.code);setItemModelId(model.id);setTool('furniture');}}
+    onFinish={setItemFinish}/>
+    <div className="ib-controls"><button type="button" disabled={!!active}
+     onClick={()=>setRotate(v=>!v)} className={rotate?'selected ib-secondary':'ib-secondary'}>
+     <RotateCw size={15}/> {rotate?'Rotated 90°':'Rotate 90°'}</button>
+     <span className="ib-muted">Selected footprint: {selectedFurniture.width} × {selectedFurniture.height} m · {euros(selectedFurniture.priceCents)}. Tap a free grid cell to place.</span>
+    </div></>}
    {(tool==='wall'||tool==='door')&&<div className="ib-hint">{tool==='door'?'Doors connect two adjacent rooms, or link a lobby/corridor to the outside edge of the plot. Tap on the exact shared grid edge, or select a room and use Add doorway. Keep the doorway clear of furniture.':'Tap near the edge of a grid cell to draw or remove a wall segment.'}</div>}
    {active&&<div className="ib-hint">The blueprint is locked while construction is underway. Inspection is still available.</div>}
    {accessReport&&site.kind!=='headquarters'&&<section className="ib-access-checker" aria-label="Room accessibility checker"><div className="ib-access-checker-heading"><div><strong>Room access · {accessReport.groundFloor?'Ground floor':floor.label}</strong><small>{accessReport.groundFloor?'Reception, corridors and entrance connectivity':buildingAccess?'Aligned stairwells, elevators and corridor doors':'Upper floors currently retain Phase 1 access'}</small></div><button type="button" className={showAccessOverlay?'ib-secondary selected':'ib-secondary'} onClick={()=>setShowAccessOverlay(v=>!v)}>{showAccessOverlay?'Hide overlay':'Show overlay'}</button></div><div className="ib-access-counts"><span><strong>{buildingAccess||accessReport.groundFloor?accessReport.connectedGuests:'—'}/{accessReport.guestRooms}</strong> connected guest rooms</span><span><strong>{buildingAccess?.floors[0]?.entranceDoors??accessReport.entranceDoors}</strong> ground entrance(s)</span><span className={accessReport.receptionConnected?'good':'bad'}>{accessReport.receptionConnected?'Reception reachable':accessReport.groundFloor?'Reception not connected':'Floor disconnected'}</span></div>{buildingAccess&&site.draft.length>1&&<div className="ib-vertical-summary"><span><strong>{buildingAccess.links.filter(l=>l.connected).length}/{buildingAccess.links.length}</strong> usable floor links</span><span><strong>{buildingAccess.verticalCapacityPerHour||'—'}</strong> guest moves/hour</span><span><strong>{buildingAccess.verticalUtilisationPercent===null?'—':buildingAccess.verticalUtilisationPercent+'%'}</strong> peak estimated load</span></div>}{accessReport.warnings.slice(0,4).map((warning,i)=><p className="ib-access-warning" key={i}><AlertCircle size={13}/>{warning}</p>)}{site.accessRulesVersion!==2&&<small className="ib-access-grandfather">{site.accessRulesVersion===1?'Phase 1 rules: upper-floor access is not yet enforced until you upgrade.':'Preview only · legacy hotels retain current guest eligibility until you opt in.'}</small>}</section>}
@@ -610,7 +625,21 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <small>X {selectedPlacedFurniture.x} · Y {selectedPlacedFurniture.y} · {furnitureSize(selectedPlacedFurniture).width} × {furnitureSize(selectedPlacedFurniture).height} m</small></div>
      <button type="button" className="ib-secondary" disabled={!!active} onClick={()=>adjustPlacedFurniture({rotated:!selectedPlacedFurniture.rotated})}><RotateCw size={14}/> Rotate 90°</button>
     </div>
-    <div className="ib-room-nudge" role="group" aria-label="Move selected furniture">
+    <div className="ib-furn-edit-model">
+      <label>Furniture model<select aria-label="Change selected furniture model"
+       disabled={!!active} value={selectedPlacedFurniture.modelId??'legacy'}
+       onChange={e=>adjustPlacedFurniture({modelId:e.target.value==='legacy'?undefined:e.target.value})}>
+       {!selectedPlacedFurniture.modelId&&<option value="legacy">{selectedPlacedType?.name??selectedPlacedFurniture.code} · Original</option>}
+       {FURNITURE_MODELS.filter(m=>m.code===selectedPlacedFurniture.code).map(m=><option key={m.id} value={m.id}>{m.name} · {euros(m.priceCents)} · {m.width}×{m.height} m</option>)}
+      </select></label>
+      <label>Material / colour<select aria-label="Change selected furniture finish" disabled={!!active}
+       value={selectedPlacedFurniture.finish??''}
+       onChange={e=>adjustPlacedFurniture({finish:e.target.value||undefined})}>
+       {!selectedPlacedFurniture.finish&&<option value="">Original finish</option>}
+       {FURNITURE_FINISHES.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
+      </select></label>
+     </div>
+     <div className="ib-room-nudge" role="group" aria-label="Move selected furniture">
      <button type="button" disabled={!!active} aria-label="Move furniture left" onClick={()=>adjustPlacedFurniture({x:selectedPlacedFurniture.x-1})}><ArrowLeft size={15}/></button>
      <button type="button" disabled={!!active} aria-label="Move furniture up" onClick={()=>adjustPlacedFurniture({y:selectedPlacedFurniture.y-1})}><ArrowUp size={15}/></button>
      <button type="button" disabled={!!active} aria-label="Move furniture down" onClick={()=>adjustPlacedFurniture({y:selectedPlacedFurniture.y+1})}><ArrowDown size={15}/></button>
