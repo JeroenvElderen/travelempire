@@ -594,6 +594,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    <div className={`ib-builder-workspace ${previewMode==='isometric'?'ib-previewing':''}`}
     data-panel={mobilePanel??'closed'} data-tool={tool} data-build-group={mobileBuildGroup} data-furnish-group={mobileFurnishGroup} data-more-group={mobileMoreGroup}>
     <div className="ib-builder-stage">
+      {!mobilePanel&&(status||error)&&<div className="ib-mobile-feedback" role="status"><AlertCircle size={15}/><span>{error||status}</span><button type="button" aria-label="Dismiss editor message" onClick={()=>setStatus('')}>×</button></div>}
       <div className="ib-mobile-canvas-guide">{tool==='room'?'Drag to draw a room':tool==='furniture'?'Tap to place furniture':tool==='select'?'Tap a room to inspect':tool==='pan'?'Drag to move · Pinch to zoom':tool==='door'?'Tap a door edge':tool==='erase'?'Tap to remove':tool==='wall'?'Tap a wall edge':tool==='window'?'Tap an exterior wall':tool==='lighting'?'Tap to add a light':'Tap to place equipment'}</div>
      {previewMode==='editor'&&<>
    <div className="ib-plan-scroller" ref={scrollerRef}><svg className={planStyle==='architectural'?'ib-floor-canvas ib-floor-architectural':'ib-floor-canvas'} width={Math.round(site.width*30*zoom)} height={Math.round(site.height*30*zoom)} viewBox={`0 0 ${site.width} ${site.height}`} aria-label={floor.label+' building plan'} onPointerDown={onPlanPointerDown} onPointerMove={onPlanPointerMove} onPointerUp={e=>onPlanPointerEnd(e)} onPointerCancel={e=>onPlanPointerEnd(e,true)} style={{touchAction:'none',cursor:tool==='pan'?'grab':tool==='room'?'crosshair':'pointer'}}>
@@ -680,6 +681,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <div className="ib-mobile-drawer-heading"><div><strong>{mobilePanel==='build'?'Build & structure':mobilePanel==='furnish'?'Furniture & interiors':mobilePanel==='inspect'?'Room inspector':'Building management'}</strong>
       <small>{mobilePanel==='build'?'Choose a tool, then work on the plan':mobilePanel==='furnish'?'Select a design or furnishing':mobilePanel==='inspect'?'Edit the selected room or object':'View, safety and reports'}</small></div>
       <button type="button" aria-label="Collapse tool panel" onClick={()=>setMobilePanel(null)}><ChevronDown size={22}/></button></div>
+     {mobilePanel&&(status||error)&&<div className="ib-mobile-sheet-feedback" role="status"><AlertCircle size={14}/>{error||status}</div>}
      <div className="ib-builder-drawer-scroll">
       {previewMode==='editor'&&<>
       <div className="ib-mobile-build-groups" role="group" aria-label="Building tool categories">
