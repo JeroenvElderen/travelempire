@@ -4,7 +4,7 @@
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
 import {furnitureProductForPlacement,FURNITURE_REFINISH_CENTS} from './furnitureCatalog';
-import {roomSections,roomsOverlap,containsRoomRect,containsRoomCell,roomArea,roomPerimeter,roomShapeEqual,type RoomSection} from './hotelRoomGeometry';
+import {roomsOverlap,containsRoomRect,containsRoomCell,roomArea,roomPerimeter,roomShapeEqual,type RoomSection} from './hotelRoomGeometry';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
 export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
