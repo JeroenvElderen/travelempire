@@ -7,6 +7,7 @@ import {
   toggleWall,roomIssues,furnitureSize,
   type HotelFloor,type HotelSite,type Room,type Wall,
 } from './internalConstruction';
+import {containsRoomCell,roomBoundaryEdges} from './hotelRoomGeometry';
 
 export type AccessStatus='connected'|'missing-door'|'disconnected'|'no-entry'|'no-reception'|'upper-floor-pending'|'no-vertical-link';
 export type DoorPair={
@@ -23,8 +24,7 @@ export type FloorAccessReport={
 };
 const circulation=(room:Room|null|undefined):room is Room=>
   room!=null&&(room.type==='corridor'||room.type==='lobby');
-const within=(room:Room,x:number,y:number)=>x>=room.x&&x<room.x+room.width&&
-  y>=room.y&&y<room.y+room.height;
+const within=(room:Room,x:number,y:number)=>containsRoomCell(room,x,y);
 const roomAt=(floor:HotelFloor,x:number,y:number):Room|null=>
  floor.rooms.find(room=>within(room,x,y))??null;
 const furnitureAt=(floor:HotelFloor,x:number,y:number):boolean=>
@@ -78,16 +78,7 @@ export function toggleHotelAccessDoor(
 }
 
 function doorSegments(room:Room):Pick<Wall,'x'|'y'|'orientation'>[]{
- const list:Pick<Wall,'x'|'y'|'orientation'>[]=[];
- for(let x=room.x;x<room.x+room.width;x++){
-  list.push({x,y:room.y,orientation:'h'});
-  list.push({x,y:room.y+room.height,orientation:'h'});
- }
- for(let y=room.y;y<room.y+room.height;y++){
-  list.push({x:room.x,y,orientation:'v'});
-  list.push({x:room.x+room.width,y,orientation:'v'});
- }
- return list;
+ return roomBoundaryEdges(room);
 }
 /** For touch screens, suggest a real boundary segment next to a corridor
  * or lobby. The user can also precisely tap any valid edge manually.
