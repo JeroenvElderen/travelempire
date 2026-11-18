@@ -840,3 +840,19 @@
 .internal-builder .ib-furn-edit-model label{display:grid;gap:5px;min-width:0;font-size:10px;color:var(--ib-muted)}
 .internal-builder .ib-furn-edit-model select{width:100%;min-width:0;max-width:100%;min-height:39px;padding:8px;border:1px solid var(--ib-line);border-radius:9px;background:rgba(27,44,65,.95);color:var(--ib-fg);font-size:11px}
 @media(max-width:620px){.internal-builder .ib-furn-edit-model{grid-template-columns:1fr}}
+
+
+/* Connected corridor tool: existing Room → Corridor, no extra mobile toolbar row. */
+.internal-builder .ib-corridor-hint{display:flex;align-items:flex-start;gap:9px;padding:12px;border:1px solid rgba(128,199,213,.42);border-radius:10px;background:rgba(34,66,82,.63)}
+.internal-builder .ib-corridor-hint>svg{flex-shrink:0;color:#a5d7e0;margin-top:2px}
+.internal-builder .ib-corridor-hint>div{display:grid;gap:4px;min-width:0}
+.internal-builder .ib-corridor-hint strong{color:var(--ib-fg);font-size:12px}
+.internal-builder .ib-corridor-hint small{color:var(--ib-muted);font-size:10px;line-height:1.55}
+.internal-builder .ib-corridor-editor{display:grid;gap:10px;padding:11px 12px;border:1px solid rgba(117,183,192,.43);border-radius:10px;background:rgba(26,61,79,.65)}
+.internal-builder .ib-corridor-editor>div:first-child{display:grid;gap:4px}
+.internal-builder .ib-corridor-editor strong{font-size:12px;color:var(--ib-fg)}
+.internal-builder .ib-corridor-editor small{font-size:10px;color:var(--ib-muted);line-height:1.5}
+.internal-builder .ib-corridor-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.internal-builder .ib-corridor-actions button{display:inline-flex;align-items:center;gap:6px;min-height:41px;padding:8px 11px;font-size:10px;touch-action:manipulation}
+.internal-builder .ib-corridor-actions button:disabled{opacity:.5}
+@media(max-width:530px){.internal-builder .ib-corridor-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.internal-builder .ib-corridor-actions button{justify-content:center;min-width:0}.internal-builder .ib-corridor-actions button:last-child:nth-child(3){grid-column:1/-1}}
