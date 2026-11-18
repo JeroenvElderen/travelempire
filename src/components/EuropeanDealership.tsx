@@ -4,7 +4,8 @@ import {EUROPEAN_MODELS,configuredOffer,trimChoices,trimPricing,verifiedVariants
 import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {AUDI_A5_PAINT_SPRITES,audiA5PaintForConfigurator} from '../audiA5Sprites';
-import {AudiA5PaintThumb,AudiA5VehicleImage} from './AudiA5VehicleImage';
+import {AUDI_A6_PAINT_SPRITES,audiA6PaintForConfigurator} from '../audiA6Sprites';
+import {AudiAvantVehicleImage,AudiA5PaintThumb,AudiA6PaintThumb} from './AudiAvantVehicleImage';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
@@ -31,7 +32,9 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const paints=paintChoices(model,year,currentTrim);
  const wheels=wheelChoices(model,year,currentTrim,activeVariant?.id);
  const paint=paints.find(p=>p.id===paintId)??paints[0];
- const audiSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id);
+ const audiSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id)??
+  audiA6PaintForConfigurator(model.brand,model.name,paint?.id);
+ const audiA6=model.brand==='Audi'&&model.name==='A6 Avant e-hybrid';
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
  const extras=useMemo(()=>{
   const options=individualOptions(model,year,currentTrim);
@@ -67,14 +70,15 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
     <section className="eu-config-group">
       <div className="eu-config-group-heading"><span className="eu-step-number">02</span><h3>Appearance</h3></div>
       <div className="eu-two"><label>Paint<select value={paint?.id??''} onChange={e=>setPaintId(e.target.value)}>{paints.map(p=><option key={p.id} value={p.id}>{p.name}{p.price?' · +'+eur(p.price):''}</option>)}</select></label><label>Wheels<select value={wheel?.id??''} onChange={e=>setWheelId(e.target.value)}>{wheels.map(w=><option key={w.id} value={w.id}>{w.name}{w.price?' · +'+eur(w.price):''}</option>)}</select></label></div>
-      {model.brand==='Audi'&&model.name==='A5 Avant e-hybrid'&&<div className="eu-audi-paint-section">
-       <div className="eu-audi-paint-choices" role="group" aria-label="Audi A5 Avant paint preview choices">
-        {AUDI_A5_PAINT_SPRITES.filter(sprite=>paints.some(p=>p.id===sprite.id)).map(sprite=><button type="button" key={sprite.id}
+      {model.brand==='Audi'&&(model.name==='A5 Avant e-hybrid'||audiA6)&&<div className="eu-audi-paint-section">
+       <div className="eu-audi-paint-choices" role="group" aria-label={model.name+' paint preview choices'}>
+        {(audiA6?AUDI_A6_PAINT_SPRITES:AUDI_A5_PAINT_SPRITES).filter(sprite=>paints.some(p=>p.id===sprite.id)).map(sprite=><button type="button" key={sprite.id}
          aria-pressed={paint?.id===sprite.id} title={sprite.name} onClick={()=>setPaintId(sprite.id)}>
-         <AudiA5PaintThumb paint={sprite}/><span>{sprite.name}</span>
+         {audiA6?<AudiA6PaintThumb paint={sprite}/>:<AudiA5PaintThumb paint={sprite}/>}
+         <span>{sprite.name}</span>
         </button>)}
        </div>
-       <small className="eu-audi-paint-choices-note">Nine top-down paint previews. Other Audi exclusive finishes retain the standard icon.</small>
+       <small className="eu-audi-paint-choices-note">Nine top-down paint previews. A6 additional colour choices are TravelEmpire custom finishes, not verified factory options. Unpictured paints retain the standard car icon.</small>
       </div>}
     </section>
     <details className="eu-extras-panel eu-config-group">
@@ -100,9 +104,9 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
    </div>}
    <aside className="eu-config-summary" ref={summaryRef}>
     <div className="eu-vehicle-stage">
-     {audiSprite?<AudiA5VehicleImage model={model.brand+' '+model.name} paintId={audiSprite.id}
-       className="eu-audi-preview" quality="preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
-       alt={audiSprite.name+' Audi A5 Avant top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
+     {audiSprite?<AudiAvantVehicleImage model={model.brand+' '+model.name} paintId={audiSprite.id}
+       className="eu-audi-preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
+       alt={audiSprite.name+' Audi '+(audiA6?'A6':'A5')+' Avant top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
      <small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small>
     </div>
     <h3>{year} {model.brand} {model.name}</h3><p>{currentTrim} grade · {paint?.name??'Standard paint'} · {wheel?.name??'Standard wheels'}</p>
