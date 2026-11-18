@@ -160,7 +160,11 @@
   display:grid!important;
  }
  .internal-builder .ib-mobile-build-groups{grid-template-columns:repeat(3,minmax(0,1fr))}
- .internal-builder .ib-mobile-build-palette{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .internal-builder .ib-mobile-build-palette{grid-template-columns:repeat(2,minmax(0,1fr))}
+ /* Only the tools in the chosen group appear; six buttons never crowd one sheet. */
+ .internal-builder .ib-builder-workspace[data-build-group="layout"] .ib-mobile-build-palette button:nth-child(n+3){display:none}
+ .internal-builder .ib-builder-workspace[data-build-group="structure"] .ib-mobile-build-palette button:nth-child(-n+2){display:none}
+ .internal-builder .ib-builder-workspace[data-build-group="systems"] .ib-mobile-build-palette{display:none!important}
  .internal-builder .ib-mobile-furnish-palette{grid-template-columns:repeat(3,minmax(0,1fr))}
  .internal-builder .ib-mobile-more-nav{grid-template-columns:repeat(4,minmax(0,1fr))}
  .internal-builder .ib-mobile-build-groups button,
