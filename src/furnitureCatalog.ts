@@ -118,6 +118,16 @@ export function buildFurnitureCatalogue(specs:ReadonlyArray<FurnitureBase>):Furn
    catalogueModel:true};
  }));
 }
+// Stable cache prevents rebuilding all 144 models during hotel simulations,
+// geometry checks, SVG rendering and quotes, especially on mobile Safari.
+const catalogueIndex=new WeakMap<ReadonlyArray<FurnitureBase>,ReadonlyMap<string,FurnitureProduct>>();
+function indexedProducts(specs:ReadonlyArray<FurnitureBase>):ReadonlyMap<string,FurnitureProduct>{
+ const existing=catalogueIndex.get(specs);
+ if(existing)return existing;
+ const index=new Map(buildFurnitureCatalogue(specs).map(p=>[p.id,p]));
+ catalogueIndex.set(specs,index);
+ return index;
+}
 /** Models with unknown identifiers (e.g. a newer save) retain their original
  * base footprint and price instead of crashing an old game version.
  */
@@ -127,8 +137,8 @@ export function furnitureProductForPlacement(
 ):FurnitureProduct{
  const base=specs.find(s=>s.code===item.code);
  if(!base)throw Error('Unknown furniture.');
- const model=item.modelId&&buildFurnitureCatalogue(specs).find(p=>p.id===item.modelId&&p.code===item.code);
- if(model)return model;
+ const model=item.modelId?indexedProducts(specs).get(item.modelId):undefined;
+ if(model&&model.code===item.code)return model;
  return {...base,id:item.code+':legacy',category:CATEGORIES[item.code],
   tier:'essential',style:'classic',modelLabel:base.name,
   catalogueModel:false};
