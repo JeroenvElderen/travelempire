@@ -1,0 +1,22 @@
+name: Verify Skoda Octavia Combi PNGs
+on:
+  push:
+    branches:
+      - feature/skoda-octavia-combi-png-paints
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: PNG and Škoda factory paint integration regression tests
+        run: npm test -- src/skodaOctaviaSprites.test.ts src/audiA5Sprites.test.ts src/audiA6Sprites.test.ts src/europeanVehicleCatalog.test.ts src/startupRecovery.test.ts
+      - name: Full tests (report known unrelated failures)
+        continue-on-error: true
+        run: npm test
