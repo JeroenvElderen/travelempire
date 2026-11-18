@@ -37,6 +37,7 @@ const FURNITURE_MODELS=buildFurnitureCatalogue(furniture);
 const HotelIsometricPreview=lazy(()=>import('./HotelIsometricPreview'));
 
 import './internal-builder.css';
+import './mobile-builder-workspace.css';
 type Props={
  company:Company|null;state:ConstructionState;portfolio:PropertyPortfolio;gameHour:number;gameNowHour:number;cash:number;error:string;
  onSelectLand:(size:HotelPlotSize)=>void;onAddHeadquarters:()=>string|null;onAdoptHolding:(id:string)=>string|null;onChangeSite:(site:HotelSite)=>string|null;
@@ -591,8 +592,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    </div>
    <div className="ib-floor-bar"><div className="ib-floor-switch"><Layers3 size={15}/><select aria-label="Selected floor" value={floorIndex} onChange={e=>{setFloorIndex(Number(e.target.value));setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);}}>{site.draft.map((f,i)=><option key={f.id} value={i}>{f.label}</option>)}</select></div><button type="button" disabled={previewMode==='isometric'||active!==undefined||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={14}/> Add floor</button><div className="ib-history-controls"><button type="button" title="Undo" aria-label="Undo blueprint change" disabled={previewMode==='isometric'||!!active||history.current.siteId!==site.id||!history.current.undo.length} onClick={()=>restoreHistory('undo')}><Undo2 size={15}/></button><button type="button" title="Redo" aria-label="Redo blueprint change" disabled={previewMode==='isometric'||!!active||history.current.siteId!==site.id||!history.current.redo.length} onClick={()=>restoreHistory('redo')}><Redo2 size={15}/></button></div><div className="ib-zoom"><button type="button" disabled={previewMode==='isometric'} onClick={()=>zoomTo(zoomRef.current-.15)} aria-label="Zoom out">−</button><span>{Math.round(zoom*100)}%</span><button type="button" disabled={previewMode==='isometric'} onClick={()=>zoomTo(zoomRef.current+.15)} aria-label="Zoom in">+</button><button type="button" className="ib-fit-button" disabled={previewMode==='isometric'} onClick={()=>{if(!site)return;const box=scrollerRef.current;const fit=box?Math.min((box.clientWidth-12)/(site.width*30),(box.clientHeight-12)/(site.height*30),2.5):1;pendingScroll.current={left:0,top:0};setZoom(planZoom(fit));if(box&&planZoom(fit)===zoomRef.current){box.scrollLeft=0;box.scrollTop=0;pendingScroll.current=null;}}}>Fit</button></div></div>
    <div className={`ib-builder-workspace ${previewMode==='isometric'?'ib-previewing':''}`}
-    data-panel={mobilePanel??'closed'} data-furnish-group={mobileFurnishGroup} data-more-group={mobileMoreGroup}>
+    data-panel={mobilePanel??'closed'} data-tool={tool} data-build-group={mobileBuildGroup} data-furnish-group={mobileFurnishGroup} data-more-group={mobileMoreGroup}>
     <div className="ib-builder-stage">
+      <div className="ib-mobile-canvas-guide">{tool==='room'?'Drag to draw a room':tool==='furniture'?'Tap to place furniture':tool==='select'?'Tap a room to inspect':tool==='pan'?'Drag to move · Pinch to zoom':tool==='door'?'Tap a door edge':tool==='erase'?'Tap to remove':tool==='wall'?'Tap a wall edge':tool==='window'?'Tap an exterior wall':tool==='lighting'?'Tap to add a light':'Tap to place equipment'}</div>
      {previewMode==='editor'&&<>
    <div className="ib-plan-scroller" ref={scrollerRef}><svg className={planStyle==='architectural'?'ib-floor-canvas ib-floor-architectural':'ib-floor-canvas'} width={Math.round(site.width*30*zoom)} height={Math.round(site.height*30*zoom)} viewBox={`0 0 ${site.width} ${site.height}`} aria-label={floor.label+' building plan'} onPointerDown={onPlanPointerDown} onPointerMove={onPlanPointerMove} onPointerUp={e=>onPlanPointerEnd(e)} onPointerCancel={e=>onPlanPointerEnd(e,true)} style={{touchAction:'none',cursor:tool==='pan'?'grab':tool==='room'?'crosshair':'pointer'}}>
      <rect width={site.width} height={site.height} fill="#111c31"/>
@@ -680,12 +682,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
       <button type="button" aria-label="Collapse tool panel" onClick={()=>setMobilePanel(null)}><ChevronDown size={22}/></button></div>
      <div className="ib-builder-drawer-scroll">
       {previewMode==='editor'&&<>
+      <div className="ib-mobile-build-groups" role="group" aria-label="Building tool categories">
+       <button type="button" className={mobileBuildGroup==='layout'?'selected':''} onClick={()=>setMobileBuildGroup('layout')}>Rooms & corridors</button>
+       <button type="button" className={mobileBuildGroup==='structure'?'selected':''} onClick={()=>setMobileBuildGroup('structure')}>Walls & doors</button>
+       <button type="button" className={mobileBuildGroup==='systems'?'selected':''} onClick={()=>setMobileBuildGroup('systems')}>Building systems</button>
+      </div>
       <div className="ib-mobile-build-palette" role="group" aria-label="Choose building tool">
        {([['room','Rooms',Plus],['corridor','Corridor',Layers3],['wall','Walls',Hammer],['door','Doors',DoorOpen],['window','Windows',PanelTop],['erase','Erase',Trash2]] as const).map(([name,label,Icon])=><button type="button" key={name} disabled={!!active}
         className={(tool==='room'&&name==='corridor'&&roomType==='corridor'||tool==='room'&&name==='room'&&roomType!=='corridor'||tool===name)?'selected':''}
         onClick={()=>{if(name==='corridor'){setRoomType('corridor');chooseMobileTool('room');}else{if(name==='room'&&roomType==='corridor')setRoomType('guest');chooseMobileTool(name as BuilderTool);} }}>
         <Icon size={16}/>{label}</button>)}
       </div>
+      <button type="button" className="ib-mobile-add-floor" disabled={!!active||site.draft.length>=MAX_FLOORS} onClick={addBuildingFloor}><Plus size={16}/> Add another floor</button>
       <div className="ib-mobile-furnish-palette" role="group" aria-label="Choose furnishing mode">
        <button type="button" className={tool==='furniture'?'selected':''} onClick={()=>chooseMobileTool('furniture')}><Sofa size={16}/> Furniture</button>
        <button type="button" className={tool==='lighting'?'selected':''} onClick={()=>chooseMobileTool('lighting')}><Lightbulb size={16}/> Lights</button>
@@ -698,7 +706,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
        <button type="button" className={mobileMoreGroup==='reports'?'selected':''} onClick={()=>setMobileMoreGroup('reports')}>Reports</button>
        <button type="button" onClick={()=>{setMobilePanel(null);setTab('projects')}}><HardHat size={14}/> Construction</button>
       </div>
-      <div className="ib-mobile-inspect-placeholder">Tap a room or a furnishing in the plan to inspect and edit it.</div>
+      {!selectedRoom&&!selectedPlacedFurniture&&<div className="ib-mobile-inspect-placeholder">Tap a room or a furnishing in the plan to inspect and edit it.</div>}
    <div className="ib-visual-mode" role="group" aria-label="Hotel building visualisation">
     <div><strong>Building view</strong><small>{previewMode==='editor'?'Editable 2D architecture plan':'Read-only isometric building cutaway'}</small></div>
     <div className="ib-visual-mode-buttons"><button type="button" className={previewMode==='editor'?'selected':''} onClick={()=>setPreviewMode('editor')} aria-pressed={previewMode==='editor'}><Grid2X2 size={15}/> 2D editor</button><button type="button" className={previewMode==='isometric'?'selected':''} onClick={()=>setPreviewMode('isometric')} aria-pressed={previewMode==='isometric'}><Layers3 size={15}/> Isometric preview</button></div>
