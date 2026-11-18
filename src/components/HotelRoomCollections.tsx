@@ -3,7 +3,7 @@ import {BedDouble,Check,CheckCircle2,Info,Layers3,Paintbrush,ShieldAlert,Shoppin
 import type {HotelFloor,HotelSite,Room} from '../internalConstruction';
 import {euros,furnitureSize} from '../internalConstruction';
 import {
- COLLECTION_STYLES,ROOM_COLLECTIONS,curatedCollectionPieces,
+ COLLECTION_STYLES,curatedCollectionPieces,
  planRoomFurnitureCollection,furnitureCollectionFor,
  type CollectionMode,type CollectionPlan,
 } from '../hotelFurnitureCollections';
