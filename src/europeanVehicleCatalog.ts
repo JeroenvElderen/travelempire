@@ -341,7 +341,18 @@ const COROLLA_VARIANTS:VerifiedVariant[]=[
 export function vehicleConfiguration(model:VehicleModel,year:number):VehicleConfiguration|undefined{return VEHICLE_CONFIGURATIONS[model.brand+'|'+model.name+'|'+year];}
 export function availableColors(model:VehicleModel,year:number,trim?:string):VehicleColor[]{return (vehicleConfiguration(model,year)?.colors??[]).filter(c=>(!c.trims||!!trim&&c.trims.includes(trim))&&(!c.years||c.years.includes(year)));}
 export function availableConfiguratorGroups(model:VehicleModel,year:number,trim?:string,variantId?:string):ConfiguratorGroup[]{return (vehicleConfiguration(model,year)?.configurator??[]).map(g=>({...g,choices:g.choices.filter(c=>(!c.trims||!!trim&&c.trims.includes(trim))&&(!c.variantIds||!!variantId&&c.variantIds.includes(variantId)))})).filter(g=>g.choices.length>0);}
-export function paintChoices(model:VehicleModel,year:number,trim:string):VehicleColor[]{return availableColors(model,year,trim);}
+export function paintChoices(model:VehicleModel,year:number,trim:string):VehicleColor[]{
+ const original=availableColors(model,year,trim);
+ // Clearly game-only paint for the user-supplied Phoenix Orange Combi asset.
+ // Never alter Škoda's published colours, grade restrictions or prices.
+ if(model.brand==='Skoda'&&model.name==='Octavia Combi'&&year===2027)
+  return [...original,{
+   id:'oct27-paint-phoenix-custom',
+   name:'Phoenix Orange (TravelEmpire custom)',
+   hex:'#C65E18',price:1320,
+  }];
+ return original;
+}
 export function wheelChoices(model:VehicleModel,year:number,trim:string,variantId?:string):ConfiguratorChoice[]{return availableConfiguratorGroups(model,year,trim,variantId).find(g=>g.id==='wheels')?.choices??[];}
 export function individualOptions(model:VehicleModel,year:number,trim:string):FactoryOption[]{const list=model.brand==='Volvo'&&model.name==='XC90'&&year===2027?VOLVO_XC90_OPTIONS:model.brand==='Volvo'&&model.name==='XC60'&&year===2027?VOLVO_XC60_OPTIONS:model.brand==='Volvo'&&model.name==='V60'&&year===2027?VOLVO_V60_OPTIONS:model.brand==='Skoda'&&year===2027&&SKODA_SUPERB_VARIANTS[model.name]?SKODA_SUPERB_OPTIONS:model.brand==='Skoda'&&year===2027&&SKODA_OCTAVIA_VARIANTS[model.name]?SKODA_OCTAVIA_OPTIONS:model.brand==='Skoda'&&model.name==='Kodiaq'&&year===2027?SKODA_KODIAQ_OPTIONS:model.brand==='Audi'&&model.name==='Q9 SUV'&&year===2027?AUDI_Q9_OPTIONS:model.brand==='Audi'&&model.name==='Q7 SUV TFSI e'&&year===2026?AUDI_Q7_TFSIE_OPTIONS:model.brand==='Audi'&&year===2027&&AUDI_A6_VARIANTS[model.name]?AUDI_A6_OPTIONS:model.brand==='Audi'&&year===2027&&AUDI_A5_VARIANTS[model.name]?AUDI_A5_OPTIONS:model.name==='Corolla Saloon'&&year===2026?COROLLA_SALOON_OPTIONS:model.name==='Corolla Touring Sports'&&year===2027?COROLLA_TS_OPTIONS:model.name==='RAV4 Hybrid'&&year===2026?RAV4_HEV_OPTIONS:[];return list.map(o=>({...o,price:o.includedTrims?.includes(trim)?0:o.price,included:o.includedTrims?.includes(trim)??false}));}
 export function compatibleOptions(_model:VehicleModel):FactoryOption[]{return [];}
