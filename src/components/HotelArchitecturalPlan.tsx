@@ -1,5 +1,5 @@
 import type {HotelFloor,HotelSite,ObjectPlacement} from '../internalConstruction';
-import {furnitureSize} from '../internalConstruction';
+import {furnitureSize,roomSections,roomBoundaryEdges} from '../internalConstruction';
 import {ISO_COLORS,roomShortLabel,wallSegment} from '../hotelVisualisation';
 import {accessDoorPair} from '../hotelAccess';
 import {furnitureFinishColor} from '../furnitureCatalog';
@@ -12,13 +12,22 @@ export function ArchitecturalRooms({floor}:{floor:HotelFloor}){
  return <g className="ib-architecture-rooms" pointerEvents="none">
   {floor.rooms.map(room=>{
    const x=room.x,y=room.y,w=room.width,h=room.height;
+   const parts=roomSections(room),multi=parts.length>1;
+   const outline=multi?roomBoundaryEdges(room).map(edge=>
+    edge.orientation==='h'?
+     `M ${edge.x} ${edge.y} h 1`:`M ${edge.x} ${edge.y} v 1`).join(' '):'';
    const isShaft=room.type==='stairwell'||room.type==='elevator';
    return <g key={room.id}>
-    <rect x={x+.04} y={y+.04} width={w-.08} height={h-.08} rx=".05"
-     fill={ISO_COLORS[room.type]} fillOpacity=".43" stroke="#e9f5ff"
-     strokeWidth=".14"/>
-    <rect x={x+.17} y={y+.17} width={w-.34} height={h-.34}
-     fill="none" stroke="#c7d9e6" strokeWidth=".035" strokeOpacity=".48"/>
+    {parts.map((part,i)=><rect key={i} x={multi?part.x:part.x+.04}
+     y={multi?part.y:part.y+.04}
+     width={multi?part.width:part.width-.08}
+     height={multi?part.height:part.height-.08}
+     rx={multi?undefined:'.05'}
+     fill={ISO_COLORS[room.type]} fillOpacity=".43"
+     stroke={multi?'none':'#e9f5ff'} strokeWidth=".14"/>)}
+    {multi?<path d={outline} fill="none" stroke="#e9f5ff" strokeWidth=".14"/>:
+     <rect x={x+.17} y={y+.17} width={w-.34} height={h-.34}
+      fill="none" stroke="#c7d9e6" strokeWidth=".035" strokeOpacity=".48"/>}
     {room.type==='stairwell'&&Array.from({length:Math.max(1,Math.floor(h/.46))},(_,i)=>{
      const offset=(i+1)*h/(Math.floor(h/.46)+1);
      return <line key={i} x1={x+.45} x2={x+w-.45}
@@ -30,13 +39,16 @@ export function ArchitecturalRooms({floor}:{floor:HotelFloor}){
     </g>}
     {room.type==='bathroom'&&<path d={`M ${x+.32} ${y+.32} L ${x+w-.32} ${y+h-.32}`}
       stroke="#c4edf0" strokeWidth=".035" strokeOpacity=".5"/>}
-    {room.type==='corridor'&&<path d={`M ${x+w/2} ${y+.15} V ${y+h-.15}`}
-      stroke="#e0e9fc" strokeWidth=".045" strokeDasharray=".32 .19" opacity=".48"/>}
+    {room.type==='corridor'&&parts.map((part,i)=><path key={i}
+      d={part.height>=part.width?
+       `M ${part.x+part.width/2} ${part.y+.15} V ${part.y+part.height-.15}`:
+       `M ${part.x+.15} ${part.y+part.height/2} H ${part.x+part.width-.15}`}
+      stroke="#e0e9fc" strokeWidth=".045" strokeDasharray=".32 .19" opacity=".48"/> )}
     <text x={x+w/2} y={y+Math.min(.59,h*.23)} fontSize=".37" fontWeight="650"
      letterSpacing=".01" textAnchor="middle" fill="#f5faff">
      {roomShortLabel(room)}
     </text>
-    {!isShaft&&w>=3&&h>=3&&<text x={x+w/2} y={y+h-.29} fontSize=".29"
+    {!isShaft&&!multi&&w>=3&&h>=3&&<text x={x+w/2} y={y+h-.29} fontSize=".29"
      textAnchor="middle" fill="#e0eaf7" opacity=".93">{w} × {h} m</text>}
    </g>;
   })}
