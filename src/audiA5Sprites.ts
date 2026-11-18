@@ -1,7 +1,7 @@
-/** Real top-down Audi A5 Avant PNG assets, produced from the same source car.
- * The atlas keeps nine official named paints in ONE small request on iPhone Safari.
- * Crops are decoded once and cached as image/png data URLs. Other vehicle
- * models and unavailable Audi exclusive paints keep the original SVG icon.
+/** Top-down Audi A5 Avant PNGs, matched to existing factory paint IDs.
+ * Nine tiny transparent paint sprites are served directly from /public/assets;
+ * a one-request atlas supplies colour thumbnails in the dealership.
+ * The original SVG remains the fallback for other models and custom paints.
  */
 export type AudiPaintSprite={id:string;name:string;hex:string;index:number;slug:string};
 export const AUDI_A5_PAINT_SPRITES:readonly AudiPaintSprite[]=[
@@ -41,17 +41,18 @@ export function audiA5PaintForConfigurator(
  if(brand!=='Audi'||name!=='A5 Avant e-hybrid')return null;
  return PAINT_BY_ID.get(paintId??'audi-a5-paint-0')??null;
 }
-/** Each paint is a separate optimized, transparent PNG. The small versions are
- * for moving taxis; the higher-resolution variants are for the showroom.
- * The 9-colour atlas above is used only by the cheap thumbnail strip.
+/** Each paint is a separate optimised transparent PNG. At 80 × 170 pixels,
+ * it's already sharper than the actual 9 × 20 map marker or 56 × 114 preview.
+ * The nine-colour atlas is only used by the dealership thumbnail strip.
  */
 export function audiA5MapSpriteUrl(paintId:string):string|null{
  const entry=PAINT_BY_ID.get(paintId);
  return entry?`${import.meta.env.BASE_URL??'/'}assets/vehicles/audi-a5-avant/${entry.slug}.png`:null;
 }
 export function audiA5PreviewSpriteUrl(paintId:string):string|null{
- const entry=PAINT_BY_ID.get(paintId);
- return entry?`${import.meta.env.BASE_URL??'/'}assets/vehicles/audi-a5-avant/${entry.slug}-preview.png`:null;
+ // The displayed showroom car is 56px wide; the 80px map-quality PNG is
+ // already high enough for that preview, without nine extra image downloads.
+ return audiA5MapSpriteUrl(paintId);
 }
 export async function audiA5SpriteUrl(
  paintId:string,quality:'map'|'preview'='map',
