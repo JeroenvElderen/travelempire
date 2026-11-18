@@ -44,13 +44,14 @@ let loaded:Promise<HTMLImageElement>|null=null;
 const imageCache=new Map<string,Promise<string|null>>();
 function loadAtlas():Promise<HTMLImageElement>{
  if(loaded)return loaded;
- loaded=new Promise((resolve,reject)=>{
+ const pending=new Promise<HTMLImageElement>((resolve,reject)=>{
   const img=new Image();
   img.onload=()=>resolve(img);
   img.onerror=()=>reject(new Error('Audi A6 PNG atlas failed to load'));
   img.src=audiA6AtlasUrl();
  }).catch(error=>{loaded=null;throw error;});
- return loaded;
+ loaded=pending;
+ return pending;
 }
 /** Cache one 80 × 170 PNG crop per actual paint.
  * The dealership previews and MapLibre sprites reuse the same result.
