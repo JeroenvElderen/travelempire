@@ -3,17 +3,17 @@
  * Crops are decoded once and cached as image/png data URLs. Other vehicle
  * models and unavailable Audi exclusive paints keep the original SVG icon.
  */
-export type AudiPaintSprite={id:string;name:string;hex:string;index:number};
+export type AudiPaintSprite={id:string;name:string;hex:string;index:number;slug:string};
 export const AUDI_A5_PAINT_SPRITES:readonly AudiPaintSprite[]=[
- {id:'audi-a5-paint-0',name:'Arkona White',hex:'#E8E9E8',index:0},
- {id:'audi-a5-paint-1',name:'Glacier White Metallic',hex:'#E8E9E5',index:1},
- {id:'audi-a5-paint-2',name:'Mythos Black Metallic',hex:'#15171B',index:2},
- {id:'audi-a5-paint-3',name:'Firmament Blue Metallic',hex:'#273D54',index:3},
- {id:'audi-a5-paint-4',name:'Floret Silver Metallic',hex:'#B9BEC3',index:4},
- {id:'audi-a5-paint-5',name:'Plateau Grey Metallic',hex:'#7C858B',index:5},
- {id:'audi-a5-paint-6',name:'Horizon Blue Metallic',hex:'#597E94',index:6},
- {id:'audi-a5-paint-7',name:'Grenadine Red Metallic',hex:'#8E2633',index:7},
- {id:'audi-a5-paint-9',name:'Daytona Grey Pearl Effect',hex:'#666A70',index:8},
+ {id:'audi-a5-paint-0',name:'Arkona White',hex:'#E8E9E8',index:0,slug:'arkona-white'},
+ {id:'audi-a5-paint-1',name:'Glacier White Metallic',hex:'#E8E9E5',index:1,slug:'glacier-white'},
+ {id:'audi-a5-paint-2',name:'Mythos Black Metallic',hex:'#15171B',index:2,slug:'mythos-black'},
+ {id:'audi-a5-paint-3',name:'Firmament Blue Metallic',hex:'#273D54',index:3,slug:'firmament-blue'},
+ {id:'audi-a5-paint-4',name:'Floret Silver Metallic',hex:'#B9BEC3',index:4,slug:'floret-silver'},
+ {id:'audi-a5-paint-5',name:'Plateau Grey Metallic',hex:'#7C858B',index:5,slug:'plateau-grey'},
+ {id:'audi-a5-paint-6',name:'Horizon Blue Metallic',hex:'#597E94',index:6,slug:'horizon-blue'},
+ {id:'audi-a5-paint-7',name:'Grenadine Red Metallic',hex:'#8E2633',index:7,slug:'grenadine-red'},
+ {id:'audi-a5-paint-9',name:'Daytona Grey Pearl Effect',hex:'#666A70',index:8,slug:'daytona-grey'},
 ] as const;
 export const AUDI_A5_ATLAS_COLUMNS=9;
 export const AUDI_A5_SPRITE_WIDTH=80;
@@ -41,45 +41,22 @@ export function audiA5PaintForConfigurator(
  if(brand!=='Audi'||name!=='A5 Avant e-hybrid')return null;
  return PAINT_BY_ID.get(paintId??'audi-a5-paint-0')??null;
 }
-const atlasUrl=()=>`${import.meta.env.BASE_URL??'/'}assets/vehicles/audi-a5-avant/paint-atlas.png`;
-let atlasPromise:Promise<HTMLImageElement>|null=null;
-const spriteCache=new Map<string,string>();
-function loadAtlas():Promise<HTMLImageElement>{
- if(atlasPromise)return atlasPromise;
- atlasPromise=new Promise((resolve,reject)=>{
-  const img=new Image();
-  img.onload=()=>resolve(img);
-  img.onerror=()=>reject(new Error('Audi A5 Avant paint atlas failed to load'));
-  img.src=atlasUrl();
- }).catch(error=>{atlasPromise=null;throw error;});
- return atlasPromise;
-}
-/** Never request or recolor an image on every map simulation tick. One atlas
- * decode, then one cropped PNG per actually used colour. No WebGL layers.
+/** Each paint is a separate optimized, transparent PNG. The small versions are
+ * for moving taxis; the higher-resolution variants are for the showroom.
+ * The 9-colour atlas above is used only by the cheap thumbnail strip.
  */
-export async function audiA5SpriteUrl(paintId:string):Promise<string|null>{
+export function audiA5MapSpriteUrl(paintId:string):string|null{
  const entry=PAINT_BY_ID.get(paintId);
- if(!entry||typeof document==='undefined'||typeof Image==='undefined')return null;
- const cached=spriteCache.get(entry.id);
- if(cached)return cached;
- try{
-  const atlas=await loadAtlas();
-  if(atlas.naturalWidth!==AUDI_A5_SPRITE_WIDTH*AUDI_A5_ATLAS_COLUMNS||
-   atlas.naturalHeight!==AUDI_A5_SPRITE_HEIGHT)
-   throw Error('Audi atlas dimensions do not match the sprite manifest');
-  const canvas=document.createElement('canvas');
-  canvas.width=AUDI_A5_SPRITE_WIDTH;canvas.height=AUDI_A5_SPRITE_HEIGHT;
-  const ctx=canvas.getContext('2d');
-  if(!ctx)return null;
-  ctx.drawImage(atlas,entry.index*AUDI_A5_SPRITE_WIDTH,0,
-   AUDI_A5_SPRITE_WIDTH,AUDI_A5_SPRITE_HEIGHT,
-   0,0,AUDI_A5_SPRITE_WIDTH,AUDI_A5_SPRITE_HEIGHT);
-  const url=canvas.toDataURL('image/png');
-  spriteCache.set(entry.id,url);
-  return url;
- }catch(error){
-  // Retain the old car SVG on unsupported browsers or asset load failures.
-  console.warn('[TravelEmpire] Audi A5 Avant sprite unavailable:',error);
-  return null;
- }
+ return entry?`${import.meta.env.BASE_URL??'/'}assets/vehicles/audi-a5-avant/${entry.slug}.png`:null;
+}
+export function audiA5PreviewSpriteUrl(paintId:string):string|null{
+ const entry=PAINT_BY_ID.get(paintId);
+ return entry?`${import.meta.env.BASE_URL??'/'}assets/vehicles/audi-a5-avant/${entry.slug}-preview.png`:null;
+}
+export async function audiA5SpriteUrl(
+ paintId:string,quality:'map'|'preview'='map',
+):Promise<string|null>{
+ // Retain promise-based compatibility for the map's current async image
+ // loading; no canvas, colour processing or extra CPU work is needed.
+ return quality==='preview'?audiA5PreviewSpriteUrl(paintId):audiA5MapSpriteUrl(paintId);
 }
