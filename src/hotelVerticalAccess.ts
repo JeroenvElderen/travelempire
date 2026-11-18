@@ -4,6 +4,7 @@
  */
 import {drawRoom,roomIssues,type HotelFloor,type HotelSite,type Room,type RoomType} from './internalConstruction';
 import {accessDoorPair,hotelAccessDoorValid,type AccessStatus,type FloorAccessReport} from './hotelAccess';
+import {roomSections} from './hotelRoomGeometry';
 
 export type VerticalCoreType='stairwell'|'elevator';
 export const VERTICAL_CORES:Readonly<Record<VerticalCoreType,{
@@ -77,7 +78,7 @@ export function addVerticalCore(
  }
  const position=candidatePositions.find(c=>c.x>=0&&c.y>=0&&
   c.x+c.width<=site.width&&c.y+c.height<=site.height&&
-  !floor.rooms.some(existing=>overlaps(existing,c)));
+  !floor.rooms.some(existing=>roomSections(existing).some(section=>overlaps(section,c))));
  if(!position)throw Error(expected.length?
   'Cannot align this shaft with the adjacent floor. Move conflicting rooms or use a different location.':
   'No space for a stairwell or elevator. Make room next to a corridor.');
