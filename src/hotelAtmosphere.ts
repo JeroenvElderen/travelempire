@@ -102,7 +102,7 @@ export function suggestRoomLighting(
  const centerX=room.x+(room.width-1)/2,centerY=room.y+(room.height-1)/2;
  const cells:Array<{x:number;y:number;dist:number}>=[];
  for(let y=room.y;y<room.y+room.height;y++)for(let x=room.x;x<room.x+room.width;x++)
-  cells.push({x,y,dist:Math.abs(x-centerX)+Math.abs(y-centerY)});
+  if(containsRoomCell(room,x,y))cells.push({x,y,dist:Math.abs(x-centerX)+Math.abs(y-centerY)});
  cells.sort((a,b)=>a.dist-b.dist);
  const free=cells.find(c=>!(floor.lights??[]).some(l=>l.x===c.x&&l.y===c.y));
  return free?{x:free.x,y:free.y}:null;
