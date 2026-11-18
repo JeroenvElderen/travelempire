@@ -8,6 +8,7 @@ import {
  type SafetyFixture,type SafetyFixtureKind,
 } from './internalConstruction';
 import {accessDoorPair,hotelAccessDoorValid} from './hotelAccess';
+import {containsRoomCell,roomSections,roomArea} from './hotelRoomGeometry';
 
 export const SAFETY_FIXTURE_COST_CENTS:Readonly<Record<SafetyFixtureKind,number>>={
  'smoke-alarm':9500,'fire-extinguisher':18000,'exit-sign':12000,
@@ -22,8 +23,7 @@ const egressRoom=(r:Room|null|undefined):boolean=>
  r!=null&&(circulation(r)||r.type==='stairwell');
 const wheelchairRoom=(r:Room|null|undefined):boolean=>
  r!=null&&(circulation(r)||r.type==='elevator')&&r.width>=2&&r.height>=2;
-const inRoom=(room:Room,x:number,y:number)=>
- x>=room.x&&y>=room.y&&x<room.x+room.width&&y<room.y+room.height;
+const inRoom=(room:Room,x:number,y:number)=>containsRoomCell(room,x,y);
 const key=(fi:number,id:string)=>fi+':'+id;
 const roomAt=(f:HotelFloor,x:number,y:number)=>
  f.rooms.find(r=>inRoom(r,x,y))??null;
@@ -212,7 +212,7 @@ export function analyzeHotelSafety(
    const clearFloor=room.width>=4&&room.height>=4&&
     floor.objects.filter(o=>inRoom(room,o.x,o.y)).reduce((a,o)=>{
      const size=furnitureSize(o);return a+size.width*size.height;
-    },0)<room.width*room.height*.60;
+    },0)<roomArea(room)*.60;
    const wheelchairRoute=clearFloor&&corridorDoors.some(d=>
     wheelchairReach.has(d.other));
    const fireReady=smokeAlarm&&evacuationRoute&&exitSign&&extinguisherInReachable;
