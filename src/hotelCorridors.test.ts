@@ -158,6 +158,19 @@ describe('Actual hotel navigation and quote consistency',()=>{
   expect(()=>placeFurniture(floor,{id:'lamp',code:'lamp',x:11,y:2,rotated:false},site))
    .toThrow('inside a room');
  });
+ it('does not repurchase previously constructed corridors when merging their identities',()=>{
+  const site=newSite();
+  let floor=drawRoom(site.draft[0],room('left','corridor',1,1,2,8),site);
+  floor=drawRoom(floor,room('right','corridor',3,1,2,8),site);
+  const paid={...site,built:[floor],draft:[floor]};
+  const merged=joinAdjacentCorridors(floor,site,'left');
+  expect(merged.rooms).toHaveLength(1);
+  const quote=constructionQuote({...paid,draft:[merged]},'contractor',0);
+  expect(quote.changes).toBe(1);
+  expect(quote.materials.find(m=>m.id==='flooring')?.quantity).toBe(0);
+  expect(quote.materialCents).toBe(0);
+  expect(quote.furnitureCents).toBe(0);
+ });
  it('charges only extra corridor floor area when extending an already built passage',()=>{
   const site=newSite(),f=paint(site.draft[0],site,part(1,1,2,8),'hall');
   const built={...site,built:[f],draft:[f]};
