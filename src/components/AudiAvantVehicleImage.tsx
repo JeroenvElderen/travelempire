@@ -4,8 +4,8 @@ import {AUDI_A6_PAINT_SPRITES,AUDI_A6_ATLAS_COLUMNS,audiA6AtlasUrl,
  audiA6PaintForVehicle,audiA6SpriteUrl} from '../audiA6Sprites';
 import {AudiA5PaintThumb} from './AudiA5VehicleImage';
 import {
- SKODA_OCTAVIA_ATLAS_COLUMNS,SKODA_OCTAVIA_PAINT_SPRITES,
- skodaOctaviaAtlasUrl,skodaOctaviaPaintForVehicle,skodaOctaviaSpriteUrl,
+ SKODA_OCTAVIA_ATLAS_COLUMNS,
+ skodaOctaviaAtlasUrl,skodaOctaviaPaintByOptionId,skodaOctaviaPaintForVehicle,skodaOctaviaSpriteUrl,
  type SkodaOctaviaPaintSprite,
 } from '../skodaOctaviaSprites';
 import type {AudiPaintSprite} from '../audiA5Sprites';
@@ -22,8 +22,7 @@ export function VehiclePaintImage({
   audiA6PaintForVehicle(model,optionIds,paintHex);
  const a5=paintId?AUDI_A5_PAINT_SPRITES.find(p=>p.id===paintId)??null:
   audiA5PaintForVehicle(model,optionIds,paintHex);
- const skoda=paintId?SKODA_OCTAVIA_PAINT_SPRITES.find(p=>
-   p.id===paintId||paintId==='oct27-paint-phoenix-custom'&&p.id==='phoenix')??null:
+ const skoda=paintId?skodaOctaviaPaintByOptionId(paintId):
    skodaOctaviaPaintForVehicle(model,optionIds,paintHex);
  const [url,setUrl]=useState<string|null>(null);
  const [failed,setFailed]=useState(false);
