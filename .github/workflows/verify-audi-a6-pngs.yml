@@ -16,7 +16,7 @@ jobs:
       - name: Verify transparent nine-colour PNG atlas exists
         run: |
           test -s public/assets/vehicles/audi-a6-avant/paint-atlas.png
-          file public/assets/vehicles/audi-a6-avant/paint-atlas.png | grep -E 'PNG image data, 576 x 136'
+          file public/assets/vehicles/audi-a6-avant/paint-atlas.png | grep -E 'PNG image data, 504 x 119'
       - name: Production build
         run: npm run build
       - name: Audi A5/A6, purchase and fleet regression
