@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {Layers3,RotateCw,Eye,Boxes,Info} from 'lucide-react';
 import type {HotelFloor,HotelSite,Room,ObjectPlacement,Wall} from '../internalConstruction';
-import {furnitureSize} from '../internalConstruction';
+import {furnitureSize,roomSections,roomBoundaryEdges} from '../internalConstruction';
 import {furnitureFinishColor} from '../furnitureCatalog';
 import {
  buildIsoScene,isoCorners,isoProject,pointString,roomShortLabel,
@@ -13,21 +13,33 @@ const pnts=(points:IsoPoint[])=>pointString(points);
 function RoomCutaway({room,site,z,angle,selected}:{
  room:Room;site:HotelSite;z:number;angle:IsoAngle;selected:boolean;
 }){
- const c=isoCorners(room.x,room.y,room.width,room.height,z,
-  site.width,site.height,angle);
- const slab=isoCorners(room.x,room.y,room.width,room.height,z-3,
-  site.width,site.height,angle);
+ const sections=roomSections(room);
+ const edges=roomBoundaryEdges(room);
  const cx=isoProject(room.x+room.width/2,room.y+room.height/2,
   z+.15,site.width,site.height,angle);
  const label=roomShortLabel(room);
  const color=ISO_COLORS[room.type];
  return <g>
-  <polygon points={pnts([c[1],c[2],slab[2],slab[1]])}
-   fill="#152e43" stroke="#6e91a5" strokeWidth=".7"/>
-  <polygon points={pnts([c[2],c[3],slab[3],slab[2]])}
-   fill="#1c344a" stroke="#6e91a5" strokeWidth=".7"/>
-  <polygon points={pnts(c)} fill={color} fillOpacity=".90"
-   stroke={selected?'#fff3af':'#d6e9f0'} strokeWidth={selected?2.4:1.1}/>
+  {sections.map((part,i)=>{
+   const corners=isoCorners(part.x,part.y,part.width,part.height,z,
+    site.width,site.height,angle);
+   return <polygon key={i} points={pnts(corners)} fill={color}
+    fillOpacity=".90" stroke="none"/>;
+  })}
+  {edges.map((edge,i)=>{
+   const x2=edge.x+(edge.orientation==='h'?1:0);
+   const y2=edge.y+(edge.orientation==='v'?1:0);
+   const a=isoProject(edge.x,edge.y,z,site.width,site.height,angle);
+   const b=isoProject(x2,y2,z,site.width,site.height,angle);
+   const lowA=isoProject(edge.x,edge.y,z-3,site.width,site.height,angle);
+   const lowB=isoProject(x2,y2,z-3,site.width,site.height,angle);
+   return <g key={i}>
+    <polygon points={pnts([a,b,lowB,lowA])} fill="#152e43"
+     fillOpacity=".7" stroke="none"/>
+    <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+     stroke={selected?'#fff3af':'#d6e9f0'} strokeWidth={selected?2.4:1.1}/>
+   </g>;
+  })}
   {room.type==='stairwell'&&Array.from({length:Math.min(10,Math.max(2,room.height))},(_,i)=>{
    const y=room.y+(i+.5)*room.height/Math.min(10,Math.max(2,room.height));
    const a=isoProject(room.x+.2,y,z+.25,site.width,site.height,angle);
