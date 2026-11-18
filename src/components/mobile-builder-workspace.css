@@ -83,6 +83,22 @@
   background:radial-gradient(ellipse at 50% 35%,#20354d,#111e34);
  }
  .internal-builder .ib-builder-stage .ib-iso-viewport{min-height:230px;max-height:47dvh}
+ .internal-builder .ib-mobile-feedback{
+  display:flex;position:absolute;bottom:48px;left:12px;right:12px;z-index:4;
+  align-items:flex-start;gap:7px;max-height:88px;overflow:auto;padding:9px 11px;
+  border-radius:10px;border:1px solid rgba(247,190,136,.48);
+  background:rgba(37,48,68,.96);color:#ffdaa9;box-shadow:0 8px 20px rgba(0,0,0,.25);
+  font-size:11px;line-height:1.4;
+ }
+ .internal-builder .ib-mobile-feedback svg{flex:0 0 auto}
+ .internal-builder .ib-mobile-feedback span{flex:1;min-width:0}
+ .internal-builder .ib-mobile-feedback button{flex:0 0 25px;border:0;background:transparent;color:#f5dfc7;font-size:18px}
+ .internal-builder .ib-mobile-sheet-feedback{
+  display:flex;align-items:flex-start;gap:8px;flex:0 0 auto;max-height:95px;overflow:auto;
+  padding:9px 13px;border-bottom:1px solid rgba(238,182,137,.3);
+  color:#ffdbb5;background:rgba(87,67,50,.33);font-size:11px;line-height:1.45;
+ }
+ .internal-builder .ib-mobile-sheet-feedback svg{flex:0 0 auto}
  .internal-builder .ib-mobile-canvas-guide{
   display:block;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
   z-index:3;max-width:calc(100% - 24px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
