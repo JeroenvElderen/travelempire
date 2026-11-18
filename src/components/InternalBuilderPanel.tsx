@@ -1,5 +1,5 @@
 import {Suspense,lazy,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,AlarmSmoke,FireExtinguisher,Signpost,Paintbrush} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,AlarmSmoke,FireExtinguisher,Signpost,Paintbrush,Route} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -26,6 +26,8 @@ import {freightStage,freightStatusLabel,freightProgress} from '../constructionLo
 import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
+import {drawCorridorSection,joinAdjacentCorridors,corridorSectionCount,removeLastCorridorSection} from '../hotelCorridors';
+import {containsRoomCell,roomSections,roomArea,roomCenterCell,roomBoundaryEdges} from '../hotelRoomGeometry';
 import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
 import HotelRoomCollections from './HotelRoomCollections';
 import {planRoomFurnitureCollection} from '../hotelFurnitureCollections';
@@ -226,8 +228,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   const scroller=scrollerRef.current;
   if(!scroller)return;
   const px=30*zoomRef.current;
-  scroller.scrollTo({left:(room.x+room.width/2)*px-scroller.clientWidth/2,
-   top:(room.y+room.height/2)*px-scroller.clientHeight/2,behavior:'smooth'});
+  const center=roomCenterCell(room);
+  scroller.scrollTo({left:(center.x+.5)*px-scroller.clientWidth/2,
+   top:(center.y+.5)*px-scroller.clientHeight/2,behavior:'smooth'});
  };
  const adjustSelectedRoom=(changes:Partial<BlueprintRoomGeometry>)=>{
   if(!site||!selectedRoom||active)return;
@@ -417,12 +420,14 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(!site||!floor)return;
   const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),width=Math.abs(a.x-b.x)+1,height=Math.abs(a.y-b.y)+1;
   const label=category[roomType]+' '+(floor.rooms.filter(r=>r.type===roomType).length+1);
-  modify(f=>drawRoom(f,{id:id(),name:label,type:roomType,x,y,width,height},site));
+  modify(f=>roomType==='corridor'?drawCorridorSection(f,site,{x,y,width,height},id(),label):
+   drawRoom(f,{id:id(),name:label,type:roomType,x,y,width,height},site),
+   roomType==='corridor'?'Connected corridor section added; adjoining corridors merged where possible.':'Room drawn.');
   setAnchor(null);
  };
  const interact=(where:Cell,from:Cell|null)=>{
   if(!site||!floor||active)return;
-  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setSelectedFurnitureId(null);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
+  if(tool==='select'){const room=floor.rooms.find(r=>containsRoomCell(r,where.x,where.y));setSelectedFurnitureId(null);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
   if(tool==='room'){
    if(from&&(from.x!==where.x||from.y!==where.y)){makeRoom(from,where);return;}
    if(anchor){makeRoom(anchor,where);return;}
@@ -455,8 +460,8 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    if(obj){modify(f=>({...f,objects:f.objects.filter(o=>o.id!==obj.id)}));return;}
    const wall=floor.walls.find(w=>w.orientation==='h'?Math.abs(w.y-(where.y+where.fy))<0.3&&w.x===where.x:Math.abs(w.x-(where.x+where.fx))<0.3&&w.y===where.y);
    if(wall){modify(f=>({...f,walls:f.walls.filter(w=>w.id!==wall.id)}));return;}
-   const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);
-   if(room){modify(f=>({...f,rooms:f.rooms.filter(r=>r.id!==room.id),objects:f.objects.filter(o=>!(o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height))}));return;}
+   const room=floor.rooms.find(r=>containsRoomCell(r,where.x,where.y));
+   if(room){modify(f=>({...f,rooms:f.rooms.filter(r=>r.id!==room.id),objects:f.objects.filter(o=>!containsRoomCell(room,o.x,o.y))}));return;}
    setStatus('Nothing to remove at this position.');
   }
  };
@@ -464,6 +469,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(!site||!floor||active)return;
   const original=floor.rooms.find(r=>r.id===roomId);
   if(!original)return;
+  if(original.type==='corridor'&&original.sections?.length){
+   setStatus('To extend a shaped corridor, select it and choose Extend corridor. Use Room → Corridor to draw more sections.');return;
+  }
   const originals=floor.objects.filter(o=>o.x>=original.x&&o.y>=original.y&&o.x<original.x+original.width&&o.y<original.y+original.height);
   for(let y=0;y<=site.height-original.height;y++){
    for(let x=0;x<=site.width-original.width;x++){
