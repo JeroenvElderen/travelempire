@@ -3,7 +3,7 @@
  * All operations are pure, atomic, and preserve historic rectangular rooms.
  */
 import {
- drawRoom,roomAtCell,roomContainsCell,roomIntersectsRect,roomSections,
+ drawRoom,roomAtCell,roomIntersectsRect,roomSections,
  type HotelFloor,type HotelSite,type Room,type RoomRect,type Wall,
 } from './internalConstruction';
 
