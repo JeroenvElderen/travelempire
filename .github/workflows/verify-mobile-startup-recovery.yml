@@ -1,0 +1,21 @@
+name: Verify Mobile Safari Startup Recovery
+on:
+  push:
+    branches:
+      - fix/startup-mobile-safari-recovery
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify production build and generated HTML module
+        run: |
+          npm run build
+          node -e "const fs=require('fs'); const s=fs.readFileSync('dist/index.html','utf8'); const m=s.match(/src=\"(\/assets\/[^\"]+\.js)\"/);if(!m)throw Error('Vite entry script missing');if(!fs.existsSync('dist'+m[1]))throw Error('Entry script absent: '+m[1]);console.log('Entry asset verified:',m[1]);"
+      - name: Startup and Audi vehicle regression tests
+        run: npm test -- src/startupRecovery.test.ts src/audiA5Sprites.test.ts src/audiA6Sprites.test.ts src/hotelCorridors.test.ts src/internalConstruction.test.ts
