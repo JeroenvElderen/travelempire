@@ -378,8 +378,8 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
 export function roomIssues(floor:HotelFloor,room:Room):string[]{
  const codes=new Set(floor.objects.filter(o=>o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height).map(o=>o.code));
  const needs:Partial<Record<RoomType,FurnitureCode[][]>>={
-  guest:[['bed','single-bed']],bathroom:[['toilet'],['sink'],['shower']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
-  bar:[['bar-counter']],restaurant:[['table'],['chair']],lobby:[['reception']],storage:[['shelves']]
+  guest:[['bed','single-bed','sofa-bed']],bathroom:[['toilet'],['sink'],['shower','bathtub']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
+  bar:[['bar-counter']],restaurant:[['table','booth'],['chair','booth']],lobby:[['reception']],storage:[['shelves']]
  };
  return (needs[room.type]??[]).filter(group=>!group.some(code=>codes.has(code))).map(group=>'Missing '+group.join(' or '));
 }
