@@ -7,6 +7,7 @@ import {
  type HotelSite,type HotelFloor,type RoomType,type BuilderTool,type FurnitureCode,type TradeMode,type ConstructionState,
  type Wall,type LightingKind,type SafetyFixtureKind,
  roomTypes,furniture,drawRoom,toggleWall,placeFurniture,updateFloor,addFloor,constructionQuote,progressProject,
+ roomContainsCell,roomSections,roomBounds,roomArea,roomBoundaryEdges,
  roomIssues,furnitureSize,supplies,supplyStock,hotelPlotCostCents,validHotelPlotSize,type HotelPlotSize,type SupplyCode,euros,RECRUITMENT_CENTS,WORKER_HOURLY_CENTS,MAX_FLOORS
 } from '../internalConstruction';
 import {defaultHotelOperations,hotelActiveAt,openingIssues,roomInventory,hotelRoles,HOTEL_STAFF_HIRING_CENTS,
@@ -26,6 +27,7 @@ import {freightStage,freightStatusLabel,freightProgress} from '../constructionLo
 import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
+import {paintHotelCorridor,joinConnectedHotelCorridors,removeHotelCorridorSection} from '../hotelCorridors';
 import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
 import HotelRoomCollections from './HotelRoomCollections';
 import {planRoomFurnitureCollection} from '../hotelFurnitureCollections';
@@ -225,9 +227,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
  const focusRoom=(room:HotelFloor['rooms'][number])=>{
   const scroller=scrollerRef.current;
   if(!scroller)return;
-  const px=30*zoomRef.current;
-  scroller.scrollTo({left:(room.x+room.width/2)*px-scroller.clientWidth/2,
-   top:(room.y+room.height/2)*px-scroller.clientHeight/2,behavior:'smooth'});
+  const px=30*zoomRef.current,bounds=roomBounds(room);
+  scroller.scrollTo({left:(bounds.x+bounds.width/2)*px-scroller.clientWidth/2,
+   top:(bounds.y+bounds.height/2)*px-scroller.clientHeight/2,behavior:'smooth'});
  };
  const adjustSelectedRoom=(changes:Partial<BlueprintRoomGeometry>)=>{
   if(!site||!selectedRoom||active)return;
@@ -417,12 +419,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(!site||!floor)return;
   const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),width=Math.abs(a.x-b.x)+1,height=Math.abs(a.y-b.y)+1;
   const label=category[roomType]+' '+(floor.rooms.filter(r=>r.type===roomType).length+1);
-  modify(f=>drawRoom(f,{id:id(),name:label,type:roomType,x,y,width,height},site));
+  if(roomType==='corridor'){
+   modify(f=>{
+    const next=paintHotelCorridor(f,site,{x,y,width,height},id(),selectedRoom?.type==='corridor'?selectedRoom.id:undefined);
+    setSelectedRoomId(next.rooms.find(r=>r.type==='corridor'&&roomContainsCell(r,x,y))?.id??null);
+    return next;
+   },'Corridor extended. Connected sections are now one room.');
+  }else modify(f=>drawRoom(f,{id:id(),name:label,type:roomType,x,y,width,height},site));
   setAnchor(null);
  };
  const interact=(where:Cell,from:Cell|null)=>{
   if(!site||!floor||active)return;
-  if(tool==='select'){const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);setSelectedFurnitureId(null);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
+  if(tool==='select'){const room=floor.rooms.find(r=>roomContainsCell(r,where.x,where.y));setSelectedFurnitureId(null);setSelectedRoomId(room?.id??null);setStatus(room?room.name+' · '+(roomIssues(floor,room).join(', ')||'Furnished'):'Tap a room to inspect it.');return;}
   if(tool==='room'){
    if(from&&(from.x!==where.x||from.y!==where.y)){makeRoom(from,where);return;}
    if(anchor){makeRoom(anchor,where);return;}
@@ -455,8 +463,16 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    if(obj){modify(f=>({...f,objects:f.objects.filter(o=>o.id!==obj.id)}));return;}
    const wall=floor.walls.find(w=>w.orientation==='h'?Math.abs(w.y-(where.y+where.fy))<0.3&&w.x===where.x:Math.abs(w.x-(where.x+where.fx))<0.3&&w.y===where.y);
    if(wall){modify(f=>({...f,walls:f.walls.filter(w=>w.id!==wall.id)}));return;}
-   const room=floor.rooms.find(r=>where.x>=r.x&&where.x<r.x+r.width&&where.y>=r.y&&where.y<r.y+r.height);
-   if(room){modify(f=>({...f,rooms:f.rooms.filter(r=>r.id!==room.id),objects:f.objects.filter(o=>!(o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height))}));return;}
+   const room=floor.rooms.find(r=>roomContainsCell(r,where.x,where.y));
+   if(room){
+    if(room.type==='corridor'&&room.sections?.length){
+     const section=roomSections(room).findIndex(part=>where.x>=part.x&&where.x<part.x+part.width&&where.y>=part.y&&where.y<part.y+part.height);
+     modify(f=>removeHotelCorridorSection(f,site,room.id,section),
+      'Corridor section removed. The remaining route stays connected.');
+    }else modify(f=>({...f,rooms:f.rooms.filter(r=>r.id!==room.id),
+     objects:f.objects.filter(o=>!roomContainsCell(room,o.x,o.y))}));
+    return;
+   }
    setStatus('Nothing to remove at this position.');
   }
  };
@@ -464,14 +480,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(!site||!floor||active)return;
   const original=floor.rooms.find(r=>r.id===roomId);
   if(!original)return;
-  const originals=floor.objects.filter(o=>o.x>=original.x&&o.y>=original.y&&o.x<original.x+original.width&&o.y<original.y+original.height);
-  for(let y=0;y<=site.height-original.height;y++){
-   for(let x=0;x<=site.width-original.width;x++){
-    const room={...original,id:id(),name:category[original.type]+' '+(floor.rooms.filter(r=>r.type===original.type).length+1),x,y};
+  const originals=floor.objects.filter(o=>roomContainsCell(original,o.x,o.y));
+  const bounds=roomBounds(original);
+  for(let y=0;y<=site.height-bounds.height;y++){
+   for(let x=0;x<=site.width-bounds.width;x++){
+    const dx=x-bounds.x,dy=y-bounds.y;
+    const room={...original,id:id(),name:category[original.type]+' '+(floor.rooms.filter(r=>r.type===original.type).length+1),
+     x:original.x+dx,y:original.y+dy,
+     sections:original.sections?.map(part=>({...part,x:part.x+dx,y:part.y+dy}))};
     let updated:HotelFloor;
     try{
      updated=drawRoom(floor,room,site);
-     for(const o of originals)updated=placeFurniture(updated,{...o,id:id(),x:o.x-original.x+x,y:o.y-original.y+y},site);
+     for(const o of originals)updated=placeFurniture(updated,{...o,id:id(),x:o.x+dx,y:o.y+dy},site);
     }catch{continue;}
     modify(()=>updated);
     setStatus('Room layout and furnishings duplicated. Approve construction to purchase the additional items.');
@@ -541,7 +561,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
     {([['pan','Move',Hand],['select','Inspect',Grid2X2],['room','Room',Plus],['wall','Wall',Hammer],['door','Door',DoorOpen],['furniture','Furnish',Sofa],['erase','Erase',Trash2]] as const).map(([key,label,Icon])=><button type="button" key={key} disabled={!!active&&key!=='select'} className={tool===key?'selected':''} onClick={()=>{setTool(key);setAnchor(null);}}><Icon size={17}/><span>{label}</span></button>)}
    </div>
    <div className="ib-hint ib-pan-guide"><Hand size={14}/> {(tool==='select'||tool==='furniture')?
-   'Tap existing furniture to edit it, or drag it to a new grid cell. Swipe empty space to pan; use two fingers to pinch-zoom.':tool==='room'?'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.':'Swipe the plan to move without placing objects. Tap to '+(tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
+   'Tap existing furniture to edit it, or drag it to a new grid cell. Swipe empty space to pan; use two fingers to pinch-zoom.':tool==='room'?(roomType==='corridor'?'Draw a connected corridor section. L- and T-shaped extensions join automatically. Use two fingers to pan or zoom.':'Drag to draw a room, or tap two corners. Use two fingers to pan and pinch-zoom while drawing.'):'Swipe the plan to move without placing objects. Tap to '+(tool==='pan'?'move around':'edit')+'.'} Two fingers pan or zoom in any tool.</div>
    <div className="ib-navigation-row"><span>Move around your plan — works while furnishing</span><div className="ib-pan-arrows" role="group" aria-label="Move floor plan"><button type="button" onClick={()=>panBy(-160,0)} aria-label="Pan left"><ArrowLeft size={16}/></button><button type="button" onClick={()=>panBy(0,-160)} aria-label="Pan up"><ArrowUp size={16}/></button><button type="button" onClick={centerPlan} aria-label="Centre floor plan" title="Centre floor plan"><Crosshair size={16}/></button><button type="button" onClick={()=>panBy(0,160)} aria-label="Pan down"><ArrowDown size={16}/></button><button type="button" onClick={()=>panBy(160,0)} aria-label="Pan right"><ArrowRight size={16}/></button></div></div>
    {site.kind!=='headquarters'&&<section className="ib-vertical-picker" aria-label="Build stairwells and elevators"><div><strong>Vertical connections</strong><small>Place the first stairwell or elevator beside a corridor. On the next floor, use the same button to align its shaft. Add a door on each floor.</small></div><div className="ib-vertical-actions"><button type="button" disabled={!!active} onClick={()=>addCore('stairwell')}><Layers3 size={15}/> Add stairs <small>€7,500/floor</small></button><button type="button" disabled={!!active} onClick={()=>addCore('elevator')}><ArrowUp size={15}/> Add elevator <small>€32,000/floor</small></button></div></section>}
    {site.kind!=='headquarters'&&<section className="ib-atmosphere-tools" aria-label="Windows and room lighting">
@@ -565,8 +585,32 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
     {safetyFloor?.warnings.slice(0,3).map((warning,i)=><p className="ib-safety-warning" key={i}><AlertCircle size={13}/>{warning}</p>)}
     {site.safetyRulesVersion!==1?<div className="ib-safety-optin"><small>Preview mode: existing hotels keep previous eligibility until upgraded. Close the hotel first to enable these simulated rules.</small><button type="button" className="ib-secondary" disabled={!!active||currentlyOpen} onClick={enableSafetyForExisting}>{currentlyOpen?'Close hotel to enable':'Enable Phase 4 rules'}</button></div>:<small className="ib-safety-legal">New bookings require fire-ready rooms and at least one accessible room. This is a game system, not a real-world safety certification.</small>}
    </section>}
-   {tool==='room'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
+   {tool==='room'&&roomType!=='corridor'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
+   <section className="ib-corridor-builder" aria-label="Continuous corridor editor">
+    <div className="ib-corridor-builder-head"><div><strong>Continuous corridors</strong>
+     <small>One hallway can turn, branch and connect both wings. No need to create separate corridor rooms.</small></div>
+     <span>{floor.rooms.filter(r=>r.type==='corridor').length} hallway{floor.rooms.filter(r=>r.type==='corridor').length===1?'':'s'}</span>
+    </div>
+    <div className="ib-corridor-builder-actions">
+     <button type="button" disabled={!!active} className={tool==='room'&&roomType==='corridor'?'selected':''}
+      onClick={()=>{setTool('room');setRoomType('corridor');setAnchor(null);}}>
+      <Plus size={15}/> Draw / extend corridor
+     </button>
+     <button type="button" className="ib-secondary" disabled={!!active||floor.rooms.filter(r=>r.type==='corridor').length<2}
+      onClick={()=>{
+       const before=floor.rooms.filter(r=>r.type==='corridor').length;
+       const next=joinConnectedHotelCorridors(floor,site);
+       const after=next.rooms.filter(r=>r.type==='corridor').length;
+       if(before===after){setStatus('These corridors do not share a full edge. Draw a connecting section first.');return;}
+       modify(()=>next, (before-after+1)+' corridor sections joined into one continuous hallway.');
+       setSelectedRoomId(next.rooms.find(r=>r.type==='corridor')?.id??null);
+      }}>
+      <Layers3 size={15}/> Join existing corridors
+     </button>
+    </div>
+    {tool==='room'&&roomType==='corridor'&&<small className="ib-corridor-tip">Draw over or beside an existing corridor. Connected sections merge automatically, including T-junctions. Other rooms and stair/lift shafts remain unchanged.</small>}
+   </section>
    {tool==='furniture'&&<><HotelRoomCollections site={site} floor={floor}
     roomId={selectedRoomId} disabled={!!active}
     onRoomSelect={roomId=>{setSelectedRoomId(roomId);setSelectedFurnitureId(null);}}
