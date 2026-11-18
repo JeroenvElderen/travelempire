@@ -139,7 +139,8 @@ export function editBlueprintFurniture(
  const before=floor.objects.find(o=>o.id===objectId);
  if(!before)throw Error('Select a furniture item to edit.');
  const updated={...before,...changes};
- if(updated.x===before.x&&updated.y===before.y&&updated.rotated===before.rotated)return floor;
+ if(updated.x===before.x&&updated.y===before.y&&updated.rotated===before.rotated&&
+  updated.modelId===before.modelId&&updated.finish===before.finish)return floor;
  const without={...floor,objects:floor.objects.filter(o=>o.id!==objectId)};
  const checked=placeFurniture(without,updated,site);
  const replacement=checked.objects[checked.objects.length-1];
