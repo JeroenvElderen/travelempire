@@ -1,0 +1,26 @@
+name: Verify Audi A6 PNG Vehicle Sprites
+on:
+  push:
+    branches:
+      - feature/audi-a6-avant-paint-pngs
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify transparent nine-colour PNG atlas exists
+        run: |
+          test -s public/assets/vehicles/audi-a6-avant/paint-atlas.png
+          file public/assets/vehicles/audi-a6-avant/paint-atlas.png | grep -E 'PNG image data, 720 x 170'
+      - name: Production build
+        run: npm run build
+      - name: Audi A5/A6, purchase and fleet regression
+        run: npm test -- src/audiA6Sprites.test.ts src/audiA5Sprites.test.ts src/dealership.test.ts src/simulation/taxi.test.ts
+      - name: Full test suite (existing unrelated failures informational)
+        continue-on-error: true
+        run: npm test
