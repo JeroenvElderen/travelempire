@@ -127,7 +127,7 @@ export function furnitureProductForPlacement(
 ):FurnitureProduct{
  const base=specs.find(s=>s.code===item.code);
  if(!base)throw Error('Unknown furniture.');
- const model=item.modelId&&buildFurnitureCatalogue([base]).find(p=>p.id===item.modelId);
+ const model=item.modelId&&buildFurnitureCatalogue(specs).find(p=>p.id===item.modelId&&p.code===item.code);
  if(model)return model;
  return {...base,id:item.code+':legacy',category:CATEGORIES[item.code],
   tier:'essential',style:'classic',modelLabel:base.name,
