@@ -8,12 +8,12 @@ import {audiA5PaintForVehicle} from './audiA5Sprites';
 
 const model=EUROPEAN_MODELS.find(m=>m.brand==='Audi'&&m.name==='A6 Avant e-hybrid')!;
 describe('Audi A6 Avant PNG paint integration',()=>{
- it('has nine uniquely indexed A6 paints in a 720 × 170 PNG atlas',()=>{
+ it('has nine uniquely indexed A6 paints in a 576 × 136 PNG atlas',()=>{
   expect(AUDI_A6_PAINT_SPRITES).toHaveLength(9);
   expect(new Set(AUDI_A6_PAINT_SPRITES.map(s=>s.id)).size).toBe(9);
   expect(AUDI_A6_PAINT_SPRITES.map(s=>s.index)).toEqual([0,1,2,3,4,5,6,7,8]);
-  expect(AUDI_A6_ATLAS_COLUMNS*AUDI_A6_SPRITE_WIDTH).toBe(720);
-  expect(AUDI_A6_SPRITE_HEIGHT).toBe(170);
+  expect(AUDI_A6_ATLAS_COLUMNS*AUDI_A6_SPRITE_WIDTH).toBe(576);
+  expect(AUDI_A6_SPRITE_HEIGHT).toBe(136);
   expect(audiA6AtlasUrl()).toContain('/assets/vehicles/audi-a6-avant/paint-atlas.png');
  });
  it('retains all six factory-listed MY27 colours and explicitly labels three game-only colours',()=>{
