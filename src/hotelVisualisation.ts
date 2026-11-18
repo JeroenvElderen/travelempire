@@ -3,6 +3,7 @@
  * eligibility. All coordinates derive from existing 1 m floor-plan data.
  * Pure math only: no WebGL context, map tiles, image textures, or timers.
  */
+import {roomContainsCell,roomSections} from './internalConstruction';
 import type {HotelFloor,HotelSite,Room,RoomType,Wall,ObjectPlacement} from './internalConstruction';
 
 export type IsoAngle=0|1|2|3;
@@ -57,8 +58,7 @@ export function isoCorners(
 export const pointString=(points:readonly IsoPoint[]):string=>
  points.map(p=>p.x.toFixed(2)+','+p.y.toFixed(2)).join(' ');
 export function roomContains(room:Room,item:Pick<ObjectPlacement,'x'|'y'>):boolean{
- return item.x>=room.x&&item.y>=room.y&&
- item.x<room.x+room.width&&item.y<room.y+room.height;
+ return roomContainsCell(room,item.x,item.y);
 }
 export function wallSegment(
  wall:Pick<Wall,'x'|'y'|'orientation'>,
@@ -78,7 +78,7 @@ export function buildIsoScene(
   .filter(({index})=>index===selectedFloor):
   site.draft.map((floor,index)=>({floor,index}));
  const raw=floors.reduce((n,{floor})=>n+
-  floor.rooms.length*3+floor.objects.length*2+floor.walls.length+
+  floor.rooms.reduce((sum,room)=>sum+roomSections(room).length*3,0)+floor.objects.length*2+floor.walls.length+
   (floor.lights?.length??0)+(floor.safetyFixtures?.length??0),0);
  const roomCount=floors.reduce((n,{floor})=>n+floor.rooms.length,0);
  const detailed=raw<=MAX_PREVIEW_PRIMITIVES&&roomCount<=MAX_PREVIEW_ROOMS;
