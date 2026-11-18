@@ -3,6 +3,7 @@ import {Layers3,RotateCw,Eye,Boxes,Info} from 'lucide-react';
 import type {HotelFloor,HotelSite,Room,ObjectPlacement,Wall} from '../internalConstruction';
 import {furnitureSize} from '../internalConstruction';
 import {furnitureFinishColor} from '../furnitureCatalog';
+import {roomSections,roomBoundaryEdges,roomCenterCell} from '../hotelRoomGeometry';
 import {
  buildIsoScene,isoCorners,isoProject,pointString,roomShortLabel,
  ISO_COLORS,type IsoAngle,type IsoPoint,type IsoScope,
@@ -13,6 +14,33 @@ const pnts=(points:IsoPoint[])=>pointString(points);
 function RoomCutaway({room,site,z,angle,selected}:{
  room:Room;site:HotelSite;z:number;angle:IsoAngle;selected:boolean;
 }){
+ if(room.type==='corridor'&&room.sections?.length){
+  const center=roomCenterCell(room);
+  const point=isoProject(center.x+.5,center.y+.5,z+.15,
+   site.width,site.height,angle);
+  return <g>
+   {roomSections(room).map((section,i)=><polygon key={i}
+    points={pnts(isoCorners(section.x,section.y,section.width,section.height,z,
+     site.width,site.height,angle))}
+    fill={ISO_COLORS.corridor} fillOpacity=".92" stroke="none"/>)}
+   {roomBoundaryEdges(room).map((edge,i)=>{
+    const x1=edge.x,y1=edge.y,x2=x1+(edge.orientation==='h'?1:0),
+     y2=y1+(edge.orientation==='v'?1:0);
+    const a=isoProject(x1,y1,z,site.width,site.height,angle);
+    const b=isoProject(x2,y2,z,site.width,site.height,angle);
+    const lowA=isoProject(x1,y1,z-3,site.width,site.height,angle);
+    const lowB=isoProject(x2,y2,z-3,site.width,site.height,angle);
+    return <g key={i}><polygon points={pnts([a,b,lowB,lowA])}
+      fill="#19344d" fillOpacity=".8" stroke="none"/>
+     <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+      stroke={selected?'#fff3af':'#d6e9f0'}
+      strokeWidth={selected?1.9:.9}/></g>;
+   })}
+   <text x={point.x} y={point.y-2} textAnchor="middle" fontSize="8"
+    fontWeight="700" fill="#142d43" stroke="#edf8ff"
+    strokeWidth=".3" paintOrder="stroke">{roomShortLabel(room)}</text>
+  </g>;
+ }
  const c=isoCorners(room.x,room.y,room.width,room.height,z,
   site.width,site.height,angle);
  const slab=isoCorners(room.x,room.y,room.width,room.height,z-3,
