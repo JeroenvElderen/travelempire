@@ -229,7 +229,9 @@ export function newHotelSite(
 export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
  if(!Number.isInteger(room.x)||!Number.isInteger(room.y)||!Number.isInteger(room.width)||!Number.isInteger(room.height))throw Error('Room coordinates must use the building grid.');
  const spec=roomTypes.find(t=>t.id===room.type);
- if(!spec||room.width<spec.minWidth||room.height<spec.minHeight)throw Error('This room is smaller than its required minimum.');
+ if(!spec||(!(room.type==='corridor'&&room.sections?.length)&&
+   (room.width<spec.minWidth||room.height<spec.minHeight)))
+  throw Error('This room is smaller than its required minimum.');
  const parts=roomSections(room);
  if(room.type!=='corridor'&&room.sections?.length)throw Error('Only corridors can have multiple sections.');
  if(parts.some(p=>!Number.isInteger(p.x)||!Number.isInteger(p.y)||
