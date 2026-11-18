@@ -58,7 +58,7 @@ describe('Audi A5 Avant official paint sprite integration',()=>{
    const map=audiA5MapSpriteUrl(sprite.id);
    const preview=audiA5PreviewSpriteUrl(sprite.id);
    expect(map).toContain('/assets/vehicles/audi-a5-avant/'+sprite.slug+'.png');
-   expect(preview).toContain('/assets/vehicles/audi-a5-avant/'+sprite.slug+'-preview.png');
+   expect(preview).toBe(map);
    expect(await audiA5SpriteUrl(sprite.id)).toBe(map);
    expect(await audiA5SpriteUrl(sprite.id,'preview')).toBe(preview);
   }
