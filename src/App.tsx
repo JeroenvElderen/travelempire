@@ -2416,7 +2416,7 @@ export default function App(){
    throw Error('Roads near '+deliveryDepot.name+' are not loaded. View that depot on the map before ordering.');
   const now=Date.now();
   const taxi:Taxi={id:crypto.randomUUID(),name:`Taxi ${fleet.taxis.length+1}`,ownership:mode==='lease'?'leased':'owned',driver:driver.trim(),position:graph.nodes.get(node)!,status:'IDLE',path:[],edgeIds:[],leg:0,distanceIntoLeg:0,fare:0,completed:0,
-   purchasePrice:mode==='lease'?undefined:price,vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleTrim:offer.trim,vehicleOptionIds:offer.optionIds,vehicleRevenueBonus:offer.revenueBonus,vehicleClass:offer.className,vehicleSeats:offer.seats>=5?offer.seats-1:offer.seats,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
+   purchasePrice:mode==='lease'?undefined:price,vehicleModel:offer.model,vehicleYear:offer.year,vehicleFuel:offer.fuel,vehicleTrim:offer.trim,vehicleOptionIds:offer.optionIds,vehiclePaintHex:offer.paintHex,vehicleRevenueBonus:offer.revenueBonus,vehicleClass:offer.className,vehicleSeats:offer.seats>=5?offer.seats-1:offer.seats,vehicleCondition:offer.condition,vehicleMileage:offer.mileage,energyRemaining:energySpec({vehicleFuel:offer.fuel}).capacity,
    deliveryStartedAt:now,deliveryUntil:now+90_000,deliveryPath:deliveryRoute(graph,graph.nodes.get(node)!),depotId};
   const updated={...company,cash:Math.round((company.cash+pendingCashRef.current-cashDue)*100)/100};
   pendingCashRef.current=0;companyRef.current=updated;
