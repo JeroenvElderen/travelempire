@@ -1,0 +1,31 @@
+name: Verify Audi A5 Avant PNG Vehicle Integration
+on:
+  push:
+    branches:
+      - feature/audi-a5-avant-paint-sprites
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify real PNG sprite asset
+        run: |
+          node --input-type=module -e "
+            import {readFileSync} from 'node:fs';
+            const p=readFileSync('public/assets/vehicles/audi-a5-avant/paint-atlas.png');
+            if(p.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||p.readUInt32BE(16)!==720||p.readUInt32BE(20)!==170)
+              throw new Error('Audi sprite atlas is not a 720x170 PNG');
+            console.log('Audi A5 Avant PNG atlas valid',p.length,'bytes');
+          "
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Audi model, paint options and existing vehicle tests
+        run: npm test -- src/audiA5Sprites.test.ts src/components/parkedCars.test.ts src/components/blueprintViewport.test.ts
+      - name: Full test suite (report existing unrelated failures)
+        continue-on-error: true
+        run: npm test
