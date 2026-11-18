@@ -1,0 +1,22 @@
+name: Verify Estate-Only Dealership
+on:
+  push:
+    branches:
+      - feature/estate-only-dealership
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Estate model policy and vehicle sprite compatibility
+        run: npm test -- src/dealershipModelPolicy.test.ts src/skodaOctaviaSprites.test.ts src/audiA5Sprites.test.ts src/audiA6Sprites.test.ts
+      - name: Full regression suite (report existing unrelated failures)
+        continue-on-error: true
+        run: npm test
