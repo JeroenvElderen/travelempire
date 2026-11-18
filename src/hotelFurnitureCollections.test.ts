@@ -3,7 +3,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {
  furniture,drawRoom,placeFurniture,furnitureSize,newHotelSite,
- updateFloor,constructionQuote,roomIssues,
+ updateFloor,constructionQuote,
  type HotelSite,type Room,type HotelFloor,
 } from './internalConstruction';
 import {furnitureRoomStyleBonus,FURNITURE_STYLES} from './furnitureCatalog';
@@ -84,7 +84,8 @@ describe('Hotel room collections — 6 themes and 6 compatible room types',()=>{
  });
  it('never blocks an existing guest-room door with automatic placement',()=>{
   const site=hotel(),f=room(site);
-  const withDoor=toggleHotelAccessDoor(f,site,{
+  const withHall=drawRoom(f,{id:'corridor',name:'Access corridor',type:'corridor',x:0,y:2,width:2,height:12},site);
+  const withDoor=toggleHotelAccessDoor(withHall,site,{
    id:'guest-door',type:'door',orientation:'v',x:2,y:5,
   });
   const doorTiles=roomDoorClearance(withDoor,withDoor.rooms[0]);
@@ -177,7 +178,7 @@ describe('One-action furnishing, preservation and construction costs',()=>{
   const old=placeFurniture(f,{id:'old',code:'bed',x:2,y:2,rotated:false},site);
   expect(furnitureRoomStyleBonus(old.objects,furniture)).toBe(0);
   const mismatched=styled.objects.map((obj,i)=>({...obj,designStyle:
-   (i%2?'modern':'luxury') as const}));
+   (i%2?'modern':'luxury') as 'modern'|'luxury'}));
   expect(furnitureRoomStyleBonus(styled.objects,furniture))
    .toBeGreaterThan(furnitureRoomStyleBonus(mismatched,furniture));
  });
