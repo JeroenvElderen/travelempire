@@ -3,7 +3,7 @@
  * All operations are pure, atomic, and preserve historic rectangular rooms.
  */
 import {
- drawRoom,roomAtCell,roomIntersectsRect,roomSections,
+ drawRoom,roomAtCell,roomIntersectsRect,roomSections,furnitureSize,
  type HotelFloor,type HotelSite,type Room,type RoomRect,type Wall,
 } from './internalConstruction';
 
@@ -109,7 +109,12 @@ function rebuild(
   if(usedIds.has(primary.id))throw Error('A corridor identifier is already in use.');
   usedIds.add(primary.id);
   for(const m of matches)aliases.set(m.id,primary.id);
-  const sections=compactSections(group);
+  // Keep the original drawn sections as the user's editable units. A global
+  // tile-to-rectangle repack would split an L-shaped hall into horizontal
+  // stripes, making it impossible to remove a single side branch cleanly.
+  const oldParts=matches.flatMap(roomSections);
+  const additions=new Set([...group].filter(tile=>!owners.has(tile)));
+  const sections=[...oldParts,...compactSections(additions)];
   const [first,...rest]=sections;
   const candidate:Room={...primary,...first,sections:rest.length?rest:undefined};
   // Reuse the canonical room validation against every other room.
@@ -175,7 +180,11 @@ export function removeHotelCorridorSection(
   const {x,y}=point(tile);
   return !remaining.some(r=>x>=r.x&&x<r.x+r.width&&y>=r.y&&y<r.y+r.height);
  });
- if(floor.objects.some(o=>lost.some(tile=>{const {x,y}=point(tile);return o.x===x&&o.y===y;}))||
+ if(floor.objects.some(o=>{
+   const size=furnitureSize(o);
+   return lost.some(tile=>{const {x,y}=point(tile);
+    return x>=o.x&&x<o.x+size.width&&y>=o.y&&y<o.y+size.height;});
+  })||
   (floor.lights??[]).some(l=>lost.includes(key(l.x,l.y)))||
   (floor.safetyFixtures??[]).some(f=>lost.includes(key(f.x,f.y))))
   throw Error('Move furnishings, lights and safety equipment out of this corridor section first.');
