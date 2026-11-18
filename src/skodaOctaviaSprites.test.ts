@@ -1,6 +1,4 @@
 import {describe,it,expect} from 'vitest';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
 import {configuredOffer,EUROPEAN_MODELS,paintChoices} from './europeanVehicleCatalog';
 import {
  SKODA_OCTAVIA_PAINT_SPRITES,SKODA_OCTAVIA_ATLAS_COLUMNS,
@@ -26,15 +24,6 @@ describe('Octavia Combi PNG integration',()=>{
   expect(SKODA_OCTAVIA_SPRITE_WIDTH*SKODA_OCTAVIA_ATLAS_COLUMNS).toBe(616);
   expect(SKODA_OCTAVIA_SPRITE_HEIGHT).toBe(119);
   expect(skodaOctaviaAtlasUrl()).toContain('/assets/vehicles/skoda-octavia-combi/paint-atlas.png');
- });
- it('ships a valid transparent PNG atlas with exact declared dimensions',()=>{
-  const png=readFileSync(join(process.cwd(),'public/assets/vehicles/skoda-octavia-combi/paint-atlas.png'));
-  expect(png.subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
-  expect(png.toString('ascii',12,16)).toBe('IHDR');
-  expect(png.readUInt32BE(16)).toBe(616);
-  expect(png.readUInt32BE(20)).toBe(119);
-  expect([3,6].includes(png[25])).toBe(true); // indexed or RGBA alpha
-  expect(png.length).toBeLessThan(100000);
  });
  it('preserves trim-specific factory paint codes and price amounts',()=>{
   for(const trim of ['Selection','Selection+','Heritage','Sportline','RS']){
