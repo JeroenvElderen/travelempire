@@ -4,12 +4,15 @@
 import type {HotelOperations} from './hotelOperations';
 import type {ConstructionFreight} from './constructionLogistics';
 import {furnitureProductForPlacement,FURNITURE_REFINISH_CENTS} from './furnitureCatalog';
+import {roomSections,roomsOverlap,containsRoomRect,containsRoomCell,roomArea,roomPerimeter,roomShapeEqual,type RoomSection} from './hotelRoomGeometry';
 export type RoomType='guest'|'bathroom'|'kitchen'|'restaurant'|'bar'|'lobby'|'storage'|'staff'|'corridor'|'office'|'meeting'|'stairwell'|'elevator';
 export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furniture'|'erase';
 export type TradeMode='contractor'|'own';
 export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table'|
  'nightstand'|'minibar'|'safe'|'headboard'|'vanity'|'bathtub'|'mirror'|'towel-rack'|'armchair'|'coffee-table'|'tv-stand'|'bench'|'water-cooler'|'reading-chair'|'dishwasher'|'microwave'|'kitchen-island'|'bar-stool'|'booth'|'plant'|'rug'|'sculpture'|'sofa-bed'|'luggage-rack';
-export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number};
+export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number;
+ /** For connected L/T/U corridors only. Bounding box remains x/y/w/h. */
+ sections?:RoomSection[];};
 export type Wall={id:string;x:number;y:number;orientation:'h'|'v';type:'wall'|'door'|'window'|'panoramic-window'};
 export type LightingKind='ceiling'|'ambient';
 export type LightingFixture={id:string;kind:LightingKind;x:number;y:number};
@@ -183,7 +186,7 @@ export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
  const spec=roomTypes.find(t=>t.id===room.type);
  if(!spec||room.width<spec.minWidth||room.height<spec.minHeight)throw Error('This room is smaller than its required minimum.');
  if(room.x<0||room.y<0||room.x+room.width>site.width||room.y+room.height>site.height)throw Error('Room extends outside the building.');
- if(floor.rooms.some(existing=>rectOverlaps(existing,room)))throw Error('Rooms cannot overlap.');
+ if(floor.rooms.some(existing=>roomsOverlap(existing,room)))throw Error('Rooms cannot overlap.');
  return {...floor,rooms:[...floor.rooms,room]};
 }
 export function toggleWall(floor:HotelFloor,wall:Wall,site:HotelSite):HotelFloor{
@@ -201,7 +204,7 @@ export function placeFurniture(floor:HotelFloor,item:ObjectPlacement,site:HotelS
  if(item.modelId&&!spec.catalogueModel)throw Error('This furniture model does not exist.');
  const size=furnitureSize(item),box={x:item.x,y:item.y,...size};
  if(item.x+size.width>site.width||item.y+size.height>site.height)throw Error('Object exceeds the building boundary.');
- const room=floor.rooms.find(r=>box.x>=r.x&&box.y>=r.y&&box.x+box.width<=r.x+r.width&&box.y+box.height<=r.y+r.height);
+ const room=floor.rooms.find(r=>containsRoomRect(r,box));
  if(!room)throw Error('Furniture must fit entirely inside a room.');
  if(spec.requires&&!spec.requires.includes(room.type))throw Error(spec.name+' cannot be placed inside '+room.name+'.');
  if(floor.objects.some(old=>rectOverlaps({...old,...furnitureSize(old)},box)))throw Error('The furniture would overlap another object.');
@@ -228,7 +231,7 @@ const materialData=[
 ] as const;
 const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
 const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
-const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'',o.designStyle??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
+const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type,r.sections??null]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'',o.designStyle??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
@@ -244,14 +247,15 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   const builtRooms=new Map(built.rooms.map(r=>[r.id,r]));
   for(const r of draft.rooms){
    const old=builtRooms.get(r.id);
-   if(old&&old.x===r.x&&old.y===r.y&&old.width===r.width&&old.height===r.height&&old.type===r.type)continue;
-   area+=r.width*r.height;wallCount+=2*(r.width+r.height);
+   if(old&&roomShapeEqual(old,r))continue;
+   area+=Math.max(0,roomArea(r)-(old?roomArea(old):0));
+   wallCount+=Math.max(0,roomPerimeter(r)-(old?roomPerimeter(old):0));
    if(r.type==='stairwell')stairModules++;
    if(r.type==='elevator')liftModules++;
    verticalWork+=verticalCoreWork(r.type);
    if(r.type==='bathroom'||r.type==='kitchen'||r.type==='bar')bathrooms+=r.type==='bathroom'?1:2;
   }
-  demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+r.width*r.height,0);
+  demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+roomArea(r),0);
   const existed=new Map(built.objects.map(o=>[o.id,o]));
   for(const item of draft.objects){
    const prior=existed.get(item.id);
@@ -379,7 +383,7 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
  return {state:changed?{...state,sites,lastPayrollHour:hour}:state,wageCents,completed};
 }
 export function roomIssues(floor:HotelFloor,room:Room):string[]{
- const codes=new Set(floor.objects.filter(o=>o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height).map(o=>o.code));
+ const codes=new Set(floor.objects.filter(o=>containsRoomCell(room,o.x,o.y)).map(o=>o.code));
  const needs:Partial<Record<RoomType,FurnitureCode[][]>>={
   guest:[['bed','single-bed','sofa-bed']],bathroom:[['toilet'],['sink'],['shower','bathtub']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
   bar:[['bar-counter']],restaurant:[['table','booth'],['chair','booth']],lobby:[['reception']],storage:[['shelves']]
