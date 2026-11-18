@@ -1,5 +1,5 @@
 import {Suspense,lazy,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent} from 'react';
-import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,AlarmSmoke,FireExtinguisher,Signpost} from 'lucide-react';
+import {Building2,Plus,HardHat,Hammer,Layers3,DoorOpen,Sofa,Trash2,RotateCw,MapPin,ShoppingCart,Ship,Truck,Users,Clock3,ChevronLeft,Package,CheckCircle2,AlertCircle,Grid2X2,Landmark,Undo2,Redo2,Copy,Hand,ArrowLeft,ArrowRight,ArrowUp,ArrowDown,Crosshair,BedDouble,UtensilsCrossed,Wine,UserCheck,TrendingUp,CalendarClock,ShieldCheck,Sun,Lightbulb,PanelTop,Flame,AlarmSmoke,FireExtinguisher,Signpost,Paintbrush} from 'lucide-react';
 import type {Company} from '../company';
 import type {PropertyPortfolio} from '../investments';
 import {ownership} from '../investments';
@@ -27,6 +27,8 @@ import {formatConstructionDate,milestoneCountdown} from '../constructionTime';
 import {ArchitecturalRooms,ArchitecturalDetails} from './HotelArchitecturalPlan';
 import {planCounts} from '../hotelVisualisation';
 import HotelFurnitureCatalogue from './HotelFurnitureCatalogue';
+import HotelRoomCollections from './HotelRoomCollections';
+import {planRoomFurnitureCollection} from '../hotelFurnitureCollections';
 import {buildFurnitureCatalogue,FURNITURE_FINISHES,furnitureFinishColor,furnitureProductForPlacement,
  type FurnitureFinish} from '../furnitureCatalog';
 const FURNITURE_MODELS=buildFurnitureCatalogue(furniture);
@@ -202,9 +204,18 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   setStatus(direction==='undo'?'Last blueprint change undone.':'Blueprint change redone.');
   setAnchor(null);setSelectedRoomId(null);setSelectedFurnitureId(null);setFurniturePreview(null);
  };
- const modify=(fn:(old:HotelFloor)=>HotelFloor)=>{
+ const modify=(fn:(old:HotelFloor)=>HotelFloor,successMessage?:string)=>{
   if(!site||!floor)return;
-  try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
+  try{const next=updateFloor(site,floorIndex,fn);const message=onChangeSite(next);if(!message)recordEdit(site);setStatus(message??successMessage??'Blueprint updated. Approve construction when ready.');}catch(e){setStatus(e instanceof Error?e.message:'Invalid layout change.');}
+ };
+ const applyRoomCollection=(roomId:string,style:import('../furnitureCatalog').FurnitureStyle,
+  mode:import('../hotelFurnitureCollections').CollectionMode)=>{
+  if(!site||!floor||active)return;
+  const room=floor.rooms.find(r=>r.id===roomId);
+  if(!room)return;
+  modify(f=>planRoomFurnitureCollection(f,site,roomId,style,mode,()=>id()).floor,
+   room.name+' furnished with the '+style+' collection. Construction quote updated.');
+  setSelectedFurnitureId(null);setSelectedRoomId(roomId);
  };
  const adjustPlacedFurniture=(changes:{x?:number;y?:number;rotated?:boolean;modelId?:string;finish?:string})=>{
   if(!site||!selectedPlacedFurniture||active)return;
@@ -556,7 +567,11 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    </section>}
    {tool==='room'&&<div className="ib-room-templates" aria-label="Quick furnished room layouts"><strong>Ready-to-furnish layouts</strong><span>Auto-place a complete room in available space. You can edit it afterwards.</span><div>{BLUEPRINT_ROOM_TEMPLATES.map(template=><button key={template.id} type="button" disabled={!!active} onClick={()=>addTemplate(template.id)}><strong>{template.name}</strong><small>{template.width} × {template.height} m · {template.equipment.length} items</small></button>)}</div></div>}
    {tool==='room'&&<div className="ib-controls"><label>Room type<select value={roomType} disabled={!!active} onChange={e=>{setRoomType(e.target.value as RoomType);setAnchor(null);}}>{roomTypes.map(r=><option key={r.id} value={r.id}>{r.label} · min {r.minWidth}×{r.minHeight}</option>)}</select></label><span className="ib-muted">Drag corner to corner, or tap two corners</span></div>}
-   {tool==='furniture'&&<><HotelFurnitureCatalogue products={FURNITURE_MODELS}
+   {tool==='furniture'&&<><HotelRoomCollections site={site} floor={floor}
+    roomId={selectedRoomId} disabled={!!active}
+    onRoomSelect={roomId=>{setSelectedRoomId(roomId);setSelectedFurnitureId(null);}}
+    onApply={applyRoomCollection}/>
+    <HotelFurnitureCatalogue products={FURNITURE_MODELS}
     selectedId={itemModelId} finish={itemFinish}
     selectedRoomType={selectedRoom?.type??null} disabled={!!active}
     onSelect={model=>{setItemCode(model.code);setItemModelId(model.id);setTool('furniture');}}
@@ -618,6 +633,13 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
    {selectedRoom&&site.kind!=='headquarters'&&<div className="ib-room-access-actions"><div><strong>{selectedRoom.name} · Access</strong><small>{accessReport?.guests.find(g=>g.roomId===selectedRoom.id)?.status.replaceAll('-',' ')??(selectedRoom.type==='corridor'||selectedRoom.type==='lobby'?'Connect to entrance and reception':'Connect to an adjacent circulation area')}</small></div><button type="button" className="ib-secondary" disabled={!!active} onClick={()=>addSuggestedDoor(selectedRoom.id)}><DoorOpen size={14}/> Add doorway</button></div>}
    {selectedRoom&&site.kind!=='headquarters'&&<section className="ib-atmosphere-inspector" aria-label="Selected room light and atmosphere"><div className="ib-atmosphere-inspector-heading"><strong><Sun size={16}/> {selectedRoom.name} · Atmosphere</strong><span className={selectedAtmosphere&&selectedAtmosphere.score>=60?'good':'caution'}>{selectedAtmosphere?.grade??'Unrated'} · {selectedAtmosphere?.score??0}/100</span></div><div className="ib-atmosphere-metrics"><div><small>Daylight</small><strong>{selectedAtmosphere?.naturalLight??0}%</strong><span>{(selectedAtmosphere?.windowCount??0)+(selectedAtmosphere?.panoramicCount??0)} windows</span></div><div><small>Artificial light</small><strong>{selectedAtmosphere?.artificialLight??0}%</strong><span>{(floor.lights??[]).filter(l=>l.x>=selectedRoom.x&&l.x<selectedRoom.x+selectedRoom.width&&l.y>=selectedRoom.y&&l.y<selectedRoom.y+selectedRoom.height).length} installed fixtures</span></div></div><div className="ib-atmosphere-shortcuts"><button type="button" className="ib-secondary" disabled={!!active} onClick={()=>addSuggestedWindow(selectedRoom.id)}><PanelTop size={14}/> Add window</button><button type="button" className="ib-secondary" disabled={!!active} onClick={()=>addSuggestedLighting(selectedRoom.id)}><Lightbulb size={14}/> Add light</button></div>{selectedAtmosphere?.advice.length?<small>{selectedAtmosphere.advice.slice(0,2).join(' · ')}</small>:<small>Natural and artificial lighting are balanced.</small>}</section>}
    {selectedRoom&&site.kind!=='headquarters'&&<section className="ib-room-safety" aria-label="Room fire safety and access"><div className="ib-room-safety-heading"><strong><ShieldCheck size={16}/> {selectedRoom.name} · Safety</strong>{selectedGuestSafety&&<span className={selectedGuestSafety.fireReady?'good':'bad'}>{selectedGuestSafety.fireReady?'Fire ready':'Action required'}</span>}</div>{selectedGuestSafety&&<div className="ib-room-safety-flags"><span className={selectedGuestSafety.smokeAlarm?'good':'bad'}>{selectedGuestSafety.smokeAlarm?'✓':'!'} Smoke alarm</span><span className={selectedGuestSafety.evacuationRoute?'good':'bad'}>{selectedGuestSafety.evacuationRoute?'✓':'!'} Evacuation path</span><span className={selectedGuestSafety.extinguisherCoverage?'good':'bad'}>{selectedGuestSafety.extinguisherCoverage?'✓':'!'} Extinguisher</span><span className={selectedGuestSafety.accessible?'good':'bad'}>{selectedGuestSafety.accessible?'✓':'!'} Wheelchair access</span></div>}<div className="ib-room-safety-actions"><button type="button" className="ib-secondary" disabled={!!active||selectedRoom.type!=='guest'} onClick={()=>addSafetyToSelected(selectedRoom.id,'smoke-alarm')}><AlarmSmoke size={14}/> Add alarm</button><button type="button" className="ib-secondary" disabled={!!active||(selectedRoom.type!=='corridor'&&selectedRoom.type!=='lobby')} onClick={()=>addSafetyToSelected(selectedRoom.id,'fire-extinguisher')}><FireExtinguisher size={14}/> Add extinguisher</button><button type="button" className="ib-secondary" disabled={!!active||floorIndex!==0||(selectedRoom.type!=='corridor'&&selectedRoom.type!=='lobby')} onClick={()=>addSafetyToSelected(selectedRoom.id,'exit-sign')}><Signpost size={14}/> Mark exit</button></div>{selectedGuestSafety?.issues.length?<small>{selectedGuestSafety.issues.slice(0,2).join(' · ')}</small>:<small>Equip rooms and build real door connections before quoting construction.</small>}</section>}
+   {selectedRoom&&<div className="ib-collection-shortcut">
+    <div><strong>Furnish {selectedRoom.name}</strong>
+     <small>Choose a complete coordinated interior and place everything at once.</small></div>
+    <button type="button" className="ib-secondary" onClick={()=>{setTool('furniture');setAnchor(null);}}>
+     <Sofa size={15}/> Browse room collections
+    </button>
+   </div>}
    {selectedRoom&&<section className="ib-room-inspector" aria-label="Selected room editor"><div className="ib-room-inspector-head"><div><strong>{selectedRoom.name}</strong><small>{selectedRoom.type} · 1 m building grid · furnishings retained</small></div><button type="button" className="ib-secondary" onClick={()=>focusRoom(selectedRoom)}><Crosshair size={14}/> Centre</button></div><div className="ib-room-inspector-controls"><div><strong>Position</strong><small>X {selectedRoom.x} · Y {selectedRoom.y}</small><div className="ib-room-nudge"><button type="button" disabled={!!active} aria-label="Move selected room left" onClick={()=>adjustSelectedRoom({x:selectedRoom.x-1})}><ArrowLeft size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room up" onClick={()=>adjustSelectedRoom({y:selectedRoom.y-1})}><ArrowUp size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room down" onClick={()=>adjustSelectedRoom({y:selectedRoom.y+1})}><ArrowDown size={15}/></button><button type="button" disabled={!!active} aria-label="Move selected room right" onClick={()=>adjustSelectedRoom({x:selectedRoom.x+1})}><ArrowRight size={15}/></button></div></div><div><strong>Dimensions</strong><small>{selectedRoom.width} × {selectedRoom.height} m</small><div className="ib-room-resize"><button type="button" disabled={!!active} aria-label="Reduce selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width-1})}>W −</button><button type="button" disabled={!!active} aria-label="Increase selected room width" onClick={()=>adjustSelectedRoom({width:selectedRoom.width+1})}>W +</button><button type="button" disabled={!!active} aria-label="Reduce selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height-1})}>H −</button><button type="button" disabled={!!active} aria-label="Increase selected room height" onClick={()=>adjustSelectedRoom({height:selectedRoom.height+1})}>H +</button></div></div></div><small>Furniture moves with its room. Any invalid overlap, missing space or attached wall is blocked without altering the layout.</small></section>}
 
    {selectedPlacedFurniture&&<section className="ib-furniture-inspector" aria-label="Selected furniture editor">
@@ -625,6 +647,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
      <small>X {selectedPlacedFurniture.x} · Y {selectedPlacedFurniture.y} · {furnitureSize(selectedPlacedFurniture).width} × {furnitureSize(selectedPlacedFurniture).height} m</small></div>
      <button type="button" className="ib-secondary" disabled={!!active} onClick={()=>adjustPlacedFurniture({rotated:!selectedPlacedFurniture.rotated})}><RotateCw size={14}/> Rotate 90°</button>
     </div>
+    {selectedPlacedFurniture.designStyle&&<div className="ib-collection-object-style">
+     <Paintbrush size={14}/> {selectedPlacedFurniture.designStyle} interior collection
+    </div>}
     <div className="ib-furn-edit-model">
       <label>Furniture model<select aria-label="Change selected furniture model"
        disabled={!!active} value={selectedPlacedFurniture.modelId??'legacy'}
