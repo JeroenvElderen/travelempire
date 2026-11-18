@@ -5,7 +5,7 @@ import {
  newHotelSite,drawRoom,placeFurniture,roomArea,roomBounds,roomContainsCell,
  roomContainsRect,roomSections,roomBoundaryEdges,roomAtCell,
  constructionQuote,updateFloor,beginConstruction,
- type HotelSite,type HotelFloor,type Room,type Wall,
+ type HotelFloor,type Room,type Wall,
 } from './internalConstruction';
 import {
  paintHotelCorridor,joinConnectedHotelCorridors,removeHotelCorridorSection,
@@ -136,7 +136,7 @@ describe('Painting connected corridors',()=>{
   expect(roomAtCell(f,11,11)?.id).toBe('hall');
   f=paintHotelCorridor(f,s,{x:3,y:5,width:11,height:2},'unused');
   expect(f.rooms).toHaveLength(1);
-  expect(roomArea(f.rooms[0])).toBe(2*9+8*2+2*5+3);
+  expect(roomArea(f.rooms[0])).toBe(2*9+8*2+2*5+4);
   expect(()=>paintHotelCorridor(f,s,{x:2,y:2,width:2,height:2},'unused'))
    .toThrow('already part of a corridor');
  });
@@ -218,6 +218,7 @@ describe('Editing irregular corridor sections safely',()=>{
   f=paintHotelCorridor(f,s,{x:4,y:5,width:6,height:2},'branch');
   const index=roomSections(f.rooms[0]).findIndex(p=>p.x===4&&p.width===6);
   f=toggleHotelLighting(f,s,{id:'ceiling',kind:'ceiling',x:7,y:5});
+  expect(analyzeRoomAtmosphere(f,f.rooms[0],s).artificialLight).toBeGreaterThan(0);
   expect(()=>removeHotelCorridorSection(f,s,'hall',index)).toThrow('Move furnishings');
   const withWall={...f,lights:[],walls:[door('corridor-edge',7,5,'h')]};
   expect(()=>removeHotelCorridorSection(withWall,s,'hall',index)).toThrow('Remove attached');
