@@ -9,7 +9,13 @@ export type BuilderTool='room'|'wall'|'door'|'window'|'lighting'|'safety'|'furni
 export type TradeMode='contractor'|'own';
 export type FurnitureCode='bed'|'single-bed'|'wardrobe'|'television'|'desk'|'lamp'|'sofa'|'reception'|'toilet'|'shower'|'sink'|'oven'|'fridge'|'freezer'|'prep'|'table'|'chair'|'bar-counter'|'coffee'|'shelves'|'computer'|'printer'|'office-chair'|'conference-table'|
  'nightstand'|'minibar'|'safe'|'headboard'|'vanity'|'bathtub'|'mirror'|'towel-rack'|'armchair'|'coffee-table'|'tv-stand'|'bench'|'water-cooler'|'reading-chair'|'dishwasher'|'microwave'|'kitchen-island'|'bar-stool'|'booth'|'plant'|'rug'|'sculpture'|'sofa-bed'|'luggage-rack';
-export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number};
+export type RoomRect={x:number;y:number;width:number;height:number};
+export type Room={id:string;type:RoomType;name:string;x:number;y:number;width:number;height:number;
+ /** Extra rectangular sections form ONE connected, irregular corridor.
+  * Optional: all historic rectangle-only hotel saves remain valid.
+  * Sections never overlap each other or the base rectangle.
+  */
+ sections?:RoomRect[];};
 export type Wall={id:string;x:number;y:number;orientation:'h'|'v';type:'wall'|'door'|'window'|'panoramic-window'};
 export type LightingKind='ceiling'|'ambient';
 export type LightingFixture={id:string;kind:LightingKind;x:number;y:number};
@@ -150,7 +156,49 @@ export const furniture:ReadonlyArray<{code:FurnitureCode;name:string;priceCents:
  {code:'luggage-rack',name:'Luggage rack',priceCents:14000,width:1,height:1,requires:['guest']}
 ];
 const storagePrefix='travelempire.internal-buildings.v1.';
-const rectOverlaps=(a:{x:number;y:number;width:number;height:number},b:{x:number;y:number;width:number;height:number})=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
+export const rectOverlaps=(a:RoomRect,b:RoomRect)=>a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;
+/** One room ID can cover multiple connected rectangular corridor sections. */
+export const roomSections=(room:Room):RoomRect[]=>[
+ {x:room.x,y:room.y,width:room.width,height:room.height},...(room.sections??[]),
+];
+export const roomContainsCell=(room:Room,x:number,y:number):boolean=>
+ roomSections(room).some(r=>x>=r.x&&x<r.x+r.width&&y>=r.y&&y<r.y+r.height);
+export function roomContainsRect(room:Room,rect:RoomRect):boolean{
+ if(!Number.isInteger(rect.x)||!Number.isInteger(rect.y)||
+  !Number.isInteger(rect.width)||!Number.isInteger(rect.height)||
+  rect.width<=0||rect.height<=0)return false;
+ for(let y=rect.y;y<rect.y+rect.height;y++)
+  for(let x=rect.x;x<rect.x+rect.width;x++)
+   if(!roomContainsCell(room,x,y))return false;
+ return true;
+}
+export const roomArea=(room:Room):number=>
+ roomSections(room).reduce((sum,r)=>sum+r.width*r.height,0);
+export function roomBounds(room:Room):RoomRect{
+ const parts=roomSections(room);
+ const x=Math.min(...parts.map(p=>p.x)),y=Math.min(...parts.map(p=>p.y));
+ return {x,y,width:Math.max(...parts.map(p=>p.x+p.width))-x,
+  height:Math.max(...parts.map(p=>p.y+p.height))-y};
+}
+export const roomIntersectsRect=(room:Room,rect:RoomRect):boolean=>
+ roomSections(room).some(part=>rectOverlaps(part,rect));
+export const roomsOverlap=(a:Room,b:Room):boolean=>
+ roomSections(a).some(part=>roomIntersectsRect(b,part));
+/** Exposed 1m edges, including corners and interior notches of L/T corridors. */
+export function roomBoundaryEdges(room:Room):Array<{x:number;y:number;orientation:'h'|'v'}>{
+ const edges:Array<{x:number;y:number;orientation:'h'|'v'}>=[];
+ for(const part of roomSections(room))for(let y=part.y;y<part.y+part.height;y++)
+  for(let x=part.x;x<part.x+part.width;x++){
+   if(!roomContainsCell(room,x,y-1))edges.push({x,y,orientation:'h'});
+   if(!roomContainsCell(room,x,y+1))edges.push({x,y:y+1,orientation:'h'});
+   if(!roomContainsCell(room,x-1,y))edges.push({x,y,orientation:'v'});
+   if(!roomContainsCell(room,x+1,y))edges.push({x:x+1,y,orientation:'v'});
+  }
+ return edges;
+}
+export const roomPerimeter=(room:Room):number=>roomBoundaryEdges(room).length;
+export const roomAtCell=(floor:HotelFloor,x:number,y:number):Room|null=>
+ floor.rooms.find(r=>roomContainsCell(r,x,y))??null;
 export const blankFloor=(index:number):HotelFloor=>({id:'floor-'+index,label:index===0?'Ground floor':'Floor '+index,rooms:[],walls:[],objects:[]});
 export const emptyConstruction=(gameHour:number):ConstructionState=>({version:1,sites:{},workers:0,lastPayrollHour:gameHour});
 export function loadConstruction(companyId:string|undefined,hour:number):ConstructionState{
@@ -182,8 +230,34 @@ export function drawRoom(floor:HotelFloor,room:Room,site:HotelSite):HotelFloor{
  if(!Number.isInteger(room.x)||!Number.isInteger(room.y)||!Number.isInteger(room.width)||!Number.isInteger(room.height))throw Error('Room coordinates must use the building grid.');
  const spec=roomTypes.find(t=>t.id===room.type);
  if(!spec||room.width<spec.minWidth||room.height<spec.minHeight)throw Error('This room is smaller than its required minimum.');
- if(room.x<0||room.y<0||room.x+room.width>site.width||room.y+room.height>site.height)throw Error('Room extends outside the building.');
- if(floor.rooms.some(existing=>rectOverlaps(existing,room)))throw Error('Rooms cannot overlap.');
+ const parts=roomSections(room);
+ if(room.type!=='corridor'&&room.sections?.length)throw Error('Only corridors can have multiple sections.');
+ if(parts.some(p=>!Number.isInteger(p.x)||!Number.isInteger(p.y)||
+   !Number.isInteger(p.width)||!Number.isInteger(p.height)||
+   p.width<=0||p.height<=0||p.x<0||p.y<0||
+   p.x+p.width>site.width||p.y+p.height>site.height))
+  throw Error('Room extends outside the building.');
+ if(parts.some((p,i)=>parts.slice(i+1).some(other=>rectOverlaps(p,other))))
+  throw Error('Corridor sections cannot overlap each other.');
+ if(floor.rooms.some(existing=>roomsOverlap(existing,room)))
+  throw Error('Rooms cannot overlap.');
+ if(room.sections?.length){
+  const connected=new Set<number>([0]),pending=[0];
+  while(pending.length){
+   const index=pending.shift()!;
+   const a=parts[index];
+   for(let i=0;i<parts.length;i++){
+    if(connected.has(i))continue;
+    const b=parts[i];
+    const touching=(a.x+a.width===b.x||b.x+b.width===a.x)&&
+      Math.max(a.y,b.y)<Math.min(a.y+a.height,b.y+b.height)||
+     (a.y+a.height===b.y||b.y+b.height===a.y)&&
+      Math.max(a.x,b.x)<Math.min(a.x+a.width,b.x+b.width);
+    if(touching){connected.add(i);pending.push(i);}
+   }
+  }
+  if(connected.size!==parts.length)throw Error('Corridor sections must be connected by a full shared edge.');
+ }
  return {...floor,rooms:[...floor.rooms,room]};
 }
 export function toggleWall(floor:HotelFloor,wall:Wall,site:HotelSite):HotelFloor{
@@ -201,7 +275,7 @@ export function placeFurniture(floor:HotelFloor,item:ObjectPlacement,site:HotelS
  if(item.modelId&&!spec.catalogueModel)throw Error('This furniture model does not exist.');
  const size=furnitureSize(item),box={x:item.x,y:item.y,...size};
  if(item.x+size.width>site.width||item.y+size.height>site.height)throw Error('Object exceeds the building boundary.');
- const room=floor.rooms.find(r=>box.x>=r.x&&box.y>=r.y&&box.x+box.width<=r.x+r.width&&box.y+box.height<=r.y+r.height);
+ const room=floor.rooms.find(r=>roomContainsRect(r,box));
  if(!room)throw Error('Furniture must fit entirely inside a room.');
  if(spec.requires&&!spec.requires.includes(room.type))throw Error(spec.name+' cannot be placed inside '+room.name+'.');
  if(floor.objects.some(old=>rectOverlaps({...old,...furnitureSize(old)},box)))throw Error('The furniture would overlap another object.');
@@ -228,7 +302,7 @@ const materialData=[
 ] as const;
 const verticalCorePrice=(type:RoomType)=>type==='stairwell'?750000:type==='elevator'?3200000:0;
 const verticalCoreWork=(type:RoomType)=>type==='stairwell'?12:type==='elevator'?24:0;
-const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'',o.designStyle??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
+const floorMetric=(floor:HotelFloor)=>JSON.stringify({rooms:floor.rooms.map(r=>[r.id,r.x,r.y,r.width,r.height,r.type,r.sections??[]]),walls:floor.walls.map(w=>[w.x,w.y,w.orientation,w.type]),objects:floor.objects.map(o=>[o.id,o.x,o.y,o.code,o.rotated,o.modelId??'',o.finish??'',o.designStyle??'']),lights:(floor.lights??[]).map(l=>[l.id,l.x,l.y,l.kind]),safety:(floor.safetyFixtures??[]).map(f=>[f.id,f.x,f.y,f.kind])});
 export function constructionQuote(site:HotelSite,method:TradeMode,workers:number):BuildQuote{
  if(site.projects.some(p=>p.status==='active'))throw Error('Construction is already underway.');
  if(method==='own'&&workers<2)throw Error('Hire at least two construction workers to build with your own crew.');
@@ -243,15 +317,33 @@ export function constructionQuote(site:HotelSite,method:TradeMode,workers:number
   if(i>=site.built.length)newFloors++;
   const builtRooms=new Map(built.rooms.map(r=>[r.id,r]));
   for(const r of draft.rooms){
+   // Corridor material is priced by newly occupied cells, NOT the number of
+   // rectangle IDs. Joining old corridor pieces must never rebuild them.
+   if(r.type==='corridor')continue;
    const old=builtRooms.get(r.id);
    if(old&&old.x===r.x&&old.y===r.y&&old.width===r.width&&old.height===r.height&&old.type===r.type)continue;
-   area+=r.width*r.height;wallCount+=2*(r.width+r.height);
+   area+=roomArea(r);wallCount+=roomPerimeter(r);
    if(r.type==='stairwell')stairModules++;
    if(r.type==='elevator')liftModules++;
    verticalWork+=verticalCoreWork(r.type);
    if(r.type==='bathroom'||r.type==='kitchen'||r.type==='bar')bathrooms+=r.type==='bathroom'?1:2;
   }
-  demolition+=built.rooms.filter(r=>!draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+r.width*r.height,0);
+  const draftCorridor=new Set<string>(),builtCorridor=new Set<string>();
+  for(const r of draft.rooms.filter(r=>r.type==='corridor'))
+   for(const p of roomSections(r))for(let y=p.y;y<p.y+p.height;y++)
+    for(let x=p.x;x<p.x+p.width;x++)draftCorridor.add(x+':'+y);
+  for(const r of built.rooms.filter(r=>r.type==='corridor'))
+   for(const p of roomSections(r))for(let y=p.y;y<p.y+p.height;y++)
+    for(let x=p.x;x<p.x+p.width;x++)builtCorridor.add(x+':'+y);
+  for(const key of draftCorridor)if(!builtCorridor.has(key)){
+   area++;
+   const [x,y]=key.split(':').map(Number);
+   for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]])
+    if(!draftCorridor.has((x+dx)+':'+(y+dy)))wallCount++;
+  }
+  demolition+=built.rooms.filter(r=>r.type!=='corridor'&&
+   !draft.rooms.some(next=>next.id===r.id)).reduce((total,r)=>total+roomArea(r),0);
+  demolition+=[...builtCorridor].filter(key=>!draftCorridor.has(key)).length;
   const existed=new Map(built.objects.map(o=>[o.id,o]));
   for(const item of draft.objects){
    const prior=existed.get(item.id);
@@ -379,7 +471,7 @@ export function settleConstruction(state:ConstructionState,nowHour:number):{stat
  return {state:changed?{...state,sites,lastPayrollHour:hour}:state,wageCents,completed};
 }
 export function roomIssues(floor:HotelFloor,room:Room):string[]{
- const codes=new Set(floor.objects.filter(o=>o.x>=room.x&&o.y>=room.y&&o.x<room.x+room.width&&o.y<room.y+room.height).map(o=>o.code));
+ const codes=new Set(floor.objects.filter(o=>roomContainsCell(room,o.x,o.y)).map(o=>o.code));
  const needs:Partial<Record<RoomType,FurnitureCode[][]>>={
   guest:[['bed','single-bed','sofa-bed']],bathroom:[['toilet'],['sink'],['shower','bathtub']],kitchen:[['oven'],['fridge'],['sink']],office:[['desk'],['computer'],['office-chair']],meeting:[['conference-table']],
   bar:[['bar-counter']],restaurant:[['table','booth'],['chair','booth']],lobby:[['reception']],storage:[['shelves']]
