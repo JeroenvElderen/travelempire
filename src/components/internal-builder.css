@@ -833,3 +833,10 @@
  .internal-builder .ib-visual-style{width:100%;flex-wrap:wrap}
  .internal-builder .ib-visual-style button{flex:1;min-height:39px}
 }
+
+
+/* Phase 6: edit a selected furniture model and finish without changing its ID. */
+.internal-builder .ib-furn-edit-model{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.internal-builder .ib-furn-edit-model label{display:grid;gap:5px;min-width:0;font-size:10px;color:var(--ib-muted)}
+.internal-builder .ib-furn-edit-model select{width:100%;min-width:0;max-width:100%;min-height:39px;padding:8px;border:1px solid var(--ib-line);border-radius:9px;background:rgba(27,44,65,.95);color:var(--ib-fg);font-size:11px}
+@media(max-width:620px){.internal-builder .ib-furn-edit-model{grid-template-columns:1fr}}
