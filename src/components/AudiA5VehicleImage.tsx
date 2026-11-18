@@ -7,25 +7,28 @@ import {
 import './audi-a5-sprites.css';
 type VehicleImageProps={
  model?:string;optionIds?:readonly string[];paintHex?:string;
- paintId?:string;alt?:string;className?:string;style?:CSSProperties;
+ paintId?:string;quality?:'map'|'preview';alt?:string;className?:string;style?:CSSProperties;
  fallbackSrc:string;
 };
 /** Reuses the PNG atlas instead of changing the colour of glass/lights.
  * The default fallback is still the existing vehicle icon.
  */
 export function AudiA5VehicleImage({
- model,optionIds,paintHex,paintId,alt='',className,style,fallbackSrc,
+ model,optionIds,paintHex,paintId,quality='map',alt='',className,style,fallbackSrc,
 }:VehicleImageProps){
  const match=paintId?AUDI_A5_PAINT_SPRITES.find(p=>p.id===paintId)??null:
   audiA5PaintForVehicle(model,optionIds,paintHex);
  const [url,setUrl]=useState<string|null>(null);
+ const [failed,setFailed]=useState(false);
  useEffect(()=>{
   let active=true;
-  setUrl(null);
-  if(match)void audiA5SpriteUrl(match.id).then(src=>{if(active)setUrl(src);});
+  setUrl(null);setFailed(false);
+  if(match)void audiA5SpriteUrl(match.id,quality).then(src=>{if(active)setUrl(src);});
   return()=>{active=false;};
- },[match?.id]);
- return <img src={url??fallbackSrc} className={className} style={style}
+ },[match?.id,quality]);
+ return <img src={url&&!failed?url:fallbackSrc}
+  onError={()=>{if(url&&!failed)setFailed(true);}}
+  className={match?className:undefined} style={style}
   alt={alt} loading="lazy" draggable={false}/>;
 }
 /** Fast paint strip thumbnails: one image request, not nine thumbnails.
