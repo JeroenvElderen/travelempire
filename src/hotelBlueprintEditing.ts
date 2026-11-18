@@ -3,7 +3,7 @@
  * or construction payments: updates remain draft layouts until approved.
  */
 import {
- drawRoom,placeFurniture,furnitureSize,roomIssues,roomTypes,
+ drawRoom,placeFurniture,furnitureSize,roomIssues,roomTypes,roomArea,
  type Room,type RoomType,type HotelFloor,type HotelSite,type FurnitureCode,type ObjectPlacement,
 } from './internalConstruction';
 import {analyzeRoomAtmosphere} from './hotelAtmosphere';
@@ -64,6 +64,7 @@ export function editBlueprintRoom(
 ):HotelFloor{
  const original=floor.rooms.find(r=>r.id===roomId);
  if(!original)throw Error('Select a room to edit.');
+ if(original.sections?.length)throw Error('This corridor has multiple sections. Use Corridor mode to extend it, or remove a section below.');
  if(Object.keys(geometry).some(k=>!Number.isInteger(geometry[k as keyof BlueprintRoomGeometry])))
   throw Error('Room dimensions and position must use whole metres.');
  if(original.x===geometry.x&&original.y===geometry.y&&
@@ -235,7 +236,7 @@ export function hotelBlueprintHealth(floor:HotelFloor,site:HotelSite):HotelBluep
  const issues=floor.rooms.map(room=>({roomId:room.id,name:room.name,
   messages:roomIssues(floor,room)})).filter(item=>item.messages.length>0);
  const unfinished=new Set(issues.map(item=>item.roomId));
- const plannedArea=floor.rooms.reduce((total,r)=>total+r.width*r.height,0);
+ const plannedArea=floor.rooms.reduce((total,r)=>total+roomArea(r),0);
  const guestRoomQuality=floor.rooms.filter(r=>r.type==='guest').map(room=>({
   roomId:room.id,name:room.name,quality:hotelGuestRoomQuality(floor,room,site),
  }));
