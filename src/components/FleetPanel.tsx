@@ -10,6 +10,7 @@ import {OFFERS,eur,type VehicleOffer} from '../dealership';
 import {financeQuote,leaseQuote,FINANCE_TERMS} from '../economy';
 import {depotParkingChoices} from '../simulation/depotParking';
 import '../dealership.css';
+import {AudiA5VehicleImage} from './AudiA5VehicleImage';
 import './fleet-compact.css';
 import './fleet-redesign.css';
 
@@ -79,7 +80,10 @@ const analyticsRevenue=fleet.taxis.reduce((sum,t)=>sum+(t.tripRevenue??0),0);
   const attention=needsService(t)||fuel<=20||Boolean(t.recoveryPending);
   return <article className={`fleet-vehicle-mini ${attention?'fleet-vehicle-mini-warning':''}`} key={t.id}>
    <div className="fleet-vehicle-mini-top">
-    <span className="fleet-vehicle-mini-art"><img src={`${import.meta.env.BASE_URL}assets/SimplePurpleCarTopView.svg`} alt="" loading="lazy" /></span>
+    <span className="fleet-vehicle-mini-art"><AudiA5VehicleImage model={t.vehicleModel}
+      optionIds={t.vehicleOptionIds} paintHex={t.vehiclePaintHex}
+      fallbackSrc={`${import.meta.env.BASE_URL}assets/SimplePurpleCarTopView.svg`} alt=""
+      className="te-audi-fleet-icon"/></span>
     <div className="fleet-vehicle-mini-info">
      <strong>{t.vehicleModel??t.name}</strong>
      <span>{t.name}{t.driver&&t.driver!=='—'?` · ${t.driver}`:''}</span>
