@@ -20,7 +20,15 @@ jobs:
             const p=readFileSync('public/assets/vehicles/audi-a5-avant/paint-atlas.png');
             if(p.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||p.readUInt32BE(16)!==720||p.readUInt32BE(20)!==170)
               throw new Error('Audi sprite atlas is not a 720x170 PNG');
-            console.log('Audi A5 Avant PNG atlas valid',p.length,'bytes');
+            const names=['arkona-white','glacier-white','mythos-black','firmament-blue',
+              'floret-silver','plateau-grey','horizon-blue','grenadine-red','daytona-grey'];
+            for(const name of names){
+              const file=readFileSync('public/assets/vehicles/audi-a5-avant/'+name+'.png');
+              if(file.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||
+                 file.readUInt32BE(16)!==80||file.readUInt32BE(20)!==170)
+                throw new Error('Invalid Audi 80x170 PNG: '+name);
+            }
+            console.log('Nine Audi A5 Avant transparent paint sprites valid; atlas',p.length,'bytes');
           "
       - name: Production TypeScript and Vite build
         run: npm run build
