@@ -5,7 +5,8 @@ import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {AUDI_A5_PAINT_SPRITES,audiA5PaintForConfigurator} from '../audiA5Sprites';
 import {AUDI_A6_PAINT_SPRITES,audiA6PaintForConfigurator} from '../audiA6Sprites';
-import {AudiAvantVehicleImage,AudiA5PaintThumb,AudiA6PaintThumb} from './AudiAvantVehicleImage';
+import {VehiclePaintImage,AudiA5PaintThumb,AudiA6PaintThumb,SkodaOctaviaPaintThumb} from './AudiAvantVehicleImage';
+import {SKODA_OCTAVIA_PAINT_SPRITES,skodaOctaviaPaintForConfigurator} from '../skodaOctaviaSprites';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
@@ -32,8 +33,10 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const paints=paintChoices(model,year,currentTrim);
  const wheels=wheelChoices(model,year,currentTrim,activeVariant?.id);
  const paint=paints.find(p=>p.id===paintId)??paints[0];
- const audiSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id)??
-  audiA6PaintForConfigurator(model.brand,model.name,paint?.id);
+ const vehicleSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id)??
+  audiA6PaintForConfigurator(model.brand,model.name,paint?.id)??
+  skodaOctaviaPaintForConfigurator(model.brand,model.name,paint?.id);
+ const skodaCombi=model.brand==='Skoda'&&model.name==='Octavia Combi';
  const audiA6=model.brand==='Audi'&&model.name==='A6 Avant e-hybrid';
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
  const extras=useMemo(()=>{
@@ -80,6 +83,22 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
        </div>
        <small className="eu-audi-paint-choices-note">Nine top-down paint previews. A6 additional colour choices are TravelEmpire custom finishes, not verified factory options. Unpictured paints retain the standard car icon.</small>
       </div>}
+      {skodaCombi&&<div className="eu-audi-paint-section">
+       <div className="eu-audi-paint-choices" role="group" aria-label="Škoda Octavia Combi paint previews">
+        {SKODA_OCTAVIA_PAINT_SPRITES.filter(sprite=>paints.some(p=>
+         skodaOctaviaPaintForConfigurator('Skoda','Octavia Combi',p.id)?.id===sprite.id))
+         .map(sprite=>{
+          const choice=paints.find(p=>skodaOctaviaPaintForConfigurator(
+           'Skoda','Octavia Combi',p.id)?.id===sprite.id);
+          return <button type="button" key={sprite.id}
+           aria-pressed={paint?.id===choice?.id}
+           onClick={()=>choice&&setPaintId(choice.id)} title={sprite.name}>
+           <SkodaOctaviaPaintThumb paint={sprite}/><span>{sprite.name}</span>
+          </button>;
+         })}
+       </div>
+       <small className="eu-audi-paint-choices-note">Factory paint pricing and grade availability are preserved. Phoenix Orange is a TravelEmpire-only custom colour.</small>
+      </div>}
     </section>
     <details className="eu-extras-panel eu-config-group">
      <summary><span className="eu-extras-title"><span className="eu-step-number">03</span><strong>Optional equipment</strong></span><span className="eu-extras-count">{extraIds.length} selected <ChevronDown size={16}/></span></summary>
@@ -104,9 +123,9 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
    </div>}
    <aside className="eu-config-summary" ref={summaryRef}>
     <div className="eu-vehicle-stage">
-     {audiSprite?<AudiAvantVehicleImage model={model.brand+' '+model.name} paintId={audiSprite.id}
+     {vehicleSprite?<VehiclePaintImage model={model.brand+' '+model.name} paintId={paint?.id}
        className="eu-audi-preview" fallbackSrc={`${import.meta.env.BASE_URL}assets/car_topview.svg`}
-       alt={audiSprite.name+' Audi '+(audiA6?'A6':'A5')+' Avant top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
+       alt={vehicleSprite.name+' '+model.brand+' '+model.name+' top-down view'}/>:<CarFront size={29} aria-hidden="true"/>}
      <small>{year} · {model.segment} · {activeVariant?.fuel??model.fuel}</small>
     </div>
     <h3>{year} {model.brand} {model.name}</h3><p>{currentTrim} grade · {paint?.name??'Standard paint'} · {wheel?.name??'Standard wheels'}</p>
