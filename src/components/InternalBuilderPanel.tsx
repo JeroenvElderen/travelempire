@@ -353,7 +353,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   const point:DragPointer={startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,
    cell,moved:false,gesture:false,panOverride:e.shiftKey,
    furnitureId:candidate?.id,furnitureOrigin:candidate?{x:candidate.x,y:candidate.y}:undefined};
-  if(candidate){setSelectedFurnitureId(candidate.id);setSelectedRoomId(null);if(tool==='select')setMobilePanel('inspect');}
+  if(candidate){setSelectedFurnitureId(candidate.id);setSelectedRoomId(null);}
   pointers.current.set(e.pointerId,point);
   if(pointers.current.size>1){
    setFurniturePreview(null);
@@ -435,6 +435,7 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
   if(cancel||point.gesture||point.panOverride)return;
   if(point.furnitureId&&point.furnitureOrigin){
    setSelectedFurnitureId(point.furnitureId);setSelectedRoomId(null);
+   if(!point.moved&&tool==='select')setMobilePanel('inspect');
    if(point.moved&&site&&!active){
     const target=furnitureDragPosition(point.furnitureOrigin,
      {x:e.clientX-point.startX,y:e.clientY-point.startY},zoomRef.current);
@@ -670,9 +671,9 @@ export default function InternalBuilderPanel({company,state,portfolio,gameHour,g
     </div>
     <nav className="ib-mobile-tool-dock" aria-label="Primary building tools">
      <button type="button" className={!mobilePanel&&tool==='pan'?'selected':''} aria-pressed={!mobilePanel&&tool==='pan'} onClick={()=>openMobilePanel('move')}><Hand size={20}/> <span>Move</span></button>
-     <button type="button" className={mobilePanel==='build'?'selected':''} aria-pressed={mobilePanel==='build'} onClick={()=>openMobilePanel('build')}><Hammer size={20}/> <span>Build</span></button>
-     <button type="button" className={mobilePanel==='furnish'?'selected':''} aria-pressed={mobilePanel==='furnish'} onClick={()=>openMobilePanel('furnish')}><Sofa size={20}/> <span>Furnish</span></button>
-     <button type="button" className={mobilePanel==='inspect'?'selected':''} aria-pressed={mobilePanel==='inspect'} onClick={()=>openMobilePanel('inspect')}><ScanEye size={20}/> <span>Inspect</span></button>
+     <button type="button" className={mobilePanel==='build'||!mobilePanel&&['room','wall','door','window','erase'].includes(tool)?'selected':''} aria-pressed={mobilePanel==='build'||!mobilePanel&&['room','wall','door','window','erase'].includes(tool)} onClick={()=>openMobilePanel('build')}><Hammer size={20}/> <span>Build</span></button>
+     <button type="button" className={mobilePanel==='furnish'||!mobilePanel&&(tool==='furniture'||tool==='lighting')?'selected':''} aria-pressed={mobilePanel==='furnish'||!mobilePanel&&(tool==='furniture'||tool==='lighting')} onClick={()=>openMobilePanel('furnish')}><Sofa size={20}/> <span>Furnish</span></button>
+     <button type="button" className={mobilePanel==='inspect'||!mobilePanel&&tool==='select'?'selected':''} aria-pressed={mobilePanel==='inspect'||!mobilePanel&&tool==='select'} onClick={()=>openMobilePanel('inspect')}><ScanEye size={20}/> <span>Inspect</span></button>
     </nav>
     {mobilePanel&&<button type="button" className="ib-mobile-sheet-backdrop" aria-label="Close tool panel" onClick={()=>setMobilePanel(null)}/>}
     <section className="ib-builder-drawer" aria-label="Builder tools and settings">
