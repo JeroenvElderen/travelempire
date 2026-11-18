@@ -2,7 +2,7 @@
  * Room covers an L/T/U shape; occupied cells remain distinct from its bounding
  * rectangle, and saved rooms without sections stay valid.
  */
-import {drawRoom,type HotelFloor,type HotelSite,type Room,type Wall} from './internalConstruction';
+import {drawRoom,furnitureSize,type HotelFloor,type HotelSite,type Room,type Wall} from './internalConstruction';
 import {
  roomSections,containsRoomCell,roomsOverlap,roomCellKeys,rectsOverlap,
  corridorShape,edgeTouchesRoom,blockingCorridorSeam,
@@ -121,7 +121,7 @@ export const corridorSectionCount=(room:Room):number=>roomSections(room).length;
  * Wall and door segments attached to the removed cells are not discarded.
  */
 export function removeLastCorridorSection(
- floor:HotelFloor,site:HotelSite,id:string,
+ floor:HotelFloor,_site:HotelSite,id:string,
 ):HotelFloor{
  const room=floor.rooms.find(r=>r.id===id);
  if(!room||room.type!=='corridor'||!room.sections||room.sections.length<2)
@@ -137,11 +137,10 @@ export function removeLastCorridorSection(
   if(touched&&!still)throw Error('Remove the door or wall attached to that corridor section first.');
  }
  for(const item of floor.objects){
-  const size=({width:1,height:1}); // individual corridor furniture is rare;
-  // only refuse removal for furniture anchored to a removed occupied cell.
-  if(containsRoomCell(room,item.x,item.y)&&!containsRoomCell(next,item.x,item.y))
-   throw Error('Move furniture from the removed section first.');
-  void size;
+  const size=furnitureSize(item);
+  for(let y=item.y;y<item.y+size.height;y++)for(let x=item.x;x<item.x+size.width;x++)
+   if(containsRoomCell(room,x,y)&&!containsRoomCell(next,x,y))
+    throw Error('Move furniture from the removed section first.');
  }
  return {...floor,rooms:floor.rooms.map(r=>r.id===id?next:r)};
 }
