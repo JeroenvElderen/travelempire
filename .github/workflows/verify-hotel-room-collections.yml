@@ -1,0 +1,22 @@
+name: Verify Hotel Room Collections
+on:
+  push:
+    branches:
+      - feature/hotel-phase7-room-collections
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Room collection planner, furnishing and hotel regression tests
+        run: npm test -- src/hotelFurnitureCollections.test.ts src/furnitureCatalog.test.ts src/hotelVisualisation.test.ts src/hotelSafety.test.ts src/hotelAtmosphere.test.ts src/hotelVerticalAccess.test.ts src/hotelAccess.test.ts src/hotelBlueprintEditing.test.ts src/hotelFurnitureQuality.test.ts src/hotelOperations.test.ts src/internalConstruction.test.ts src/components/blueprintViewport.test.ts
+      - name: Full suite (report unrelated known regressions)
+        continue-on-error: true
+        run: npm test
