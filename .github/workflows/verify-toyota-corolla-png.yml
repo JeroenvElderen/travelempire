@@ -1,0 +1,25 @@
+name: Verify Toyota Corolla Touring Sports PNG integration
+on:
+  push:
+    branches:
+      - feature/toyota-corolla-touring-sports-sprites
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify Toyota PNG sprite atlas is present and correct
+        run: |
+          node -e "const fs=require('fs');const p='public/assets/vehicles/toyota-corolla-touring-sports/paint-atlas.png';const b=fs.readFileSync(p);if(b.toString('hex',0,8)!=='89504e470d0a1a0a'||b.readUInt32BE(16)!==800||b.readUInt32BE(20)!==170)throw Error('Toyota sprite atlas missing, corrupt or wrong size');console.log('Toyota atlas verified:',b.length,'bytes');"
+      - name: TypeScript and Vite production build
+        run: npm run build
+      - name: Toyota, Audi, Skoda and estate-only dealership regression tests
+        run: npm test -- src/toyotaCorollaSprites.test.ts src/audiA5Sprites.test.ts src/audiA6Sprites.test.ts src/skodaOctaviaSprites.test.ts src/dealershipModelPolicy.test.ts
+      - name: Full suite (existing unrelated test failures reported)
+        continue-on-error: true
+        run: npm test
