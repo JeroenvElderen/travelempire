@@ -5,8 +5,9 @@ import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {AUDI_A5_PAINT_SPRITES,audiA5PaintForConfigurator} from '../audiA5Sprites';
 import {AUDI_A6_PAINT_SPRITES,audiA6PaintForConfigurator} from '../audiA6Sprites';
-import {VehiclePaintImage,AudiA5PaintThumb,AudiA6PaintThumb,SkodaOctaviaPaintThumb} from './AudiAvantVehicleImage';
+import {VehiclePaintImage,AudiA5PaintThumb,AudiA6PaintThumb,SkodaOctaviaPaintThumb,ToyotaCorollaPaintThumb} from './AudiAvantVehicleImage';
 import {SKODA_OCTAVIA_PAINT_SPRITES,skodaOctaviaPaintForConfigurator} from '../skodaOctaviaSprites';
+import {TOYOTA_COROLLA_PAINT_SPRITES,toyotaCorollaPaintForConfigurator} from '../toyotaCorollaSprites';
 import {financeQuote,leaseQuote} from '../economy';
 import './EuropeanDealership.css';
 
@@ -35,8 +36,10 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const paint=paints.find(p=>p.id===paintId)??paints[0];
  const vehicleSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id)??
   audiA6PaintForConfigurator(model.brand,model.name,paint?.id)??
-  skodaOctaviaPaintForConfigurator(model.brand,model.name,paint?.id);
+  skodaOctaviaPaintForConfigurator(model.brand,model.name,paint?.id)??
+  toyotaCorollaPaintForConfigurator(model.brand,model.name,paint?.id);
  const skodaCombi=model.brand==='Skoda'&&model.name==='Octavia Combi';
+ const corollaTouring=model.brand==='Toyota'&&model.name==='Corolla Touring Sports';
  const audiA6=model.brand==='Audi'&&model.name==='A6 Avant e-hybrid';
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
  const extras=useMemo(()=>{
@@ -82,6 +85,17 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
         </button>)}
        </div>
        <small className="eu-audi-paint-choices-note">Nine top-down paint previews. A6 additional colour choices are TravelEmpire custom finishes, not verified factory options. Unpictured paints retain the standard car icon.</small>
+      </div>}
+      {corollaTouring&&<div className="eu-audi-paint-section">
+       <div className="eu-audi-paint-choices" role="group" aria-label="Toyota Corolla Touring Sports paint previews">
+        {TOYOTA_COROLLA_PAINT_SPRITES.filter(sprite=>paints.some(p=>p.id===sprite.id))
+          .map(sprite=><button type="button" key={sprite.id}
+           aria-pressed={paint?.id===sprite.id} title={sprite.name}
+           onClick={()=>setPaintId(sprite.id)}>
+           <ToyotaCorollaPaintThumb paint={sprite}/><span>{sprite.name}</span>
+          </button>)}
+       </div>
+       <small className="eu-audi-paint-choices-note">Six standard paints and four GR SPORT bi-tone finishes with black roofs. Colours and prices follow the selected trim.</small>
       </div>}
       {skodaCombi&&<div className="eu-audi-paint-section">
        <div className="eu-audi-paint-choices" role="group" aria-label="Škoda Octavia Combi paint previews">
