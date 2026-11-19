@@ -9,6 +9,11 @@ import {
  type SkodaOctaviaPaintSprite,
 } from '../skodaOctaviaSprites';
 import type {AudiPaintSprite} from '../audiA5Sprites';
+import {
+ TOYOTA_COROLLA_ATLAS_COLUMNS,toyotaCorollaAtlasUrl,toyotaCorollaPaintById,
+ toyotaCorollaPaintForVehicle,toyotaCorollaSpriteUrl,
+ type ToyotaCorollaPaintSprite,
+} from '../toyotaCorollaSprites';
 import './audi-a5-sprites.css';
 type Props={
  model?:string;optionIds?:readonly string[];paintHex?:string;paintId?:string;
@@ -22,6 +27,8 @@ export function VehiclePaintImage({
   audiA6PaintForVehicle(model,optionIds,paintHex);
  const a5=paintId?AUDI_A5_PAINT_SPRITES.find(p=>p.id===paintId)??null:
   audiA5PaintForVehicle(model,optionIds,paintHex);
+ const toyota=paintId?toyotaCorollaPaintById(paintId):
+  toyotaCorollaPaintForVehicle(model,optionIds,paintHex);
  const skoda=paintId?skodaOctaviaPaintByOptionId(paintId):
    skodaOctaviaPaintForVehicle(model,optionIds,paintHex);
  const [url,setUrl]=useState<string|null>(null);
@@ -29,13 +36,13 @@ export function VehiclePaintImage({
  useEffect(()=>{
   let active=true;
   setUrl(null);setFailed(false);
-  const promise=skoda?skodaOctaviaSpriteUrl(skoda.id):a6?audiA6SpriteUrl(a6.id):a5?audiA5SpriteUrl(a5.id):null;
+  const promise=toyota?toyotaCorollaSpriteUrl(toyota.id):skoda?skodaOctaviaSpriteUrl(skoda.id):a6?audiA6SpriteUrl(a6.id):a5?audiA5SpriteUrl(a5.id):null;
   if(promise)void promise.then(src=>{if(active)setUrl(src);});
   return()=>{active=false;};
- },[a6?.id,a5?.id,skoda?.id]);
+ },[a6?.id,a5?.id,skoda?.id,toyota?.id]);
  return <img src={url&&!failed?url:fallbackSrc}
   onError={()=>{if(url&&!failed)setFailed(true);}}
-  className={skoda||a6||a5?className:undefined} style={style}
+  className={toyota||skoda||a6||a5?className:undefined} style={style}
   alt={alt} loading="lazy" draggable={false}/>;
 }
 export function AudiA6PaintThumb({paint}:{paint:AudiPaintSprite}){
@@ -59,3 +66,14 @@ export function SkodaOctaviaPaintThumb({paint}:{paint:SkodaOctaviaPaintSprite}){
   role="img" aria-label={paint.name}/>;
 }
 export {AudiA5PaintThumb};
+
+/** Matching Toyota showroom paint tile, using the exact 10-column atlas. */
+export function ToyotaCorollaPaintThumb({paint}:{paint:ToyotaCorollaPaintSprite}){
+ const style:CSSProperties={
+  backgroundImage:`url("${toyotaCorollaAtlasUrl()}")`,
+  backgroundSize:`${TOYOTA_COROLLA_ATLAS_COLUMNS*100}% 100%`,
+  backgroundPosition:`${paint.index/(TOYOTA_COROLLA_ATLAS_COLUMNS-1)*100}% center`,
+ };
+ return <span className="te-audi-paint-thumb" style={style}
+  role="img" aria-label={paint.name}/>;
+}
