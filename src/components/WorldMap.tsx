@@ -33,6 +33,7 @@ import {deliveryPosition} from '../dealership';
 import {audiA5PaintForVehicle,audiA5SpriteUrl} from '../audiA5Sprites';
 import {audiA6PaintForVehicle,audiA6SpriteUrl} from '../audiA6Sprites';
 import {skodaOctaviaPaintForVehicle,skodaOctaviaSpriteUrl} from '../skodaOctaviaSprites';
+import {toyotaCorollaPaintForVehicle,toyotaCorollaSpriteUrl} from '../toyotaCorollaSprites';
 import {loadStationTile,stationTileKey,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
 import type {RestStop} from '../simulation/driverRest';
@@ -585,21 +586,24 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    const from=sameRoute&&displayed?{...previous!.to,position:displayed}:sameRoute?previous!.to:renderTaxi;
    taxiSnapshots.current.set(taxi.id,{from,to:renderTaxi,forecast,at:now});
   }if(!taxiMarkers.current.has(taxi.id)&&map.current){const el=document.createElement('div');el.className='taxi-map-marker';const img=document.createElement('img');if(taxi.kind==='explorer'){const filters:Record<string,string>={motorway:'hue-rotate(0deg)',trunk:'hue-rotate(25deg)',primary:'hue-rotate(70deg)',secondary:'hue-rotate(130deg)',tertiary:'hue-rotate(185deg)',residential:'hue-rotate(235deg)',rural:'hue-rotate(275deg)',service:'hue-rotate(310deg)',poi:'hue-rotate(160deg)',completion:'hue-rotate(90deg)'};img.style.filter=filters[taxi.explorerRole??'']??'';}img.src=`${import.meta.env.BASE_URL??'/'}assets/${taxi.kind==='recovery'?'heavy_recovery_truck.svg':taxi.kind==='explorer'?(taxi.explorerRole==='completion'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='highway'?'SimpleBlueCarTopView.svg':taxi.explorerRole==='urban'?'SimpleOrangeCarTopView.svg':taxi.explorerRole==='poi'?'SimpleBlueCarTopView.svg':'SimpleBlueCarTopView.svg'):'car_topview.svg'}`;img.alt='';img.draggable=false;
-   // Model-specific PNGs for Audi A5 and A6 Avants; no per-frame recolouring.
+   // Model-specific PNGs for Audi, Skoda and Toyota estate cars; no per-frame recolouring.
    const a6Paint=(taxi.kind??'taxi')==='taxi'?
     audiA6PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
    const skodaPaint=(taxi.kind??'taxi')==='taxi'?
     skodaOctaviaPaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
    const audiPaint=(taxi.kind??'taxi')==='taxi'?
     a6Paint??audiA5PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
-   const vehiclePaint=skodaPaint??audiPaint;
+   const toyotaPaint=(taxi.kind??'taxi')==='taxi'?
+    toyotaCorollaPaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
+   const vehiclePaint=toyotaPaint??skodaPaint??audiPaint;
    if(vehiclePaint){
     img.dataset.vehiclePaint=vehiclePaint.id;
     const defaultCarIcon=img.src;
     img.addEventListener('error',()=>{
      if(img.src!==defaultCarIcon)img.src=defaultCarIcon;
     },{once:true});
-    const source=skodaPaint?skodaOctaviaSpriteUrl(skodaPaint.id):
+    const source=toyotaPaint?toyotaCorollaSpriteUrl(toyotaPaint.id):
+     skodaPaint?skodaOctaviaSpriteUrl(skodaPaint.id):
      a6Paint?audiA6SpriteUrl(a6Paint.id):audiA5SpriteUrl(audiPaint!.id);
     void source.then(url=>{
      if(url&&img.isConnected)img.src=url;
