@@ -1,7 +1,7 @@
 name: Verify Q7 Q9 and Volvo vehicle sprites
 on:
   push:
-    branches: [feature/q7-q9-volvo-sprite-atlases]
+    branches: [feature/q7-q9-volvo-sprite-atlases, fix/q7-q9-volvo-faithful-pngs]
   pull_request:
     paths:
       - 'src/estateSuvSprites.ts'
@@ -32,6 +32,6 @@ jobs:
           data=p.read_bytes()
           assert data.startswith(bytes.fromhex('89504e470d0a1a0a'))
           w,h=struct.unpack('>II',data[16:24])
-          assert (w,h)==(240,220),f'Unexpected size {(w,h)}'
+          assert (w,h)==(960,850),f'Unexpected size {(w,h)}'
           print(f'Atlas verified: {w} × {h}')
           PY
