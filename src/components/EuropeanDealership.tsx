@@ -5,7 +5,8 @@ import {eur,type VehicleOffer} from '../dealership';
 import {DRIVER_COST} from '../simulation/taxi';
 import {AUDI_A5_PAINT_SPRITES,audiA5PaintForConfigurator} from '../audiA5Sprites';
 import {AUDI_A6_PAINT_SPRITES,audiA6PaintForConfigurator} from '../audiA6Sprites';
-import {VehiclePaintImage,AudiA5PaintThumb,AudiA6PaintThumb,SkodaOctaviaPaintThumb,ToyotaCorollaPaintThumb} from './AudiAvantVehicleImage';
+import {VehiclePaintImage,AudiA5PaintThumb,AudiA6PaintThumb,SkodaOctaviaPaintThumb,ToyotaCorollaPaintThumb,EstateSuvPaintThumb} from './AudiAvantVehicleImage';
+import {ESTATE_SUV_PAINTS,estateSuvPaintForConfigurator,estateSuvModelForVehicle} from '../estateSuvSprites';
 import {SKODA_OCTAVIA_PAINT_SPRITES,skodaOctaviaPaintForConfigurator} from '../skodaOctaviaSprites';
 import {TOYOTA_COROLLA_PAINT_SPRITES,toyotaCorollaPaintForConfigurator} from '../toyotaCorollaSprites';
 import {financeQuote,leaseQuote} from '../economy';
@@ -37,10 +38,12 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const vehicleSprite=audiA5PaintForConfigurator(model.brand,model.name,paint?.id)??
   audiA6PaintForConfigurator(model.brand,model.name,paint?.id)??
   skodaOctaviaPaintForConfigurator(model.brand,model.name,paint?.id)??
-  toyotaCorollaPaintForConfigurator(model.brand,model.name,paint?.id);
+  toyotaCorollaPaintForConfigurator(model.brand,model.name,paint?.id)??
+  estateSuvPaintForConfigurator(model.brand,model.name,paint?.id);
  const skodaCombi=model.brand==='Skoda'&&model.name==='Octavia Combi';
  const corollaTouring=model.brand==='Toyota'&&model.name==='Corolla Touring Sports';
  const audiA6=model.brand==='Audi'&&model.name==='A6 Avant e-hybrid';
+ const estateSuv=estateSuvModelForVehicle(model.brand+' '+model.name);
  const wheel=wheels.find(w=>w.id===wheelId)??wheels[0];
  const extras=useMemo(()=>{
   const options=individualOptions(model,year,currentTrim);
@@ -85,6 +88,20 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
         </button>)}
        </div>
        <small className="eu-audi-paint-choices-note">Nine top-down paint previews. A6 additional colour choices are TravelEmpire custom finishes, not verified factory options. Unpictured paints retain the standard car icon.</small>
+      </div>}
+      {estateSuv&&<div className="eu-audi-paint-section">
+       <div className="eu-audi-paint-choices" role="group" aria-label={model.name+' paint image choices'}>
+        {ESTATE_SUV_PAINTS.filter(sprite=>sprite.model===estateSuv&&paints.some(p=>
+           estateSuvPaintForConfigurator(model.brand,model.name,p.id)?.id===sprite.id))
+         .map(sprite=>{
+          const available=paints.find(p=>estateSuvPaintForConfigurator(model.brand,model.name,p.id)?.id===sprite.id);
+          return <button type="button" key={sprite.id} title={sprite.name}
+           aria-pressed={paint?.id===available?.id} onClick={()=>available&&setPaintId(available.id)}>
+           <EstateSuvPaintThumb paint={sprite}/><span>{sprite.name}</span>
+          </button>;
+         })}
+       </div>
+       <small className="eu-audi-paint-choices-note">Top-down Q7, Q9 and Volvo paint previews. Factory trim restrictions and prices remain unchanged. Unspecified exclusive finishes retain the standard icon.</small>
       </div>}
       {corollaTouring&&<div className="eu-audi-paint-section">
        <div className="eu-audi-paint-choices" role="group" aria-label="Toyota Corolla Touring Sports paint previews">

@@ -1,0 +1,37 @@
+name: Verify Q7 Q9 and Volvo vehicle sprites
+on:
+  push:
+    branches: [feature/q7-q9-volvo-sprite-atlases]
+  pull_request:
+    paths:
+      - 'src/estateSuvSprites.ts'
+      - 'src/estateSuvSprites.test.ts'
+      - 'src/components/EuropeanDealership.tsx'
+      - 'src/components/AudiAvantVehicleImage.tsx'
+      - 'src/components/WorldMap.tsx'
+      - 'public/assets/vehicles/estate-suv/**'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- src/estateSuvSprites.test.ts src/audiA5Sprites.test.ts src/audiA6Sprites.test.ts src/skodaOctaviaSprites.test.ts src/toyotaCorollaSprites.test.ts
+      - name: Verify atlas dimensions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p=Path('public/assets/vehicles/estate-suv/paint-atlas.png')
+          assert p.exists(), 'Atlas PNG must be checked in before merging'
+          data=p.read_bytes()
+          assert data.startswith(bytes.fromhex('89504e470d0a1a0a'))
+          w,h=struct.unpack('>II',data[16:24])
+          assert (w,h)==(240,220),f'Unexpected size {(w,h)}'
+          print(f'Atlas verified: {w} × {h}')
+          PY
