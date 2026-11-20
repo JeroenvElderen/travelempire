@@ -1,7 +1,8 @@
-/** Five new factory-catalogue models rendered as model-specific, top-down PNGs.
- * This is a shared atlas: 12 columns for paints, 5 rows for vehicle models.
- * The image is loaded only once, and the selected colour is cropped once.
- * Saved car IDs, trim restrictions, paint prices, and map animation stay intact.
+/** Five vehicle-specific transparent top-down PNG masters (Audi Q7/Q9,
+ * Volvo XC60/V60/XC90), recoloured from ONE exact silhouette per model.
+ * 12 columns by 5 rows, each sprite 80x170 px, with the nose facing up.
+ * One atlas decode + cached crops preserve saved paint IDs, prices and
+ * existing MapLibre vehicle rotation and simulation behaviour.
  */
 export type EstateSuvModel='q7'|'q9'|'xc60'|'v60'|'xc90';
 export type EstateSuvPaint={
@@ -70,8 +71,8 @@ const catalog:{
 ] as const;
 export const ESTATE_SUV_COLUMNS=12;
 export const ESTATE_SUV_ROWS=5;
-export const ESTATE_SUV_SPRITE_WIDTH=20;
-export const ESTATE_SUV_SPRITE_HEIGHT=44;
+export const ESTATE_SUV_SPRITE_WIDTH=80;
+export const ESTATE_SUV_SPRITE_HEIGHT=170;
 export const ESTATE_SUV_PAINTS:readonly EstateSuvPaint[]=catalog.flatMap(({model,row,paints})=>
  paints.map(([id,name,hex],column)=>({id,name,hex,model,column,row})));
 const byId=new Map(ESTATE_SUV_PAINTS.map(sprite=>[sprite.id,sprite]));
@@ -116,7 +117,7 @@ export function estateSuvPaintForVehicle(model:string|undefined,optionIds:readon
  return first?estateSuvPaintById(first):null;
 }
 export function estateSuvAtlasUrl():string{
- return `${import.meta.env.BASE_URL??'/'}assets/vehicles/estate-suv/paint-atlas.png`;
+ return `${import.meta.env.BASE_URL??'/'}assets/vehicles/estate-suv/paint-atlas.png?v=faithful-20261120`;
 }
 let atlasPromise:Promise<HTMLImageElement>|null=null;
 const cropped=new Map<string,Promise<string|null>>();
