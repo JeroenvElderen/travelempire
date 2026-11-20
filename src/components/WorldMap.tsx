@@ -34,6 +34,7 @@ import {audiA5PaintForVehicle,audiA5SpriteUrl} from '../audiA5Sprites';
 import {audiA6PaintForVehicle,audiA6SpriteUrl} from '../audiA6Sprites';
 import {skodaOctaviaPaintForVehicle,skodaOctaviaSpriteUrl} from '../skodaOctaviaSprites';
 import {toyotaCorollaPaintForVehicle,toyotaCorollaSpriteUrl} from '../toyotaCorollaSprites';
+import {estateSuvPaintForVehicle,estateSuvSpriteUrl} from '../estateSuvSprites';
 import {loadStationTile,stationTileKey,type Station} from '../data/stations';
 import {loadRestStopTile} from '../data/restStops';
 import type {RestStop} from '../simulation/driverRest';
@@ -595,14 +596,17 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     a6Paint??audiA5PaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
    const toyotaPaint=(taxi.kind??'taxi')==='taxi'?
     toyotaCorollaPaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
-   const vehiclePaint=toyotaPaint??skodaPaint??audiPaint;
+   const estatePaint=(taxi.kind??'taxi')==='taxi'?
+    estateSuvPaintForVehicle(taxi.vehicleModel,taxi.vehicleOptionIds,taxi.vehiclePaintHex):null;
+   const vehiclePaint=estatePaint??toyotaPaint??skodaPaint??audiPaint;
    if(vehiclePaint){
     img.dataset.vehiclePaint=vehiclePaint.id;
     const defaultCarIcon=img.src;
     img.addEventListener('error',()=>{
      if(img.src!==defaultCarIcon)img.src=defaultCarIcon;
     },{once:true});
-    const source=toyotaPaint?toyotaCorollaSpriteUrl(toyotaPaint.id):
+    const source=estatePaint?estateSuvSpriteUrl(estatePaint.id):
+     toyotaPaint?toyotaCorollaSpriteUrl(toyotaPaint.id):
      skodaPaint?skodaOctaviaSpriteUrl(skodaPaint.id):
      a6Paint?audiA6SpriteUrl(a6Paint.id):audiA5SpriteUrl(audiPaint!.id);
     void source.then(url=>{
