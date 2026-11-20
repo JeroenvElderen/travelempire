@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {EUROPEAN_MODELS,paintChoices,trimChoices} from './europeanVehicleCatalog';
 import {
- ESTATE_SUV_PAINTS,ESTATE_SUV_COLUMNS,ESTATE_SUV_ROWS,
+ ESTATE_SUV_PAINTS,ESTATE_SUV_COLUMNS,ESTATE_SUV_ROWS,ESTATE_SUV_SPRITE_WIDTH,ESTATE_SUV_SPRITE_HEIGHT,
  estateSuvModelForVehicle,estateSuvPaintForConfigurator,
  estateSuvPaintForVehicle,estateSuvPaintById,estateSuvSpriteUrl,
 } from './estateSuvSprites';
@@ -17,6 +17,8 @@ describe('Q7 Q9 Volvo PNG paint support',()=>{
   expect(ESTATE_SUV_PAINTS).toHaveLength(47);
   expect(ESTATE_SUV_COLUMNS).toBe(12);
   expect(ESTATE_SUV_ROWS).toBe(5);
+  expect(ESTATE_SUV_SPRITE_WIDTH).toBe(80);
+  expect(ESTATE_SUV_SPRITE_HEIGHT).toBe(170);
   for(const [brand,name,key,count] of cases){
    const group=ESTATE_SUV_PAINTS.filter(p=>p.model===key);
    expect(group.length).toBe(count);

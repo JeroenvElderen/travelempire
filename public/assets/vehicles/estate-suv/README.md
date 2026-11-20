@@ -1,20 +1,32 @@
-# Q7, Q9 and Volvo top-down vehicle sprites
+# Model-specific Audi Q7 / Q9 / Volvo overhead PNGs
 
-All five game models share one transparent PNG atlas in this folder.
+This folder holds **one transparent 960 × 850 PNG atlas**, divided into
+12 paint columns × 5 model rows. Each cell is **80 × 170 pixels**, nose-up.
 
-Atlas dimensions: 240 × 220 pixels; 12 columns and five rows.
-Every cell measures 20 × 44 pixels. Cars face upward.
+Unlike the original 20 × 44 placeholder atlas, each row is derived from a
+different high-detail, transparent 256 × 512 base PNG generated specifically
+for that vehicle from the reference pictures supplied in the ChatGPT
+conversation. The individual colours were recoloured from a single locked
+base shape per model, preserving the windows, mirrors, roofline and lights.
 
-Rows:
-- 0: Audi Q7 SUV TFSI e (12 named finishes)
-- 1: Audi Q9 SUV (10 named finishes; unspecified exclusive option falls back)
-- 2: Volvo XC60 (8 factory finishes)
-- 3: Volvo V60 (8 factory finishes)
-- 4: Volvo XC90 (9 finishes, with saved Black Edition aliases)
+| Row | Model | Supported named paint finishes |
+| --- | --- | ---: |
+| 0 | Audi Q7 SUV TFSI e | 12 |
+| 1 | Audi Q9 SUV | 10 |
+| 2 | Volvo XC60 | 8 |
+| 3 | Volvo V60 | 8 |
+| 4 | Volvo XC90 | 9 |
 
-The existing factory prices, trim eligibility, and purchase options remain unchanged.
-Only one atlas is fetched, and cropped images are cached by selected paint.
-Fallback SVGs remain available if a requested paint has no sprite.
+One atlas is downloaded and decoded; the browser crops each requested
+paint once and caches it for dealership, fleet and moving MapLibre vehicles.
+The existing factory paint identifiers, trim restrictions, prices, legacy
+owned vehicles and XC90 Black Edition aliases are unchanged. Audi Q9's
+unspecified S line exclusive colour still falls back to the original SVG.
 
-The current small atlas is intended for the live map; the supplied full-size
-generated sources can be added as higher-resolution dealership previews.
+The images are **original game illustrations**, not official manufacturer
+renders or direct copies of third-party watermarked photography. Paint
+colours are approximations of the catalogued finishes.
+
+To update the artwork later, keep the model row order, existing paint column
+order, and the atlas dimensions or update the matching constants in
+`src/estateSuvSprites.ts` and the asset validation CI check.
