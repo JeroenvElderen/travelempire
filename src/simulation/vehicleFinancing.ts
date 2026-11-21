@@ -52,7 +52,7 @@ export function vehicleFinanceQuote(
   assessment.score<500?'Your credit score is below 500. Repay debt and avoid missed payments to qualify.':
   principal>available+.001?creditMessage:
   upfront>spendableCash+.001?
-   `The payment is €${upfront.toLocaleString('en-IE')}, but only €${spendableCash.toLocaleString('en-IE')} is spendable after the €${minimumOperatingCash.toLocaleString('en-IE')} cash reserve. Reduce the number of vehicles or increase available cash.`:
+   `The upfront payment is €${upfront.toLocaleString('en-IE')}, but only €${spendableCash.toLocaleString('en-IE')} is spendable after the €${minimumOperatingCash.toLocaleString('en-IE')} cash reserve. Reduce the number of vehicles or increase available cash.`:
   '';
  return {...assessment,rate,principal,upfront,dailyPayment,totalInterest,
   businessAvailable,assetCredit,vehicleAdvanceRatio,minimumDepositPercent,
