@@ -182,11 +182,14 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,compan
     {parkingError&&<p className="dealer-parking-error" role="alert">{parkingError}</p>}
     {financing&&<div className="eu-finance-summary" aria-label="Vehicle finance offer">
      <div className="eu-price-line"><span>Credit score</span><strong>{financing.score} / 850</strong></div>
-     <div className="eu-price-line"><span>Remaining credit</span><strong>{eur(financing.available)}</strong></div>
+     <div className="eu-price-line"><span>Company credit available</span><strong>{eur(financing.businessAvailable)}</strong></div>
+     <div className="eu-price-line"><span>New vehicle collateral credit</span><strong>{eur(financing.assetCredit)}</strong></div>
+     <div className="eu-price-line"><span>Max finance for this order</span><strong>{eur(financing.available)}</strong></div>
      <div className="eu-price-line"><span>Financed principal</span><strong>{eur(financing.principal)}</strong></div>
      <div className="eu-price-line"><span>Annual interest</span><strong>{(financing.rate*100).toFixed(2)}%</strong></div>
      <div className="eu-price-line"><span>Daily instalments (total)</span><strong>{eur(financing.dailyPayment)}</strong></div>
      <div className="eu-price-line"><span>Total interest</span><strong>{eur(financing.totalInterest)}</strong></div>
+     <div className="eu-price-line"><span>Cash kept in reserve</span><strong>{eur(financing.minimumOperatingCash)}</strong></div>
     </div>}
     <div className="eu-price-total eu-checkout-due"><span>Due now incl. drivers</span><strong>{eur(dueNow)}</strong></div>
     {!reviewing?<button className="eu-order" type="button" onClick={()=>onReviewChange(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-dueNow))} remaining cash</p><button className="eu-order" disabled={!!checkoutBlocker} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(dueNow)}</button>{checkoutBlocker&&<p className="dealer-parking-error" role="alert">{checkoutBlocker}</p>}<button type="button" className="eu-back" onClick={()=>onReviewChange(false)}>← Edit configuration</button></>}
