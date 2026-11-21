@@ -20,18 +20,21 @@ export function lendingAssessment(company:Company,fleet:FleetState,gameNow:numbe
  const valuation=valueCompany(company,fleet,gameNow);
  const outstanding=(fleet.loans??[]).reduce((sum,l)=>sum+Math.max(0,l.balance),0)+
   (fleet.corporate?.loans??[]).reduce((sum,l)=>sum+Math.max(0,l.balance),0);
+ // The published company valuation is net of outstanding loans. Underwriting
+ // starts from the gross appraised asset base so existing debt is deducted ONCE,
+ // rather than first inside equity and again from the lending ceiling.
+ const grossAssetBase=Math.max(0,money(valuation.assetValue+valuation.earningsValue+
+  valuation.growthValue+outstanding));
  const score=creditScore(company.cash,fleet.loans??[],(fleet.leases??[]).length,
   fleet.financePaymentsMade??0,(fleet.creditMisses??0)+(fleet.creditDefaults??0)*3,
-  valuation.value);
- // The FIRST secured loan can borrow up to the full appraised company value
- // at strong credit, less other existing liabilities. Loans never create
- // unlimited additional borrowing capacity simply by adding cash.
+  grossAssetBase);
  const ratio=score>=700?1:score>=650?.85:score>=600?.65:score>=500?.35:0;
- const creditLimit=money(Math.max(0,valuation.value*ratio));
- const available=money(Math.max(0,creditLimit-outstanding));
+ const creditLimit=money(Math.max(0,grossAssetBase*ratio));
+ const headroom=money(creditLimit-outstanding);
+ const available=Math.max(0,headroom);
  const collateral=fleet.taxis.reduce((sum,t)=>sum+appraisedVehicleValue(t),0);
- return {score,companyValue:valuation.value,creditLimit,available,outstanding,
-  collateral,ratio,canBorrow:score>=500};
+ return {score,companyValue:valuation.value,grossAssetBase,creditLimit,headroom,
+  available,outstanding,collateral,ratio,canBorrow:score>=500};
 }
 export function securedRate(score:number,days:number):number{
  const risk=score>=750?.052:score>=700?.065:score>=650?.079:score>=600?.10:.135;

@@ -30,11 +30,26 @@ describe('vehicle financing shares the business credit facility',()=>{
   const fleet={...emptyFleet(),loans:[createSecuredLoan(1000,.08,365),createSecuredLoan(1000,.08,365)]};
   expect(vehicleFinanceQuote(company,fleet,0,20000,1,25,365).approved).toBe(true);
  });
- it('enforces the shared credit limit instead of an old €75,000 ceiling',()=>{
-  expect(vehicleFinanceQuote(company,emptyFleet(),0,120000,1,25,365).approved).toBe(true);
-  const denied=vehicleFinanceQuote(company,emptyFleet(),0,180000,2,25,365);
+ it('permits collateral-secured vehicle finance when general credit is exhausted',()=>{
+  const fleet={...emptyFleet(),loans:[createSecuredLoan(300000,.08,365)]};
+  const quote=vehicleFinanceQuote(company,fleet,0,20000,1,35,365);
+  expect(quote.businessAvailable).toBe(0);
+  expect(quote.assetCredit).toBe(13000);
+  expect(quote.approved).toBe(true);
+  expect(quote.principal).toBe(13000);
+ });
+ it('requires a larger deposit when the new vehicles do not cover the requested principal',()=>{
+  const fleet={...emptyFleet(),loans:[createSecuredLoan(300000,.08,365)]};
+  const denied=vehicleFinanceQuote(company,fleet,0,20000,5,10,365);
   expect(denied.approved).toBe(false);
-  expect(denied.reason).toContain('borrowing capacity');
+  expect(denied.minimumDepositPercent).toBe(35);
+  expect(denied.reason).toContain('at least 35% deposit');
+ });
+ it('protects the operating cash reserve during financed purchases',()=>{
+  const quote=vehicleFinanceQuote({...company,cash:5500},emptyFleet(),0,20000,1,25,365);
+  expect(quote.approved).toBe(false);
+  expect(quote.spendableCash).toBe(500);
+  expect(quote.reason).toContain('reserve');
  });
  it('explains cash shortages even when assets support the loan',()=>{
   const lowCash={...company,cash:1000};
