@@ -10,7 +10,7 @@ export const UPGRADES: {id:EconomyUpgrade;name:string;cost:number;detail:string}
 ];
 export function dailyPayment(amount:number,rate:number,days:number){const daily=rate/365;return amount*daily/(1-Math.pow(1+daily,-days));}
 export function createLoan(amount:number,rate:number,days:number):BusinessLoan{return{id:crypto.randomUUID(),principal:amount,balance:amount,annualRate:rate,termDays:days,remainingDays:days,dailyPayment:dailyPayment(amount,rate,days),accruedGameSeconds:0};}
-export const FINANCE_TERMS=[30,60,90,180] as const;
+export const FINANCE_TERMS=[30,60,90,180,365,730] as const;
 export function financeQuote(price:number,depositPercent:number,days:number,rate=0.09){
  const deposit=Math.round(price*depositPercent/100*100)/100;
  const principal=Math.max(0,Math.round((price-deposit)*100)/100);
