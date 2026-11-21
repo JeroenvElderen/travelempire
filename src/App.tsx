@@ -52,7 +52,8 @@ import FrontendConsole from "./components/FrontendConsole";
 import FinancialConsole from "./components/FinancialConsole";
 import {recordFinancialAudit} from "./financialDiagnostics";
 import FerryRoutesPanel from "./components/FerryRoutesPanel";
-import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,UPGRADES} from "./economy";
+import {advanceLoans,advanceLeases,financeQuote,leaseQuote,createLoan,UPGRADES,FINANCE_TERMS} from "./economy";
+import {vehicleFinanceQuote} from './simulation/vehicleFinancing';
 import {securedQuote,createSecuredLoan,advanceSecuredLoans} from './simulation/securedLoans';
 import {partnershipOffer,collectBankRevenue,bookBankCollection,bookBankLenderCollections,revenueAverage,type BankPartnership} from './simulation/bankPartnerships';
 import {bankOf,bankEntry,appendBankEntries,transferBank} from "./banking";
@@ -2345,16 +2346,16 @@ export default function App(){
    // Enforce parking *before* charging or preparing finance. Pending vehicle
    // deliveries already occupy their assigned depot's capacity reservation.
    const deliveryDepot=requireDepotParking(current,currentFleet,depotId,quantity);
-   if(![30,60,90,180].includes(termDays)||![10,20,25,30,40,50].includes(depositPercent))throw Error('Invalid finance terms.');
+   if(!FINANCE_TERMS.includes(termDays as typeof FINANCE_TERMS[number])||!Number.isInteger(depositPercent)||depositPercent<10||depositPercent>90)throw Error('Invalid finance terms.');
    const discount=Research.level(research,'procurement')*0.04;
    const price=Math.round(offer.price*(1-discount)*100)/100;
-   const quote=financeQuote(price,depositPercent,termDays);
+   const financing=mode==='finance'?vehicleFinanceQuote({...current,cash:current.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,quantity,depositPercent,termDays):null;
+   if(financing&&!financing.approved)throw Error(financing.reason);
+   const quote=financeQuote(price,depositPercent,termDays,financing?.rate??.09);
    const lease=leaseQuote(price,termDays);
    const perVehicle=mode==='cash'?price+DRIVER_COST:mode==='finance'?quote.deposit+DRIVER_COST:lease.upfront+DRIVER_COST;
    const total=Math.round(perVehicle*quantity*100)/100;
    if(current.cash+pendingCashRef.current<total)throw Error('Insufficient company funds for the entire batch.');
-   if(mode==='finance'&&(currentFleet.loans??[]).length+quantity>2)throw Error('Maximum two active loans, including vehicle finance.');
-   if(mode==='finance'&&quote.principal*quantity>corporateCreditCapacity(currentFleet))throw Error('Batch exceeds available borrowing capacity.');
    const location=depotId==='main'?current.headquarters:current.depots?.find(d=>d.id===depotId);
    if(!location)throw Error('Delivery depot no longer exists.');
    const destination:[number,number]=[location.lng,location.lat];
@@ -2381,9 +2382,9 @@ export default function App(){
    });
    const updated={...current,cash:Math.round((current.cash+pendingCashRef.current-total)*100)/100};
    pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
-   const loans=mode==='finance'?taxis.map(t=>({...createLoan(quote.principal,0.09,termDays),purpose:'vehicle' as const,vehicleId:t.id})):[];
+   const loans=mode==='finance'?taxis.map(t=>({...createLoan(quote.principal,financing?.rate??.09,termDays),purpose:'vehicle' as const,vehicleId:t.id})):[];
    const leases=mode==='lease'?taxis.map(t=>({id:crypto.randomUUID(),vehicleId:t.id,vehicleName:t.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0})):[];
-   const entries=taxis.flatMap(t=>[...(mode==='finance'?[bankEntry('Taxi finance disbursement · '+t.name,quote.principal,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+t.name,-perVehicle,'operating','purchase')]);
+   const entries=taxis.flatMap(t=>[...(mode==='finance'?[bankEntry('Taxi finance disbursement · '+t.name,quote.principal,'operating','loan')]:[]),bankEntry((mode==='lease'?'Lease initiation · ':'Vehicle purchase · ')+t.name,-(mode==='finance'?price+DRIVER_COST:perVehicle),'operating','purchase')]);
    // Commit the reservation immediately; rapid consecutive orders must see
    // the first order before React's next render or the 5-second disk save.
    const ordered:FleetState={...currentFleet,taxis:[...currentFleet.taxis,...taxis],drivers:[...(currentFleet.drivers??[]),...drivers],loans:[...(currentFleet.loans??[]),...loans],leases:[...(currentFleet.leases??[]),...leases],leaseExpense:(currentFleet.leaseExpense??0)+(mode==='lease'?lease.upfront*quantity:0),bank:appendBankEntries(bankOf(currentFleet.bank),entries),transactions:[{id:crypto.randomUUID(),time:now,description:'Batch vehicle order · '+quantity+' × '+offer.model+' → '+deliveryDepot.name,amount:-total},...(currentFleet.transactions??[])].slice(0,100)};
@@ -2399,14 +2400,14 @@ export default function App(){
   if(!driver.trim())throw Error('Enter a driver name.');
   const discount=Research.level(research,'procurement')*0.04;
   const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
-  if(![30,60,90,180].includes(termDays)||![10,20,25,30,40,50].includes(depositPercent))throw Error('Invalid finance terms.');
+  if(!FINANCE_TERMS.includes(termDays as typeof FINANCE_TERMS[number])||!Number.isInteger(depositPercent)||depositPercent<10||depositPercent>90)throw Error('Invalid finance terms.');
   const price=Math.round(offer.price*(1-discount)*100)/100;
-  const quote=financeQuote(price,depositPercent,termDays);
+  const financing=mode==='finance'?vehicleFinanceQuote({...company,cash:company.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,1,depositPercent,termDays):null;
+  if(financing&&!financing.approved)throw Error(financing.reason);
+  const quote=financeQuote(price,depositPercent,termDays,financing?.rate??.09);
   const lease=leaseQuote(price,termDays);
   const financed=mode==='finance'?quote.principal:0;
   const cashDue=mode==='cash'?cost:mode==='finance'?quote.deposit+DRIVER_COST:lease.upfront+DRIVER_COST;
-  if(mode==='finance'&&(fleet.loans??[]).length>=2)throw Error('Maximum two active loans, including vehicle finance.');
-  if(mode==='finance'&&financed>corporateCreditCapacity(fleet))throw Error('Borrowing limit of €75,000 exceeded.');
   if(company.cash+pendingCashRef.current<cashDue)throw Error('Insufficient company funds.');
   const location=depotId==='main'?company.headquarters:company.depots?.find(d=>d.id===depotId);
   if(!location)throw Error('Delivery depot no longer exists.');
@@ -2423,7 +2424,7 @@ export default function App(){
   saveCompany(updated);setCompany(updated);
   const old=currentFleet;
   const ordered:FleetState={...old,
-   loans:financed>0?[...(old.loans??[]),{...createLoan(financed,0.09,termDays),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
+   loans:financed>0?[...(old.loans??[]),{...createLoan(financed,financing?.rate??.09,termDays),purpose:'vehicle' as const,vehicleId:taxi.id}]:old.loans,
    leases:mode==='lease'?[...(old.leases??[]),{id:crypto.randomUUID(),vehicleId:taxi.id,vehicleName:taxi.name,dailyPayment:lease.daily,remainingDays:termDays,termDays,accruedGameSeconds:0,totalPaid:0}]:old.leases,
    leaseExpense:(old.leaseExpense??0)+(mode==='lease'?lease.upfront:0),
    accounting:mode==='lease'?bookAccounting(old.accounting,periodMonth(gameClockRef.current?.epochMs??now),0,lease.upfront,0,0):old.accounting,
@@ -3436,7 +3437,7 @@ export default function App(){
   onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
   onAutoAssignmentChange={setAutoDriverStaffing} onTripPreferenceChange={setDriverTripPreference}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
- {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
+ {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
   roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
   gameNow={gameClock?.epochMs??Date.now()} explorerTelemetry={explorerTelemetry}
