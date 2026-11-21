@@ -29,6 +29,21 @@ describe('asset-backed custom business lending',()=>{
   expect(assets.available).toBe(assets.companyValue);
   expect(securedQuote(company,emptyFleet(),0,assets.available,730).approved).toBe(true);
  });
+ it('counts liabilities exactly once when calculating general borrowing headroom',()=>{
+  const fleet={...emptyFleet(),loans:[createSecuredLoan(40000,.08,365)]};
+  const assessment=lendingAssessment(company,fleet,0);
+  expect(assessment.companyValue).toBe(210000);
+  expect(assessment.grossAssetBase).toBe(250000);
+  expect(assessment.outstanding).toBe(40000);
+  expect(assessment.available).toBe(210000);
+  // Merely borrowing and holding cash must not increase lending headroom.
+  const loanCash={...company,cash:290000};
+  expect(lendingAssessment(loanCash,fleet,0).available).toBe(250000);
+ });
+ it('does not create capacity for a severely indebted company',()=>{
+  const fleet={...emptyFleet(),loans:[createSecuredLoan(2000000,.08,365)]};
+  expect(lendingAssessment({...company,cash:1000},fleet,0).available).toBe(0);
+ });
  it('requires credit approval, a valid term and remaining asset-backed capacity',()=>{
   const base=emptyFleet();
   const assets=lendingAssessment(company,base,0);
