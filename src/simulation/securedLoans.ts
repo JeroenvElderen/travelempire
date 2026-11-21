@@ -31,7 +31,7 @@ export function lendingAssessment(company:Company,fleet:FleetState,gameNow:numbe
  const available=money(Math.max(0,creditLimit-outstanding));
  const collateral=fleet.taxis.reduce((sum,t)=>sum+appraisedVehicleValue(t),0);
  return {score,companyValue:valuation.value,creditLimit,available,outstanding,
-  collateral,ratio,canBorrow:score>=500&&(fleet.loans??[]).filter(l=>l.secured).length<3};
+  collateral,ratio,canBorrow:score>=500};
 }
 export function securedRate(score:number,days:number):number{
  const risk=score>=750?.052:score>=700?.065:score>=650?.079:score>=600?.10:.135;
