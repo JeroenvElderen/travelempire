@@ -10,10 +10,13 @@ import {ESTATE_SUV_PAINTS,estateSuvPaintForConfigurator,estateSuvModelForVehicle
 import {SKODA_OCTAVIA_PAINT_SPRITES,skodaOctaviaPaintForConfigurator} from '../skodaOctaviaSprites';
 import {TOYOTA_COROLLA_PAINT_SPRITES,toyotaCorollaPaintForConfigurator} from '../toyotaCorollaSprites';
 import {financeQuote,leaseQuote} from '../economy';
+import {vehicleFinanceQuote} from '../simulation/vehicleFinancing';
+import type {Company} from '../company';
+import type {FleetState} from '../simulation/taxi';
 import './EuropeanDealership.css';
 
-type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;company:Company;fleet:FleetState;gameNow:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({reviewing,onReviewChange,cash,company,fleet,gameNow,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const brand=initialBrand;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
  const [selected,setSelected]=useState(initialModel??(models[0]?models[0].brand+' '+models[0].name:'Toyota Corolla Touring Sports'));
@@ -63,7 +66,11 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
  const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
  const priceBreakdown=trimPricing(model,year,currentTrim);
  const offer=configuredOffer(model,year,extraIds,currentTrim,activeVariant?.id,paint?.id,wheel?.id);
+ const financing=mode==='finance'?vehicleFinanceQuote(company,fleet,gameNow,offer.price,quantity,depositPercent,termDays):null;
  const upfront=mode==='cash'?offer.price+DRIVER_COST:mode==='finance'?financeQuote(offer.price,depositPercent,termDays).deposit+DRIVER_COST:leaseQuote(offer.price,termDays).upfront+DRIVER_COST;
+ const dueNow=financing?.upfront??Math.round(upfront*quantity*100)/100;
+ const checkoutBlocker=!ready?'Road network is still loading. Open the map near your depot and try again.':
+  parkingError||financing?.reason||(dueNow>cash+.001?'Not enough operating cash for the upfront payment and driver costs.':'');
  const bonus=offer.revenueBonus??0;
  return <section className="eu-dealership">
   {onBack&&<button type="button" className="eu-back" onClick={onBack}>← Back to models</button>}
@@ -173,8 +180,16 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,ready,
     <div className="eu-price-line"><span>Quantity</span><strong>{quantity}</strong></div>
     <div className="eu-price-line"><span>Delivery</span><strong>{depotName}</strong></div>
     {parkingError&&<p className="dealer-parking-error" role="alert">{parkingError}</p>}
-    <div className="eu-price-total eu-checkout-due"><span>Due now incl. drivers</span><strong>{eur(upfront*quantity)}</strong></div>
-    {!reviewing?<button className="eu-order" type="button" onClick={()=>onReviewChange(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-upfront*quantity))} remaining cash</p><button className="eu-order" disabled={!ready||!!parkingError||upfront*quantity>cash||(mode==='finance'&&quantity>2)} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(upfront*quantity)}</button><button type="button" className="eu-back" onClick={()=>onReviewChange(false)}>← Edit configuration</button></>}
+    {financing&&<div className="eu-finance-summary" aria-label="Vehicle finance offer">
+     <div className="eu-price-line"><span>Credit score</span><strong>{financing.score} / 850</strong></div>
+     <div className="eu-price-line"><span>Remaining credit</span><strong>{eur(financing.available)}</strong></div>
+     <div className="eu-price-line"><span>Financed principal</span><strong>{eur(financing.principal)}</strong></div>
+     <div className="eu-price-line"><span>Annual interest</span><strong>{(financing.rate*100).toFixed(2)}%</strong></div>
+     <div className="eu-price-line"><span>Daily instalments (total)</span><strong>{eur(financing.dailyPayment)}</strong></div>
+     <div className="eu-price-line"><span>Total interest</span><strong>{eur(financing.totalInterest)}</strong></div>
+    </div>}
+    <div className="eu-price-total eu-checkout-due"><span>Due now incl. drivers</span><strong>{eur(dueNow)}</strong></div>
+    {!reviewing?<button className="eu-order" type="button" onClick={()=>onReviewChange(true)}>Review order →</button>:<><p className="eu-review-message">{quantity} vehicle(s) · {mode} · {eur(Math.max(0,cash-dueNow))} remaining cash</p><button className="eu-order" disabled={!!checkoutBlocker} onClick={()=>onOrder(offer,quantity,mode,depositPercent,termDays)}>Confirm order · {eur(dueNow)}</button>{checkoutBlocker&&<p className="dealer-parking-error" role="alert">{checkoutBlocker}</p>}<button type="button" className="eu-back" onClick={()=>onReviewChange(false)}>← Edit configuration</button></>}
     <small className="eu-brief-note">Vehicle prices and equipment may include gameplay estimates.</small>
    </aside>
   </div>
