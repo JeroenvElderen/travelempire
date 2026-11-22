@@ -396,3 +396,70 @@
  background:#202222c9;
  font-variant-numeric:tabular-nums;
 }
+
+
+/* Approved visual tree: a five-node stem and eight named category entrances.
+ * Every area grows independently with only its meaningful fork lines. */
+.factory-tech-division{
+ z-index:2;
+ border-width:2px!important;
+ background:#50b86b!important;
+ border-color:#a7e6a9!important;
+ box-shadow:0 3px 0 #2f7c47!important;
+}
+.factory-tech-division.factory-tech-locked{
+ background:#3c4140!important;
+ border-color:#747b75!important;
+ box-shadow:0 3px 0 #222726!important;
+}
+.factory-tech-division .factory-tech-icon{
+ opacity:1!important;
+ filter:none!important;
+}
+.factory-sprite-emoji{
+ font-size:29px;
+ line-height:1;
+ display:grid;
+ place-items:center;
+ width:100%;
+ height:100%;
+ filter:drop-shadow(0 1px 1px #0006);
+}
+.factory-division-name{
+ position:absolute;
+ top:calc(100% + 9px);
+ left:50%;
+ transform:translateX(-50%);
+ width:115px;
+ max-width:115px;
+ color:#f3f5ed;
+ text-shadow:0 1px 2px #000,0 0 4px #000;
+ text-align:center;
+ font-size:10px;
+ line-height:1.15;
+ font-weight:850;
+ pointer-events:none;
+ white-space:normal;
+ overflow-wrap:normal;
+}
+.factory-tech-division.factory-tech-locked .factory-division-name{
+ color:#aeb9af;
+}
+.factory-tech-division .factory-check{
+ border:1px solid #e4ffdf;
+}
+.factory-tech-division .factory-padlock{
+ z-index:3;
+}
+.factory-viewport{
+ background-color:#25292a!important;
+}
+.factory-scene{
+ background-color:#26292a!important;
+}
+/* Preserve the full-screen touch canvas: resource crafting and details only
+ * appear upon the corresponding deliberate touch. */
+@media(max-width:520px){
+ .factory-division-name{font-size:10px;}
+ .factory-sprite-emoji{font-size:26px;}
+}
