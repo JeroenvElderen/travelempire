@@ -68,7 +68,7 @@ describe('Builderment-style fully automatic research progression',()=>{
    .toContain('fleetAnalytics Level 2');
   expect(technologyLevelRequirements('airportMarkets',1,levels,{...context,starterLevel:4}))
    .toContain('premium Level 2');
-  const better={...levels,fleetAnalytics:2,routing:2,premium:2,demandIntelligence:1};
+  const better={...levels,fleetAnalytics:2,routing:2,navigation:2,premium:2,demandIntelligence:1};
   expect(technologyLevelRequirements('regionalReposition',1,better,{...context,starterLevel:4})).toEqual([]);
   expect(technologyLevelRequirements('airportMarkets',1,better,{...context,starterLevel:4})).toEqual([]);
  });
