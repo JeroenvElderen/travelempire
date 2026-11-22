@@ -1,13 +1,14 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {PointerEvent as ReactPointerEvent,WheelEvent as ReactWheelEvent} from 'react';
-import {X,FlaskConical,Coins,LocateFixed,CheckCircle2,LockKeyhole,ChevronDown} from 'lucide-react';
+import {X,Coins,LocateFixed,CheckCircle2,LockKeyhole,ChevronDown} from 'lucide-react';
 import type {Company} from '../company';
 import * as Research from '../research';
-import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,type ResourceKey,type OperationalContext} from '../researchProgress';
-import {STARTER_STAGES,STARTER_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
+import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
+import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
 import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
+import ResearchPixelIcon from './ResearchPixelIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
@@ -22,7 +23,7 @@ const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n));
 const fmt=(n:number)=>Math.floor(Math.max(0,n||0)).toLocaleString('en-IE');
 const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=10000?
  (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
-const starterGlyph=['','🚕','📈','🏅','🚘'];
+const starterIconCategory=[2,0,6,5] as const;
 
 export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
@@ -70,6 +71,13 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
+ const selectedParents=selected?.kind==='research'&&selected.level===1
+  ?technologyParents(selected.projectId):[];
+ const selectedRequirements=selectedParents.map(parent=>{
+  const level=REQUIRED_LEVELS(selected!.projectId,parent);
+  return {parent,name:projects.get(parent)?.name??parent,
+   level,done:(state.levels[parent as Research.ResearchId]??0)>=level};
+ });
  const selectedBusinessUnlocks=selected?Object.values(BUSINESS_UNLOCKS).filter(rule=>
   'starter' in rule
    ?selected.kind==='starter'&&selected.level===rule.starter
@@ -208,10 +216,14 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
       return <path key={index} className={complete?'factory-wire-done':child&&!blocked(child).length?'factory-wire-open':'factory-wire-locked'}
        d={edge.path}/>;
      })}
+     {hierarchy.junctions.map(join=>{
+      const target=hierarchy.byId.get(join.id);
+      return <circle key={'join-'+join.id} cx={join.x} cy={join.y} r={5}
+       className={target&&isDone(target)?'factory-junction-done':
+        target&&!blocked(target).length?'factory-junction-open':'factory-junction-locked'}/>;
+     })}
     </svg>
-    <div className="factory-origin" style={{left:hierarchy.width/2-44,top:30}}>
-     <FlaskConical size={29}/><span>START</span>
-    </div>
+
     {hierarchy.nodes.map(node=>{
      const done=isDone(node);
      const missing=blocked(node);
@@ -225,11 +237,17 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
       style={{left:node.x,top:node.y}} title={title+' Level '+node.level}
       aria-label={title+' level '+node.level+(done?', completed':open?', collecting resources':', locked')}
       onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
-      <span className="factory-tech-icon">{node.kind==='starter'?
-       starterGlyph[node.level]:RESEARCH_GLYPHS[node.projectId]??'🔬'}</span>
+      <span className="factory-tech-icon">
+       <ResearchPixelIcon category={node.kind==='starter'?
+        starterIconCategory[node.level-1]:node.category} size={32}/>
+      </span>
       {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
       {done&&<span className="factory-check"><CheckCircle2 size={13}/></span>}
       {node.kind==='research'&&<span className="factory-node-level">{node.level}</span>}
+      {node.kind==='research'&&node.level===1&&technologyParents(node.projectId).length>=2&&
+       <span className="factory-node-join" title={technologyParents(node.projectId).length+' prerequisites'}>
+        {technologyParents(node.projectId).length}
+       </span>}
       {started&&<span className="factory-progress-indicator" style={{width:progress(node)+'%'}}/>}
      </button>;
     })}
@@ -261,8 +279,10 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
    onPointerDown={e=>e.stopPropagation()} onClick={()=>setSelectedId(null)}>
    <section className="factory-details" role="dialog" aria-label="Technology requirements"
     onClick={e=>e.stopPropagation()}>
-    <header><span className="factory-detail-icon">{selected.kind==='starter'?
-     starterGlyph[selected.level]:RESEARCH_GLYPHS[selected.projectId]??'🔬'}</span>
+    <header><span className="factory-detail-icon">
+     <ResearchPixelIcon category={selected.kind==='starter'?
+      starterIconCategory[selected.level-1]:selected.category} size={37}/>
+    </span>
      <div><small>{selected.kind==='starter'?'STARTER TECHNOLOGY':
       ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
       <h2>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].name:
@@ -270,6 +290,16 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      <button type="button" aria-label="Close technology details" onClick={()=>setSelectedId(null)}><X size={20}/></button>
     </header>
     <p>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].unlocks:selectedProject?.effect}</p>
+    {selectedRequirements.length>0&&<div className="factory-dependency-list">
+     <strong>{selectedRequirements.length>=2?
+      'All '+selectedRequirements.length+' technology branches required':
+      'Unlock prerequisite'}</strong>
+     {selectedRequirements.map(requirement=><div key={requirement.parent}>
+      {requirement.done?<CheckCircle2 size={15} className="factory-requirement-done"/>:
+       <LockKeyhole size={15} className="factory-requirement-locked"/>}
+      <span>{requirement.name} · Lv {requirement.level}</span>
+     </div>)}
+    </div>}
     {selectedBusinessUnlocks.length>0&&<div className="factory-feature-unlocks">
      <strong>Unlocks business features</strong>
      {selectedBusinessUnlocks.map(feature=><span key={feature}>🔓 {feature}</span>)}
