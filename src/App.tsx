@@ -1901,18 +1901,18 @@ export default function App(){
      const efficiencyBonus=(skill-1)*0.03;
      const careBonus=(skill-1)*0.0375;
      const serviceBonus=(skill-1)*0.02;
-     const consumed=energyUsed(delivered,km,efficiencyBonus)*(1-Math.min(0.45,Research.level(research,'engine')*0.05+Research.level(research,'fuelInjection')*0.02+Research.level(research,'lightweight')*0.02+Research.level(research,'ecoDriving')*0.03+Resources.unlockedBonus(research.levels,'energy')+(t.kind==='explorer'?Research.level(research,'patrol')*0.02:0)))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.12:1);
+     const consumed=energyUsed(delivered,km,efficiencyBonus)*(1-Math.min(0.45,Research.level(researchRef.current,'engine')*0.05+Research.level(researchRef.current,'fuelInjection')*0.02+Research.level(researchRef.current,'lightweight')*0.02+Research.level(researchRef.current,'ecoDriving')*0.03+Resources.unlockedBonus(researchRef.current.levels,'energy')+(t.kind==='explorer'?Research.level(researchRef.current,'patrol')*0.02:0)))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.12:1);
      // Energy purchases are charged at refill time, never again per driven kilometre.
      const depotLevels=upgradesFor(old,t.depotId??'main');
-     const fuel=0,maintenance=km*0.075*(1-Math.min(0.45,Research.level(research,'lubrication')*0.04+Research.level(research,'routing')*0.02+Research.level(research,'workshopResearch')*0.04+Research.level(research,'parts')*0.03+Resources.unlockedBonus(research.levels,'maintenance')))*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
-     const explorerTravelCost=(t.kind==='explorer')?km*0.50*(1-Math.min(0.45,Research.level(research,'survey')*0.06+Research.level(research,'navigation')*0.03+Resources.unlockedBonus(research.levels,'explorer'))):0;
+     const fuel=0,maintenance=km*0.075*(1-Math.min(0.45,Research.level(researchRef.current,'lubrication')*0.04+Research.level(researchRef.current,'routing')*0.02+Research.level(researchRef.current,'workshopResearch')*0.04+Research.level(researchRef.current,'parts')*0.03+Resources.unlockedBonus(researchRef.current.levels,'maintenance')))*((old.upgrades??[]).includes('workshop')?0.9:1)*(1-0.10*(depotLevels.workshop??0));
+     const explorerTravelCost=(t.kind==='explorer')?km*0.50*(1-Math.min(0.45,Research.level(researchRef.current,'survey')*0.06+Research.level(researchRef.current,'navigation')*0.03+Resources.unlockedBonus(researchRef.current.levels,'explorer'))):0;
      explorationExpense+=explorerTravelCost;
-     const wearPerKm=0.025*(1-careBonus)*(1-Math.min(0.50,Research.level(research,'durability')*0.07+Research.level(research,'defensive')*0.03))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
+     const wearPerKm=0.025*(1-careBonus)*(1-Math.min(0.50,Research.level(researchRef.current,'durability')*0.07+Research.level(researchRef.current,'defensive')*0.03))*(t.drivingPolicy==='economy'?0.85:t.drivingPolicy==='performance'?1.25:1); // Condition points lost per kilometre
      const wage=(t.kind==='explorer')?0:0.009*(old.wageMultiplier??1)*(1+Math.min(0.20,Math.floor(experience/25)*0.04)); // €32.40 per simulated hour, including employer costs
-     const insurance=((t.kind==='explorer')?0.00045:0.00085)*(1-Research.level(research,'insuranceResearch')*0.05); // €3.06 per simulated hour per taxi
+     const insurance=((t.kind==='explorer')?0.00045:0.00085)*(1-Research.level(researchRef.current,'insuranceResearch')*0.05); // €3.06 per simulated hour per taxi
      driverWages+=wage;insuranceExpense+=insurance;
      distanceKm+=km;fuelExpense+=fuel;maintenanceExpense+=maintenance;
-     const fareMultiplier=Math.min(1.6,(1+Resources.unlockedBonus(research.levels,'taxi'))*(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(research,'pricing')+0.03*Research.level(research,'peakPricing')+0.03*Research.level(research,'premium')+0.02*Research.level(research,'longDistance')+0.02*Research.level(research,'dispatchResearch')+0.01*Research.level(research,'fleetAnalytics')+0.02*Research.level(research,'trainingResearch')+0.02*Research.level(research,'advertising')+0.02*Research.level(research,'brand')+0.01*Research.level(research,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0)) );
+     const fareMultiplier=Math.min(1.6,(1+Resources.unlockedBonus(researchRef.current.levels,'taxi'))*(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+Math.min(0.75,0.05*Research.level(researchRef.current,'pricing')+0.03*Research.level(researchRef.current,'peakPricing')+0.03*Research.level(researchRef.current,'premium')+0.02*Research.level(researchRef.current,'longDistance')+0.02*Research.level(researchRef.current,'dispatchResearch')+0.01*Research.level(researchRef.current,'fleetAnalytics')+0.02*Research.level(researchRef.current,'trainingResearch')+0.02*Research.level(researchRef.current,'advertising')+0.02*Research.level(researchRef.current,'brand')+0.01*Research.level(researchRef.current,'loyalty')))*(1+serviceBonus)*((old.upgrades??[]).includes('dispatch')?1.05:1)*(1+0.03*(depotLevels.dispatch??0)) );
      // Stable request IDs prevent a delayed worker result or save replay from
      // booking the same completed passenger journey more than once.
      const {earned,duplicate}=settlePassengerFare(
@@ -1988,7 +1988,7 @@ export default function App(){
     const facilityByDepot=depotDefinitions.map(d=>{
       const assigned=assignedByDepot.get(d.id)??0;
       const daily=depotDailyTotal(d.id==='main',upgradesFor(old,d.id),depotCapacity(d,upgradesFor(old,d.id)));
-      return {id:d.id,name:d.name,assigned,cost:daily*4/86400*(1-Research.level(research,'depotEfficiency')*0.04-Resources.unlockedBonus(research.levels,'depot'))};
+      return {id:d.id,name:d.name,assigned,cost:daily*4/86400*(1-Research.level(researchRef.current,'depotEfficiency')*0.04-Resources.unlockedBonus(researchRef.current.levels,'depot'))};
     });
     const facilityCost=facilityByDepot.reduce((a,d)=>a+d.cost,0);
     const depotHistory:DepotFinanceRecord[]=[...(old.depotFinanceHistory??[])];
@@ -2095,7 +2095,7 @@ export default function App(){
    });
   },1000);
   return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',resetTick);window.removeEventListener('pageshow',resetTick);};
- },[company?.id,graph,fleet.taxis.length,research]);
+ },[company?.id,graph,fleet.taxis.length]);
 
  // An untouched company needs one real HQ road before any specialist can
  // start. This is the ONLY bootstrap exception to connected discovery.
