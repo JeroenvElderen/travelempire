@@ -7,6 +7,7 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,type ResourceKey,
 import {STARTER_STAGES,STARTER_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
 import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
+import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
@@ -69,6 +70,11 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
+ const selectedBusinessUnlocks=selected?Object.values(BUSINESS_UNLOCKS).filter(rule=>
+  'starter' in rule
+   ?selected.kind==='starter'&&selected.level===rule.starter
+   :selected.kind==='research'&&selected.projectId===rule.id&&selected.level===rule.level
+ ).map(rule=>rule.name):[];
  const frontier=hierarchy.nodes.filter(n=>!isDone(n)&&blocked(n).length===0)
   .sort((a,b)=>a.rank-b.rank||a.x-b.x)[0];
  const nextId=starterLevel<STARTER_LEVELS?'starter:'+(starterLevel+1):frontier?.id??'starter:4';
@@ -264,6 +270,10 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      <button type="button" aria-label="Close technology details" onClick={()=>setSelectedId(null)}><X size={20}/></button>
     </header>
     <p>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].unlocks:selectedProject?.effect}</p>
+    {selectedBusinessUnlocks.length>0&&<div className="factory-feature-unlocks">
+     <strong>Unlocks business features</strong>
+     {selectedBusinessUnlocks.map(feature=><span key={feature}>🔓 {feature}</span>)}
+    </div>}
     {isDone(selected)?<div className="factory-done-message"><CheckCircle2 size={17}/> Research complete</div>:
      <>
       {blocked(selected).length>0&&<div className="factory-prerequisites"><strong>Requires</strong>
