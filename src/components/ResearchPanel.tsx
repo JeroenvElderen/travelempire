@@ -115,7 +115,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
   <header className="rv5-head">
    <div className="rv5-heading">
     <FlaskConical size={20}/>
-    <div><h1>Technology</h1><small>TravelEmpire Research Centre</small></div>
+    <div><h1>Technology</h1><small>TravelEmpire · {new Date(gameNow).toLocaleDateString('en-IE')}</small></div>
    </div>
    <span className="rv5-count">{completed} / {all.length} unlocked</span>
   </header>
@@ -174,6 +174,8 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
        })}
        <path className="pending" d="M 380 98 V 120"/>
        {[0,1,2,3,4,5,6,7].map(lane=><path className="pending" key={lane} d={`M 380 120 H ${65+lane*90} V ${145+(lane%2)*20}`}/>)}
+       <path className="expansion" d="M 380 120 V 898"/>
+       {[8,9,10,11].map(lane=><path className="expansion" key={'expansion-'+lane} d={`M 380 898 H ${128+(lane-7)*105+27} V ${930+(lane%2)*20}`}/>)}
       </svg>
       <div className="rv5-root" style={{left:352,top:34}} title="TravelEmpire research root"><FlaskConical size={25}/></div>
       <div className="rv5-tree-divider" style={{top:865}}>NEW BUSINESS DIVISIONS</div>
