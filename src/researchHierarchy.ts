@@ -186,7 +186,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
    groupChildren.sort((a,b)=>orderFor(parent,a,group.included.indexOf(a))-
     orderFor(parent,b,group.included.indexOf(b)));
   }
-  const ready=new Set<string>(),depthMemo=new Map<string,number>(),seen=new Set<string>();
+  const depthMemo=new Map<string,number>(),seen=new Set<string>();
   const depth=(id:string):number=>{
    if(depthMemo.has(id))return depthMemo.get(id)!;
    if(seen.has(id))throw Error('Cycle in visual division '+group.key+': '+id);
@@ -239,7 +239,6 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
      x:baseX+choice.col*COL,y});
     lowest=Math.max(lowest,y+RESEARCH_TILE_SIZE);
    }
-   ready.add(id);
   }
   // Author each branch, while retaining every extra actual dependency as
   // metadata-only connectors (displayed in the node's requirements drawer).
@@ -249,7 +248,6 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
    const source=parent?researchNodeId(parent,Math.min(maximum(parent),visualParentLevel(parent,id))):divisionId;
    if(!parent)link(divisionId,target,'division');
    const real=technologyParents(id);
-   const primaryLevel=parent?PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1:0;
    let visibleMatches=false;
    for(const realParent of real){
     const realSource=researchNodeId(realParent,PARENT_LEVEL_REQUIREMENTS[id]?.[realParent]??1);
@@ -266,6 +264,14 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
     junctions.push({id:target,x:to.x+RESEARCH_TILE_SIZE/2,y:to.y-12,inputs:real.length});
    }
   }
+ }
+ // Cross-division prerequisite edges are intentionally invisible, but
+ // retained in the graph for full requirement inspection and verification.
+ for(const id of ids)for(const parent of technologyParents(id)){
+  const from=researchNodeId(parent,PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1);
+  const to=researchNodeId(id,1);
+  if(byId.has(from)&&byId.has(to)&&!edges.some(edge=>edge.from===from&&edge.to===to))
+   link(from,to,'prerequisite',false);
  }
  const height=lowest+175;
  return {width,height,nodes,edges,junctions,byId,initialId:'starter:1'};
