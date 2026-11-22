@@ -127,7 +127,7 @@ describe('research-gated business access',()=>{
    expect(lockedFeature(feature,true,blank)).not.toBeNull();
  });
  it('unlocks each division through its own research and preserves old companies',()=>{
-  const save={...blank,starterLevel:4,levels:{portAnalytics:1,advertising:2,depotEfficiency:2,trainingResearch:1,procurement:1,fleetAnalytics:1}};
+  const save={...blank,starterLevel:5,levels:{portAnalytics:1,advertising:2,depotEfficiency:2,trainingResearch:1,procurement:1,fleetAnalytics:1}};
   for(const feature of ['Dealership','Drivers','Operations','Ferries','Investments','Hotels','Company','Finance'])
    expect(lockedFeature(feature,true,save)).toBeNull();
   for(const feature of ['Dealership','Drivers','Ferries','Hotels','Finance'])
