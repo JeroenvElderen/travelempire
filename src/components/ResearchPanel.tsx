@@ -7,6 +7,7 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,type ResourceKey,
 import {STARTER_STAGES,STARTER_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
 import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
+import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable,type ProductKey} from '../researchProducts';
 import './research-v4.css';
 
 type Props={company:Company|null;state:Research.ResearchState;discoveredRoads:number;
@@ -50,11 +51,21 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   {passengers:STARTER_STAGES[node.level-1].jobs,revenue:STARTER_STAGES[node.level-1].revenue}:
   effectiveCosts(node.projectId,node.level,state.levels,Research.projects);
  const delivered=(node:HierarchyNode)=>node.kind==='starter'?earned:state.contributions?.[node.id]??{};
+ const productCosts=(node:HierarchyNode)=>node.kind==='starter'?{}:
+  productRequirements(node.projectId,node.level,Research.projects);
+ const productDelivered=(node:HierarchyNode)=>state.productContributions?.[node.id]??{};
  const progress=(node:HierarchyNode)=>{
   if(isDone(node))return 100;
   const c=costs(node),d=delivered(node),entries=Object.entries(c);
-  return entries.length?Math.round(entries.reduce((sum,[key,total])=>
-   sum+Math.min(1,(d[key as ResourceKey]??0)/Math.max(1,total)),0)*100/entries.length):0;
+  const productEntries=Object.entries(productCosts(node));
+  const total=entries.length+productEntries.length;
+  if(!total)return 0;
+  const raw=entries.reduce((sum,[key,n])=>
+   sum+Math.min(1,(d[key as ResourceKey]??0)/Math.max(1,n)),0);
+  const supplied=productDelivered(node);
+  const crafted=productEntries.reduce((sum,[key,n])=>
+   sum+Math.min(1,(supplied[key]??0)/Math.max(1,n)),0);
+  return Math.round((raw+crafted)*100/total);
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
@@ -229,7 +240,16 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      <b>{small(item.total)}</b>
     </div>)}
    </div>
-   <small className="factory-resources-caption">Lifetime earned on the right. Resources are automatically distributed to eligible research.</small>
+   <strong className="factory-section-caption">Processed research products</strong>
+   <div className="factory-resources-grid">
+    {PRODUCT_KEYS.filter(key=>(state.productProduced?.[key]??0)>0).map(key=><div className="factory-resource" key={key}>
+     <span>{recipeById.get(key)?.icon??'📦'}</span>
+     <div><strong>{recipeById.get(key)?.name??key}</strong>
+      <small>{fmt(state.productInventory?.[key]??0)} in stock</small></div>
+     <b>{fmt(state.productProduced?.[key]??0)}</b>
+    </div>)}
+   </div>
+   <small className="factory-resources-caption">Lifetime earned or manufactured on the right. Products are automatically made from ingredients and delivered to research.</small>
   </div>}
   {selected&&<div className="factory-detail-backdrop" role="presentation"
    onPointerDown={e=>e.stopPropagation()} onClick={()=>setSelectedId(null)}>
@@ -258,7 +278,31 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
          <span className="factory-requirement-bar"><i style={{width:Math.min(100,count/need*100)+'%'}}/></span>
         </div>;
        })}</div>
-      <small className="factory-auto-caption">Progresses automatically as your company operates.</small>
+      {selected.kind==='research'&&PRODUCT_KEYS.some(key=>(productCosts(selected)[key]??0)>0)&&
+       <div className="factory-product-chains">
+        <strong>Manufactured research requirements</strong>
+        {PRODUCT_KEYS.filter(key=>(productCosts(selected)[key]??0)>0).map(key=>{
+         const recipe=recipeById.get(key);
+         const need=productCosts(selected)[key]??0;
+         const made=productDelivered(selected)[key]??0;
+         return <details key={key} className="factory-product-chain">
+          <summary><span>{recipe?.icon??'📦'} {recipe?.name??key}</span>
+           <b>{fmt(made)} / {fmt(need)}</b></summary>
+          {recipe&&!recipeAvailable(key,state.levels)&&
+           <small className="factory-product-lock">Unlock {projects.get(recipe.unlock.project)?.name??recipe.unlock.project} Level {recipe.unlock.level} first</small>}
+          <div className="factory-recipe-ingredients">
+           {recipeIngredients(key).map(ingredient=><div key={ingredient.kind+':'+ingredient.key}>
+            <span>{ingredient.kind==='raw'?
+             RESEARCH_RESOURCE_GLYPHS[ingredient.key]:recipeById.get(ingredient.key)?.icon}
+             {' '}{ingredient.kind==='raw'?RESOURCE_INFO[ingredient.key].name:recipeById.get(ingredient.key)?.name}</span>
+            <b>× {fmt(ingredient.count)}</b>
+           </div>)}
+          </div>
+          {recipe?.parts&&<small>Intermediate products above are also automatically made from their own recipes.</small>}
+         </details>;
+        })}
+       </div>}
+      <small className="factory-auto-caption">Resources and intermediate products are produced and delivered automatically as your company operates.</small>
      </>}
    </section>
   </div>}
