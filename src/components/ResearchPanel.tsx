@@ -111,7 +111,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   const element=viewport.current;
   if(!element)return;
   const update=()=>{
-   if(!initialized.current){initialized.current=true;centerOn(nextId,.76);}
+   if(!initialized.current){initialized.current=true;centerOn(nextId,.96);}
    else updateTransform(camera.current);
   };
   update();
