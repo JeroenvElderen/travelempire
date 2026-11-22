@@ -6,7 +6,7 @@ import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {RESEARCH_RESOURCE_GLYPHS} from '../researchGraph';
-import {buildResearchHierarchy,RESEARCH_TILE_SIZE,type HierarchyNode} from '../researchHierarchy';
+import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import ResearchPixelIcon from './ResearchPixelIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
@@ -23,7 +23,15 @@ const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n));
 const fmt=(n:number)=>Math.floor(Math.max(0,n||0)).toLocaleString('en-IE');
 const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=10000?
  (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
-const starterIconCategory=[2,0,6,5] as const;
+const starterIconCategory=[3,2,4,0,6] as const;
+const starterIcons=['🗺️','🚕','📋','📈','⭐'] as const;
+const divisionIcons:Record<DivisionKey,string>={
+ revenue:'🪙',taxis:'🚕',explorers:'🧭',hotels:'🏨',
+ parking:'🅿️',finance:'🏦',vehicles:'🛠️',construction:'🏗️'
+};
+const divisionNames:Record<DivisionKey,string>=Object.fromEntries(
+ DIVISIONS.map(division=>[division.key,division.name])
+) as Record<DivisionKey,string>;
 
 export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
@@ -42,19 +50,23 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  const starterLevel=freshStart?state.starterLevel??0:STARTER_LEVELS;
  const context:OperationalContext={roads:discoveredRoads,explorers:explorerSpecializations,depots,
   freshStart,starterLevel};
- const isDone=(node:HierarchyNode)=>node.kind==='starter'?starterLevel>=node.level:
+ const isDone=(node:HierarchyNode)=>node.kind==='division'?starterLevel>=STARTER_LEVELS:
+  node.kind==='starter'?starterLevel>=node.level:
   Research.level(state,node.projectId as Research.ResearchId)>=node.level;
  const blocked=(node:HierarchyNode)=>{
   if(isDone(node))return [];
   if(node.kind==='starter')return node.level>1&&starterLevel<node.level-1?['Starter Level '+(node.level-1)]:[];
+  if(node.kind==='division')return starterLevel>=STARTER_LEVELS?[]:['Complete Operations IV (50 jobs and 2,000 roads)'];
   return technologyLevelRequirements(node.projectId,node.level,state.levels,context);
  };
- const costs=(node:HierarchyNode)=>node.kind==='starter'?
-  {passengers:STARTER_STAGES[node.level-1].jobs,revenue:STARTER_STAGES[node.level-1].revenue}:
+ const costs=(node:HierarchyNode)=>node.kind==='division'?{}:node.kind==='starter'?
+  {passengers:STARTER_STAGES[node.level-1].jobs,roads:STARTER_STAGES[node.level-1].roads}:
   effectiveCosts(node.projectId,node.level,state.levels,Research.projects);
- const delivered=(node:HierarchyNode)=>node.kind==='starter'?earned:state.contributions?.[node.id]??{};
- const productCosts=(node:HierarchyNode)=>node.kind==='starter'?{}:
-  productRequirements(node.projectId,node.level,Research.projects);
+ const delivered=(node:HierarchyNode)=>node.kind==='starter'?
+  {...earned,roads:Math.max(earned.roads,discoveredRoads)}:
+  node.kind==='division'?{}:state.contributions?.[node.id]??{};
+ const productCosts=(node:HierarchyNode)=>node.kind==='research'?
+  productRequirements(node.projectId,node.level,Research.projects):{};
  const productDelivered=(node:HierarchyNode)=>state.productContributions?.[node.id]??{};
  const progress=(node:HierarchyNode)=>{
   if(isDone(node))return 100;
@@ -71,6 +83,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
+ const selectedDivision=selected?.kind==='division'?divisionNames[selected.division!]:undefined;
  const selectedParents=selected?.kind==='research'&&selected.level===1
   ?technologyParents(selected.projectId):[];
  const selectedRequirements=selectedParents.map(parent=>{
@@ -85,7 +98,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  ).map(rule=>rule.name):[];
  const frontier=hierarchy.nodes.filter(n=>!isDone(n)&&blocked(n).length===0)
   .sort((a,b)=>a.rank-b.rank||a.x-b.x)[0];
- const nextId=starterLevel<STARTER_LEVELS?'starter:'+(starterLevel+1):frontier?.id??'starter:4';
+ const nextId=starterLevel<STARTER_LEVELS?'starter:'+(starterLevel+1):frontier?.id??'starter:5';
  const updateTransform=(next:Camera)=>{
   const el=viewport.current;
   if(!el)return;
@@ -111,7 +124,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   const element=viewport.current;
   if(!element)return;
   const update=()=>{
-   if(!initialized.current){initialized.current=true;centerOn('starter:4',1.08);}
+   if(!initialized.current){initialized.current=true;centerOn('starter:3',.98);}
    else updateTransform(camera.current);
   };
   update();
@@ -224,17 +237,22 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      const open=!done&&!missing.length;
      const started=open&&progress(node)>0;
      const title=node.kind==='starter'?STARTER_STAGES[node.level-1].name:
+      node.kind==='division'?divisionNames[node.division!]:
       projects.get(node.projectId)?.name??node.projectId;
      return <button key={node.id} type="button" data-tech-id={node.id}
-      className={'factory-tech'+(done?' factory-tech-done':open?' factory-tech-open':' factory-tech-locked')+
+      className={'factory-tech'+(node.kind==='division'?' factory-tech-division':'')+
+       (done?' factory-tech-done':open?' factory-tech-open':' factory-tech-locked')+
        (started?' factory-tech-in-progress':'')+(selectedId===node.id?' factory-tech-selected':'')}
-      style={{left:node.x,top:node.y}} title={title+' Level '+node.level}
-      aria-label={title+' level '+node.level+(done?', completed':open?', collecting resources':', locked')}
+      style={{left:node.x,top:node.y}} title={title+(node.kind==='research'?' Level '+node.level:'')}
+      aria-label={title+(node.kind==='research'?' level '+node.level:'')+
+       (done?', completed':open?', collecting resources':', locked')}
       onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
       <span className="factory-tech-icon">
-       <ResearchPixelIcon category={node.kind==='starter'?
-        starterIconCategory[node.level-1]:node.category} projectId={node.kind==='research'?node.projectId:undefined} level={node.level} size={30}/>
+       {node.kind==='starter'?<span className="factory-sprite-emoji">{starterIcons[node.level-1]}</span>:
+        node.kind==='division'?<span className="factory-sprite-emoji">{divisionIcons[node.division!]}</span>:
+        <ResearchPixelIcon category={node.category} projectId={node.projectId} level={node.level} size={30}/>}
       </span>
+      {node.kind==='division'&&<span className="factory-division-name">{title}</span>}
       {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
       {done&&<span className="factory-check"><CheckCircle2 size={13}/></span>}
       {node.kind==='research'&&<span className="factory-node-level">{node.level}</span>}
@@ -274,16 +292,22 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
    <section className="factory-details" role="dialog" aria-label="Technology requirements"
     onClick={e=>e.stopPropagation()}>
     <header><span className="factory-detail-icon">
-     <ResearchPixelIcon category={selected.kind==='starter'?
-      starterIconCategory[selected.level-1]:selected.category} projectId={selected.kind==='research'?selected.projectId:undefined} level={selected.level} size={37}/>
+     {selected.kind==='starter'?<span>{starterIcons[selected.level-1]}</span>:
+      selected.kind==='division'?<span>{divisionIcons[selected.division!]}</span>:
+      <ResearchPixelIcon category={selected.category} projectId={selected.projectId} level={selected.level} size={37}/>}
     </span>
-     <div><small>{selected.kind==='starter'?'STARTER TECHNOLOGY':
+     <div><small>{selected.kind==='starter'?'STARTER MILESTONES':
+      selected.kind==='division'?'RESEARCH DIVISION':
       ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
-      <h2>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].name:
-       selectedProject?.name} · {selected.kind==='starter'?'Level '+selected.level:'Lv '+selected.level}</h2></div>
+      <h2>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].name+' · Level '+selected.level:
+       selected.kind==='division'?selectedDivision:
+       selectedProject?.name+' · Lv '+selected.level}</h2></div>
      <button type="button" aria-label="Close technology details" onClick={()=>setSelectedId(null)}><X size={20}/></button>
     </header>
-    <p>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].unlocks:selectedProject?.effect}</p>
+    <p>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].unlocks:
+     selected.kind==='division'?
+      'This division opens after the five startup milestones. Each connected technology progresses automatically from your business activity.':
+      selectedProject?.effect}</p>
     {selectedRequirements.length>0&&<div className="factory-dependency-list">
      <strong>{selectedRequirements.length>=2?
       'All '+selectedRequirements.length+' technology branches required':
@@ -298,7 +322,8 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      <strong>Unlocks business features</strong>
      {selectedBusinessUnlocks.map(feature=><span key={feature}>🔓 {feature}</span>)}
     </div>}
-    {isDone(selected)?<div className="factory-done-message"><CheckCircle2 size={17}/> Research complete</div>:
+    {isDone(selected)?<div className="factory-done-message"><CheckCircle2 size={17}/>
+     {selected.kind==='division'?'Division unlocked':selected.kind==='starter'?'Milestone completed':'Research complete'}</div>:
      <>
       {blocked(selected).length>0&&<div className="factory-prerequisites"><strong>Requires</strong>
        {blocked(selected).map((req,i)=><span key={i}><LockKeyhole size={13}/>{req}</span>)}</div>}
