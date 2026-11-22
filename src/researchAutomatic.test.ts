@@ -54,11 +54,11 @@ describe('Builderment-style fully automatic research progression',()=>{
   const initial=state(earned);
   const current=advanceAutomaticTree(initial,projects,context);
   const spent=Object.values(current.contributions??{}).reduce((tot,c)=>{
-   for(const k of resourceKeys)tot[k]+=(c[k]??0);
+   for(const k of resourceKeys)tot[k]=(tot[k]??0)+(c[k]??0);
    return tot;
   },safeBag({}));
   for(const k of resourceKeys)
-   expect((current.resources?.[k]??0)+spent[k]).toBeCloseTo(earned[k],5);
+   expect((current.resources?.[k]??0)+(spent[k]??0)).toBeCloseTo(earned[k]??0,5);
   const again=advanceAutomaticTree(current,projects,context);
   expect(again).toBe(current);
  });
