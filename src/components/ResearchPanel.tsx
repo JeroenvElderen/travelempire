@@ -152,6 +152,6 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
   </aside>}
   {!company&&<p className="rv4-hint">Create a company to begin collecting resources and researching technologies.</p>}
   {state.active&&<p className="rv4-hint"><Clock3 size={14}/> A previously purchased research upgrade is finishing on the original game clock; its reward will be preserved.</p>}
-  <footer className="rv4-footer"><ChartNoAxesCombined size={15}/> Research advances through actual business activity. No manual delivery or additional research payment required.</footer>
+  <footer className="rv4-footer"><ChartNoAxesCombined size={15}/><span title="Research time follows your game clock">{new Date(gameNow).toLocaleDateString("en-IE")} · </span> Research advances through actual business activity. No manual delivery or additional research payment required.</footer>
  </section>;
 }
