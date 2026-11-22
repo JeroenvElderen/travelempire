@@ -21,7 +21,7 @@ export type AutomaticState=ResourceState&{levels:Partial<Record<string,number>>;
 /** Some joined branches require more than the first level of a parent. */
 export const PARENT_LEVEL_REQUIREMENTS:Record<string,Readonly<Record<string,number>>>={
  airportMarkets:{premium:2},
- regionalReposition:{fleetAnalytics:2,routing:2},
+ regionalReposition:{fleetAnalytics:2,routing:2,navigation:2},
  safetyCertification:{defensive:2},
  networkLogistics:{depotEfficiency:3},
  customerRetention:{loyalty:2},
