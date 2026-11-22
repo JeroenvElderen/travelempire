@@ -108,6 +108,7 @@ export type ResourceState={
  productVersion?:1;
  productInventory?:Record<string,number>;
  productProduced?:Record<string,number>;
+ productConsumed?:Record<string,number>;
  productContributions?:Record<string,Record<string,number>>;
  productRawSpent?:ResourceBag;
  productCursor?:number;
