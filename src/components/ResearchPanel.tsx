@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {FlaskConical,Database,CheckCircle2,LockKeyhole,Search,X,Minus,ZoomIn,Maximize2,GitBranch,Layers3} from 'lucide-react';
 import type {Company} from '../company';
 import * as Research from '../research';
-import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,researchCosts,
+import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,
  safeBag,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {buildLevelResearchDiagram,RESEARCH_CANVAS_WIDTH,RESEARCH_NODE_SIZE,
  RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,type LevelDiagramNode} from '../researchGraph';
@@ -80,7 +80,6 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  const selectedCosts=selected?nodeCosts(selected):{};
  const selectedDelivered=selected?.type==='starter'?earned:selected?state.contributions?.[selected.id]??{}:{};
  const matching=search.trim()?projects.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).slice(0,7):[];
- const firstIncomplete=diagram.nodes.find(n=>!isComplete(n)&&requirements(n).length===0);
  const activeCount=diagram.nodes.filter(n=>!isComplete(n)&&requirements(n).length===0).length;
  const fit=()=>{
   const width=viewport.current?.clientWidth??350;
