@@ -1,125 +1,90 @@
 import {describe,expect,it} from 'vitest';
 import {allProjects} from './research';
-import {buildResearchHierarchy,INDEPENDENT_RESEARCH_ROOTS} from './researchHierarchy';
-import {technologyParents} from './researchProgress';
+import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE} from './researchHierarchy';
+import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES} from './researchAutomatic';
 
-describe('immersive dependency-first research tree',()=>{
+describe('approved eight-division research technology tree',()=>{
  const diagram=buildResearchHierarchy(allProjects.map(p=>p.id));
  const byId=diagram.byId;
- it('includes every one of 176 research levels and all four intro milestones',()=>{
-  expect(diagram.nodes).toHaveLength(176);
-  expect(diagram.nodes.filter(n=>n.kind==='starter')).toHaveLength(4);
-  expect(new Set(diagram.nodes.map(n=>n.id)).size).toBe(176);
+ const researchLevels=allProjects.reduce((n,p)=>n+maximum(p.id),0);
+ it('keeps every real research level plus exactly five startup milestones and eight division entrances',()=>{
+  expect(STARTER_STAGES.map(s=>s.jobs)).toEqual([10,20,30,40,50]);
+  expect(STARTER_STAGES.map(s=>s.roads)).toEqual([50,200,500,1000,2000]);
+  expect(researchLevels).toBe(172);
+  expect(diagram.nodes).toHaveLength(researchLevels+5+8);
+  expect(diagram.nodes.filter(n=>n.kind==='starter')).toHaveLength(5);
+  expect(diagram.nodes.filter(n=>n.kind==='division')).toHaveLength(8);
+  expect(diagram.nodes.filter(n=>n.kind==='research')).toHaveLength(researchLevels);
+  expect(new Set(diagram.nodes.map(n=>n.id)).size).toBe(diagram.nodes.length);
+ });
+ it('opens eight unequal, separately growing research divisions, without a common final',()=>{
+  expect(DIVISIONS.map(d=>d.name)).toEqual([
+   'Revenue','Taxis & Ferries','Explorers','Hotels','Parking',
+   'Banking & Finance','Fleet & Vehicles','Construction']);
+  const lengths=DIVISIONS.map(d=>d.projects.length);
+  expect(lengths[1]).toBeGreaterThan(lengths[3]);
+  expect(lengths[0]).toBeGreaterThan(lengths[4]);
+  expect(new Set(lengths).size).toBeGreaterThan(4);
+  const nodes=diagram.nodes.filter(n=>n.kind==='division');
+  expect(new Set(nodes.map(n=>n.y)).size).toBe(1);
+  expect(nodes.every(n=>n.y>byId.get('starter:5')!.y)).toBe(true);
+  expect(diagram.nodes.some(n=>n.id.includes('final')||n.id.includes('trophy'))).toBe(false);
+ });
+ it('connects the five intro milestones and fans out to exactly eight entrances',()=>{
+  const visible=diagram.edges.filter(e=>e.visible);
+  const wired=new Set(visible.map(e=>e.from+'>'+e.to));
+  for(let l=2;l<=5;l++)expect(wired.has('starter:'+(l-1)+'>starter:'+l)).toBe(true);
+  const entrances=visible.filter(e=>e.from==='starter:5'&&e.to.startsWith('division:'));
+  expect(entrances).toHaveLength(8);
+  for(const division of DIVISIONS){
+   expect(wired.has('division:'+division.key+'>'+division.root+':1')).toBe(true);
+  }
+ });
+ it('preserves every real prerequisite even when its wire is hidden for readability',()=>{
+  const wired=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
+  for(const project of allProjects)
+   for(const parent of technologyParents(project.id)){
+    const level=PARENT_LEVEL_REQUIREMENTS[project.id]?.[parent]??1;
+    expect(wired.has(parent+':'+level+'>'+project.id+':1')).toBe(true);
+   }
+  expect(wired.has('premium:2>airportMarkets:1')).toBe(true);
+  expect(wired.has('fleetAnalytics:2>regionalReposition:1')).toBe(true);
+  expect(wired.has('routing:2>regionalReposition:1')).toBe(true);
+  expect(wired.has('navigation:2>regionalReposition:1')).toBe(true);
+  expect(diagram.junctions.find(n=>n.id==='regionalReposition:1')?.inputs).toBe(3);
+ });
+ it('gives each research node one visible ancestor, including local fork splits',()=>{
+  const visible=diagram.edges.filter(e=>e.visible);
+  for(const node of diagram.nodes.filter(n=>n.kind==='research')){
+   const inbound=visible.filter(e=>e.to===node.id);
+   expect(inbound, node.id).toHaveLength(1);
+  }
+  expect(visible.some(e=>e.from==='pricing:3'&&e.to==='peakPricing:1')).toBe(true);
+  expect(visible.some(e=>e.from==='pricing:3'&&e.to==='demandIntelligence:1')).toBe(true);
+  expect(visible.some(e=>e.from==='fleetAnalytics:3'&&e.to==='trainingResearch:1')).toBe(true);
+ });
+ it('avoids tile overlaps and renders all connections inside the canvas',()=>{
+  const occupied=new Set<string>();
   for(const node of diagram.nodes){
    expect(node.x).toBeGreaterThanOrEqual(0);
    expect(node.y).toBeGreaterThanOrEqual(0);
-   expect(node.x+54).toBeLessThanOrEqual(diagram.width);
-   expect(node.y+54).toBeLessThanOrEqual(diagram.height);
+   expect(node.x+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.width);
+   expect(node.y+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.height);
+   const key=node.x+':'+node.y;
+   expect(occupied.has(key),key).toBe(false);
+   occupied.add(key);
   }
- });
- it('starts with four serial job-and-cash milestones',()=>{
-  expect(STARTER_STAGES.map(s=>s.jobs)).toEqual([10,20,30,50]);
-  expect(byId.get('starter:1')?.rank).toBe(0);
-  expect(byId.get('starter:4')?.rank).toBe(3);
-  const wired=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
-  for(let level=2;level<=4;level++)
-   expect(wired.has('starter:'+(level-1)+'>starter:'+level)).toBe(true);
- });
- it('starts five research families, including two genuinely independent paths',()=>{
-  const roots=diagram.nodes.filter(n=>n.rank===4&&n.kind==='research');
-  expect(new Set(roots.map(n=>n.projectId))).toEqual(new Set([
-   'pricing','fleetAnalytics','depotEfficiency','survey','procurement'
-  ]));
-  expect(INDEPENDENT_RESEARCH_ROOTS).toEqual(['pricing','procurement']);
-  const linked=diagram.edges.filter(e=>e.from==='starter:4').map(e=>e.to).sort();
-  expect(linked).toEqual(['fleetAnalytics:1','depotEfficiency:1','survey:1'].sort());
-  expect(diagram.edges.some(e=>e.to==='pricing:1'||e.to==='procurement:1')).toBe(false);
- });
- it('requires actual parental technology levels for multi-branch joins',()=>{
-  const edges=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
-  for(const project of allProjects){
-   for(const parent of technologyParents(project.id)){
-    const required=PARENT_LEVEL_REQUIREMENTS[project.id]?.[parent]??1;
-    expect(edges.has(parent+':'+required+'>'+project.id+':1')).toBe(true);
-   }
-  }
-  expect(edges.has('premium:2>airportMarkets:1')).toBe(true);
-  expect(edges.has('fleetAnalytics:2>regionalReposition:1')).toBe(true);
-  expect(edges.has('routing:2>regionalReposition:1')).toBe(true);
-  expect(edges.has('navigation:2>regionalReposition:1')).toBe(true);
-  const merge=diagram.junctions.find(j=>j.id==='regionalReposition:1');
-  expect(merge?.inputs).toBe(3);
-  expect(edges.has('regionalReposition:1>multiDepotDispatch:1')).toBe(true);
-  expect(edges.has('regionalReposition:1>advancedScheduling:1')).toBe(true);
-  expect(edges.has('multiDepotDispatch:1>profitAwareFleet:1')).toBe(true);
-  expect(edges.has('advancedScheduling:1>profitAwareFleet:1')).toBe(true);
- });
- it('draws a clear primary line per technology instead of every cross-branch prerequisite',()=>{
-  const visible=diagram.edges.filter(edge=>edge.visible);
-  const hidden=diagram.edges.filter(edge=>!edge.visible);
-  expect(hidden.length).toBeGreaterThan(5);
-  expect(visible.length).toBeLessThan(diagram.edges.length);
-  for(const node of diagram.nodes.filter(n=>n.kind==='research')){
-   const inbound=visible.filter(edge=>edge.to===node.id);
-   // A technology has one visual predecessor, except truly standalone
-   // starting lines. Remaining dependencies are shown when tapped.
-   expect(inbound.length).toBeLessThanOrEqual(1);
-  }
-  const regional=diagram.edges.filter(edge=>edge.to==='regionalReposition:1');
-  expect(regional).toHaveLength(3);
-  expect(regional.filter(edge=>edge.visible).map(edge=>edge.from)).toEqual(['routing:2']);
-  expect(diagram.edges.filter(edge=>edge.from==='starter:4'&&edge.visible)).toHaveLength(3);
- });
- it('keeps all required dependencies authoritative even when their connectors are hidden',()=>{
-  const all=new Set(diagram.edges.map(edge=>edge.from+'>'+edge.to));
-  expect(all.has('fleetAnalytics:2>regionalReposition:1')).toBe(true);
-  expect(all.has('navigation:2>regionalReposition:1')).toBe(true);
-  expect(all.has('routing:2>regionalReposition:1')).toBe(true);
- });
- it('connects every dependent technology in downward-ranked paths',()=>{
-  for(const edge of diagram.edges){
-   const parent=byId.get(edge.from),child=byId.get(edge.to);
-   expect(parent).toBeDefined();expect(child).toBeDefined();
-   expect(child!.rank).toBeGreaterThan(parent!.rank);
+  for(const edge of diagram.edges.filter(e=>e.visible)){
+   const from=byId.get(edge.from)!,to=byId.get(edge.to)!;
+   expect(to.y).toBeGreaterThan(from.y);
    expect(edge.path.startsWith('M ')).toBe(true);
   }
  });
- it('keeps all 176 level tiles collision-free, including staggered branches',()=>{
-  const layers=new Map<number,typeof diagram.nodes>();
-  for(const node of diagram.nodes)layers.set(node.rank,[...(layers.get(node.rank)??[]),node]);
-  for(const layer of layers.values()){
-   const ordered=[...layer].sort((a,b)=>a.x-b.x);
-   for(let i=1;i<ordered.length;i++)
-    expect(ordered[i].x-ordered[i-1].x).toBeGreaterThanOrEqual(54);
-  }
-  expect(diagram.nodes.filter(n=>n.kind==='research').every(n=>n.rank>=4)).toBe(true);
-  expect(new Set(diagram.nodes.map(n=>n.rank)).size).toBeGreaterThanOrEqual(17);
- });
- it('fits a compact touch canvas instead of widening into dozens of category columns',()=>{
-  expect(diagram.width).toBeLessThan(1900);
-  expect(diagram.height).toBeGreaterThan(1400);
-  expect(diagram.nodes).toHaveLength(176);
-  const root=byId.get('starter:4')!;
-  for(const node of diagram.nodes.filter(n=>n.kind==='starter'))
-   expect(node.x).toBe(root.x);
- });
- it('routes a single local fork from each research technology',()=>{
-  for(const edge of diagram.edges.filter(e=>e.visible&&e.kind==='prerequisite')){
-   const from=byId.get(edge.from)!,to=byId.get(edge.to)!;
-   // Five-level upgrades may be stacked beneath an unrelated neighboring
-   // branch, but a visible arrow must not traverse the entire canvas.
-   expect(Math.abs(from.x-to.x)).toBeLessThanOrEqual(720);
-   expect(to.y).toBeGreaterThan(from.y);
-  }
- });
- it('keeps the standalone fare-only chain in a coherent directed progression',()=>{
-  const edges=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
-  expect(edges.has('pricing:1>peakPricing:1')).toBe(true);
-  expect(edges.has('peakPricing:1>premium:1')).toBe(true);
-  expect(edges.has('premium:1>longDistance:1')).toBe(true);
-  const root=byId.get('pricing:1')!;
-  const leaf=byId.get('longDistance:1')!;
-  expect(leaf.y).toBeGreaterThan(root.y);
+ it('does not introduce research progress or resource requirements from decorative division tiles',()=>{
+  expect(diagram.nodes.filter(n=>n.kind==='division').every(n=>n.level===0)).toBe(true);
+  const ids=new Set(diagram.nodes.filter(n=>n.kind==='research').map(n=>n.projectId));
+  expect(ids).toEqual(new Set(allProjects.map(p=>p.id)));
+  expect(diagram.height).toBeGreaterThan(1100);
  });
 });
