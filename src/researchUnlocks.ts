@@ -4,7 +4,7 @@ import type {ResearchState} from './research';
  * retain their acquired services and menus without regression.
  */
 export const BUSINESS_UNLOCKS={
- Dealership:{name:'Vehicle Dealership',starter:4},
+ Dealership:{name:'Vehicle Dealership',starter:5},
  Drivers:{name:'Driver Management',id:'trainingResearch',level:1},
  Operations:{name:'Operations Centre',id:'fleetAnalytics',level:1},
  Ferries:{name:'Ferry Operations',id:'portAnalytics',level:1},
@@ -28,7 +28,7 @@ export function lockedFeature(feature:string,companyIsNew:boolean,state:Research
  const rule=BUSINESS_UNLOCKS[feature as LockedFeature];
  if(!rule)return 'Continue research to unlock '+feature;
  if('starter' in rule)return (state.starterLevel??0)>=rule.starter?null:
-  rule.name+' requires Starter Level '+rule.starter+' (50 completed taxi jobs and €3,500 earned)';
+  rule.name+' requires Starter Level '+rule.starter+' (50 completed taxi jobs and 2,000 discovered roads)';
  return (state.levels[rule.id]??0)>=rule.level?null:
   rule.name+' requires '+rule.id+' Level '+rule.level;
 }
