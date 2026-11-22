@@ -51,7 +51,7 @@ const mid:readonly ProductKey[]=['demandForecast','maintenanceModel','navigation
  'demandForecast','maintenanceModel','trafficAnalysis','financialForecast','maritimeStudy','hospitalityModel','propertyPlan','investmentStrategy'];
 const advanced:readonly ProductKey[]=['integratedMobility','advancedVehicleTech','integratedMobility','integratedMobility',
  'integratedMobility','constructionSystem','tourismNetwork','internationalStrategy','tourismNetwork','tourismNetwork',
- 'constructionSystem','internationalStrategy'];
+ 'constructionSystem','integratedMobility'];
 const expert:readonly ProductKey[]=['integratedMobility','advancedVehicleTech','autonomousFleet','autonomousFleet',
  'autonomousFleet','constructionSystem','tourismNetwork','internationalStrategy','tourismNetwork','tourismNetwork',
  'constructionSystem','internationalStrategy'];
@@ -63,7 +63,11 @@ export function productRequirements(id:string,level:number,legacy:readonly Resea
  if(category===undefined)return {};
  const tier=previous?level:(next?.tier??1);
  if(tier<2)return id==='explorerExpansion'?{navigationModel:2}:{};
- if(!previous&&technologyParents(id).length===0)return {};
+ // Never require a product whose recipe is unlocked by the very same
+ // technology. Corporate due diligence must open before Corporate Reports
+ // can be manufactured, otherwise a fresh company could never progress.
+ if(!previous&&(technologyParents(id).length===0||
+  recipeById.get(basic[category])?.unlock.project===id))return {};
  const result:ProductBag={};
  const add=(key:ProductKey,n:number)=>{result[key]=(result[key]??0)+n;};
  if(tier===2)add(basic[category],previous?3:5);
