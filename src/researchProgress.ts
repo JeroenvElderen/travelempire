@@ -78,8 +78,23 @@ export const legacyTechnologyLinks:Readonly<Record<string,readonly string[]>>={
  brand:['advertising'],loyalty:['brand'],
  insuranceResearch:['procurement'],efficiency:['procurement']
 };
+/** A small foundation opens first, then branches split and join as company
+ * operations diversify. These are research prerequisites, not hard locks on
+ * already-functional gameplay or previously completed save levels.
+ */
+export const hierarchyFoundationLinks:Readonly<Record<string,readonly string[]>>={
+ fleetAnalytics:['pricing'],
+ trainingResearch:['fleetAnalytics'],
+ advertising:['pricing'],
+ engine:['depotEfficiency'],
+ portAnalytics:['survey'],
+ occupancyForecast:['advertising'],
+ modularBuilding:['depotEfficiency'],
+ corporateDueDiligence:['procurement']
+};
 export function technologyParents(id:string):readonly string[]{
- return newProjects.find(p=>p.id===id)?.requires??legacyTechnologyLinks[id]??[];
+ const primary=newProjects.find(p=>p.id===id)?.requires??legacyTechnologyLinks[id]??[];
+ return [...new Set([...primary,...(hierarchyFoundationLinks[id]??[])])];
 }
 export const ADVANCED_CATEGORIES=['Passenger Markets & Pricing','Vehicle Engineering','Fleet Management & Dispatch','Exploration & Cartography','Drivers & Personnel','Depots, Maintenance & Parking','Marketing & Reputation','Banking & Financial Technology','Maritime & Ports','Hotels & Hospitality','Construction & Property','Corporate & International'] as const;
 export type ResearchSnapshot=ResourceBag;
