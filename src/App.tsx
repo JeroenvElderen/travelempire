@@ -1360,7 +1360,7 @@ export default function App(){
   const settle=()=>{
    const current=companyRef.current,clock=gameClockRef.current,old=fleetSaveRef.current;
    if(!current||!clock||!old.corporate)return;
-   const result=advanceCorporate(old.corporate,clock.epochMs,accountingOf(old.accounting).settings.corporateRate);
+   const result=advanceCorporate(old.corporate,clock.epochMs,accountingOf(old.accounting).settings.corporateRate,Resources.unlockedBonus(researchRef.current.levels,'corporate'));
    if(result.state.lastProcessedDay===old.corporate.lastProcessedDay)return;
    pendingCashRef.current=Math.round((pendingCashRef.current+result.parentCashDelta)*100)/100;
    const entries=result.events.filter(e=>e.kind==='repayment').map(e=>bankEntry(e.description,e.parentCashDelta,'operating','repayment'));
@@ -3142,7 +3142,7 @@ export default function App(){
    const cargo=planConstructionFreight([site.longitude,site.latitude],seaNetwork,roadGraph,hour,quote.deliveryHours);
    started=beginConstruction(site,method,old.workers,hour,crypto.randomUUID(),cargo);
   }catch(e){return e instanceof Error?e.message:'Could not plan cargo ship and truck delivery.';}
-  const price=started.quote.totalCents/100;
+  const price=Math.round(started.quote.totalCents*(1-Resources.unlockedBonus(researchRef.current.levels,'construction')))/100;
   const available=current.cash+pendingCashRef.current;
   if(available+0.001<price)return 'Insufficient company funds for materials, furniture and the work package.';
   const next={...old,sites:{...old.sites,[siteId]:started.site}};
