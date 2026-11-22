@@ -686,6 +686,12 @@ export default function App(){
   setResearch(old=>advanceAutomaticTree(
    Resources.observation(old,snapshot),Research.projects,context));
  },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
+ const ensureResearchFeature=(feature:string):string|null=>{
+  const current=companyRef.current;
+  const reason=current?lockedFeature(feature,current.researchProgression===2,researchRef.current):null;
+  if(reason){setResearchError(reason);setSimError(reason);setPage('Research');}
+  return reason;
+ };
  // Grant two additional vehicles of EVERY explorer role when level 1
  // finishes. A legacy research completion only set explorerExpansionApplied
  // without spawning anything; the separate marker grants those saves too.
@@ -2273,6 +2279,7 @@ export default function App(){
   fleetSaveRef.current=updated;setFleet(updated);setSimError('');
  };
  const acquireSubsidiary=(id:string,discount:number,loanPercent:number)=>{
+  if(ensureResearchFeature('Finance'))return;
   const current=companyRef.current;if(!current)return;
   try{
    const old=fleetSaveRef.current;
@@ -2281,6 +2288,7 @@ export default function App(){
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
  const createSubsidiary=(name:string,city:string,capital:number)=>{
+  if(ensureResearchFeature('Finance'))return;
   const current=companyRef.current;if(!current)return;
   try{
    const old=fleetSaveRef.current;
@@ -2318,6 +2326,7 @@ export default function App(){
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
  const foundForeign=(name:string,city:string,countryCode:string,capital:number)=>{
+  if(ensureResearchFeature('Finance'))return;
   const current=companyRef.current;if(!current)return;
   try{
    const old=fleetSaveRef.current;
@@ -2605,6 +2614,7 @@ export default function App(){
   setSimError('');
  };
  const addDepot=(location:Headquarters)=>{
+  if(ensureResearchFeature('Company'))return;
   if(!companyRef.current||!graph)return;
   const cash=companyRef.current.cash+pendingCashRef.current;
   if(cash<10000){setSimError('A new depot costs €10,000.');return;}
@@ -3004,8 +3014,9 @@ export default function App(){
  // harbour coverage is not retirement: they continue discovering other
  // drivable classes under Explorer Autopilot's all-road fallback.
  const setFerryTicketPrice=(routeId:string,fare:number)=>{const current=companyRef.current;if(!current||!(current.purchasedFerryRouteIds??[]).includes(routeId)||!Number.isFinite(fare))return;const value=Math.max(1,Math.min(100,Math.round(fare*2)/2));const updated={...current,ferryTicketPrices:{...(current.ferryTicketPrices??{}),[routeId]:value}};companyRef.current=updated;saveCompany(updated);setCompany(updated);};
- const purchaseFerryRoute=(routeId:string,_displayedPrice:number)=>{const current=companyRef.current;const price=ferryRoutePrice(routeId);if(!current||!Number.isFinite(price)||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId],ferryServiceStartedAt:{...(current.ferryServiceStartedAt??{}),[routeId]:gameClockRef.current?.epochMs??Date.now()},ferryLastPaidVoyage:{...(current.ferryLastPaidVoyage??{}),[routeId]:0}};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
+ const purchaseFerryRoute=(routeId:string,_displayedPrice:number)=>{if(ensureResearchFeature('Ferries'))return;const current=companyRef.current;const price=ferryRoutePrice(routeId);if(!current||!Number.isFinite(price)||current.cash<price||(current.purchasedFerryRouteIds??[]).includes(routeId))return;const updated={...current,cash:Math.round((current.cash-price)*100)/100,purchasedFerryRouteIds:[...(current.purchasedFerryRouteIds??[]),routeId],ferryServiceStartedAt:{...(current.ferryServiceStartedAt??{}),[routeId]:gameClockRef.current?.epochMs??Date.now()},ferryLastPaidVoyage:{...(current.ferryLastPaidVoyage??{}),[routeId]:0}};companyRef.current=updated;saveCompany(updated);setCompany(updated);setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Ferry route purchase · '+routeId,amount:-price},...(old.transactions??[])].slice(0,100)}));};
  const investInProperty=(poi:InvestablePOI,amountEuros:number):string|null=>{
+  const restriction=ensureResearchFeature('Investments');if(restriction)return restriction;
   const current=companyRef.current,clock=gameClockRef.current;
   if(!current||!clock)return 'Create a company before buying property shares.';
   const cost=Math.round(amountEuros*100);
@@ -3093,6 +3104,7 @@ export default function App(){
   return null;
  };
  const setupHeadquartersBuilding=():string|null=>{
+  const restriction=ensureResearchFeature('Hotels');if(restriction)return restriction;
   const current=companyRef.current;
   if(!current)return 'Create a company before designing your headquarters.';
   const old=constructionRef.current,siteId='hq:'+current.id;
@@ -3107,6 +3119,8 @@ export default function App(){
   return null;
  };
  const purchaseHotelPlot=(location:Headquarters)=>{
+  const restriction=ensureResearchFeature('Hotels');
+  if(restriction){setConstructionError(restriction);return;}
   const current=companyRef.current,clock=gameClockRef.current?.epochMs;
   setSelecting(false);setPlacingHotelLand(false);setPage('Hotels');
   if(!current||clock===undefined){setConstructionError('Company or game clock is not ready.');return;}
@@ -3130,6 +3144,7 @@ export default function App(){
   setConstructionError('');
  };
  const startInternalBuild=(siteId:string,method:TradeMode):string|null=>{
+  const restriction=ensureResearchFeature('Hotels');if(restriction)return restriction;
   const current=companyRef.current,clock=gameClockRef.current?.epochMs,old=constructionRef.current;
   if(!current||clock===undefined)return 'Company clock is not ready.';
   const site=old.sites[siteId];if(!site)return 'Select a hotel site.';
