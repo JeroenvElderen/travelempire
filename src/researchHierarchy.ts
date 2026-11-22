@@ -24,7 +24,6 @@ const TOP=105;
  * Layout and ordering are deterministic and independent of research progress.
  */
 export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
- const known=new Set(ids);
  const categories=new Map<string,number>();
  const projectOrder=new Map<string,number>();
  RESEARCH_LANES.forEach((group,index)=>group.forEach((id,offset)=>{
