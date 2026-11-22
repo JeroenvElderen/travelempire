@@ -70,8 +70,8 @@ function projectMark(projectId:string):number{
   hash=((hash*33)^projectId.charCodeAt(i))>>>0;
  return hash%mini.length;
 }
-export default function ResearchPixelIcon({category,size=32,projectId}:{
- category:number;size?:number;projectId?:string
+export default function ResearchPixelIcon({category,size=32,projectId,level=1}:{
+ category:number;size?:number;projectId?:string;level?:number
 }){
  const shapes=tiles[category]??tiles[0];
  const palette=fills[category]??fills[0];
@@ -86,6 +86,10 @@ export default function ResearchPixelIcon({category,size=32,projectId}:{
    {mini[variant].map(([x,y,w,h],i)=>
     <rect key={i} x={9+x} y={9+y} width={w} height={h}
      fill={i%3===0?'#f3df9d':'#b3e8c1'}/>)}
+  </g>}
+  {projectId&&<g>
+   <rect x={1} y={14} width={Math.max(2,Math.min(5,level))} height={1}
+    fill={['#e0c392','#c8deab','#a3dfb7','#9ac6f2','#f0e2a9'][Math.max(0,Math.min(4,level-1))]}/>
   </g>}
  </svg>;
 }
