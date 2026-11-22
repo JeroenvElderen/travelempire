@@ -43,14 +43,49 @@ const fills:Readonly<Record<number,readonly [string,string,string,string]>>={
  10:['#57452e','#d3ad55','#fce1a2','#f6c878'],
  11:['#40536a','#779aba','#d4e6f7','#b6cadd']
 };
-export default function ResearchPixelIcon({category,size=32}:{
- category:number;size?:number
+// Compact accent silhouettes distinguish technologies within the same
+// division. They are generated from stable project identifiers, not emoji,
+// so icons remain consistent across reloads and mobile platforms.
+const mini:readonly (readonly [number,number,number,number])[][]=[
+ [[2,0,1,6],[0,2,5,1]],                           // cross
+ [[0,0,5,1],[2,1,1,5]],                           // pick
+ [[2,0,1,5],[0,2,5,1]],                           // compass
+ [[0,0,5,2],[1,2,3,2],[2,4,1,2]],                 // marker
+ [[0,4,5,1],[0,2,2,2],[3,0,2,4]],                 // rising graph
+ [[0,1,2,4],[3,1,2,4],[2,0,1,6]],                 // rails
+ [[0,1,5,1],[0,3,5,1],[0,5,5,1]],                 // three levels
+ [[0,0,5,1],[0,5,5,1],[0,1,1,4],[4,1,1,4]],      // blueprint
+ [[0,0,5,5],[1,1,3,3]],                           // case
+ [[1,0,3,1],[0,1,5,3],[1,4,3,1]],                 // disc
+ [[0,0,2,2],[3,0,2,2],[0,3,2,2],[3,3,2,2]],      // tiles
+ [[0,0,5,2],[1,2,3,3]],                           // structure
+ [[1,0,3,1],[0,1,5,3],[1,4,3,2]],                 // engine
+ [[2,0,1,2],[0,2,5,1],[1,3,3,3]],                 // pin
+ [[0,0,5,2],[2,2,1,4]],                           // T
+ [[0,0,1,6],[0,5,5,1],[4,1,1,4]]                 // right angle
+];
+function projectMark(projectId:string):number{
+ let hash=17;
+ for(let i=0;i<projectId.length;i++)
+  hash=((hash*33)^projectId.charCodeAt(i))>>>0;
+ return hash%mini.length;
+}
+export default function ResearchPixelIcon({category,size=32,projectId}:{
+ category:number;size?:number;projectId?:string
 }){
  const shapes=tiles[category]??tiles[0];
  const palette=fills[category]??fills[0];
+ const variant=projectId?projectMark(projectId):null;
  return <svg viewBox="0 0 16 16" width={size} height={size}
   aria-hidden="true" focusable="false" shapeRendering="crispEdges">
   {shapes.map(([x,y,w,h,ink],index)=><rect key={index} x={x} y={y}
    width={w} height={h} fill={palette[ink]}/>)}
+  {variant!==null&&<g>
+   <rect x={8} y={8} width={8} height={8} fill="#282b2c" opacity={.88}/>
+   <rect x={9} y={9} width={6} height={6} fill="#4d6154"/>
+   {mini[variant].map(([x,y,w,h],i)=>
+    <rect key={i} x={9+x} y={9+y} width={w} height={h}
+     fill={i%3===0?'#f3df9d':'#b3e8c1'}/>)}
+  </g>}
  </svg>;
 }
