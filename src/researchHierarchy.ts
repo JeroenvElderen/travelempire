@@ -207,10 +207,13 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   if(!from||!to)throw Error('Unresolved research connection '+fromId+' > '+toId);
   const x1=from.x+NODE/2,y1=from.y+NODE;
   const x2=to.x+NODE/2,y2=to.y;
-  const junctionHeight=Math.max(y1+14,y2-27);
+  // Fork just below the parent tile, before its Level 2 appears. Routing
+  // across at the child's row used to draw straight through Levels 2–5,
+  // creating visual clutter and seemingly unrelated connections.
+  const forkY=y1+Math.max(10,Math.min(17,(y2-y1)*.30));
   const path=Math.abs(x1-x2)<1?
    `M ${x1} ${y1} V ${y2}`:
-   `M ${x1} ${y1} V ${junctionHeight} H ${x2} V ${y2}`;
+   `M ${x1} ${y1} V ${forkY} H ${x2} V ${y2}`;
   edges.push({from:fromId,to:toId,path,kind,visible});
  };
  for(let level=2;level<=STARTER_STAGES.length;level++){
