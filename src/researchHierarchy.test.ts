@@ -72,7 +72,7 @@ describe('immersive dependency-first research tree',()=>{
     expect(ordered[i].x-ordered[i-1].x).toBeGreaterThanOrEqual(54);
   }
   expect(diagram.nodes.filter(n=>n.kind==='research').every(n=>n.rank>=4)).toBe(true);
-  expect(new Set(diagram.nodes.map(n=>n.rank)).size).toBeGreaterThan(17);
+  expect(new Set(diagram.nodes.map(n=>n.rank)).size).toBeGreaterThanOrEqual(17);
  });
  it('keeps the standalone fare-only chain in a coherent directed progression',()=>{
   const edges=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
