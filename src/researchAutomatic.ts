@@ -2,6 +2,8 @@ import {
  allResearch,normalizeResources,prerequisites,resourceKeys,researchCosts,safeBag,
  type OperationalContext,type ResearchProject,type ResourceBag,type ResourceCosts,type ResourceKey,type ResourceState
 } from './researchProgress';
+import {allocateResearchProducts} from './researchProductionEngine';
+import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
 /** Intro progression uses cumulative settled activity, not spendable inventory.
  * The dealership unlock is Level 4. All milestone thresholds are cumulative.
@@ -68,7 +70,7 @@ export function effectiveCosts(
  return Object.fromEntries(Object.entries(base).map(([key,value])=>[key,Math.max(1,Math.ceil(value*factor))])) as ResourceCosts;
 }
 
-type Candidate={id:string;level:number;key:string;goal:ResourceCosts;given:ResourceCosts};
+type Candidate={id:string;level:number;key:string;goal:ResourceCosts;given:ResourceCosts;productGoal:ProductBag};
 const hasAllStreams=(candidate:Candidate,earned:ResourceBag)=>
  resourceKeys.every(key=>!candidate.goal[key]||earned[key]>0);
 
@@ -88,6 +90,11 @@ export function advanceAutomaticTree<T extends AutomaticState>(
  const earned=safeBag(base.earned);
  const contributions:Record<string,ResourceCosts>={...(base.contributions??{})};
  const resourceCursor:Partial<Record<ResourceKey,number>>={...(base.resourceCursor??{})};
+ let production={
+  productInventory:base.productInventory,productProduced:base.productProduced,
+  productConsumed:base.productConsumed,productContributions:base.productContributions,
+  productRawSpent:base.productRawSpent,productCursor:base.productCursor
+ };
  if(base.automaticVersion!==1||base.selected||base.queue?.length||base.starterLevel!==starterLevel)changed=true;
  // Existing companies never have to re-earn access to equipment or services.
  if(context.freshStart){
@@ -100,7 +107,7 @@ export function advanceAutomaticTree<T extends AutomaticState>(
  // Starter milestones must happen before the other divisions can start.
  if(starterLevel<STARTER_LEVELS){
   return changed?{...base,levels,starterLevel,automaticVersion:1,
-   selected:undefined,queue:[],resources,contributions,resourceCursor}:base;
+   selected:undefined,queue:[],resources,contributions,resourceCursor,...production,productVersion:1}:base;
  }
  const all=allResearch(legacy);
  // Each completion can open another level or a cross-branch dependency. A
@@ -117,11 +124,20 @@ export function advanceAutomaticTree<T extends AutomaticState>(
    if(technologyLevelRequirements(project.id,level,levels,{...context,starterLevel}).length)continue;
    const key=researchNodeId(project.id,level);
    candidates.push({id:project.id,level,key,
-    goal:effectiveCosts(project.id,level,levels,legacy),given:{...(contributions[key]??{})}});
+    goal:effectiveCosts(project.id,level,levels,legacy),given:{...(contributions[key]??{})},productGoal:productRequirements(project.id,level,legacy)});
   }
   if(!candidates.length)break;
   const participating=candidates.filter(candidate=>hasAllStreams(candidate,earned));
   let deliveredThisWave=false;
+  // Materialise nested research recipes only for eligible projects and only
+  // when all recipe inputs can be fulfilled in one atomic transaction.
+  const manufactured=allocateResearchProducts(participating.map(candidate=>({
+   key:candidate.key,goal:candidate.productGoal
+  })),levels,resources,production);
+  if(manufactured.changed){
+   resources=manufactured.resources;production=manufactured.ledger;
+   changed=true;deliveredThisWave=true;
+  }
   // Every key uses an independent rotating cursor; selection order cannot
   // permanently starve a sibling branch.
   for(const resource of resourceKeys){
@@ -161,7 +177,10 @@ export function advanceAutomaticTree<T extends AutomaticState>(
   let unlocked=false;
   for(const candidate of candidates){
    if(resourceKeys.every(resource=>
-    (candidate.given[resource]??0)+1e-8>=(candidate.goal[resource]??0))){
+    (candidate.given[resource]??0)+1e-8>=(candidate.goal[resource]??0))&&
+    PRODUCT_KEYS.every(product=>
+     (production.productContributions?.[candidate.key]?.[product]??0)>=
+     (candidate.productGoal[product]??0))){
     levels[candidate.id]=candidate.level;
     unlocked=true;changed=true;
    }
@@ -172,5 +191,5 @@ export function advanceAutomaticTree<T extends AutomaticState>(
   if(!deliveredThisWave&&wave>50)break;
  }
  return changed?{...base,levels,starterLevel,automaticVersion:1,selected:undefined,
-  queue:[],resources,contributions,resourceCursor}:base;
+  queue:[],resources,contributions,resourceCursor,...production,productVersion:1}:base;
 }
