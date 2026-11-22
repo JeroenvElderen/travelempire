@@ -241,20 +241,22 @@ export default function App(){
     diagnostic('ferry:harbours-unlocked',destinations.join(','));
    }
    busy=true;
-   let gross=0,costs=0;
+   let gross=0,costs=0,passengersSettled=0;
+   const ferryResearchBonus=Resources.unlockedBonus(research.levels,'ferry')+(research.levels.tourismPartnerships?0.03:0);
    const events:Array<{description:string;amount:number;time:number}>=[];
    for(const arrival of settlement.arrivals){
     const route=ferryRoutes.get(arrival.routeId);
     if(!route)continue;
     const {passengers:adjustedPassengers,revenue,cost}=ferryVoyageEconomics(arrival.durationMinutes,arrival.completedAt,current.ferryTicketPrices?.[arrival.routeId]);
-    gross+=revenue;costs+=cost;
+    const ticketIncome=Math.round(revenue*(1+ferryResearchBonus)*100)/100;
+     gross+=ticketIncome;costs+=cost;passengersSettled+=adjustedPassengers;
     // A real-world OSM import direction is the initial outbound orientation.
     // The boat and the revenue model use the same persisted departure epoch.
     const origin=arrival.direction==='outbound'?route.from:route.to;
     const destination=arrival.direction==='outbound'?route.to:route.from;
     const passage=`${portNames.get(origin)??origin} → ${portNames.get(destination)??destination}`;
     events.push({description:`Ferry fare · ${passage} · ${adjustedPassengers} passengers`,
-     amount:revenue,time:arrival.completedAt});
+     amount:ticketIncome,time:arrival.completedAt});
     events.push({description:`Ferry operating costs · ${passage}`,amount:-cost,
      time:arrival.completedAt});
    }
@@ -284,7 +286,7 @@ export default function App(){
      if(lastDay?.day===day)history[history.length-1]={...lastDay,revenue:lastDay.revenue+gross,expenses:lastDay.expenses+costs};
      else history.push({day,revenue:gross,expenses:costs,trips:0});
      const ferryAccounting=bookAccounting(old.accounting,periodMonth(nowGame),gross,costs,costs,0);
-     return {...old,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:bookBankCollection(old.bankPartnershipPaidByDay,day,partnership.paid),bankPartnershipPaidByLenderByDay:bookBankLenderCollections(old.bankPartnershipPaidByLenderByDay,day,partnership.settlements),revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
+     return {...old,researchFerryPassengersTotal:(old.researchFerryPassengersTotal??0)+passengersSettled,accounting:ferryAccounting,bank:partnershipBank,bankPartnerships:partnership.deals,bankPartnershipPaid:(old.bankPartnershipPaid??0)+partnership.paid,bankPartnershipPaidByDay:bookBankCollection(old.bankPartnershipPaidByDay,day,partnership.paid),bankPartnershipPaidByLenderByDay:bookBankLenderCollections(old.bankPartnershipPaidByLenderByDay,day,partnership.settlements),revenue:old.revenue+gross,overheadExpense:(old.overheadExpense??0)+costs,
       ferryRevenueByDay:(()=>{const days={...(old.ferryRevenueByDay??{})};days[day]=Math.round(((days[day]??0)+gross)*100)/100;const keys=Object.keys(days).sort();for(const oldDay of keys.slice(0,-45))delete days[oldDay];return days;})(),
       ferryOperatingCostByDay:(()=>{const days={...(old.ferryOperatingCostByDay??{})};days[day]=Math.round(((days[day]??0)+costs)*100)/100;for(const oldDay of Object.keys(days).sort().slice(0,-45))delete days[oldDay];return days;})(),
       financeHistory:history.slice(-365),
@@ -3051,6 +3053,8 @@ export default function App(){
      if(previous?.day===date)history[history.length-1]={...previous,revenue:previous.revenue+income};
      else history.push({day:date,revenue:income,expenses:0,trips:0});
      return {...old,
+      researchParkingHoursTotal:(old.researchParkingHoursTotal??0)+result.parkingSpaceHours,
+      researchOtherRevenueTotal:(old.researchOtherRevenueTotal??0)+income,
       accounting:bookAccounting(old.accounting,periodMonth(now),income,0,0,0),
       financeHistory:history.slice(-365),
       financeJournal:postFinance(old.financeJournal,[{day:date,side:'income',category:'property.rental',amount:income}]),
