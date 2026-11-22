@@ -6,7 +6,7 @@ export type HierarchyNode={
  id:string;projectId:string;level:number;category:number;
  kind:'starter'|'research';rank:number;x:number;y:number;
 };
-export type HierarchyEdge={from:string;to:string;path:string;kind:'starter'|'prerequisite'|'level'};
+export type HierarchyEdge={from:string;to:string;path:string;kind:'starter'|'prerequisite'|'level';visible:boolean};
 export type HierarchyJunction={id:string;x:number;y:number;inputs:number};
 export type ResearchHierarchy={
  width:number;height:number;nodes:HierarchyNode[];edges:HierarchyEdge[];
@@ -31,6 +31,41 @@ const ROOT_COLUMNS:Readonly<Record<string,number>>={
  pricing:-5,fleetAnalytics:-2,depotEfficiency:0,survey:2,procurement:5
 };
 const ROOT_ORDER=['pricing','fleetAnalytics','depotEfficiency','survey','procurement'] as const;
+/** Choose the one drawn branch for each technology. All other prerequisite
+ * relationships are still enforced by the research engine and shown on tap.
+ * One visual parent keeps the map legible without altering gameplay rules.
+ */
+const DRAWN_PARENT:Readonly<Record<string,string>>={
+ airportMarkets:'demandIntelligence',
+ regionalReposition:'routing',
+ profitAwareFleet:'multiDepotDispatch',
+ vehicleLifecycle:'conditionPrediction',
+ coordinatedFrontiers:'navigation',
+ safetyCertification:'advancedScheduling',
+ networkLogistics:'preventiveCalendar',
+ customerRetention:'regionalReputation',
+ treasuryForecast:'creditRiskModels'
+};
+const visibleParent=(def:TechnologyDefinition):string|undefined=>{
+ const preferred=DRAWN_PARENT[def.id];
+ if(preferred&&def.parents.some(parent=>parent.id===preferred))return preferred;
+ return def.parents[0]?.id;
+};
+const childOrder:Readonly<Record<string,readonly string[]>>={
+ pricing:['peakPricing','demandIntelligence','advertising'],
+ fleetAnalytics:['dispatchResearch','trainingResearch'],
+ depotEfficiency:['workshopResearch','engine','parkingYield','modularBuilding'],
+ survey:['navigation','portAnalytics'],
+ procurement:['insuranceResearch','efficiency','creditRiskModels','corporateDueDiligence'],
+ navigation:['patrol','explorerExpansion','coordinatedFrontiers'],
+ engine:['fuelInjection','durability','lightweight','powertrainAdaptation'],
+ advertising:['brand','regionalReputation','occupancyForecast'],
+ regionalReposition:['multiDepotDispatch','advancedScheduling']
+};
+const orderedChild=(parent:string,id:string,defaultOrder:number)=>{
+ const branch=childOrder[parent];const index=branch?.indexOf(id)??-1;
+ return index<0?100+defaultOrder:index;
+};
 
 type TechnologyDefinition={
  id:string;category:number;cap:number;rank:number;parents:{id:string;level:number}[];order:number;
@@ -88,14 +123,16 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   a.order-b.order);
 
  const children=new Map<string,string[]>();
- for(const def of all)if(def.parents.length){
-  const primary=def.parents[0].id;
+ for(const def of all){
+  const primary=visibleParent(def);
+  if(!primary)continue;
   const list=children.get(primary)??[];
   list.push(def.id);
   children.set(primary,list);
  }
- for(const list of children.values())list.sort((a,b)=>
-  (ordering.get(a)??999)-(ordering.get(b)??999));
+ for(const [parent,list] of children.entries())list.sort((a,b)=>
+  orderedChild(parent,a,ordering.get(a)??999)-
+  orderedChild(parent,b,ordering.get(b)??999));
  const columns=new Map<string,number>();
  const occupied=new Map<number,Set<number>>();
  for(const def of all){
@@ -103,17 +140,19 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   if(!def.parents.length){
    preferred=ROOT_COLUMNS[def.id]??0;
   }else{
-   const existing=def.parents.map(p=>columns.get(p.id)).filter((c):c is number=>c!==undefined);
-   if(existing.length!==def.parents.length)throw Error('Unplaced prerequisite for '+def.id);
-   preferred=existing.reduce((sum,c)=>sum+c,0)/existing.length;
-   const siblings=children.get(def.parents[0].id)??[];
+   // Group each fork physically around its one *displayed* parent. Averaging
+   // across every dependency caused the cross-screen horizontal wires in the
+   // previous version; those other requirements remain enforced off-canvas.
+   const primary=visibleParent(def);
+   const parentColumn=primary===undefined?undefined:columns.get(primary);
+   if(parentColumn===undefined)throw Error('Unplaced visual prerequisite for '+def.id);
+   preferred=parentColumn;
+   const siblings=children.get(primary!)??[];
    const slot=siblings.indexOf(def.id);
    if(siblings.length>1){
-    preferred+=(slot-(siblings.length-1)/2)*2.3;
-   }else{
-    // A technology's next level already occupies its own vertical lane.
-    // Give its child a nearby, separate lane to keep the fork readable.
-    preferred+=def.category%2===0?-1.2:1.2;
+    // A branch takes a short step left or right at the split, rather than
+    // jumping to the middle of distant prerequisite columns.
+    preferred+=(slot-(siblings.length-1)/2)*1.85;
    }
   }
   const ideal=Math.round(preferred);
@@ -163,7 +202,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   }
  }
  const edges:HierarchyEdge[]=[],junctions:HierarchyJunction[]=[];
- const connect=(fromId:string,toId:string,kind:HierarchyEdge['kind'])=>{
+ const connect=(fromId:string,toId:string,kind:HierarchyEdge['kind'],visible=true)=>{
   const from=byId.get(fromId),to=byId.get(toId);
   if(!from||!to)throw Error('Unresolved research connection '+fromId+' > '+toId);
   const x1=from.x+NODE/2,y1=from.y+NODE;
@@ -172,7 +211,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   const path=Math.abs(x1-x2)<1?
    `M ${x1} ${y1} V ${y2}`:
    `M ${x1} ${y1} V ${junctionHeight} H ${x2} V ${y2}`;
-  edges.push({from:fromId,to:toId,path,kind});
+  edges.push({from:fromId,to:toId,path,kind,visible});
  };
  for(let level=2;level<=STARTER_STAGES.length;level++){
   connect('starter:'+(level-1),'starter:'+level,'starter');
@@ -180,8 +219,9 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
  for(const def of all){
   const first=researchNodeId(def.id,1);
   if(def.parents.length){
+   const drawn=visibleParent(def);
    for(const parent of def.parents)
-    connect(researchNodeId(parent.id,parent.level),first,'prerequisite');
+    connect(researchNodeId(parent.id,parent.level),first,'prerequisite',parent.id===drawn);
    if(def.parents.length>=2){
     const to=byId.get(first)!;
     junctions.push({id:first,x:to.x+NODE/2,y:to.y-20,inputs:def.parents.length});
