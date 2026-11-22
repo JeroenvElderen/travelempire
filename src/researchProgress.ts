@@ -93,7 +93,7 @@ export function researchCosts(id:string,l:number,legacy:readonly ResearchProject
  if(id==='explorerExpansion')return {roads:5000,distance:2000,revenue:25000};
  return Object.fromEntries(Object.entries(base).map(([k,v])=>[k,Math.ceil(v*factor)])) as ResourceCosts;
 }
-export function prerequisites(id:string,levels:Record<string,number>,context:OperationalContext):string[]{
+export function prerequisites(id:string,levels:Partial<Record<string,number>>,context:OperationalContext):string[]{
  const project=newProjects.find(p=>p.id===id);
  const missing=(project?.requires??[]).filter(dependency=>(levels[dependency]??0)<1)
   .map(dependency=>allResearchNames[dependency]??dependency);
