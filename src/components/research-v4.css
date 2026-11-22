@@ -182,3 +182,134 @@
 .factory-feature-unlocks strong{width:100%;font-size:11px;color:#c5eccc}
 .factory-feature-unlocks span{padding:5px 7px;background:#45634b;border:1px solid #70a478;
  border-radius:5px;font-weight:600}
+
+
+/* Hand-branching technology map: restrained, Builderment-style tile treatment.
+ * These are original TravelEmpire icons and styles, not copied game assets. */
+.research-factory{
+ background:#29292b;
+ color:#f7f4eb;
+}
+.research-factory-header{
+ height:59px;min-height:59px;
+ background:#744c30;border-bottom:3px solid #ad7d51;
+ box-shadow:0 3px 0 rgba(0,0,0,.32);
+}
+.research-factory-header h1{
+ font-family:system-ui,'Arial Black',sans-serif!important;
+ font-size:21px!important;font-weight:950!important;letter-spacing:.07em;
+ color:#fcf8e8!important;
+ -webkit-text-stroke:.5px #32251e;
+ text-shadow:1px 2px 0 #201a16,0 0 2px #211712;
+}
+.factory-resources-trigger,.factory-close{
+ background:#604832;border:2px solid #b89a72;border-radius:4px;
+ box-shadow:0 3px 0 #30251f;color:#fff6e9;
+}
+.factory-viewport{background:#292b2d}
+.factory-scene{
+ background-color:#292b2d;
+ background-image:none;
+}
+.factory-wires path{stroke-width:1.75;stroke:#797b7b;stroke-linejoin:miter;stroke-linecap:square}
+.factory-wires .factory-wire-done{stroke:#6bbc7e;stroke-width:2.2}
+.factory-wires .factory-wire-open{stroke:#9d9d9b;stroke-width:1.9}
+.factory-wires .factory-wire-locked{stroke:#737575;stroke-width:1.5;opacity:.72}
+.factory-wires circle{
+ stroke:#d2d2ce;stroke-width:1.4;fill:#525454;
+}
+.factory-wires circle.factory-junction-done{fill:#57c070;stroke:#bdf0c3}
+.factory-wires circle.factory-junction-open{fill:#bba477;stroke:#eee1b8}
+.factory-wires circle.factory-junction-locked{fill:#666768;stroke:#b2b3b2}
+.factory-tech{
+ width:54px;height:54px;
+ background:#47494a;border:2px solid #989b9d;
+ border-radius:2px;
+ box-shadow:0 3px 0 #202223;
+ transform:translateZ(0);
+}
+.factory-tech-icon{display:grid;place-items:center;width:100%;height:100%}
+.factory-tech-icon svg{width:34px;height:34px;image-rendering:pixelated}
+.factory-tech-done{
+ background:#62c978;border-color:#b7f5bc;
+ box-shadow:0 3px 0 #296d3f;
+}
+.factory-tech-open{
+ background:#53534a;border-color:#d1bb8a;
+ box-shadow:0 3px 0 #665035;
+}
+.factory-tech-open.factory-tech-in-progress{
+ background:#50765b;border-color:#9addaa;
+ box-shadow:0 3px 0 #345339;
+}
+.factory-tech-locked{
+ background:#3a3c3e;border-color:#737779;
+ box-shadow:0 3px 0 #232526;
+}
+.factory-tech-locked .factory-tech-icon{
+ filter:grayscale(1);opacity:.18;
+}
+.factory-padlock{
+ width:21px;height:21px;stroke-width:3;color:#fff;
+ filter:drop-shadow(0 1px 2px #111);
+}
+.factory-tech-selected{outline:2px solid #f9e5a1;outline-offset:3px}
+.factory-check{
+ top:-6px;right:-6px;width:17px;height:17px;border:1px solid #dbffdc;
+ color:#fff;background:#3b934e;
+}
+.factory-node-level{
+ left:-5px;top:-6px;bottom:auto;transform:none;
+ border:1px solid #898d8c;border-radius:2px;
+ color:#ecefec;background:#303435;
+ font-size:10px;line-height:15px;min-width:17px;
+ padding:0 3px;
+}
+.factory-tech-done .factory-node-level{
+ background:#2f7441;border-color:#a4e7ad;color:#f4fff1
+}
+.factory-node-join{
+ position:absolute;right:-7px;bottom:-7px;
+ display:grid;place-items:center;
+ min-width:18px;height:18px;padding:0 4px;
+ border:1px solid #e6d098;border-radius:2px;
+ background:#6b5740;color:#fff6da;
+ font:bold 11px/1 system-ui,sans-serif;
+ z-index:2;
+}
+.factory-tech-done .factory-node-join{
+ border-color:#ceffd6;background:#347c4b;color:#eaffef;
+}
+.factory-progress-indicator{height:3px;background:#a6eabd}
+.factory-locate{
+ width:43px;height:43px;right:13px;bottom:15px;
+ background:#4b554d;border:2px solid #8aa98d;border-radius:5px;
+ box-shadow:0 3px 0 #28322b,0 6px 12px #0004;
+}
+.factory-scale{font-size:10px;opacity:.76}
+.factory-details{
+ background:#303234;border-top:4px solid #98704d;
+ border-radius:5px 5px 0 0;
+}
+.factory-detail-icon{
+ background:#444647;border:2px solid #9fa6a1;border-radius:3px;
+}
+.factory-dependency-list{
+ display:flex;flex-direction:column;gap:7px;
+ background:#393b3e;border:1px solid #686c6b;
+ padding:10px 11px;border-radius:5px;margin:9px 0 12px;
+}
+.factory-dependency-list>strong{
+ font-size:11px;letter-spacing:.01em;color:#e5e5db;
+}
+.factory-dependency-list>div{
+ display:flex;align-items:center;gap:9px;font-size:11px;
+ color:#dcddd9;
+}
+.factory-dependency-list svg.factory-requirement-done{color:#8bda9a;flex:none}
+.factory-dependency-list svg.factory-requirement-locked{color:#cbbfa4;flex:none}
+@media(max-width:520px){
+ .research-factory-header{height:55px;min-height:55px}
+ .research-factory-header h1{font-size:18px!important}
+ .factory-resources{top:61px}
+}
