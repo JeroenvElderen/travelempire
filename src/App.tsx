@@ -2368,7 +2368,7 @@ export default function App(){
    if(!FINANCE_TERMS.includes(termDays as typeof FINANCE_TERMS[number])||!Number.isInteger(depositPercent)||depositPercent<10||depositPercent>90)throw Error('Invalid finance terms.');
    const discount=Research.level(research,'procurement')*0.04;
    const price=Math.round(offer.price*(1-discount)*100)/100;
-   const financing=mode==='finance'?vehicleFinanceQuote({...current,cash:current.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,quantity,depositPercent,termDays):null;
+   const financing=mode==='finance'?vehicleFinanceQuote({...current,cash:current.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,quantity,depositPercent,termDays,researchRef.current.levels):null;
    if(financing&&!financing.approved)throw Error(financing.reason);
    const quote=financeQuote(price,depositPercent,termDays,financing?.rate??.09);
    const lease=leaseQuote(price,termDays);
@@ -2421,7 +2421,7 @@ export default function App(){
   const cost=Math.round((offer.price*(1-discount)+DRIVER_COST)*100)/100;
   if(!FINANCE_TERMS.includes(termDays as typeof FINANCE_TERMS[number])||!Number.isInteger(depositPercent)||depositPercent<10||depositPercent>90)throw Error('Invalid finance terms.');
   const price=Math.round(offer.price*(1-discount)*100)/100;
-  const financing=mode==='finance'?vehicleFinanceQuote({...company,cash:company.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,1,depositPercent,termDays):null;
+  const financing=mode==='finance'?vehicleFinanceQuote({...company,cash:company.cash+pendingCashRef.current},currentFleet,gameClockRef.current?.epochMs??Date.now(),price,1,depositPercent,termDays,researchRef.current.levels):null;
   if(financing&&!financing.approved)throw Error(financing.reason);
   const quote=financeQuote(price,depositPercent,termDays,financing?.rate??.09);
   const lease=leaseQuote(price,termDays);
@@ -3468,7 +3468,7 @@ export default function App(){
   onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
   onAutoAssignmentChange={setAutoDriverStaffing} onTripPreferenceChange={setDriverTripPreference}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
- {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
+ {page==='Dealership'&&company&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} researchLevels={research.levels} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
   roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
   gameNow={gameClock?.epochMs??Date.now()} explorerTelemetry={explorerTelemetry}
