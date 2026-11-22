@@ -148,3 +148,29 @@
  .factory-detail-requirements{gap:10px}
 }
 @media(prefers-reduced-motion:reduce){.factory-tech,.factory-tech-open{transition:none}}
+
+
+/* Compact production-chain details; the map remains full-screen until a node is tapped. */
+.factory-section-caption{display:block;padding-top:8px;border-top:1px solid #565b55;
+ color:#dbecd9;font-size:11px}
+.factory-product-chains{margin-top:12px;border-top:1px solid #4d574e;padding-top:10px}
+.factory-product-chains>strong{display:block;color:#dbeedc;font-size:12px;margin-bottom:8px}
+.factory-product-chain{margin:7px 0;border:1px solid #6a796b;border-radius:7px;background:#3b443c;
+ overflow:hidden;color:#ecf6ec}
+.factory-product-chain>summary{cursor:pointer;display:flex;justify-content:space-between;
+ align-items:center;gap:10px;padding:11px;font-size:11px;list-style:none}
+.factory-product-chain>summary::-webkit-details-marker{display:none}
+.factory-product-chain>summary span{font-weight:700}
+.factory-product-chain>summary b{color:#a9d8aa;white-space:nowrap}
+.factory-product-chain[open]>summary{border-bottom:1px solid #677c6a}
+.factory-recipe-ingredients{display:flex;flex-direction:column;gap:6px;padding:8px 10px}
+.factory-recipe-ingredients>div{display:flex;justify-content:space-between;align-items:center;
+ gap:9px;font-size:11px}
+.factory-recipe-ingredients>div span{flex:1}
+.factory-recipe-ingredients>div b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.factory-product-lock{display:block;padding:8px 10px;background:#594735;
+ color:#f5d9b1;font-size:10px}
+.factory-product-chain>small{display:block;padding:5px 10px 10px;
+ color:#bdcbbb;font-size:10px}
+.research-nav-locked{opacity:.58}
+.research-nav-locked:hover{opacity:.9}
