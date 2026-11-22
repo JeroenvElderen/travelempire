@@ -313,3 +313,86 @@
  .research-factory-header h1{font-size:18px!important}
  .factory-resources{top:61px}
 }
+
+
+/* Technology tree 4 — compact deliberately composed factory-style board.
+ * Square tiles, short local branches and no spreadsheet/grid backdrop.
+ * Every clickable technology remains at least 46 × 46 CSS pixels at 100%.
+ */
+.research-factory{
+ background:#282a2a;
+}
+.factory-viewport{
+ background:#282a2a;
+}
+.factory-scene{
+ background:#282a2a;
+}
+.factory-tech{
+ width:46px!important;height:46px!important;
+ padding:0!important;border-width:1.5px!important;
+ border-radius:2px!important;
+ box-shadow:0 2px 0 #181b1b!important;
+}
+.factory-tech-icon svg{
+ width:32px!important;height:32px!important;
+ image-rendering:pixelated;
+}
+.factory-tech-done{
+ background:#62cb74!important;
+ border-color:#bcf0bc!important;
+ box-shadow:0 2px 0 #34854a!important;
+}
+.factory-tech-open{
+ background:#455c49!important;
+ border-color:#a3d7a8!important;
+}
+.factory-tech-open.factory-tech-in-progress{
+ background:#426e68!important;
+ border-color:#b4dcdc!important;
+}
+.factory-tech-locked{
+ background:#424445!important;
+ border-color:#858887!important;
+}
+.factory-tech-locked .factory-tech-icon{
+ opacity:.17!important;
+ filter:grayscale(1);
+}
+.factory-padlock{
+ width:20px!important;height:20px!important;
+ color:#f4f3ef!important;
+ filter:drop-shadow(0 1px 1px #161616);
+}
+.factory-node-level{
+ font-size:9px!important;line-height:13px!important;
+ top:-5px!important;left:-5px!important;
+ min-width:15px!important;
+}
+.factory-node-join{
+ min-width:17px!important;height:17px!important;
+ font-size:10px!important;
+ right:-7px!important;bottom:-7px!important;
+}
+.factory-check{
+ width:15px!important;height:15px!important;
+ right:-6px!important;top:-6px!important;
+}
+.factory-wires path{
+ stroke-linecap:square!important;
+ stroke-linejoin:round!important;
+}
+.factory-wires .factory-wire-done{
+ stroke:#70c583!important;stroke-width:2!important;
+}
+.factory-wires .factory-wire-open{
+ stroke:#a7aaa5!important;stroke-width:1.8!important;
+}
+.factory-wires .factory-wire-locked{
+ stroke:#767d79!important;stroke-width:1.55!important;
+ opacity:.7!important;
+}
+.factory-scale{
+ background:#202222c9;
+ font-variant-numeric:tabular-nums;
+}
