@@ -5,7 +5,7 @@ import type {Company} from '../company';
 import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
-import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
+import {RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
 import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import ResearchPixelIcon from './ResearchPixelIcon';
