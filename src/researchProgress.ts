@@ -64,6 +64,23 @@ export const newProjects:readonly AdvancedProject[]=[
  {id:'crossBorderTreasury',name:'Cross-Border Treasury',category:11,tier:5,requires:['subsidiaryIntegration'],resources:{corporate:10,revenue:1000000},effect:'Improve corporate operating results by 5%',bonus:'corporate',rate:.05}
 ] as const;
 
+/** Genuine links for existing programmes, preserved on older saves.
+ * Completed legacy levels remain completed even when a newly added parent
+ * technology has not yet been researched.
+ */
+export const legacyTechnologyLinks:Readonly<Record<string,readonly string[]>>={
+ peakPricing:['pricing'],premium:['pricing'],longDistance:['pricing'],
+ fuelInjection:['engine'],durability:['engine'],lubrication:['durability'],lightweight:['engine'],
+ dispatchResearch:['fleetAnalytics'],routing:['dispatchResearch'],
+ navigation:['survey'],patrol:['navigation'],explorerExpansion:['navigation'],
+ ecoDriving:['trainingResearch'],defensive:['trainingResearch'],
+ workshopResearch:['depotEfficiency'],parts:['workshopResearch'],
+ brand:['advertising'],loyalty:['brand'],
+ insuranceResearch:['procurement'],efficiency:['procurement']
+};
+export function technologyParents(id:string):readonly string[]{
+ return newProjects.find(p=>p.id===id)?.requires??legacyTechnologyLinks[id]??[];
+}
 export const ADVANCED_CATEGORIES=['Passenger Markets & Pricing','Vehicle Engineering','Fleet Management & Dispatch','Exploration & Cartography','Drivers & Personnel','Depots, Maintenance & Parking','Marketing & Reputation','Banking & Financial Technology','Maritime & Ports','Hotels & Hospitality','Construction & Property','Corporate & International'] as const;
 export type ResearchSnapshot=ResourceBag;
 export type ResourceState={
@@ -94,8 +111,7 @@ export function researchCosts(id:string,l:number,legacy:readonly ResearchProject
  return Object.fromEntries(Object.entries(base).map(([k,v])=>[k,Math.ceil(v*factor)])) as ResourceCosts;
 }
 export function prerequisites(id:string,levels:Partial<Record<string,number>>,context:OperationalContext):string[]{
- const project=newProjects.find(p=>p.id===id);
- const missing=(project?.requires??[]).filter(dependency=>(levels[dependency]??0)<1)
+ const missing=technologyParents(id).filter(dependency=>(levels[dependency]??0)<1)
   .map(dependency=>allResearchNames[dependency]??dependency);
  if(id==='explorerExpansion'&&(context.roads<5000||context.explorers<1))
   missing.push('5,000 discovered roads and at least one explorer');
