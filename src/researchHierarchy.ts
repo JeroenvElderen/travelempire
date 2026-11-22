@@ -68,7 +68,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
    :STARTER_RANK;
   // New late-game technologies open progressively deeper in the graph,
   // instead of producing another perfectly horizontal row of tiles.
-  const stagger=next&&next.tier>=4?1:0;
+  const stagger=parents.length?(next?(next.tier>=3?2:1):1):0;
   const def:TechnologyDefinition={
    id,category:categories.get(id)??11,cap:maximum(id),
    rank:baseRank+stagger,parents,order:ordering.get(id)??999
