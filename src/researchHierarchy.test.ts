@@ -55,6 +55,28 @@ describe('immersive dependency-first research tree',()=>{
   expect(edges.has('multiDepotDispatch:1>profitAwareFleet:1')).toBe(true);
   expect(edges.has('advancedScheduling:1>profitAwareFleet:1')).toBe(true);
  });
+ it('draws a clear primary line per technology instead of every cross-branch prerequisite',()=>{
+  const visible=diagram.edges.filter(edge=>edge.visible);
+  const hidden=diagram.edges.filter(edge=>!edge.visible);
+  expect(hidden.length).toBeGreaterThan(5);
+  expect(visible.length).toBeLessThan(diagram.edges.length);
+  for(const node of diagram.nodes.filter(n=>n.kind==='research')){
+   const inbound=visible.filter(edge=>edge.to===node.id);
+   // A technology has one visual predecessor, except truly standalone
+   // starting lines. Remaining dependencies are shown when tapped.
+   expect(inbound.length).toBeLessThanOrEqual(1);
+  }
+  const regional=diagram.edges.filter(edge=>edge.to==='regionalReposition:1');
+  expect(regional).toHaveLength(3);
+  expect(regional.filter(edge=>edge.visible).map(edge=>edge.from)).toEqual(['routing:2']);
+  expect(diagram.edges.filter(edge=>edge.from==='starter:4'&&edge.visible)).toHaveLength(3);
+ });
+ it('keeps all required dependencies authoritative even when their connectors are hidden',()=>{
+  const all=new Set(diagram.edges.map(edge=>edge.from+'>'+edge.to));
+  expect(all.has('fleetAnalytics:2>regionalReposition:1')).toBe(true);
+  expect(all.has('navigation:2>regionalReposition:1')).toBe(true);
+  expect(all.has('routing:2>regionalReposition:1')).toBe(true);
+ });
  it('connects every dependent technology in downward-ranked paths',()=>{
   for(const edge of diagram.edges){
    const parent=byId.get(edge.from),child=byId.get(edge.to);
