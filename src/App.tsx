@@ -242,7 +242,7 @@ export default function App(){
    }
    busy=true;
    let gross=0,costs=0,passengersSettled=0;
-   const ferryResearchBonus=Resources.unlockedBonus(research.levels,'ferry')+(research.levels.tourismPartnerships?0.03:0);
+   const ferryResearchBonus=Resources.unlockedBonus(researchRef.current.levels,'ferry')+(researchRef.current.levels.tourismPartnerships?0.03:0);
    const events:Array<{description:string;amount:number;time:number}>=[];
    for(const arrival of settlement.arrivals){
     const route=ferryRoutes.get(arrival.routeId);
@@ -463,6 +463,7 @@ export default function App(){
  // Preserve existing specialists, progress and discovered roads.
  const universalFleet=(loaded:FleetState):FleetState=>loaded;
  const [fleet,setFleet]=useState<FleetState>(()=>company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});
+ const [fleetLoadedFor,setFleetLoadedFor]=useState<string|undefined>(company?.id);
  const [taxiDispatchMode,setTaxiDispatchMode]=useState<TaxiDispatchMode>(()=>{
   try{const saved=company?.id?localStorage.getItem('travelempire.taxi.dispatch.v1.'+company.id):null;
    return isTaxiDispatchMode(saved)?saved:'max-profit';}catch{return 'max-profit';}
@@ -652,6 +653,7 @@ export default function App(){
 
  const [simError,setSimError]=useState('');
  const [research,setResearch]=useState<Research.ResearchState>(()=>company?Research.settle(Research.migrateToGameTime(Research.load(company.id),gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs),gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs):Research.empty());
+ const researchRef=useRef(research);researchRef.current=research;
  const [researchError,setResearchError]=useState('');
  useEffect(()=>{if(!company){setResearch(Research.empty());return;}const now=gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs;setResearch(Research.settle(Research.migrateToGameTime(Research.load(company.id),now),now))},[company?.id]);
  useEffect(()=>{if(company)Research.save(company.id,research)},[company?.id,research]);
@@ -676,7 +678,7 @@ export default function App(){
  // Earn resources from monotonic company counters, never from render counts.
  // The watermark saved alongside research prevents duplicate awards on reload.
  useEffect(()=>{
-  if(!company?.id)return;
+  if(!company?.id||fleetLoadedFor!==company.id)return;
   const snapshot:Resources.ResearchSnapshot={
    roads:Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0),
    passengers:Math.max(0,fleet.completed??0),
@@ -695,7 +697,7 @@ export default function App(){
    depots:1+(company.depots?.length??0)};
   setResearch(old=>Resources.autoContribute(
    Resources.observation(old,snapshot),Research.projects,context));
- },[company?.id,company?.depots?.length,fleet]);
+ },[company?.id,company?.depots?.length,fleet,fleetLoadedFor]);
  // Grant two additional vehicles of EVERY explorer role when level 1
  // finishes. A legacy research completion only set explorerExpansionApplied
  // without spawning anything; the separate marker grants those saves too.
@@ -1272,7 +1274,7 @@ export default function App(){
   check();const timer=window.setInterval(check,12000);
   return()=>window.clearInterval(timer);
  },[company?.id,graph]);
- useEffect(()=>{setFleet(company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});queueRef.current=[];discoveredCacheRef.current=null;setMissionQueue([]);lastMissionAt.current=0},[company?.id]);
+ useEffect(()=>{setFleet(company?universalFleet(loadFleet(company.id)):{taxis:[],revenue:0,completed:0});setFleetLoadedFor(company?.id);queueRef.current=[];discoveredCacheRef.current=null;setMissionQueue([]);lastMissionAt.current=0},[company?.id]);
  // Restore historical discoveries from IndexedDB and merge with any progress made
  // while the database was opening. Legacy localStorage discoveries are migrated.
  useEffect(()=>{if(!company)return;const id=company.id;let cancelled=false;
@@ -3031,7 +3033,7 @@ export default function App(){
   const settle=()=>{
    if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
    const now=gameClockRef.current?.epochMs;if(now===undefined)return;
-   const result=settlePropertyDividends(portfolioRef.current,now,activeHotelPeriods(constructionRef.current),Resources.unlockedBonus(research.levels,'parking'));
+   const result=settlePropertyDividends(portfolioRef.current,now,activeHotelPeriods(constructionRef.current),Resources.unlockedBonus(researchRef.current.levels,'parking'));
    if(result.portfolio===portfolioRef.current)return;
    try{savePortfolio(companyId,result.portfolio)}catch(error){diagnostic('investments:save-error',String(error));return;}
    portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
@@ -3331,7 +3333,7 @@ export default function App(){
    constructionRef.current=result.state;setConstruction(result.state);
    const hotelArrivals=Object.entries(result.state.sites).reduce((sum,[id,site])=>
     sum+Math.max(0,(site.operations?.totals.guests??0)-(beforeHotels.sites[id]?.operations?.totals.guests??0)),0);
-   const hotelResearchBonusCents=Math.round(hotels.grossCents*Resources.unlockedBonus(research.levels,'hotel'));
+   const hotelResearchBonusCents=Math.round(hotels.grossCents*Resources.unlockedBonus(researchRef.current.levels,'hotel'));
    const hotelGross=(hotels.grossCents+hotelResearchBonusCents)/100,hotelExpense=hotels.expenseCents/100;
    const crewExpense=result.wageCents/100;
    if(hotelGross>0||hotelExpense>0||crewExpense>0){
