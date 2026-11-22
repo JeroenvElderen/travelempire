@@ -15,8 +15,8 @@ import type {Company} from '../company';
 import type {FleetState} from '../simulation/taxi';
 import './EuropeanDealership.css';
 
-type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;company:Company;fleet:FleetState;gameNow:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({reviewing,onReviewChange,cash,company,fleet,gameNow,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({reviewing,onReviewChange,cash,company,fleet,gameNow,researchLevels,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const brand=initialBrand;
  const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
  const [selected,setSelected]=useState(initialModel??(models[0]?models[0].brand+' '+models[0].name:'Toyota Corolla Touring Sports'));
@@ -66,7 +66,7 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,compan
  const extraTotal=extras.filter(o=>extraIds.includes(o.id)).reduce((n,o)=>n+o.price,0);
  const priceBreakdown=trimPricing(model,year,currentTrim);
  const offer=configuredOffer(model,year,extraIds,currentTrim,activeVariant?.id,paint?.id,wheel?.id);
- const financing=mode==='finance'?vehicleFinanceQuote(company,fleet,gameNow,offer.price,quantity,depositPercent,termDays):null;
+ const financing=mode==='finance'?vehicleFinanceQuote(company,fleet,gameNow,offer.price,quantity,depositPercent,termDays,researchLevels):null;
  const upfront=mode==='cash'?offer.price+DRIVER_COST:mode==='finance'?financeQuote(offer.price,depositPercent,termDays).deposit+DRIVER_COST:leaseQuote(offer.price,termDays).upfront+DRIVER_COST;
  const dueNow=financing?.upfront??Math.round(upfront*quantity*100)/100;
  const checkoutBlocker=!ready?'Road network is still loading. Open the map near your depot and try again.':
