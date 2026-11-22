@@ -2,7 +2,7 @@ import {
  allResearch,normalizeResources,prerequisites,resourceKeys,researchCosts,safeBag,
  type OperationalContext,type ResearchProject,type ResourceBag,type ResourceCosts,type ResourceKey,type ResourceState
 } from './researchProgress';
-import {allocateResearchProducts} from './researchProductionEngine';
+import {allocateResearchProducts,type ProductionLedger} from './researchProductionEngine';
 import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
 /** Intro progression uses cumulative settled activity, not spendable inventory.
@@ -90,7 +90,7 @@ export function advanceAutomaticTree<T extends AutomaticState>(
  const earned=safeBag(base.earned);
  const contributions:Record<string,ResourceCosts>={...(base.contributions??{})};
  const resourceCursor:Partial<Record<ResourceKey,number>>={...(base.resourceCursor??{})};
- let production={
+ let production:ProductionLedger={
   productInventory:base.productInventory,productProduced:base.productProduced,
   productConsumed:base.productConsumed,productContributions:base.productContributions,
   productRawSpent:base.productRawSpent,productCursor:base.productCursor
