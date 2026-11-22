@@ -81,6 +81,7 @@ import {postFinance,type FinancePosting} from "./simulation/financeJournal";
 import DailySummaryModal from './components/DailySummaryModal';
 import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBaseline,type DailySummary} from './simulation/dailySummary';
 import * as Research from "./research";
+import * as Resources from "./researchProgress";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -655,30 +656,44 @@ export default function App(){
  useEffect(()=>{if(!company||!gameClock)return;setResearch(old=>Research.settle(old,gameClock.epochMs))},[company?.id,gameClock?.epochMs]);
  // Ferry purchases must not enqueue distant road tiles. Active vehicle journeys
  // request destination roads through the existing on-demand route prefetcher.
- const startResearch=(id:Research.ResearchId)=>{if(!company)return;try{if(id==='explorerExpansion'){const roads=Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0);const roles=new Set(fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole));if(roads<5000||roles.size<1)throw Error('Requires 5,000 discovered roads and the universal explorer.');}const gameNow=gameClockRef.current?.epochMs;if(gameNow===undefined)throw Error('Game clock is not ready');const ready=Research.settle(research,gameNow);const cost=Research.price(id,Research.level(ready,id)+1);if(company.cash<cost)throw Error('Insufficient funds');const next=Research.start(ready,id,gameNow);const updated={...company,cash:Math.round((company.cash-cost)*100)/100};saveCompany(updated);Research.save(company.id,next);setCompany(updated);setResearch(next);setResearchError('')}catch(e){setResearchError(String(e))}};
- const completeResearchNow=()=>{
-  const current=companyRef.current;
-  const now=gameClockRef.current?.epochMs;
-  if(!current||now===undefined){setResearchError('Company or game clock is unavailable');return;}
-  const ready=Research.settle(research,now);
-  if(!ready.active){setResearchError('No active research to complete');return;}
-  const cost=Research.instantCompletionCost(ready,now);
-  if(current.cash<cost){setResearchError('Insufficient funds to finish research');return;}
-  const project=Research.projects.find(p=>p.id===ready.active?.id);
-  if(!window.confirm(`Complete ${project?.name??'research'} · Level ${ready.active.level} immediately for ${new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(cost)}? This charge is non-refundable.`))return;
-  // Recheck before committing so a stale dialog cannot spend twice.
-  const latest=Research.settle(Research.load(current.id),now);
-  if(!latest.active||latest.active.id!==ready.active.id||latest.active.level!==ready.active.level){setResearchError('Research changed. Please try again.');return;}
-  const amount=Research.instantCompletionCost(latest,now);
-  const balance=companyRef.current;
-  if(!balance||balance.id!==current.id||balance.cash<amount){setResearchError('Insufficient funds');return;}
-  const completed=Research.completeInstantly(latest,now);
-  const updated={...balance,cash:Math.round((balance.cash-amount)*100)/100};
-  Research.save(balance.id,completed);
-  saveCompany(updated);companyRef.current=updated;
-  setCompany(updated);setResearch(completed);setResearchError('');
+ const researchContext=():Resources.OperationalContext=>({
+  roads:Math.max(discoveredCacheRef.current?.ids.length??0,fleetSaveRef.current.exploredEdgeIds?.length??0),
+  explorers:fleetSaveRef.current.taxis.filter(t=>t.kind==='explorer').length,
+  depots:1+(companyRef.current?.depots?.length??0)
+ });
+ const startResearch=(id:Research.ResearchId)=>{
+  setResearch(old=>Resources.selectTechnology(old,id,Research.projects,researchContext()));
+  setResearchError('');
  };
- const cancelResearch=()=>setResearch(old=>({...old,active:undefined}));
+ const queueResearch=(id:Research.ResearchId)=>{
+  setResearch(old=>Resources.queueTechnology(old,id,Research.projects,researchContext()));
+  setResearchError('');
+ };
+ const cancelResearch=()=>setResearch(old=>({...old,selected:undefined}));
+ const removeQueuedResearch=(id:Research.ResearchId)=>setResearch(old=>({...old,queue:(old.queue??[]).filter(v=>v!==id)}));
+ // Earn resources from monotonic company counters, never from render counts.
+ // The watermark saved alongside research prevents duplicate awards on reload.
+ useEffect(()=>{
+  if(!company?.id)return;
+  const snapshot:Resources.ResearchSnapshot={
+   roads:Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0),
+   passengers:Math.max(0,fleet.completed??0),
+   revenue:Math.max(0,(fleet.revenue??0)+(fleet.researchOtherRevenueTotal??0)),
+   parking:Math.max(0,fleet.researchParkingHoursTotal??0),
+   hotels:Math.max(0,fleet.researchHotelGuestsTotal??0),
+   ferries:Math.max(0,fleet.researchFerryPassengersTotal??0),
+   distance:Math.max(0,Math.floor(fleet.distanceKm??0)),
+   maintenance:Math.max(0,fleet.researchServicesTotal??0),
+   construction:Math.max(0,fleet.researchConstructionTotal??0),
+   corporate:Math.max(0,(fleet.corporate?.events??[]).filter(e=>
+    e.kind==='acquisition'||e.kind==='formation'||e.kind==='merger'||e.kind==='asset-transfer').length)
+  };
+  const context:Resources.OperationalContext={roads:snapshot.roads,
+   explorers:fleet.taxis.filter(t=>t.kind==='explorer').length,
+   depots:1+(company.depots?.length??0)};
+  setResearch(old=>Resources.autoContribute(
+   Resources.observation(old,snapshot),Research.projects,context));
+ },[company?.id,company?.depots?.length,fleet]);
  // Grant two additional vehicles of EVERY explorer role when level 1
  // finishes. A legacy research completion only set explorerExpansionApplied
  // without spawning anything; the separate marker grants those saves too.
@@ -3450,7 +3465,7 @@ export default function App(){
  {page==='Investments'&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} operatedHotelIds={Object.values(construction.sites).filter(site=>site.sourceHoldingId&&hotelActiveAt(site.operations,Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS))).map(site=>site.sourceHoldingId!)} error={investmentError}/></div>}
  {page==='Hotels'&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} gameNowHour={(gameClock?.epochMs??Date.now())/HOUR_MS} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={size=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}if(!validHotelPlotSize(size)){setConstructionError('Select valid plot dimensions.');return;}setHotelPlotSize(size);setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onAssignFreight={projectId=>attachLegacyConstructionFreight(projectId)} onTrackFreight={id=>{setFreightFocus(old=>({id,token:(old?.token??0)+1}));setPage('World');setDrawerOpen(false);}} onOrderSupplies={orderInternalHotelSupplies} onHotelSetting={configureHotel} onHotelOpening={changeHotelOpening} onHireWorker={recruitConstructionWorker} onDismissWorker={dismissConstructionWorker}/></div>}
  {page==='Finance'&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
- {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onCancel={cancelResearch} onCompleteNow={completeResearchNow}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
+ {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><button type="button" className="research-map-close" aria-label="Close Research and return to map" onClick={()=>go('World')}><X size={20}/></button><ResearchPanel company={company} state={research} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} onStart={startResearch} onQueue={queueResearch} onCancel={cancelResearch} onRemoveQueue={removeQueuedResearch} depots={1+(company?.depots?.length??0)}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
  {page==='World'&&placingHotelLand&&<div className="hotel-land-pick"><div><strong><Building2 size={17}/> Select hotel development land</strong><small>Tap near a road · {hotelPlotSize.width} × {hotelPlotSize.height} m ({hotelPlotSize.width*hotelPlotSize.height} m²) · {new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(hotelPlotCostCents(hotelPlotSize)/100)}</small></div><button type="button" onClick={()=>{setPlacingHotelLand(false);setSelecting(false);setPage('Hotels');}}>Cancel</button></div>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
