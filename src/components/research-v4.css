@@ -48,14 +48,14 @@
  position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;
  cursor:grab;user-select:none;-webkit-user-select:none;
  background-color:#2a2c2e;
- background-image:linear-gradient(rgba(129,141,130,.055) 1px,transparent 1px),
- linear-gradient(90deg,rgba(129,141,130,.055) 1px,transparent 1px);
- background-size:28px 28px;
  overscroll-behavior:contain;
 }
 .factory-viewport:active{cursor:grabbing}
 .factory-scene{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;
- touch-action:none;pointer-events:none;contain:layout style;}
+ touch-action:none;pointer-events:none;contain:layout style;
+ background-color:#2a2c2e;
+ background-image:linear-gradient(rgba(129,141,130,.075) 1px,transparent 1px),linear-gradient(90deg,rgba(129,141,130,.075) 1px,transparent 1px);
+ background-size:28px 28px;}
 .factory-wires{position:absolute;inset:0;overflow:visible;pointer-events:none}
 .factory-wires path{fill:none;stroke:#63676b;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .factory-wires .factory-wire-done{stroke:#8ac795;stroke-width:2.5}
