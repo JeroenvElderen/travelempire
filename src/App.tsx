@@ -655,8 +655,9 @@ export default function App(){
  const [research,setResearch]=useState<Research.ResearchState>(()=>company?Research.settle(Research.migrateToGameTime(Research.load(company.id),gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs),gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs):Research.empty());
  const researchRef=useRef(research);researchRef.current=research;
  const [researchError,setResearchError]=useState('');
- useEffect(()=>{if(!company){setResearch(Research.empty());return;}const now=gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs;setResearch(Research.settle(Research.migrateToGameTime(Research.load(company.id),now),now))},[company?.id]);
- useEffect(()=>{if(company)Research.save(company.id,research)},[company?.id,research]);
+ const [researchLoadedFor,setResearchLoadedFor]=useState<string|undefined>(company?.id);
+ useEffect(()=>{if(!company){setResearch(Research.empty());setResearchLoadedFor(undefined);return;}const now=gameClockRef.current?.epochMs??loadGameClock(company.id).epochMs;setResearch(Research.settle(Research.migrateToGameTime(Research.load(company.id),now),now));setResearchLoadedFor(company.id)},[company?.id]);
+ useEffect(()=>{if(company&&researchLoadedFor===company.id)Research.save(company.id,research)},[company?.id,research,researchLoadedFor]);
  useEffect(()=>{if(!company||!gameClock)return;setResearch(old=>Research.settle(old,gameClock.epochMs))},[company?.id,gameClock?.epochMs]);
  // Ferry purchases must not enqueue distant road tiles. Active vehicle journeys
  // request destination roads through the existing on-demand route prefetcher.
@@ -678,7 +679,7 @@ export default function App(){
  // Earn resources from monotonic company counters, never from render counts.
  // The watermark saved alongside research prevents duplicate awards on reload.
  useEffect(()=>{
-  if(!company?.id||fleetLoadedFor!==company.id)return;
+  if(!company?.id||fleetLoadedFor!==company.id||researchLoadedFor!==company.id)return;
   const snapshot:Resources.ResearchSnapshot={
    roads:Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0),
    passengers:Math.max(0,fleet.completed??0),
@@ -697,7 +698,7 @@ export default function App(){
    depots:1+(company.depots?.length??0)};
   setResearch(old=>Resources.autoContribute(
    Resources.observation(old,snapshot),Research.projects,context));
- },[company?.id,company?.depots?.length,fleet,fleetLoadedFor]);
+ },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
  // Grant two additional vehicles of EVERY explorer role when level 1
  // finishes. A legacy research completion only set explorerExpansionApplied
  // without spawning anything; the separate marker grants those saves too.
