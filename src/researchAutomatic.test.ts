@@ -11,37 +11,41 @@ const state=(earned:ResourceCosts={},resources:ResourceCosts=earned)=>({
  earned:safeBag(earned),resources:safeBag(resources)
 });
 describe('Builderment-style fully automatic research progression',()=>{
- it('requires cumulative 10, 20, 30, 50 jobs and earned cash, not bank balance',()=>{
-  const thresholds=STARTER_STAGES.map(stage=>[stage.jobs,stage.revenue]);
-  expect(thresholds).toEqual([[10,300],[20,900],[30,1800],[50,3500]]);
-  let s=advanceAutomaticTree(state({passengers:9,revenue:100000}),projects,context);
+ it('requires five cumulative job-and-road milestones, never spending road research inventory',()=>{
+  expect(STARTER_STAGES.map(s=>[s.jobs,s.roads])).toEqual([
+   [10,50],[20,200],[30,500],[40,1000],[50,2000]]);
+  const noHistoricalRoads={...context,roads:0};
+  let s=advanceAutomaticTree(state({passengers:9,roads:20000}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(0);
-  s=advanceAutomaticTree(state({passengers:10,revenue:300}),projects,context);
+  s=advanceAutomaticTree(state({passengers:10,roads:50}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(1);
-  s=advanceAutomaticTree(state({passengers:20,revenue:900}),projects,context);
+  s=advanceAutomaticTree(state({passengers:20,roads:200}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(2);
-  s=advanceAutomaticTree(state({passengers:30,revenue:1800}),projects,context);
+  s=advanceAutomaticTree(state({passengers:30,roads:500}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(3);
-  s=advanceAutomaticTree(state({passengers:50,revenue:3500}),projects,context);
-  expect(s.starterLevel).toBe(4);
+  s=advanceAutomaticTree(state({passengers:40,roads:1000}),projects,noHistoricalRoads);
+  expect(s.starterLevel).toBe(5);
+  expect(automaticUnlocked(s,true)).toBe(false);
+  s=advanceAutomaticTree(state({passengers:50,roads:2000}),projects,noHistoricalRoads);
+  expect(s.starterLevel).toBe(5);
   expect(automaticUnlocked(s,true)).toBe(true);
  });
- it('prevents purchases until Level 4 only for newly created companies',()=>{
+ it('prevents purchases until Level 5 only for newly created companies',()=>{
   expect(automaticUnlocked(state(),true)).toBe(false);
   expect(automaticUnlocked(state(),false)).toBe(true);
   const mature=advanceAutomaticTree({...state(),levels:{pricing:4,engine:2}},projects,
    {...context,freshStart:false});
-  expect(mature.starterLevel).toBe(4);
+  expect(mature.starterLevel).toBe(5);
   expect(mature.levels.pricing).toBe(4);
   expect(mature.levels.engine).toBe(2);
  });
  it('keeps all nonstarter research locked until startup graduation',()=>{
-  expect(technologyLevelRequirements('pricing',1,{},context)).toContain('Starter Level 4 · Vehicle Dealership');
-  expect(technologyLevelRequirements('pricing',1,{}, {...context,starterLevel:4})).toEqual([]);
+  expect(technologyLevelRequirements('pricing',1,{},context)).toContain('Starter Level 5 · Vehicle Dealership');
+  expect(technologyLevelRequirements('pricing',1,{}, {...context,starterLevel:5})).toEqual([]);
  });
  it('automatically researches consecutive levels without user selection or a queue',()=>{
   const s=advanceAutomaticTree(state({passengers:500,revenue:75000,roads:5000,distance:10000}),projects,context);
-  expect(s.starterLevel).toBe(4);
+  expect(s.starterLevel).toBe(5);
   expect((s.levels.pricing??0)).toBeGreaterThan(0);
   expect((s.levels.depotEfficiency??0)).toBeGreaterThan(0);
   expect(s.selected).toBeUndefined();
@@ -64,13 +68,13 @@ describe('Builderment-style fully automatic research progression',()=>{
  });
  it('requires multiple parent technologies and specific levels to join branches',()=>{
   const levels={fleetAnalytics:1,routing:1,pricing:1,peakPricing:1,premium:1};
-  expect(technologyLevelRequirements('regionalReposition',1,levels,{...context,starterLevel:4}))
+  expect(technologyLevelRequirements('regionalReposition',1,levels,{...context,starterLevel:5}))
    .toContain('fleetAnalytics Level 2');
-  expect(technologyLevelRequirements('airportMarkets',1,levels,{...context,starterLevel:4}))
+  expect(technologyLevelRequirements('airportMarkets',1,levels,{...context,starterLevel:5}))
    .toContain('premium Level 2');
   const better={...levels,fleetAnalytics:2,routing:2,navigation:2,premium:2,demandIntelligence:1};
-  expect(technologyLevelRequirements('regionalReposition',1,better,{...context,starterLevel:4})).toEqual([]);
-  expect(technologyLevelRequirements('airportMarkets',1,better,{...context,starterLevel:4})).toEqual([]);
+  expect(technologyLevelRequirements('regionalReposition',1,better,{...context,starterLevel:5})).toEqual([]);
+  expect(technologyLevelRequirements('airportMarkets',1,better,{...context,starterLevel:5})).toEqual([]);
  });
  it('retains existing progress and limits legacy project levels to five',()=>{
   const s=advanceAutomaticTree({...state({passengers:300,revenue:150000,roads:20000,distance:9000}),
@@ -79,15 +83,15 @@ describe('Builderment-style fully automatic research progression',()=>{
   expect(s.levels.explorerExpansion).toBe(1);
   expect(effectiveCosts('pricing',5,s.levels,projects).revenue).toBeGreaterThan(0);
  });
- it('draws a unique tile for every level and four starter tiles',()=>{
+ it('draws a unique tile for every research level and five starter milestones',()=>{
   const graph=buildLevelResearchDiagram(allProjects.map(p=>p.id));
-  expect(graph.nodes).toHaveLength(4+27*5+1+36);
+  expect(graph.nodes).toHaveLength(5+27*5+1+36);
   expect(new Set(graph.nodes.map(n=>n.id)).size).toBe(graph.nodes.length);
-  expect(graph.nodes.filter(n=>n.type==='starter')).toHaveLength(4);
+  expect(graph.nodes.filter(n=>n.type==='starter')).toHaveLength(5);
   expect(graph.nodes.filter(n=>n.projectId==='pricing')).toHaveLength(5);
   const edges=new Set(graph.edges.map(e=>e.from+'>'+e.to));
   expect(edges.has('starter:1>starter:2')).toBe(true);
-  expect(edges.has('starter:4>pricing:1')).toBe(true);
+  expect(edges.has('starter:5>pricing:1')).toBe(true);
   expect(edges.has('pricing:1>pricing:2')).toBe(true);
   expect(edges.has('premium:2>airportMarkets:1')).toBe(true);
   expect(graph.nodes.every(n=>n.y+54<=graph.height)).toBe(true);
