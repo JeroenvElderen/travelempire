@@ -104,6 +104,13 @@ export type ResourceState={
  researchV3?:true;
  automaticVersion?:1;starterLevel?:number;
  resourceCursor?:Partial<Record<ResourceKey,number>>;
+ /** Versioned production-chain resource accounting. All inventories persist. */
+ productVersion?:1;
+ productInventory?:Record<string,number>;
+ productProduced?:Record<string,number>;
+ productContributions?:Record<string,Record<string,number>>;
+ productRawSpent?:ResourceBag;
+ productCursor?:number;
 };
 export type ResearchProject={id:string;name:string;category:number;effect:string;base:number};
 export type OperationalContext={explorers:number;roads:number;depots:number;freshStart?:boolean;starterLevel?:number};
