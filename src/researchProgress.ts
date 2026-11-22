@@ -56,7 +56,7 @@ export const newProjects:readonly AdvancedProject[]=[
  {id:'occupancyForecast',name:'Occupancy Forecasting',category:9,tier:1,requires:[],resources:{hotels:100,revenue:30000},effect:'Improve managed hotel room revenue by 2%',bonus:'hotel',rate:.02},
  {id:'guestExperience',name:'Guest Experience',category:9,tier:3,requires:['occupancyForecast'],resources:{hotels:400,revenue:100000},effect:'Improve managed hotel revenue by 3%',bonus:'hotel',rate:.03},
  {id:'hotelAutomation',name:'Hotel Operations Automation',category:9,tier:4,requires:['guestExperience'],resources:{hotels:2000,revenue:500000},effect:'Improve managed hotel revenue by 5%',bonus:'hotel',rate:.05},
- {id:'modularBuilding',name:'Modular Building',category:10,tier:2,requires:[],resources:{construction:5,revenue:50000},effect:'Reduce eligible construction project costs by 2%',bonus:'construction',rate:.02},
+ {id:'modularBuilding',name:'Modular Building',category:10,tier:2,requires:[],resources:{roads:800,revenue:50000},effect:'Reduce eligible construction project costs by 2%',bonus:'construction',rate:.02},
  {id:'materialLogistics',name:'Material Logistics',category:10,tier:3,requires:['modularBuilding'],resources:{construction:25,roads:3000,revenue:150000},effect:'Reduce eligible construction project costs by 3%',bonus:'construction',rate:.03},
  {id:'qualityInspection',name:'Quality & Inspection',category:10,tier:4,requires:['materialLogistics'],resources:{construction:75,revenue:600000},effect:'Reduce eligible construction project costs by 4%',bonus:'construction',rate:.04},
  {id:'corporateDueDiligence',name:'Corporate Due Diligence',category:11,tier:2,requires:[],resources:{corporate:1,revenue:150000},effect:'Improve oversight of corporate overhead by 2%',bonus:'corporate',rate:.02},
