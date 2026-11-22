@@ -22,7 +22,7 @@ const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=1000
  (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
 const starterGlyph=['','🚕','📈','🏅','🚘'];
 
-export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
+export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
  const projects=useMemo(()=>new Map(Research.allProjects.map(p=>[p.id,p])),[]);
  const viewport=useRef<HTMLDivElement>(null);
@@ -58,7 +58,6 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
- const completed=hierarchy.nodes.filter(isDone).length;
  const frontier=hierarchy.nodes.filter(n=>!isDone(n)&&blocked(n).length===0)
   .sort((a,b)=>a.rank-b.rank||a.x-b.x)[0];
  const nextId=starterLevel<STARTER_LEVELS?'starter:'+(starterLevel+1):frontier?.id??'starter:4';
