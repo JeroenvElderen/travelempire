@@ -142,3 +142,25 @@
  .rv5-details{left:5px;right:5px;bottom:5px;max-height:57%}
  .rv5-detail-actions button{padding:8px 6px}
 }
+
+
+/* Distinct Builderment-style nodes for each independent research level. */
+.rv5-node{transition:background .13s ease,border-color .13s ease}
+.rv5-node.completed{background:#4fbe62!important;border-color:#b8f2ba!important;box-shadow:0 3px 0 #1c6a36!important}
+.rv5-node.researching{background:#416d9c!important;border-color:#8ac4ff!important}
+.rv5-node.locked{background:#393c3b!important;border-color:#686d6a!important}
+.rv5-node.partial:not(.completed){box-shadow:0 3px 0 #17456a,0 0 0 3px rgba(90,154,229,.22)!important}
+.rv5-node-level{left:50%!important;top:auto!important;bottom:-11px!important;transform:translateX(-50%);
+ background:#171e1c!important;border:1px solid #7c8c80!important;border-radius:3px;
+ color:#e4e9e4!important;white-space:nowrap!important;padding:0 5px!important;font-size:11px!important;z-index:2}
+.rv5-node.completed .rv5-node-level{border-color:#75d88a!important;color:#c7ffd1!important}
+.rv5-tree-divider.rv5-intro-label{font-size:14px;color:#cce4d2;border:0;letter-spacing:.12em}
+.rv5-lane-label{position:absolute;z-index:3;display:grid;place-items:center;width:78px;height:32px;
+ background:#454e46;color:#e2f9e6;border:1px solid #5b795f;border-radius:5px;font-size:22px;
+ text-align:center;pointer-events:none}
+.rv5-auto-message{margin-top:12px;padding:10px;font-size:12px;color:#d4f5d9;
+ border-radius:6px;border:1px solid #547b5a;background:#314535;line-height:1.45}
+.rv5-wallet-title strong::after{content:' · Auto';font-size:10px;color:#9dddac;font-weight:600}
+.rv5-details .rv5-detail-resources{gap:9px}
+.rv5-details .rv5-detail-resources .rv5-bar i{background:#70c782}
+@media (prefers-reduced-motion:reduce){.rv5-node{transition:none}}
