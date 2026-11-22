@@ -24,7 +24,7 @@ describe('Builderment-style fully automatic research progression',()=>{
   s=advanceAutomaticTree(state({passengers:30,roads:500}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(3);
   s=advanceAutomaticTree(state({passengers:40,roads:1000}),projects,noHistoricalRoads);
-  expect(s.starterLevel).toBe(5);
+  expect(s.starterLevel).toBe(4);
   expect(automaticUnlocked(s,true)).toBe(false);
   s=advanceAutomaticTree(state({passengers:50,roads:2000}),projects,noHistoricalRoads);
   expect(s.starterLevel).toBe(5);
