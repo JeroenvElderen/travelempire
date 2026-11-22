@@ -19,10 +19,13 @@ export function vehicleCollateralAdvanceRatio(score:number):number{
 
 export function vehicleFinanceQuote(
  company:Company,fleet:FleetState,gameNow:number,
- unitPrice:number,quantity:number,depositPercent:number,days:number
+ unitPrice:number,quantity:number,depositPercent:number,days:number,
+ researchLevels:Partial<Record<string,number>>={}
 ){
  const assessment=lendingAssessment(company,fleet,gameNow);
- const rate=securedRate(assessment.score,days);
+ const financeResearchDiscount=(researchLevels.creditRiskModels?0.0015:0)+
+  (researchLevels.financeNegotiation?0.005:0)+(researchLevels.treasuryForecast?0.003:0);
+ const rate=Math.max(.035,Math.round((securedRate(assessment.score,days)-financeResearchDiscount)*10000)/10000);
  const validPrice=Number.isFinite(unitPrice)&&unitPrice>0;
  const validQuantity=Number.isInteger(quantity)&&quantity>=1&&quantity<=50;
  const validDeposit=Number.isInteger(depositPercent)&&depositPercent>=10&&depositPercent<=90;
