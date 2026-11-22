@@ -1,7 +1,13 @@
-import {maximum,newProjects,technologyParents} from './researchProgress';
+import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
-import {RESEARCH_LANES,RESEARCH_NODE_SIZE} from './researchGraph';
+import {RESEARCH_LANES} from './researchGraph';
 
+/** Gameplay rules remain in researchAutomatic/researchProgress.
+ * This is an authored, readable *presentation* of the same 176 levels.
+ * Nodes belonging to one technology are kept together; other branches split
+ * near their actual parent rather than being distributed into wide rows.
+ */
+export const RESEARCH_TILE_SIZE=46;
 export type HierarchyNode={
  id:string;projectId:string;level:number;category:number;
  kind:'starter'|'research';rank:number;x:number;y:number;
@@ -10,230 +16,215 @@ export type HierarchyEdge={from:string;to:string;path:string;kind:'starter'|'pre
 export type HierarchyJunction={id:string;x:number;y:number;inputs:number};
 export type ResearchHierarchy={
  width:number;height:number;nodes:HierarchyNode[];edges:HierarchyEdge[];
- junctions:HierarchyJunction[];
- byId:Map<string,HierarchyNode>;initialId:string;
+ junctions:HierarchyJunction[];byId:Map<string,HierarchyNode>;initialId:string;
 };
-
-/** These two research families begin independently after Starter Level 4.
- * The gameplay unlock still requires Starter Level 4, but there is no
- * arbitrary line tying their technology paths to the central trunk.
- */
 export const INDEPENDENT_RESEARCH_ROOTS=['pricing','procurement'] as const;
-const independentRoots=new Set<string>(INDEPENDENT_RESEARCH_ROOTS);
-
-const NODE=RESEARCH_NODE_SIZE;
-const COLUMN=92;
-const ROW=95;
-const TOP=75;
-const PADDING=145;
-const STARTER_RANK=STARTER_STAGES.length;
-const ROOT_COLUMNS:Readonly<Record<string,number>>={
- pricing:-5,fleetAnalytics:-2,depotEfficiency:0,survey:2,procurement:5
-};
-const ROOT_ORDER=['pricing','fleetAnalytics','depotEfficiency','survey','procurement'] as const;
-/** Choose the one drawn branch for each technology. All other prerequisite
- * relationships are still enforced by the research engine and shown on tap.
- * One visual parent keeps the map legible without altering gameplay rules.
+const INDEPENDENT_ROOTS=new Set<string>(INDEPENDENT_RESEARCH_ROOTS);
+const COLUMN=72,ROW=70,TOP=78,PADDING=130;
+const MAX_COLUMN=11;
+const INITIAL_RANK=STARTER_STAGES.length;
+/** Each visible connection is to ONE primary ancestor. A badge and the
+ * details drawer disclose *all* prerequisites, never hidden from gameplay.
  */
-const DRAWN_PARENT:Readonly<Record<string,string>>={
- airportMarkets:'demandIntelligence',
- regionalReposition:'routing',
- profitAwareFleet:'multiDepotDispatch',
- vehicleLifecycle:'conditionPrediction',
- coordinatedFrontiers:'navigation',
- safetyCertification:'advancedScheduling',
- networkLogistics:'preventiveCalendar',
- customerRetention:'regionalReputation',
- treasuryForecast:'creditRiskModels'
+const MAIN_PATH:Readonly<Record<string,string>>={
+ airportMarkets:'demandIntelligence',regionalReposition:'routing',
+ profitAwareFleet:'multiDepotDispatch',vehicleLifecycle:'conditionPrediction',
+ coordinatedFrontiers:'navigation',safetyCertification:'advancedScheduling',
+ networkLogistics:'preventiveCalendar',customerRetention:'regionalReputation',
+ treasuryForecast:'creditRiskModels',tourismNetwork:'tourismPartnerships'
 };
-const visibleParent=(def:TechnologyDefinition):string|undefined=>{
- const preferred=DRAWN_PARENT[def.id];
- if(preferred&&def.parents.some(parent=>parent.id===preferred))return preferred;
- return def.parents[0]?.id;
+const ROOT_COLUMNS:Readonly<Record<string,number>>={
+ pricing:-6,fleetAnalytics:-3,depotEfficiency:0,survey:3,procurement:6
 };
-const childOrder:Readonly<Record<string,readonly string[]>>={
+const ROOT_SEQUENCE=['pricing','fleetAnalytics','depotEfficiency','survey','procurement'];
+const BRANCH_SEQUENCE:Readonly<Record<string,readonly string[]>>={
  pricing:['peakPricing','demandIntelligence','advertising'],
  fleetAnalytics:['dispatchResearch','trainingResearch'],
  depotEfficiency:['workshopResearch','engine','parkingYield','modularBuilding'],
  survey:['navigation','portAnalytics'],
  procurement:['insuranceResearch','efficiency','creditRiskModels','corporateDueDiligence'],
- navigation:['patrol','explorerExpansion','coordinatedFrontiers'],
  engine:['fuelInjection','durability','lightweight','powertrainAdaptation'],
+ navigation:['patrol','explorerExpansion','coordinatedFrontiers'],
+ trainingResearch:['ecoDriving','defensive','driverSpecialisation'],
  advertising:['brand','regionalReputation','occupancyForecast'],
  regionalReposition:['multiDepotDispatch','advancedScheduling']
 };
-const orderedChild=(parent:string,id:string,defaultOrder:number)=>{
- const branch=childOrder[parent];const index=branch?.indexOf(id)??-1;
- return index<0?100+defaultOrder:index;
+type Technology={
+ id:string;category:number;levels:number;index:number;
+ parents:{id:string;level:number}[];primary:string|undefined;
 };
+function lateralOffset(index:number,count:number):number{
+ if(count<=1)return 0;
+ return index*2-(count-1);
+}
+function mapPath(from:HierarchyNode,to:HierarchyNode):string{
+ const startX=from.x+RESEARCH_TILE_SIZE/2,startY=from.y+RESEARCH_TILE_SIZE;
+ const endX=to.x+RESEARCH_TILE_SIZE/2,endY=to.y;
+ if(Math.abs(startX-endX)<1)return `M ${startX} ${startY} V ${endY}`;
+ // Bus travels just below the branch point. The short horizontal fan avoids
+ // long lines through the other levels of that research family.
+ const busY=Math.min(endY-8,startY+13);
+ return `M ${startX} ${startY} V ${busY} H ${endX} V ${endY}`;
+}
 
-type TechnologyDefinition={
- id:string;category:number;cap:number;rank:number;parents:{id:string;level:number}[];order:number;
-};
-
-/** Design a top-down, branching technology map with deliberately separate
- * families and multi-parent joins. Project levels stay in the same vertical
- * lane; children can fork to either side. The lanes are *not* category
- * columns, and the tree need not be one connected component.
- *
- * Coordinates are generated from real research prerequisites so the drawing
- * cannot claim to have an unlock that the simulation doesn't enforce.
+/** "Builderment-style" deliberate branch composition, not a horizontal
+ * spreadsheet of levels: a single four-step starter stem, five compact
+ * foundations, local forks, standalone paths and small multi-input markers.
+ * Crowded lanes are moved DOWN, never shoved across the canvas.
  */
 export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
- const categories=new Map<string,number>(),ordering=new Map<string,number>();
- let total=0;
- RESEARCH_LANES.forEach((list,category)=>list.forEach(id=>{
-  categories.set(id,category);ordering.set(id,total++);
+ const known=new Set(ids);
+ const categories=new Map<string,number>();
+ const order=new Map<string,number>();
+ RESEARCH_LANES.forEach((group,category)=>group.forEach(id=>{
+  categories.set(id,category);order.set(id,order.size);
  }));
- const available=new Set(ids);
- const definitions=new Map<string,TechnologyDefinition>();
- const ranking=new Set<string>();
- const rankOf=(id:string):number=>{
-  const existing=definitions.get(id);
-  if(existing)return existing.rank;
-  if(ranking.has(id))throw Error('Cyclic technology prerequisite: '+id);
-  if(!available.has(id))throw Error('Missing research technology: '+id);
-  ranking.add(id);
+ const definitions=new Map<string,Technology>();
+ for(const id of ids){
   const parents=technologyParents(id).map(parent=>({
    id:parent,level:PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1
   }));
-  const next=newProjects.find(p=>p.id===id);
-  const baseRank=parents.length
-   ?Math.max(...parents.map(parent=>rankOf(parent.id)+parent.level-1))+1
-   :STARTER_RANK;
-  // New late-game technologies open progressively deeper in the graph,
-  // instead of producing another perfectly horizontal row of tiles.
-  const stagger=parents.length?(next?(next.tier>=3?2:1):1):0;
-  const def:TechnologyDefinition={
-   id,category:categories.get(id)??11,cap:maximum(id),
-   rank:baseRank+stagger,parents,order:ordering.get(id)??999
-  };
-  definitions.set(id,def);
-  ranking.delete(id);
-  return def.rank;
- };
- ids.forEach(rankOf);
-
- const all=[...definitions.values()].sort((a,b)=>
-  a.rank-b.rank||
-  (ROOT_ORDER.indexOf(a.id as typeof ROOT_ORDER[number])>=0
-   ?ROOT_ORDER.indexOf(a.id as typeof ROOT_ORDER[number]):99)-
-  (ROOT_ORDER.indexOf(b.id as typeof ROOT_ORDER[number])>=0
-   ?ROOT_ORDER.indexOf(b.id as typeof ROOT_ORDER[number]):99)||
-  a.order-b.order);
-
+  for(const parent of parents)if(!known.has(parent.id))
+   throw Error('Missing technology prerequisite: '+id+' -> '+parent.id);
+  const preferred=MAIN_PATH[id];
+  const primary=parents.find(parent=>parent.id===preferred)?.id??parents[0]?.id;
+  definitions.set(id,{
+   id,category:categories.get(id)??11,levels:maximum(id),
+   index:order.get(id)??999,parents,primary
+  });
+ }
  const children=new Map<string,string[]>();
- for(const def of all){
-  const primary=visibleParent(def);
-  if(!primary)continue;
-  const list=children.get(primary)??[];
-  list.push(def.id);
-  children.set(primary,list);
+ for(const def of definitions.values()){
+  if(!def.primary)continue;
+  const group=children.get(def.primary)??[];
+  group.push(def.id);children.set(def.primary,group);
  }
- for(const [parent,list] of children.entries())list.sort((a,b)=>
-  orderedChild(parent,a,ordering.get(a)??999)-
-  orderedChild(parent,b,ordering.get(b)??999));
- const columns=new Map<string,number>();
- const occupied=new Map<number,Set<number>>();
- for(const def of all){
-  let preferred:number;
+ for(const [parent,group] of children){
+  const sequence=BRANCH_SEQUENCE[parent]??[];
+  group.sort((a,b)=>{
+   const ai=sequence.indexOf(a),bi=sequence.indexOf(b);
+   return (ai<0?100+(order.get(a)??999):ai)-
+    (bi<0?100+(order.get(b)??999):bi);
+  });
+ }
+ // Prerequisites are computed using their real required level. The manual
+ // root spacing and branch order guide placement without changing tech rules.
+ const depthCache=new Map<string,number>(),visiting=new Set<string>();
+ const nominalDepth=(id:string):number=>{
+  if(depthCache.has(id))return depthCache.get(id)!;
+  if(visiting.has(id))throw Error('Cyclic research prerequisites '+id);
+  visiting.add(id);
+  const def=definitions.get(id);
+  if(!def)throw Error('Unknown research '+id);
+  const depth=def.parents.length?Math.max(...def.parents.map(parent=>
+   nominalDepth(parent.id)+parent.level)):INITIAL_RANK;
+  visiting.delete(id);depthCache.set(id,depth);return depth;
+ };
+ ids.forEach(nominalDepth);
+ const scheduled=[...definitions.values()].sort((a,b)=>
+  nominalDepth(a.id)-nominalDepth(b.id)||
+  (ROOT_SEQUENCE.indexOf(a.id)<0?99:ROOT_SEQUENCE.indexOf(a.id))-
+  (ROOT_SEQUENCE.indexOf(b.id)<0?99:ROOT_SEQUENCE.indexOf(b.id))||
+  a.index-b.index
+ );
+ const coords=new Map<string,{column:number;rank:number}>();
+ const occupied=new Set<string>();
+ for(const def of scheduled){
+  if(def.parents.some(parent=>!coords.has(parent.id)))
+   throw Error('Unscheduled visual prerequisite for '+def.id);
+  let wanted=ROOT_COLUMNS[def.id]??0;
+  let earliest=INITIAL_RANK;
+  if(def.parents.length){
+   earliest=Math.max(...def.parents.map(parent=>
+    coords.get(parent.id)!.rank+parent.level));
+   const primary=coords.get(def.primary!)!;
+   const siblings=children.get(def.primary!)??[def.id];
+   const siblingIndex=siblings.indexOf(def.id);
+   const delta=lateralOffset(siblingIndex,siblings.length);
+   wanted=primary.column+delta;
+   // A child of a five-level technology belongs on a nearby *side*
+   // instead of drawing a confusing line through its parent's own levels.
+   if(siblings.length===1&&def.primary){
+    wanted+=((categories.get(def.id)??0)%2===0?-1:1);
+   }
+   // Offset sibling forks by 0–2 rows to create the curved, compact
+   // branch hierarchy in the reference rather than a single long row.
+   earliest+=siblings.length>1?siblingIndex%3:0;
+  }
   if(!def.parents.length){
-   preferred=ROOT_COLUMNS[def.id]??0;
-  }else{
-   // Group each fork physically around its one *displayed* parent. Averaging
-   // across every dependency caused the cross-screen horizontal wires in the
-   // previous version; those other requirements remain enforced off-canvas.
-   const primary=visibleParent(def);
-   const parentColumn=primary===undefined?undefined:columns.get(primary);
-   if(parentColumn===undefined)throw Error('Unplaced visual prerequisite for '+def.id);
-   preferred=parentColumn;
-   const siblings=children.get(primary!)??[];
-   const slot=siblings.indexOf(def.id);
-   if(siblings.length>1){
-    // A branch takes a short step left or right at the split, rather than
-    // jumping to the middle of distant prerequisite columns.
-    preferred+=(slot-(siblings.length-1)/2)*1.85;
+   const col=ROOT_COLUMNS[def.id];
+   if(col===undefined)throw Error('Unmapped research foundation '+def.id);
+   wanted=col;
+  }
+  let choice:{column:number;rank:number;score:number}|undefined;
+  const cx=Math.max(-MAX_COLUMN,Math.min(MAX_COLUMN,Math.round(wanted)));
+  for(let delay=0;delay<=96;delay++){
+   for(let spread=0;spread<=7;spread++){
+    for(const candidate of spread===0?[cx]:[cx-spread,cx+spread]){
+     if(candidate < -MAX_COLUMN||candidate>MAX_COLUMN)continue;
+     const rank=earliest+delay;
+     let available=true;
+     for(let level=0;level<def.levels;level++)
+      if(occupied.has(candidate+':'+(rank+level))){available=false;break;}
+     if(!available)continue;
+     const parentDistance=def.primary?Math.abs(candidate-coords.get(def.primary)!.column):0;
+     const score=delay*7+Math.abs(candidate-wanted)*11+parentDistance*3;
+     if(!choice||score<choice.score)
+      choice={column:candidate,rank,score};
+    }
    }
+   // Once a nearby place exists, delaying more than five additional
+   // rows can never be preferable. Keep forks visually local.
+   if(choice&&delay>5)break;
   }
-  const ideal=Math.round(preferred);
-  let assigned:number|undefined;
-  // A technology reserves the full five-level vertical strip. Collisions
-  // are therefore prevented even if multiple branches start on one row.
-  for(let radius=0;radius<=75;radius++){
-   const options=radius===0?[ideal]:[ideal-radius,ideal+radius];
-   const vacant=options.filter(column=>
-    Array.from({length:def.cap},(_,i)=>def.rank+i)
-     .every(rank=>!occupied.get(rank)?.has(column)));
-   if(vacant.length){
-    assigned=vacant.sort((a,b)=>Math.abs(a-preferred)-Math.abs(b-preferred)||
-     Math.abs(a)-Math.abs(b))[0];
-    break;
-   }
-  }
-  if(assigned===undefined)throw Error('Research layout could not position '+def.id);
-  columns.set(def.id,assigned);
-  for(let offset=0;offset<def.cap;offset++){
-   const rank=def.rank+offset;
-   const row=occupied.get(rank)??new Set<number>();
-   row.add(assigned);occupied.set(rank,row);
-  }
+  if(!choice)throw Error('Research hierarchy failed to place '+def.id);
+  coords.set(def.id,{column:choice.column,rank:choice.rank});
+  for(let i=0;i<def.levels;i++)occupied.add(choice.column+':'+(choice.rank+i));
  }
-
- const cols=[0,...columns.values()];
- const minColumn=Math.min(...cols),maxColumn=Math.max(...cols);
- const left=PADDING-minColumn*COLUMN;
- const width=(maxColumn-minColumn)*COLUMN+NODE+PADDING*2;
- const bottom=Math.max(STARTER_RANK-1,...all.map(p=>p.rank+p.cap-1));
- const height=TOP+(bottom+1)*ROW+125;
- const byId=new Map<string,HierarchyNode>();
+ const minCol=Math.min(0,...[...coords.values()].map(p=>p.column));
+ const maxCol=Math.max(0,...[...coords.values()].map(p=>p.column));
+ const shift=PADDING-minCol*COLUMN;
+ const width=(maxCol-minCol)*COLUMN+RESEARCH_TILE_SIZE+PADDING*2;
+ const maxRank=Math.max(INITIAL_RANK-1,...[...coords].map(([id,p])=>
+  p.rank+definitions.get(id)!.levels-1));
+ const height=TOP+(maxRank+1)*ROW+80;
  const nodes:HierarchyNode[]=[];
- const insert=(node:HierarchyNode)=>{nodes.push(node);byId.set(node.id,node)};
- for(const stage of STARTER_STAGES){
-  insert({id:'starter:'+stage.level,projectId:'starter',level:stage.level,
-   category:-1,kind:'starter',rank:stage.level-1,
-   x:left,y:TOP+(stage.level-1)*ROW});
- }
- for(const def of all){
-  const x=left+(columns.get(def.id)??0)*COLUMN;
-  for(let level=1;level<=def.cap;level++){
-   insert({id:researchNodeId(def.id,level),projectId:def.id,level,
-    category:def.category,kind:'research',rank:def.rank+level-1,
-    x,y:TOP+(def.rank+level-1)*ROW});
-  }
+ const byId=new Map<string,HierarchyNode>();
+ const push=(node:HierarchyNode)=>{nodes.push(node);byId.set(node.id,node);};
+ for(const stage of STARTER_STAGES)push({
+  id:'starter:'+stage.level,projectId:'starter',level:stage.level,
+  category:-1,kind:'starter',rank:stage.level-1,
+  x:shift,y:TOP+(stage.level-1)*ROW
+ });
+ for(const def of scheduled){
+  const pos=coords.get(def.id)!;
+  for(let level=1;level<=def.levels;level++)push({
+   id:researchNodeId(def.id,level),projectId:def.id,level,
+   category:def.category,kind:'research',
+   rank:pos.rank+level-1,x:shift+pos.column*COLUMN,
+   y:TOP+(pos.rank+level-1)*ROW
+  });
  }
  const edges:HierarchyEdge[]=[],junctions:HierarchyJunction[]=[];
- const connect=(fromId:string,toId:string,kind:HierarchyEdge['kind'],visible=true)=>{
+ const link=(fromId:string,toId:string,kind:HierarchyEdge['kind'],visible=true)=>{
   const from=byId.get(fromId),to=byId.get(toId);
-  if(!from||!to)throw Error('Unresolved research connection '+fromId+' > '+toId);
-  const x1=from.x+NODE/2,y1=from.y+NODE;
-  const x2=to.x+NODE/2,y2=to.y;
-  // Fork just below the parent tile, before its Level 2 appears. Routing
-  // across at the child's row used to draw straight through Levels 2–5,
-  // creating visual clutter and seemingly unrelated connections.
-  const forkY=y1+Math.max(10,Math.min(17,(y2-y1)*.30));
-  const path=Math.abs(x1-x2)<1?
-   `M ${x1} ${y1} V ${y2}`:
-   `M ${x1} ${y1} V ${forkY} H ${x2} V ${y2}`;
-  edges.push({from:fromId,to:toId,path,kind,visible});
+  if(!from||!to)throw Error('Unresolved research node '+fromId+' -> '+toId);
+  edges.push({from:fromId,to:toId,kind,visible,path:mapPath(from,to)});
  };
- for(let level=2;level<=STARTER_STAGES.length;level++){
-  connect('starter:'+(level-1),'starter:'+level,'starter');
- }
- for(const def of all){
-  const first=researchNodeId(def.id,1);
-  if(def.parents.length){
-   const drawn=visibleParent(def);
-   for(const parent of def.parents)
-    connect(researchNodeId(parent.id,parent.level),first,'prerequisite',parent.id===drawn);
-   if(def.parents.length>=2){
-    const to=byId.get(first)!;
-    junctions.push({id:first,x:to.x+NODE/2,y:to.y-20,inputs:def.parents.length});
-   }
-  }else if(!independentRoots.has(def.id)){
-   connect('starter:4',first,'starter');
+ for(let i=2;i<=STARTER_STAGES.length;i++)
+  link('starter:'+(i-1),'starter:'+i,'starter');
+ for(const def of scheduled){
+  const target=researchNodeId(def.id,1);
+  for(const parent of def.parents)
+   link(researchNodeId(parent.id,parent.level),target,'prerequisite',parent.id===def.primary);
+  if(!def.parents.length&&!INDEPENDENT_ROOTS.has(def.id))
+   link('starter:4',target,'starter');
+  for(let level=2;level<=def.levels;level++)
+   link(researchNodeId(def.id,level-1),researchNodeId(def.id,level),'level');
+  if(def.parents.length>1){
+   const node=byId.get(target)!;
+   junctions.push({id:target,x:node.x+RESEARCH_TILE_SIZE/2,y:node.y-11,inputs:def.parents.length});
   }
-  for(let level=2;level<=def.cap;level++)
-   connect(researchNodeId(def.id,level-1),researchNodeId(def.id,level),'level');
  }
  return {width,height,nodes,edges,junctions,byId,initialId:'starter:1'};
 }
