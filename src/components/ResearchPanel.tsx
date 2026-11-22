@@ -209,18 +209,12 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
    <div ref={scene} className="factory-scene" style={{width:hierarchy.width,height:hierarchy.height}}>
     <svg className="factory-wires" width={hierarchy.width} height={hierarchy.height}
      viewBox={'0 0 '+hierarchy.width+' '+hierarchy.height} aria-hidden="true">
-     {hierarchy.edges.map((edge,index)=>{
+     {hierarchy.edges.filter(edge=>edge.visible).map((edge,index)=>{
       const parent=hierarchy.byId.get(edge.from);
       const child=hierarchy.byId.get(edge.to);
       const complete=Boolean(parent&&isDone(parent));
       return <path key={index} className={complete?'factory-wire-done':child&&!blocked(child).length?'factory-wire-open':'factory-wire-locked'}
        d={edge.path}/>;
-     })}
-     {hierarchy.junctions.map(join=>{
-      const target=hierarchy.byId.get(join.id);
-      return <circle key={'join-'+join.id} cx={join.x} cy={join.y} r={5}
-       className={target&&isDone(target)?'factory-junction-done':
-        target&&!blocked(target).length?'factory-junction-open':'factory-junction-locked'}/>;
      })}
     </svg>
 
