@@ -5,8 +5,8 @@ import type {Company} from '../company';
 import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
-import {RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
-import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
+import {RESEARCH_RESOURCE_GLYPHS} from '../researchGraph';
+import {buildResearchHierarchy,RESEARCH_TILE_SIZE,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import ResearchPixelIcon from './ResearchPixelIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
@@ -104,14 +104,14 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   const target=hierarchy.byId.get(id),el=viewport.current;
   if(!target||!el)return;
   const nextScale=scale??camera.current.scale;
-  updateTransform({scale:nextScale,x:el.clientWidth/2-(target.x+RESEARCH_NODE_SIZE/2)*nextScale,
-   y:el.clientHeight*.40-(target.y+RESEARCH_NODE_SIZE/2)*nextScale});
+  updateTransform({scale:nextScale,x:el.clientWidth/2-(target.x+RESEARCH_TILE_SIZE/2)*nextScale,
+   y:el.clientHeight*.40-(target.y+RESEARCH_TILE_SIZE/2)*nextScale});
  };
  useEffect(()=>{
   const element=viewport.current;
   if(!element)return;
   const update=()=>{
-   if(!initialized.current){initialized.current=true;centerOn(nextId,.96);}
+   if(!initialized.current){initialized.current=true;centerOn('starter:4',1.08);}
    else updateTransform(camera.current);
   };
   update();
@@ -233,7 +233,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
       onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
       <span className="factory-tech-icon">
        <ResearchPixelIcon category={node.kind==='starter'?
-        starterIconCategory[node.level-1]:node.category} size={32}/>
+        starterIconCategory[node.level-1]:node.category} projectId={node.kind==='research'?node.projectId:undefined} size={30}/>
       </span>
       {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
       {done&&<span className="factory-check"><CheckCircle2 size={13}/></span>}
@@ -275,7 +275,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
     onClick={e=>e.stopPropagation()}>
     <header><span className="factory-detail-icon">
      <ResearchPixelIcon category={selected.kind==='starter'?
-      starterIconCategory[selected.level-1]:selected.category} size={37}/>
+      starterIconCategory[selected.level-1]:selected.category} projectId={selected.kind==='research'?selected.projectId:undefined} size={37}/>
     </span>
      <div><small>{selected.kind==='starter'?'STARTER TECHNOLOGY':
       ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
