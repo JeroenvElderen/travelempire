@@ -5,14 +5,17 @@ import {
 import {allocateResearchProducts,type ProductionLedger} from './researchProductionEngine';
 import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
-/** Intro progression uses cumulative settled activity, not spendable inventory.
- * The dealership unlock is Level 4. All milestone thresholds are cumulative.
+/** Five introductory milestones from the approved tech-tree design.
+ * Jobs and discovered roads are cumulative operating achievements, never
+ * bank cash or individually spent research inventory. Existing saves keep
+ * their completed levels and have their next stage assessed automatically.
  */
 export const STARTER_STAGES=[
- {level:1,name:'First Customers',jobs:10,revenue:300,unlocks:'Research Level 2'},
- {level:2,name:'Growing Service',jobs:20,revenue:900,unlocks:'Research Level 3'},
- {level:3,name:'Trusted Operator',jobs:30,revenue:1800,unlocks:'Research Level 4'},
- {level:4,name:'Vehicle Dealership',jobs:50,revenue:3500,unlocks:'Dealership and all research divisions'}
+ {level:1,name:'Start Up',jobs:10,roads:50,unlocks:'Operations I'},
+ {level:2,name:'Operations I',jobs:20,roads:200,unlocks:'Operations II'},
+ {level:3,name:'Operations II',jobs:30,roads:500,unlocks:'Operations III'},
+ {level:4,name:'Operations III',jobs:40,roads:1000,unlocks:'Operations IV'},
+ {level:5,name:'Operations IV',jobs:50,roads:2000,unlocks:'Dealership and eight research divisions'}
 ] as const;
 
 export const STARTER_LEVELS=STARTER_STAGES.length;
@@ -48,15 +51,15 @@ export function technologyLevelRequirements(
   }
  }
  if(context.freshStart&&((context.starterLevel??0)<STARTER_LEVELS))
-  missing.push('Starter Level 4 · Vehicle Dealership');
+  missing.push('Starter Level 5 · Vehicle Dealership');
  return missing;
 }
 export function starterProgress(earned:ResourceCosts,completed:number){
- const next=STARTER_STAGES[Math.max(0,Math.min(3,completed))];
+ const next=STARTER_STAGES[Math.max(0,Math.min(STARTER_LEVELS-1,completed))];
  return {
   completed:Math.min(STARTER_LEVELS,Math.max(0,completed)),
   next:completed>=STARTER_LEVELS?null:next,
-  jobs:Math.max(0,earned.passengers??0),revenue:Math.max(0,earned.revenue??0)
+  jobs:Math.max(0,earned.passengers??0),roads:Math.max(0,earned.roads??0),revenue:Math.max(0,earned.revenue??0)
  };
 }
 export function automaticUnlocked(state:ResourceState|undefined,companyIsNew:boolean){
@@ -100,7 +103,7 @@ export function advanceAutomaticTree<T extends AutomaticState>(
  if(context.freshStart){
   while(starterLevel<STARTER_LEVELS){
    const stage=STARTER_STAGES[starterLevel];
-   if(earned.passengers<stage.jobs||earned.revenue<stage.revenue)break;
+   if(earned.passengers<stage.jobs||Math.max(context.roads,earned.roads)<stage.roads)break;
    starterLevel++;changed=true;
   }
  }
