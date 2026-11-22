@@ -1,254 +1,267 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {FlaskConical,Database,CheckCircle2,LockKeyhole,Search,X,Minus,ZoomIn,Maximize2,GitBranch,Layers3} from 'lucide-react';
+import type {PointerEvent as ReactPointerEvent,WheelEvent as ReactWheelEvent} from 'react';
+import {X,FlaskConical,Coins,LocateFixed,CheckCircle2,LockKeyhole,ChevronDown} from 'lucide-react';
 import type {Company} from '../company';
 import * as Research from '../research';
-import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,
- safeBag,type ResourceKey,type OperationalContext} from '../researchProgress';
-import {buildLevelResearchDiagram,RESEARCH_CANVAS_WIDTH,RESEARCH_NODE_SIZE,
- RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,type LevelDiagramNode} from '../researchGraph';
-import {STARTER_STAGES,STARTER_LEVELS,researchNodeId,technologyLevelRequirements,effectiveCosts} from '../researchAutomatic';
+import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,type ResourceKey,type OperationalContext} from '../researchProgress';
+import {STARTER_STAGES,STARTER_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
+import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
+import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
 import './research-v4.css';
 
-type Tab='tree'|'resources'|'completed';
-type Props={
- company:Company|null;state:Research.ResearchState;discoveredRoads:number;
- explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;
-};
-const short=(n:number):string=>{
- const value=Math.max(0,Number(n)||0);
- if(value>=1e9)return (value/1e9).toFixed(value>=1e10?0:1).replace(/\.0$/,'')+'b';
- if(value>=1e6)return (value/1e6).toFixed(value>=1e7?0:1).replace(/\.0$/,'')+'m';
- if(value>=10000)return (value/1000).toFixed(value>=100000?0:1).replace(/\.0$/,'')+'k';
- return Math.floor(value).toLocaleString('en-IE');
-};
-const format=(key:ResourceKey,n:number)=>key==='revenue'?'€'+short(n):short(n);
-const exact=(key:ResourceKey,n:number)=>key==='revenue'?'€'+Math.floor(n).toLocaleString('en-IE'):Math.floor(n).toLocaleString('en-IE');
-const labels:Record<ResourceKey,string>={
- roads:'Roads',passengers:'Drop-offs',revenue:'Cash earned',parking:'Parking',hotels:'Hotels',
- ferries:'Ferries',distance:'Distance',maintenance:'Services',construction:'Builds',corporate:'Corporate'
-};
-const minZoom=.31,maxZoom=1.8;
-const clampZoom=(n:number)=>Math.min(maxZoom,Math.max(minZoom,Math.round(n*100)/100));
-const starterIcon=['','🚕','📈','🏅','🚙'];
+type Props={company:Company|null;state:Research.ResearchState;discoveredRoads:number;
+ explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;onClose:()=>void};
+type Vector={x:number;y:number};
+type Camera={x:number;y:number;scale:number};
+type Gesture={tapId:string|null;pointerId:number;down:Vector;moved:boolean;multi:boolean};
+type Pinch={distance:number;scale:number;anchor:Vector};
+const MIN_SCALE=.27,MAX_SCALE=2.4;
+const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n));
+const fmt=(n:number)=>Math.floor(Math.max(0,n||0)).toLocaleString('en-IE');
+const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=10000?
+ (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
+const starterGlyph=['','🚕','📈','🏅','🚘'];
 
-export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,gameNow,freshStart=false}:Props){
- const [tab,setTab]=useState<Tab>('tree');
- const [focused,setFocused]=useState<string|null>(null);
- const [search,setSearch]=useState('');
- const [category,setCategory]=useState<number|'all'>('all');
+export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
+ const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
+ const projects=useMemo(()=>new Map(Research.allProjects.map(p=>[p.id,p])),[]);
  const viewport=useRef<HTMLDivElement>(null);
- const [zoom,setZoom]=useState(.46);
- const manualZoom=useRef(false);
- const pinch=useRef<{distance:number;zoom:number}|null>(null);
- const projects=Research.allProjects;
- const diagram=useMemo(()=>buildLevelResearchDiagram(projects.map(p=>p.id)),[]);
- const byId=useMemo(()=>new Map(diagram.nodes.map(n=>[n.id,n])),[diagram]);
+ const scene=useRef<HTMLDivElement>(null);
+ const pointers=useRef(new Map<number,Vector>());
+ const camera=useRef<Camera>({x:0,y:0,scale:.7});
+ const gesture=useRef<Gesture|null>(null);
+ const pinch=useRef<Pinch|null>(null);
+ const initialized=useRef(false);
+ const [selectedId,setSelectedId]=useState<string|null>(null);
+ const [resourceOpen,setResourceOpen]=useState(false);
+ const [zoomLabel,setZoomLabel]=useState('70%');
  const inventory=safeBag(state.resources),earned=safeBag(state.earned);
  const starterLevel=freshStart?state.starterLevel??0:STARTER_LEVELS;
  const context:OperationalContext={roads:discoveredRoads,explorers:explorerSpecializations,depots,
   freshStart,starterLevel};
- const isComplete=(node:LevelDiagramNode)=>{
-  if(node.type==='starter')return starterLevel>=node.level;
-  return Research.level(state,node.projectId as Research.ResearchId)>=node.level;
- };
- const requirements=(node:LevelDiagramNode)=>{
-  if(isComplete(node))return [] as string[];
-  if(node.type==='starter')
-   return node.level>1&&starterLevel<node.level-1?['Startup Level '+(node.level-1)]:[];
+ const isDone=(node:HierarchyNode)=>node.kind==='starter'?starterLevel>=node.level:
+  Research.level(state,node.projectId as Research.ResearchId)>=node.level;
+ const blocked=(node:HierarchyNode)=>{
+  if(isDone(node))return [];
+  if(node.kind==='starter')return node.level>1&&starterLevel<node.level-1?['Starter Level '+(node.level-1)]:[];
   return technologyLevelRequirements(node.projectId,node.level,state.levels,context);
  };
- const nodeCosts=(node:LevelDiagramNode)=>{
-  if(node.type==='starter'){
-   const target=STARTER_STAGES[node.level-1];
-   return {passengers:target.jobs,revenue:target.revenue};
-  }
-  return effectiveCosts(node.projectId,node.level,state.levels,Research.projects);
+ const costs=(node:HierarchyNode)=>node.kind==='starter'?
+  {passengers:STARTER_STAGES[node.level-1].jobs,revenue:STARTER_STAGES[node.level-1].revenue}:
+  effectiveCosts(node.projectId,node.level,state.levels,Research.projects);
+ const delivered=(node:HierarchyNode)=>node.kind==='starter'?earned:state.contributions?.[node.id]??{};
+ const progress=(node:HierarchyNode)=>{
+  if(isDone(node))return 100;
+  const c=costs(node),d=delivered(node),entries=Object.entries(c);
+  return entries.length?Math.round(entries.reduce((sum,[key,total])=>
+   sum+Math.min(1,(d[key as ResourceKey]??0)/Math.max(1,total)),0)*100/entries.length):0;
  };
- const progressFor=(node:LevelDiagramNode)=>{
-  if(isComplete(node))return 100;
-  const costs=nodeCosts(node);
-  const delivered=node.type==='starter'?earned:state.contributions?.[node.id]??{};
-  const entries=Object.entries(costs);
-  if(!entries.length)return 0;
-  return Math.round(entries.reduce((sum,[key,n])=>
-   sum+Math.min(1,(delivered[key as ResourceKey]??0)/n),0)/entries.length*100);
+ const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
+ const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
+ const completed=hierarchy.nodes.filter(isDone).length;
+ const frontier=hierarchy.nodes.filter(n=>!isDone(n)&&blocked(n).length===0)
+  .sort((a,b)=>a.rank-b.rank||a.x-b.x)[0];
+ const nextId=starterLevel<STARTER_LEVELS?'starter:'+(starterLevel+1):frontier?.id??'starter:4';
+ const updateTransform=(next:Camera)=>{
+  const el=viewport.current;
+  if(!el)return;
+  const width=el.clientWidth,height=el.clientHeight;
+  const sceneW=hierarchy.width*next.scale,sceneH=hierarchy.height*next.scale;
+  const horizontalMargin=Math.min(150,width*.42),verticalMargin=Math.min(180,height*.42);
+  const x=sceneW<=width? (width-sceneW)/2:
+   clamp(next.x,width-sceneW-horizontalMargin,horizontalMargin);
+  const y=sceneH<=height? (height-sceneH)/2:
+   clamp(next.y,height-sceneH-verticalMargin,verticalMargin);
+  camera.current={x,y,scale:next.scale};
+  if(scene.current)scene.current.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+next.scale+')';
+  setZoomLabel(Math.round(next.scale*100)+'%');
  };
- const completed=diagram.nodes.filter(isComplete).length;
- const selected=focused?byId.get(focused):undefined;
- const selectedProject=selected?.type==='technology'?projects.find(p=>p.id===selected.projectId):undefined;
- const selectedMissing=selected?requirements(selected):[];
- const selectedCosts=selected?nodeCosts(selected):{};
- const selectedDelivered=selected?.type==='starter'?earned:selected?state.contributions?.[selected.id]??{}:{};
- const matching=search.trim()?projects.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).slice(0,7):[];
- const activeCount=diagram.nodes.filter(n=>!isComplete(n)&&requirements(n).length===0).length;
- const fit=()=>{
-  const width=viewport.current?.clientWidth??350;
-  manualZoom.current=false;
-  setZoom(clampZoom((width-22)/RESEARCH_CANVAS_WIDTH));
-  viewport.current?.scrollTo({left:0,top:0,behavior:'smooth'});
+ const centerOn=(id:string,scale?:number)=>{
+  const target=hierarchy.byId.get(id),el=viewport.current;
+  if(!target||!el)return;
+  const nextScale=scale??camera.current.scale;
+  updateTransform({scale:nextScale,x:el.clientWidth/2-(target.x+RESEARCH_NODE_SIZE/2)*nextScale,
+   y:el.clientHeight*.40-(target.y+RESEARCH_NODE_SIZE/2)*nextScale});
  };
  useEffect(()=>{
-  const element=viewport.current;if(!element)return;
-  const adjust=()=>{if(!manualZoom.current)setZoom(clampZoom((element.clientWidth-22)/RESEARCH_CANVAS_WIDTH));};
-  adjust();
-  const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(adjust):null;
-  resize?.observe(element);window.addEventListener('resize',adjust);
-  return()=>{resize?.disconnect();window.removeEventListener('resize',adjust);};
- },[tab]);
- const changeZoom=(delta:number)=>{manualZoom.current=true;setZoom(v=>clampZoom(v+delta));};
- const jumpTo=(id:string)=>{
-  const node=byId.get(id);if(!node||!viewport.current)return;
-  viewport.current.scrollTo({
-   left:Math.max(0,(node.x+RESEARCH_NODE_SIZE/2)*zoom-viewport.current.clientWidth/2),
-   top:Math.max(0,(node.y+RESEARCH_NODE_SIZE/2)*zoom-viewport.current.clientHeight/2),
-   behavior:'smooth'});
+  const element=viewport.current;
+  if(!element)return;
+  const update=()=>{
+   if(!initialized.current){initialized.current=true;centerOn(nextId,.76);}
+   else updateTransform(camera.current);
+  };
+  update();
+  const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(update);
+  observer?.observe(element);
+  return()=>observer?.disconnect();
+ },[]);
+ const relative=(e:ReactPointerEvent<HTMLDivElement>):Vector=>{
+  const rect=e.currentTarget.getBoundingClientRect();
+  return {x:e.clientX-rect.left,y:e.clientY-rect.top};
  };
- const touchDistance=(a:React.Touch,b:React.Touch)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
- const onTouchStart=(e:React.TouchEvent<HTMLDivElement>)=>{
-  if(e.touches.length===2)pinch.current={distance:touchDistance(e.touches[0],e.touches[1]),zoom};
+ const onPointerDown=(e:ReactPointerEvent<HTMLDivElement>)=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const position=relative(e);
+  pointers.current.set(e.pointerId,position);
+  e.currentTarget.setPointerCapture(e.pointerId);
+  if(pointers.current.size===1){
+   const target=e.target instanceof Element?e.target.closest('[data-tech-id]'):null;
+   gesture.current={tapId:target?.getAttribute('data-tech-id')??null,
+    pointerId:e.pointerId,down:position,moved:false,multi:false};
+  }else if(pointers.current.size>=2){
+   if(gesture.current){gesture.current.multi=true;gesture.current.moved=true;}
+   const [a,b]=[...pointers.current.values()];
+   const midpoint={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+   pinch.current={
+    distance:Math.hypot(a.x-b.x,a.y-b.y),
+    scale:camera.current.scale,
+    anchor:{x:(midpoint.x-camera.current.x)/camera.current.scale,
+     y:(midpoint.y-camera.current.y)/camera.current.scale}
+   };
+  }
  };
- const onTouchMove=(e:React.TouchEvent<HTMLDivElement>)=>{
-  if(e.touches.length!==2||!pinch.current)return;
-  manualZoom.current=true;
-  setZoom(clampZoom(pinch.current.zoom*touchDistance(e.touches[0],e.touches[1])/Math.max(1,pinch.current.distance)));
+ const onPointerMove=(e:ReactPointerEvent<HTMLDivElement>)=>{
+  const previous=pointers.current.get(e.pointerId);
+  if(!previous)return;
+  const position=relative(e);
+  pointers.current.set(e.pointerId,position);
+  if(pointers.current.size>=2&&pinch.current){
+   const [a,b]=[...pointers.current.values()];
+   const midpoint={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+   const scale=clamp(pinch.current.scale*Math.hypot(a.x-b.x,a.y-b.y)/
+    Math.max(1,pinch.current.distance),MIN_SCALE,MAX_SCALE);
+   updateTransform({scale,x:midpoint.x-pinch.current.anchor.x*scale,
+    y:midpoint.y-pinch.current.anchor.y*scale});
+   return;
+  }
+  if(pointers.current.size===1){
+   if(gesture.current&&Math.hypot(position.x-gesture.current.down.x,position.y-gesture.current.down.y)>6)
+    gesture.current.moved=true;
+   updateTransform({...camera.current,
+    x:camera.current.x+position.x-previous.x,y:camera.current.y+position.y-previous.y});
+  }
  };
- const onTouchEnd=(e:React.TouchEvent<HTMLDivElement>)=>{if(e.touches.length<2)pinch.current=null;};
-
- return <section className="research-v4 rv5" aria-label="Technology research tree">
-  <header className="rv5-head">
-   <div className="rv5-heading"><FlaskConical size={20}/><div><h1>Technology</h1>
-    <small>TravelEmpire · {new Date(gameNow).toLocaleDateString('en-IE')}</small></div></div>
-   <span className="rv5-count">{completed} / {diagram.nodes.length} levels</span>
+ const onPointerFinish=(e:ReactPointerEvent<HTMLDivElement>)=>{
+  const g=gesture.current;
+  if(g?.pointerId===e.pointerId&&!g.moved&&!g.multi&&g.tapId)setSelectedId(g.tapId);
+  pointers.current.delete(e.pointerId);
+  if(pointers.current.size<2)pinch.current=null;
+  if(pointers.current.size===1){
+   const [id,pos]=[...pointers.current.entries()][0];
+   gesture.current={tapId:null,pointerId:id,down:pos,moved:true,multi:true};
+  }else if(pointers.current.size===0)gesture.current=null;
+  try{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}catch{/* pointer already released */}
+ };
+ const zoomAt=(point:Vector,multiplier:number)=>{
+  const current=camera.current;
+  const scale=clamp(current.scale*multiplier,MIN_SCALE,MAX_SCALE);
+  const world={x:(point.x-current.x)/current.scale,y:(point.y-current.y)/current.scale};
+  updateTransform({scale,x:point.x-world.x*scale,y:point.y-world.y*scale});
+ };
+ const onWheel=(e:ReactWheelEvent<HTMLDivElement>)=>{
+  e.preventDefault();
+  const rect=e.currentTarget.getBoundingClientRect();
+  zoomAt({x:e.clientX-rect.left,y:e.clientY-rect.top},Math.exp(-e.deltaY*.0015));
+ };
+ const onDoubleClick=(e:React.MouseEvent<HTMLDivElement>)=>{
+  const rect=e.currentTarget.getBoundingClientRect();
+  zoomAt({x:e.clientX-rect.left,y:e.clientY-rect.top},camera.current.scale>.95?.65:1.5);
+ };
+ const resourceItems=resourceKeys.map(key=>({key,name:RESOURCE_INFO[key].name,
+  glyph:RESEARCH_RESOURCE_GLYPHS[key],balance:inventory[key],total:earned[key]}));
+ return <section className="research-factory" role="application" aria-label="Research technology hierarchy">
+  <header className="research-factory-header">
+   <button className="factory-resources-trigger" type="button" onClick={()=>{setResourceOpen(v=>!v);setSelectedId(null);}}
+    aria-expanded={resourceOpen} aria-label="Toggle research resources">
+    <Coins size={19}/><span>Resources</span><ChevronDown size={12}/>
+   </button>
+   <h1>TECHNOLOGY</h1>
+   <button className="factory-close" type="button" aria-label="Close Research" onClick={onClose}><X size={23}/></button>
   </header>
-  <section className="rv5-wallet" aria-label="Available automatic research resources">
-   <div className="rv5-wallet-title"><strong><Database size={13}/> Total research resources earned</strong>
-    <button type="button" onClick={()=>setTab('resources')}>Details ›</button></div>
-   <div className="rv5-wallet-grid">{resourceKeys.map(key=><button type="button" key={key}
-    className="rv5-wallet-unit" onClick={()=>setTab('resources')}
-    title={RESOURCE_INFO[key].name+' · '+exact(key,earned[key])+' earned · '+exact(key,inventory[key])+' available'}>
-    <span className="rv5-wallet-glyph" aria-hidden="true">{RESEARCH_RESOURCE_GLYPHS[key]}</span>
-    <span className="rv5-wallet-amount">{format(key,earned[key])}</span>
-    <span className="rv5-wallet-name">{labels[key]}</span>
-   </button>)}</div>
-  </section>
-  <nav className="rv5-tabs" aria-label="Research views">
-   <button type="button" className={tab==='tree'?'on':''} onClick={()=>setTab('tree')}><GitBranch size={15}/> Tech tree</button>
-   <button type="button" className={tab==='resources'?'on':''} onClick={()=>setTab('resources')}><Database size={15}/> Resources</button>
-   <button type="button" className={tab==='completed'?'on':''} onClick={()=>setTab('completed')}><CheckCircle2 size={15}/> Unlocked</button>
-  </nav>
-  {tab==='tree'&&<>
-   <div className="rv5-toolbar">
-    <label className="rv5-search"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)}
-     placeholder="Find technology" aria-label="Find technology"/></label>
-    <select aria-label="Jump to technology division" value={category} onChange={e=>{
-     const v=e.target.value==='all'?'all':Number(e.target.value);setCategory(v);
-     const first=projects.find(p=>p.category===v);
-     if(first)jumpTo(researchNodeId(first.id,1));
-    }}>
-     <option value="all">All divisions</option>{ADVANCED_CATEGORIES.map((name,i)=><option key={name} value={i}>{name}</option>)}
-    </select>
-   </div>
-   {matching.length>0&&<div className="rv5-search-results">
-    {matching.map(p=><button key={p.id} type="button"
-     onClick={()=>{const id=researchNodeId(p.id,Math.min(Research.maxLevel(p.id),Research.level(state,p.id)+1));setFocused(id);setSearch('');jumpTo(id);}}>
-     {RESEARCH_GLYPHS[p.id]??'🔬'} {p.name}</button>)}
-   </div>}
-   <div className="rv5-map-controls"><span><Layers3 size={13}/>
-    {starterLevel<STARTER_LEVELS?'Starter '+starterLevel+' / 4 · Dealership locked':
-     activeCount+' levels progressing automatically'}</span>
-    <div className="rv5-zoom-controls">
-     <button type="button" aria-label="Zoom out" onClick={()=>changeZoom(-.12)}><Minus size={16}/></button>
-     <span>{Math.round(zoom*100)}%</span>
-     <button type="button" aria-label="Zoom in" onClick={()=>changeZoom(.12)}><ZoomIn size={16}/></button>
-     <button type="button" aria-label="Fit tree to width" onClick={fit}><Maximize2 size={15}/></button>
+  <div className="factory-viewport" ref={viewport} onPointerDown={onPointerDown}
+   onPointerMove={onPointerMove} onPointerUp={onPointerFinish} onPointerCancel={onPointerFinish}
+   onWheel={onWheel} onDoubleClick={onDoubleClick}
+   aria-label="Drag to pan, pinch to zoom. Tap any technology to view requirements.">
+   <div ref={scene} className="factory-scene" style={{width:hierarchy.width,height:hierarchy.height}}>
+    <svg className="factory-wires" width={hierarchy.width} height={hierarchy.height}
+     viewBox={'0 0 '+hierarchy.width+' '+hierarchy.height} aria-hidden="true">
+     {hierarchy.edges.map((edge,index)=>{
+      const parent=hierarchy.byId.get(edge.from);
+      const child=hierarchy.byId.get(edge.to);
+      const complete=Boolean(parent&&isDone(parent));
+      return <path key={index} className={complete?'factory-wire-done':child&&!blocked(child).length?'factory-wire-open':'factory-wire-locked'}
+       d={edge.path}/>;
+     })}
+    </svg>
+    <div className="factory-origin" style={{left:hierarchy.width/2-44,top:30}}>
+     <FlaskConical size={29}/><span>START</span>
     </div>
+    {hierarchy.nodes.map(node=>{
+     const done=isDone(node);
+     const missing=blocked(node);
+     const open=!done&&!missing.length;
+     const started=open&&progress(node)>0;
+     const title=node.kind==='starter'?STARTER_STAGES[node.level-1].name:
+      projects.get(node.projectId)?.name??node.projectId;
+     return <button key={node.id} type="button" data-tech-id={node.id}
+      className={'factory-tech'+(done?' factory-tech-done':open?' factory-tech-open':' factory-tech-locked')+
+       (started?' factory-tech-in-progress':'')+(selectedId===node.id?' factory-tech-selected':'')}
+      style={{left:node.x,top:node.y}} title={title+' Level '+node.level}
+      aria-label={title+' level '+node.level+(done?', completed':open?', collecting resources':', locked')}
+      onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
+      <span className="factory-tech-icon">{node.kind==='starter'?
+       starterGlyph[node.level]:RESEARCH_GLYPHS[node.projectId]??'🔬'}</span>
+      {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
+      {done&&<span className="factory-check"><CheckCircle2 size={13}/></span>}
+      {node.kind==='research'&&<span className="factory-node-level">{node.level}</span>}
+      {started&&<span className="factory-progress-indicator" style={{width:progress(node)+'%'}}/>}
+     </button>;
+    })}
    </div>
-   <div className="rv5-viewport" ref={viewport} onTouchStart={onTouchStart}
-    onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} aria-label="Pan and zoom connected technology levels">
-    <div className="rv5-canvas-frame" style={{width:diagram.width*zoom,height:diagram.height*zoom}}>
-     <div className="rv5-canvas" style={{width:diagram.width,height:diagram.height,transform:`scale(${zoom})`}}>
-      <svg className="rv5-links" width={diagram.width} height={diagram.height}
-       viewBox={`0 0 ${diagram.width} ${diagram.height}`} aria-hidden="true">
-       {diagram.edges.map((edge,i)=>{
-        const parent=byId.get(edge.from);
-        return <path key={i} d={edge.path} className={parent&&isComplete(parent)?'established':'pending'}/>;
-       })}
-      </svg>
-      <div className="rv5-tree-divider rv5-intro-label" style={{top:15}}>START YOUR COMPANY</div>
-      <div className="rv5-tree-divider" style={{top:475}}>RESEARCH DIVISIONS · UNLOCK AFTER LEVEL 4</div>
-      <div className="rv5-tree-divider" style={{top:3245}}>ADDITIONAL BUSINESS DIVISIONS</div>
-      {diagram.divisions.map(item=><div className="rv5-lane-label" key={item.category}
-       style={{left:item.x-12,top:item.y}} title={ADVANCED_CATEGORIES[item.category]}>
-       {['🚕','🔧','🧭','🗺️','🎓','🏢','📣','🏦','⛴️','🏨','🏗️','🌍'][item.category]}
-      </div>)}
-      {diagram.nodes.map(node=>{
-       const done=isComplete(node);
-       const missing=requirements(node),locked=missing.length>0&&!done;
-       const partial=progressFor(node)>0&&!done;
-       const next=!locked&&!done;
-       const name=node.type==='starter'?STARTER_STAGES[node.level-1].name:
-        projects.find(p=>p.id===node.projectId)?.name??node.projectId;
-       return <button key={node.id} type="button"
-        className={'rv5-node'+(done?' completed':'')+(locked?' locked':'')+(next?' researching':'')+(partial?' partial':'')+(focused===node.id?' focused':'')}
-        style={{left:node.x,top:node.y}} onClick={()=>setFocused(node.id)}
-        title={name+' · Level '+node.level}
-        aria-pressed={focused===node.id}
-        aria-label={name+' Level '+node.level+' · '+(done?'Unlocked':locked?'Locked':'Progressing automatically')}>
-        <span className="rv5-node-glyph">{node.type==='starter'?starterIcon[node.level]:RESEARCH_GLYPHS[node.projectId]??'🔬'}</span>
-        {locked?<LockKeyhole className="rv5-node-lock" size={15}/>:done?<CheckCircle2 className="rv5-node-check" size={14}/>:null}
-        <span className="rv5-node-level">{node.type==='starter'?'S':'L'}{node.level}</span>
-       </button>;
-      })}
-     </div>
-    </div>
+  </div>
+  <button className="factory-locate" type="button" aria-label="Locate next available research level"
+   onClick={()=>centerOn(nextId,.90)}><LocateFixed size={20}/></button>
+  <div className="factory-scale" aria-hidden="true">{zoomLabel}</div>
+  {resourceOpen&&<div className="factory-resources" aria-label="Research resources" role="dialog">
+   <header><strong>Research resources</strong><button type="button" onClick={()=>setResourceOpen(false)} aria-label="Close resource inventory"><X size={17}/></button></header>
+   <div className="factory-resources-grid">
+    {resourceItems.map(item=><div className="factory-resource" key={item.key}>
+     <span>{item.glyph}</span><div><strong>{item.name}</strong><small>{small(item.balance)} available</small></div>
+     <b>{small(item.total)}</b>
+    </div>)}
    </div>
-   <div className="rv5-caption"><span>🟩 Completed</span><span>🟦 Gathering resources</span><span>🔒 Locked</span><span>Automatic · pan and zoom</span></div>
-  </>}
-  {tab==='resources'&&<section className="rv5-view">
-   <h2>Your research resources</h2><p>All sources contribute automatically to available technology levels. Resources are counted once and never require manual delivery.</p>
-   <div className="rv5-resource-list">{resourceKeys.map(key=><div key={key} className="rv5-resource-row">
-    <span className="rv5-resource-emoji">{RESEARCH_RESOURCE_GLYPHS[key]}</span>
-    <div><strong>{RESOURCE_INFO[key].name}</strong><small>{RESOURCE_INFO[key].unit} · {exact(key,earned[key])} earned altogether</small></div>
-    <b>{exact(key,inventory[key])}</b>
-   </div>)}</div>
-   <p>Starter levels use cumulative jobs and operating revenue. Technology levels automatically consume research resources as they're supplied, never your bank balance.</p>
-   <button type="button" className="rv5-back" onClick={()=>setTab('tree')}><GitBranch size={16}/> Back to technology tree</button>
-  </section>}
-  {tab==='completed'&&<section className="rv5-view">
-   <h2>Unlocked research levels</h2><p>{completed} of {diagram.nodes.length} levels complete. Each green node has its own requirements and unlock conditions.</p>
-   <div className="rv5-unlocked-list">{diagram.nodes.filter(isComplete).map(node=><button type="button" key={node.id}
-    onClick={()=>{setFocused(node.id);setTab('tree');jumpTo(node.id);}}>
-    <span>{node.type==='starter'?starterIcon[node.level]:RESEARCH_GLYPHS[node.projectId]??'🔬'}</span>
-    <strong>{node.type==='starter'?STARTER_STAGES[node.level-1].name:
-     projects.find(p=>p.id===node.projectId)?.name??node.projectId}</strong><small>Lv {node.level}</small>
-   </button>)}</div>
-   <button type="button" className="rv5-back" onClick={()=>setTab('tree')}><GitBranch size={16}/> Return to technology tree</button>
-  </section>}
-  {tab==='tree'&&selected&&<aside className="rv5-details" aria-label="Technology level details">
-   <header><div className="rv5-detail-icon">
-    {selected.type==='starter'?starterIcon[selected.level]:RESEARCH_GLYPHS[selected.projectId]??'🔬'}
-   </div><div><small>{selected.type==='starter'?'Starter progression':ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
-    <h2>{selected.type==='starter'?STARTER_STAGES[selected.level-1].name:selectedProject?.name}</h2>
-    <span>Level {selected.level} · {isComplete(selected)?'Unlocked':selectedMissing.length?'Prerequisites locked':'Automatically collecting resources'}</span>
-   </div><button type="button" aria-label="Close level details" onClick={()=>setFocused(null)}><X size={20}/></button></header>
-   <p>{selected.type==='starter'?STARTER_STAGES[selected.level-1].unlocks:selectedProject?.effect}</p>
-   {isComplete(selected)?<div className="rv5-unlocked-note"><CheckCircle2 size={17}/> Level completed. The next connected level is available automatically.</div>:<>
-    {selectedMissing.length>0&&<div className="rv5-missing"><strong>Unlock these first</strong>
-     {selectedMissing.map(item=><div key={item}><LockKeyhole size={13}/>{item}</div>)}</div>}
-    <div className="rv5-detail-progress"><span>Requirements collected automatically</span><b>{progressFor(selected)}%</b></div>
-    <div className="rv5-detail-resources">{resourceKeys.filter(key=>(selectedCosts[key]??0)>0).map(key=>{
-     const needed=selectedCosts[key]??0;
-     const delivered=Math.min(needed,selectedDelivered[key]??0);
-     return <div key={key}><span>{RESEARCH_RESOURCE_GLYPHS[key]} {RESOURCE_INFO[key].name}</span>
-      <strong>{exact(key,delivered)} / {exact(key,needed)}</strong>
-      <div className="rv5-bar"><i style={{width:(needed?delivered/needed*100:0)+'%'}}/></div>
-      <small>{selected.type==='starter'?'Cumulative operational milestone':
-       exact(key,inventory[key])+' still in inventory'}</small>
-     </div>;
-    })}</div>
-    <div className="rv5-auto-message">Progress is automatic. Resources flow to eligible technologies as your company operates.</div>
-   </>}
-  </aside>}
-  {!company&&<p className="rv5-auto-message">Create a company to start your research tree.</p>}
+   <small className="factory-resources-caption">Lifetime earned on the right. Resources are automatically distributed to eligible research.</small>
+  </div>}
+  {selected&&<div className="factory-detail-backdrop" role="presentation"
+   onPointerDown={e=>e.stopPropagation()} onClick={()=>setSelectedId(null)}>
+   <section className="factory-details" role="dialog" aria-label="Technology requirements"
+    onClick={e=>e.stopPropagation()}>
+    <header><span className="factory-detail-icon">{selected.kind==='starter'?
+     starterGlyph[selected.level]:RESEARCH_GLYPHS[selected.projectId]??'🔬'}</span>
+     <div><small>{selected.kind==='starter'?'STARTER TECHNOLOGY':
+      ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
+      <h2>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].name:
+       selectedProject?.name} · {selected.kind==='starter'?'Level '+selected.level:'Lv '+selected.level}</h2></div>
+     <button type="button" aria-label="Close technology details" onClick={()=>setSelectedId(null)}><X size={20}/></button>
+    </header>
+    <p>{selected.kind==='starter'?STARTER_STAGES[selected.level-1].unlocks:selectedProject?.effect}</p>
+    {isDone(selected)?<div className="factory-done-message"><CheckCircle2 size={17}/> Research complete</div>:
+     <>
+      {blocked(selected).length>0&&<div className="factory-prerequisites"><strong>Requires</strong>
+       {blocked(selected).map((req,i)=><span key={i}><LockKeyhole size={13}/>{req}</span>)}</div>}
+      <div className="factory-detail-requirements">{resourceKeys.filter(k=>(costs(selected)[k]??0)>0)
+       .map(key=>{
+        const need=costs(selected)[key]??0;
+        const count=Math.min(need,delivered(selected)[key]??0);
+        return <div key={key} className="factory-requirement">
+         <div><span>{RESEARCH_RESOURCE_GLYPHS[key]} {RESOURCE_INFO[key].name}</span>
+          <b>{fmt(count)} / {fmt(need)}</b></div>
+         <span className="factory-requirement-bar"><i style={{width:Math.min(100,count/need*100)+'%'}}/></span>
+        </div>;
+       })}</div>
+      <small className="factory-auto-caption">Progresses automatically as your company operates.</small>
+     </>}
+   </section>
+  </div>}
  </section>;
 }
