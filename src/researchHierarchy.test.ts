@@ -96,6 +96,23 @@ describe('immersive dependency-first research tree',()=>{
   expect(diagram.nodes.filter(n=>n.kind==='research').every(n=>n.rank>=4)).toBe(true);
   expect(new Set(diagram.nodes.map(n=>n.rank)).size).toBeGreaterThanOrEqual(17);
  });
+ it('fits a compact touch canvas instead of widening into dozens of category columns',()=>{
+  expect(diagram.width).toBeLessThan(1900);
+  expect(diagram.height).toBeGreaterThan(1400);
+  expect(diagram.nodes).toHaveLength(176);
+  const root=byId.get('starter:4')!;
+  for(const node of diagram.nodes.filter(n=>n.kind==='starter'))
+   expect(node.x).toBe(root.x);
+ });
+ it('routes a single local fork from each research technology',()=>{
+  for(const edge of diagram.edges.filter(e=>e.visible&&e.kind==='prerequisite')){
+   const from=byId.get(edge.from)!,to=byId.get(edge.to)!;
+   // Five-level upgrades may be stacked beneath an unrelated neighboring
+   // branch, but a visible arrow must not traverse the entire canvas.
+   expect(Math.abs(from.x-to.x)).toBeLessThanOrEqual(720);
+   expect(to.y).toBeGreaterThan(from.y);
+  }
+ });
  it('keeps the standalone fare-only chain in a coherent directed progression',()=>{
   const edges=new Set(diagram.edges.map(e=>e.from+'>'+e.to));
   expect(edges.has('pricing:1>peakPricing:1')).toBe(true);
