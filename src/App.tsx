@@ -2571,7 +2571,7 @@ export default function App(){
   if(companyRef.current.researchProgression===2&&
    !automaticUnlocked(researchRef.current,true)&&t.kind==='taxi'&&
    fleet.taxis.filter(vehicle=>vehicle.kind==='taxi').length<=1){
-   setSimError('Keep the starter taxi until the dealership unlocks at Starter Level 4.');
+   setSimError('Keep the starter taxi until the dealership unlocks at Starter Level 5.');
    return;
   }
   if(t.status!=='IDLE'&&t.status!=='PAUSED'){setSimError('Vehicle must be idle or parked before selling.');return;}
