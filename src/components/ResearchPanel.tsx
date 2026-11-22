@@ -7,7 +7,7 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,type ResourceKey,
 import {STARTER_STAGES,STARTER_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {RESEARCH_GLYPHS,RESEARCH_RESOURCE_GLYPHS,RESEARCH_NODE_SIZE} from '../researchGraph';
 import {buildResearchHierarchy,type HierarchyNode} from '../researchHierarchy';
-import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable,type ProductKey} from '../researchProducts';
+import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
 type Props={company:Company|null;state:Research.ResearchState;discoveredRoads:number;
