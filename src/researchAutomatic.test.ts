@@ -43,7 +43,7 @@ describe('Builderment-style fully automatic research progression',()=>{
   const s=advanceAutomaticTree(state({passengers:500,revenue:75000,roads:5000,distance:10000}),projects,context);
   expect(s.starterLevel).toBe(4);
   expect((s.levels.pricing??0)).toBeGreaterThan(0);
-  expect((s.levels.engine??0)).toBeGreaterThan(0);
+  expect((s.levels.depotEfficiency??0)).toBeGreaterThan(0);
   expect(s.selected).toBeUndefined();
   expect(s.queue).toEqual([]);
   expect(s.contributions?.[researchNodeId('pricing',1)]).toBeDefined();
@@ -58,7 +58,7 @@ describe('Builderment-style fully automatic research progression',()=>{
    return tot;
   },safeBag({}));
   for(const k of resourceKeys)
-   expect((current.resources?.[k]??0)+(spent[k]??0)).toBeCloseTo(earned[k]??0,5);
+   expect((current.resources?.[k]??0)+(spent[k]??0)+(current.productRawSpent?.[k]??0)).toBeCloseTo(earned[k]??0,5);
   const again=advanceAutomaticTree(current,projects,context);
   expect(again).toBe(current);
  });
