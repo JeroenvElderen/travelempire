@@ -143,7 +143,8 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
 /** Accrue once for every completed simulated hour. Never repay already settled hours. */
 export function settlePropertyDividends(
  portfolio:PropertyPortfolio,gameNow:number,
- operatedPeriods?:ReadonlyMap<string,readonly {fromHour:number;toHour?:number}[]>
+ operatedPeriods?:ReadonlyMap<string,readonly {fromHour:number;toHour?:number}[]>,
+ parkingResearchBonus=0
 ):{portfolio:PropertyPortfolio;incomeCents:number;hours:number;parkingSpaceHours:number}{
  const hour=currentHour(gameNow);
  let incomeCents=0,hours=0,changed=false,parkingSpaceHours=0;
@@ -161,7 +162,7 @@ export function settlePropertyDividends(
    if(periods?.some(p=>p.fromHour<=t-1&&(p.toHour===undefined||t-1<p.toHour)))continue;
    const operations=propertyOperations(h,t-1);
    if(h.kind==='parking')parkingSpaceHours+=Math.round(operations.occupiedUnits*ownership(h));
-   payment+=Math.round(operations.netCents*ownership(h));
+   payment+=Math.round(operations.netCents*ownership(h)*(h.kind==='parking'?1+Math.min(.25,Math.max(0,parkingResearchBonus)):1));
   }
   incomeCents+=payment;hours=Math.max(hours,hour-from);changed=true;
   holdings[id]={...h,dividendsCents:(h.dividendsCents??0)+payment,lastHour:hour};
