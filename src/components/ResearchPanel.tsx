@@ -121,13 +121,13 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
    <span className="rv5-count">{completed} / {diagram.nodes.length} levels</span>
   </header>
   <section className="rv5-wallet" aria-label="Available automatic research resources">
-   <div className="rv5-wallet-title"><strong><Database size={13}/> Research resources</strong>
+   <div className="rv5-wallet-title"><strong><Database size={13}/> Total research resources earned</strong>
     <button type="button" onClick={()=>setTab('resources')}>Details ›</button></div>
    <div className="rv5-wallet-grid">{resourceKeys.map(key=><button type="button" key={key}
     className="rv5-wallet-unit" onClick={()=>setTab('resources')}
-    title={RESOURCE_INFO[key].name+' · '+exact(key,inventory[key])+' available'}>
+    title={RESOURCE_INFO[key].name+' · '+exact(key,earned[key])+' earned · '+exact(key,inventory[key])+' available'}>
     <span className="rv5-wallet-glyph" aria-hidden="true">{RESEARCH_RESOURCE_GLYPHS[key]}</span>
-    <span className="rv5-wallet-amount">{format(key,inventory[key])}</span>
+    <span className="rv5-wallet-amount">{format(key,earned[key])}</span>
     <span className="rv5-wallet-name">{labels[key]}</span>
    </button>)}</div>
   </section>
