@@ -87,9 +87,11 @@ export type ResourceState={
  resources?:ResourceBag;earned?:ResourceBag;sourceSnapshot?:ResourceBag;
  contributions?:Record<string,ResourceCosts>;selected?:string;queue?:string[];
  researchV3?:true;
+ automaticVersion?:1;starterLevel?:number;
+ resourceCursor?:Partial<Record<ResourceKey,number>>;
 };
 export type ResearchProject={id:string;name:string;category:number;effect:string;base:number};
-export type OperationalContext={explorers:number;roads:number;depots:number};
+export type OperationalContext={explorers:number;roads:number;depots:number;freshStart?:boolean;starterLevel?:number};
 
 export const safeBag=(bag?:ResourceCosts):ResourceBag=>Object.fromEntries(resourceKeys.map(k=>[k,Math.max(0,Number(bag?.[k]??0)||0)])) as ResourceBag;
 export const allResearch=(legacy:readonly ResearchProject[])=>[...legacy,...newProjects];
