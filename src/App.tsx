@@ -2654,6 +2654,7 @@ export default function App(){
   setFleet(old=>({...old,
    fuelExpense:(old.fuelExpense??0)+fuelCost,
    serviceExpense:(old.serviceExpense??0)+serviceCost,
+    researchServicesTotal:(old.researchServicesTotal??0)+1,
    transactions:[
     {id:crypto.randomUUID(),time:now,taxiId:id,description:`${vehicle.name} · reset ${spec.unit==='L'?'refuel':'recharge'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-fuelCost},
     {id:crypto.randomUUID(),time:now,taxiId:id,description:`${vehicle.name} · reset full service`,amount:-serviceCost},
@@ -2681,7 +2682,7 @@ export default function App(){
   setFleet(old=>({...old,fuelExpense:(old.fuelExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · ${spec.unit==='L'?'fuel purchase':'electricity purchase'} (${quantity.toFixed(1)} ${spec.unit})`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,energyRemaining:spec.capacity,energyPurchased:(t.energyPurchased??0)+quantity,fuelExpense:(t.fuelExpense??0)+cost}:t)}));
   setSimError('');
  };
- const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
+ const serviceTaxi=(id:string)=>{if(!companyRef.current)return;const taxi=fleet.taxis.find(t=>t.id===id);if(!taxi||taxi.deliveryUntil&&taxi.deliveryUntil>Date.now()||taxi.status!=="IDLE"){setSimError("Taxi must be idle and delivered before servicing.");return;}const cost=150;if(companyRef.current.cash+pendingCashRef.current<cost){setSimError("Insufficient funds for servicing (€150).");return;}pendingCashRef.current-=cost;setFleet(old=>({...old,serviceExpense:(old.serviceExpense??0)+cost,researchServicesTotal:(old.researchServicesTotal??0)+1,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),taxiId:id,description:`${taxi.name} · scheduled service`,amount:-cost},...(old.transactions??[])].slice(0,100),taxis:old.taxis.map(t=>t.id===id?{...t,vehicleCondition:Math.min(100,(t.vehicleCondition??100)+20),serviceCount:(t.serviceCount??0)+1,lastServiceKm:t.operatingKm??0}:t)}));setSimError("");};
  const acceptBankPartnership=(bankId:string,request:number,share:number)=>{
   const current=companyRef.current;
   if(!current)return;
@@ -3321,17 +3322,21 @@ export default function App(){
    const hour=Math.floor(epoch/HOUR_MS);
    // Hotel guests and inventory advance before construction processing so supplies
    // arrive and become consumable at their actual game-hour timestamps.
+   const beforeHotels=constructionRef.current;
    const hotels=settleHotelOperations(constructionRef.current,hour,
     holdingId=>ownership(portfolioRef.current.holdings[holdingId]));
    const result=settleConstruction(hotels.state,hour);
    if(result.state===constructionRef.current)return;
    try{saveConstruction(companyId,result.state);}catch(error){diagnostic('construction:save-error',String(error));return;}
    constructionRef.current=result.state;setConstruction(result.state);
-   const hotelGross=hotels.grossCents/100,hotelExpense=hotels.expenseCents/100;
+   const hotelArrivals=Object.entries(result.state.sites).reduce((sum,[id,site])=>
+    sum+Math.max(0,(site.operations?.totals.guests??0)-(beforeHotels.sites[id]?.operations?.totals.guests??0)),0);
+   const hotelResearchBonusCents=Math.round(hotels.grossCents*Resources.unlockedBonus(research.levels,'hotel'));
+   const hotelGross=(hotels.grossCents+hotelResearchBonusCents)/100,hotelExpense=hotels.expenseCents/100;
    const crewExpense=result.wageCents/100;
    if(hotelGross>0||hotelExpense>0||crewExpense>0){
     const current=companyRef.current;if(!current)return;
-    const amount=(hotels.companyNetCents-result.wageCents)/100;
+    const amount=(hotels.companyNetCents+hotelResearchBonusCents-result.wageCents)/100;
     const updated={...current,cash:Math.round((current.cash+pendingCashRef.current+amount)*100)/100};
     pendingCashRef.current=0;companyRef.current=updated;saveCompany(updated);setCompany(updated);
     setFleet(old=>{
@@ -3345,7 +3350,9 @@ export default function App(){
       ...(crewExpense?[{id:crypto.randomUUID(),time:epoch,description:'Construction crew wages',amount:-crewExpense}]:[]),
       ...(old.transactions??[])
      ];
-     return {...old,financeHistory:history.slice(-365),
+     return {...old,researchHotelGuestsTotal:(old.researchHotelGuestsTotal??0)+hotelArrivals,
+      researchOtherRevenueTotal:(old.researchOtherRevenueTotal??0)+hotelGross,
+      financeHistory:history.slice(-365),
       financeJournal:postFinance(old.financeJournal,[
        {day:date,side:'income',category:'hotel.rooms',amount:hotelGross},
        {day:date,side:'expense',category:'hotel.operations',amount:hotelExpense},
@@ -3356,7 +3363,10 @@ export default function App(){
     });
     diagnostic('hotels:settled',`gross=${hotelGross.toFixed(2)} expenses=${hotelExpense.toFixed(2)} workers=${crewExpense.toFixed(2)}`);
    }
-   if(result.completed.length)diagnostic('construction:projects-completed',result.completed.join('; '));
+   if(result.completed.length){
+    setFleet(old=>({...old,researchConstructionTotal:(old.researchConstructionTotal??0)+result.completed.length}));
+    diagnostic('construction:projects-completed',result.completed.join('; '));
+   }
   };
   const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
  },[company?.id]);
