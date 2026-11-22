@@ -133,7 +133,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
   if(def.parents.some(parent=>!coords.has(parent.id)))
    throw Error('Unscheduled visual prerequisite for '+def.id);
   let wanted=ROOT_COLUMNS[def.id]??0;
-  let earliest=INITIAL_RANK;
+  let earliest:number=INITIAL_RANK;
   if(def.parents.length){
    earliest=Math.max(...def.parents.map(parent=>
     coords.get(parent.id)!.rank+parent.level));
