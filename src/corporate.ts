@@ -96,7 +96,7 @@ export function transferSubsidiaryAssets(stateValue:CorporateState|undefined,sou
  const e=event('asset-transfer',target.id,'Move '+vehicles+' vehicles and '+depots+' depots from '+source.name+' to '+target.name,vehicleAssets+depotAssets,0,0,gameMs);
  return {state:{...state,subsidiaries:state.subsidiaries.map(s=>s.id===sourceId?nextSource:s.id===targetId?nextTarget:s),events:[e,...state.events].slice(0,1000)},parentCashDelta:0,events:[e]};
 }
-export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:number,corporateTaxRate=22){
+export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:number,corporateTaxRate=22,researchBonus=0){
  const state=corporateOf(stateValue);
  const today=dayOf(gameMs);
  if(!state.lastProcessedDay)return {state:{...state,lastProcessedDay:today},parentCashDelta:0,events:[] as CorporateEvent[],interest:0};
@@ -108,7 +108,7 @@ export function advanceCorporate(stateValue:CorporateState|undefined,gameMs:numb
   const tickMs=Date.parse(state.lastProcessedDay)+(i+1)*86400000;
   for(const sub of subsidiaries){
    if(!sub.active||sub.lastSettledDay>=dayOf(tickMs))continue;
-   const dailyRevenue=sub.revenuePerDay;
+   const dailyRevenue=round(sub.revenuePerDay*(1+Math.max(0,Math.min(.25,researchBonus))));
    const dailyExpenses=sub.expensesPerDay;
    const tax=Math.max(0,round((dailyRevenue-dailyExpenses)*(sub.foreignTaxRate??corporateTaxRate)/100));
    const net=round(dailyRevenue-dailyExpenses-tax);
