@@ -10,7 +10,7 @@ import './DealershipPage.css';
 import './dealership-floating.css';
 import './dealership-fleet-match.css';
 
-type Props={cash:number;company:Company;fleet:FleetState;gameNow:number;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
+type Props={cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
 const photoFiles:Record<string,string>={
  'Volvo|XC90':'2025 Volvo XC90 (facelift), front 4.11.25.jpg',
  'Volvo|XC60':'Volvo XC60 II 2025 facelift 001.jpg',
@@ -26,7 +26,7 @@ function VehiclePhoto({model}:{model:VehicleModel}){
   {file&&!failed?<img loading="lazy" src={'https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(file)+'?width=900'} alt={model.brand+' '+model.name+' exterior'} onError={()=>setFailed(true)}/>:<div className="dealer-photo-fallback"><CarFront size={32} aria-hidden="true"/><small>Photo unavailable</small></div>}
  </div>;
 }
-export default function DealershipPage({cash,company,fleet,gameNow,ready,depots,error='',onDepotChange,onOrder}:Props){
+export default function DealershipPage({cash,company,fleet,gameNow,researchLevels,ready,depots,error='',onDepotChange,onOrder}:Props){
  const [selected,setSelected]=useState<VehicleModel|null>(null);
  const [stage,setStage]=useState<'browse'|'build'|'review'>('browse');
  const [search,setSearch]=useState('');
@@ -91,7 +91,7 @@ export default function DealershipPage({cash,company,fleet,gameNow,ready,depots,
      <div className="dealer-toolbar">{depotSelector}<label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Math.round(Number(e.target.value)||25))))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option><option value={365}>1 game year</option><option value={730}>2 game years</option></select></label>}</div>
     </details>
     {error&&<p className="dealer-parking-error" role="alert">{error}</p>}
-    <EuropeanDealership key={selected.brand+'|'+selected.name} reviewing={stage==='review'} onReviewChange={reviewing=>setStage(reviewing?'review':'build')} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setStage('browse')} cash={cash} company={company} fleet={fleet} gameNow={gameNow} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
+    <EuropeanDealership key={selected.brand+'|'+selected.name} reviewing={stage==='review'} onReviewChange={reviewing=>setStage(reviewing?'review':'build')} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setStage('browse')} cash={cash} company={company} fleet={fleet} gameNow={gameNow} researchLevels={researchLevels} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
    </div>}
  </section>;
 }
