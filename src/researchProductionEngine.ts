@@ -1,4 +1,4 @@
-import {resourceKeys,type ResourceBag,type ResourceCosts} from './researchProgress';
+import {resourceKeys,type ResourceBag} from './researchProgress';
 import {PRODUCT_KEYS,recipeById,recipeAvailable,recipeIngredients,
  type ProductBag,type ProductKey} from './researchProducts';
 
