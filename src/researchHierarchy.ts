@@ -1,236 +1,272 @@
-import {maximum,newProjects,technologyParents} from './researchProgress';
+import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
-import {RESEARCH_LANES} from './researchGraph';
 
-/** Gameplay rules remain in researchAutomatic/researchProgress.
- * This is an authored, readable *presentation* of the same 176 levels.
- * Nodes belonging to one technology are kept together; other branches split
- * near their actual parent rather than being distributed into wide rows.
- */
 export const RESEARCH_TILE_SIZE=46;
+export type DivisionKey='revenue'|'taxis'|'explorers'|'hotels'|'parking'|'finance'|'vehicles'|'construction';
 export type HierarchyNode={
- id:string;projectId:string;level:number;category:number;
- kind:'starter'|'research';rank:number;x:number;y:number;
+ id:string;projectId:string;level:number;category:number;rank:number;x:number;y:number;
+ kind:'starter'|'division'|'research';division?:DivisionKey;
 };
-export type HierarchyEdge={from:string;to:string;path:string;kind:'starter'|'prerequisite'|'level';visible:boolean};
+export type HierarchyEdge={
+ from:string;to:string;path:string;
+ kind:'starter'|'division'|'prerequisite'|'level'|'visual';
+ visible:boolean;
+};
 export type HierarchyJunction={id:string;x:number;y:number;inputs:number};
 export type ResearchHierarchy={
  width:number;height:number;nodes:HierarchyNode[];edges:HierarchyEdge[];
  junctions:HierarchyJunction[];byId:Map<string,HierarchyNode>;initialId:string;
 };
-export const INDEPENDENT_RESEARCH_ROOTS=['pricing','procurement'] as const;
-const INDEPENDENT_ROOTS=new Set<string>(INDEPENDENT_RESEARCH_ROOTS);
-const COLUMN=72,ROW=70,TOP=78,PADDING=130;
-const MAX_COLUMN=11;
-const INITIAL_RANK=STARTER_STAGES.length;
-/** Each visible connection is to ONE primary ancestor. A badge and the
- * details drawer disclose *all* prerequisites, never hidden from gameplay.
+
+/** The exact eight first-row divisions from the approved design. These
+ * definitions are an intentionally authored hierarchy, NOT a generated grid.
+ * The underlying technologies are still the real, individually researched
+ * levels: no placeholder unlocks, no extra vehicles and no final trophy.
  */
-const MAIN_PATH:Readonly<Record<string,string>>={
- airportMarkets:'demandIntelligence',regionalReposition:'routing',
- profitAwareFleet:'multiDepotDispatch',vehicleLifecycle:'conditionPrediction',
- coordinatedFrontiers:'navigation',safetyCertification:'advancedScheduling',
- networkLogistics:'preventiveCalendar',customerRetention:'regionalReputation',
- treasuryForecast:'creditRiskModels',tourismNetwork:'tourismPartnerships'
-};
-const ROOT_COLUMNS:Readonly<Record<string,number>>={
- pricing:-6,fleetAnalytics:-3,depotEfficiency:0,survey:3,procurement:6
-};
-const ROOT_SEQUENCE=['pricing','fleetAnalytics','depotEfficiency','survey','procurement'];
-const BRANCH_SEQUENCE:Readonly<Record<string,readonly string[]>>={
+export const DIVISIONS:readonly {
+ key:DivisionKey;name:string;category:number;root:string;
+ projects:readonly string[];lanes:number;
+}[]=[
+ {key:'revenue',name:'Revenue',category:0,root:'pricing',lanes:3,projects:[
+  'pricing','peakPricing','premium','longDistance','demandIntelligence','airportMarkets',
+  'corporatePassengers','advertising','brand','loyalty','regionalReputation',
+  'tourismPartnerships','customerRetention']},
+ {key:'taxis',name:'Taxis & Ferries',category:2,root:'fleetAnalytics',lanes:3,projects:[
+  'fleetAnalytics','dispatchResearch','routing','regionalReposition','multiDepotDispatch',
+  'profitAwareFleet','trainingResearch','ecoDriving','defensive','driverSpecialisation',
+  'advancedScheduling','safetyCertification','portAnalytics','ferryTimetabling','fleetTurnaround']},
+ {key:'explorers',name:'Explorers',category:3,root:'survey',lanes:2,projects:[
+  'survey','navigation','patrol','explorerExpansion','coordinatedFrontiers','coverageIntelligence','harbourSurvey']},
+ {key:'hotels',name:'Hotels',category:9,root:'occupancyForecast',lanes:1,projects:[
+  'occupancyForecast','guestExperience','hotelAutomation']},
+ {key:'parking',name:'Parking',category:5,root:'depotEfficiency',lanes:1,projects:[
+  'depotEfficiency','parkingYield','networkLogistics']},
+ {key:'finance',name:'Banking & Finance',category:7,root:'procurement',lanes:2,projects:[
+  'procurement','insuranceResearch','efficiency','creditRiskModels','financeNegotiation',
+  'treasuryForecast','corporateDueDiligence','subsidiaryIntegration','crossBorderTreasury']},
+ {key:'vehicles',name:'Fleet & Vehicles',category:1,root:'engine',lanes:2,projects:[
+  'engine','fuelInjection','durability','lubrication','lightweight','conditionPrediction',
+  'powertrainAdaptation','vehicleLifecycle','workshopResearch','parts','preventiveCalendar']},
+ {key:'construction',name:'Construction',category:10,root:'modularBuilding',lanes:1,projects:[
+  'modularBuilding','materialLogistics','qualityInspection']}
+] as const;
+const COL=70,ROW=72,START_Y=78,DIVISION_Y=START_Y+STARTER_STAGES.length*ROW+88;
+const TECH_Y=DIVISION_Y+108,SPACE=48;
+
+/** Side branches are ordered by function, not by project category or ID. */
+const FORK_ORDER:Readonly<Record<string,readonly string[]>>={
  pricing:['peakPricing','demandIntelligence','advertising'],
- fleetAnalytics:['dispatchResearch','trainingResearch'],
- depotEfficiency:['workshopResearch','engine','parkingYield','modularBuilding'],
- survey:['navigation','portAnalytics'],
- procurement:['insuranceResearch','efficiency','creditRiskModels','corporateDueDiligence'],
- engine:['fuelInjection','durability','lightweight','powertrainAdaptation'],
- navigation:['patrol','explorerExpansion','coordinatedFrontiers'],
+ peakPricing:['premium','longDistance'],
+ demandIntelligence:['airportMarkets','corporatePassengers'],
+ advertising:['brand','regionalReputation','loyalty'],
+ brand:['loyalty'],regionalReputation:['tourismPartnerships','customerRetention'],
+ fleetAnalytics:['dispatchResearch','trainingResearch','portAnalytics'],
+ dispatchResearch:['routing','regionalReposition'],
+ routing:['regionalReposition','multiDepotDispatch'],
  trainingResearch:['ecoDriving','defensive','driverSpecialisation'],
- advertising:['brand','regionalReputation','occupancyForecast'],
- regionalReposition:['multiDepotDispatch','advancedScheduling']
+ driverSpecialisation:['advancedScheduling','safetyCertification'],
+ portAnalytics:['ferryTimetabling','fleetTurnaround'],
+ survey:['navigation','patrol','explorerExpansion'],
+ navigation:['coordinatedFrontiers','explorerExpansion','patrol'],
+ coordinatedFrontiers:['coverageIntelligence','harbourSurvey'],
+ depotEfficiency:['parkingYield','networkLogistics'],
+ procurement:['insuranceResearch','efficiency','creditRiskModels','corporateDueDiligence'],
+ creditRiskModels:['financeNegotiation','treasuryForecast'],
+ corporateDueDiligence:['subsidiaryIntegration','crossBorderTreasury'],
+ engine:['fuelInjection','durability','lightweight','powertrainAdaptation','workshopResearch'],
+ durability:['conditionPrediction','lubrication','vehicleLifecycle'],
+ workshopResearch:['parts','preventiveCalendar'],
+ occupancyForecast:['guestExperience','hotelAutomation'],
+ modularBuilding:['materialLogistics','qualityInspection']
 };
-type Technology={
- id:string;category:number;levels:number;index:number;
- parents:{id:string;level:number}[];primary:string|undefined;
+const VISIBLE_PARENT:Readonly<Record<string,string>>={
+ peakPricing:'pricing',demandIntelligence:'pricing',advertising:'pricing',
+ airportMarkets:'demandIntelligence',corporatePassengers:'airportMarkets',
+ loyalty:'brand',customerRetention:'regionalReputation',tourismPartnerships:'regionalReputation',
+ regionalReposition:'routing',profitAwareFleet:'multiDepotDispatch',
+ safetyCertification:'advancedScheduling',advancedScheduling:'driverSpecialisation',
+ multiDepotDispatch:'regionalReposition',ferryTimetabling:'portAnalytics',
+ fleetTurnaround:'ferryTimetabling',explorerExpansion:'navigation',
+ coordinatedFrontiers:'navigation',coverageIntelligence:'coordinatedFrontiers',
+ harbourSurvey:'coverageIntelligence',parkingYield:'depotEfficiency',
+ networkLogistics:'depotEfficiency',treasuryForecast:'creditRiskModels',
+ financeNegotiation:'creditRiskModels',crossBorderTreasury:'subsidiaryIntegration',
+ vehicleLifecycle:'conditionPrediction',powertrainAdaptation:'engine'
 };
-function lateralOffset(index:number,count:number):number{
- if(count<=1)return 0;
- return index*2-(count-1);
+const BRANCH_LEVEL:Readonly<Record<string,number>>={
+ pricing:3,peakPricing:2,advertising:3,brand:2,
+ fleetAnalytics:3,trainingResearch:2,dispatchResearch:2,
+ survey:2,navigation:2,procurement:2,engine:2,
+ depotEfficiency:2
+};
+export function visualParentLevel(parent:string,child:string):number{
+ if(child==='regionalReposition'&&parent==='routing')return 2;
+ return BRANCH_LEVEL[parent]??1;
 }
-function mapPath(from:HierarchyNode,to:HierarchyNode):string{
- const startX=from.x+RESEARCH_TILE_SIZE/2,startY=from.y+RESEARCH_TILE_SIZE;
- const endX=to.x+RESEARCH_TILE_SIZE/2,endY=to.y;
- if(Math.abs(startX-endX)<1)return `M ${startX} ${startY} V ${endY}`;
- // Bus travels just below the branch point. The short horizontal fan avoids
- // long lines through the other levels of that research family.
- const busY=Math.min(endY-8,startY+13);
- return `M ${startX} ${startY} V ${busY} H ${endX} V ${endY}`;
+const orderFor=(parent:string,child:string,index:number)=>{
+ const list=FORK_ORDER[parent]??[];
+ const n=list.indexOf(child);
+ return n<0?100+index:n;
+};
+function connectPath(from:HierarchyNode,to:HierarchyNode):string{
+ const sx=from.x+RESEARCH_TILE_SIZE/2,sy=from.y+RESEARCH_TILE_SIZE;
+ const ex=to.x+RESEARCH_TILE_SIZE/2,ey=to.y;
+ if(sx===ex)return `M ${sx} ${sy} V ${ey}`;
+ const bus=Math.min(ey-11,sy+18);
+ return `M ${sx} ${sy} V ${bus} H ${ex} V ${ey}`;
 }
 
-/** "Builderment-style" deliberate branch composition, not a horizontal
- * spreadsheet of levels: a single four-step starter stem, five compact
- * foundations, local forks, standalone paths and small multi-input markers.
- * Crowded lanes are moved DOWN, never shoved across the canvas.
+/** Place projects separately INSIDE their divisions, so one branch can have
+ * 40+ nodes while its neighbour has 3. Each technology's level nodes form
+ * a contiguous trail; children fork near their visually relevant ancestor.
  */
 export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
- const known=new Set(ids);
- const categories=new Map<string,number>();
- const order=new Map<string,number>();
- RESEARCH_LANES.forEach((group,category)=>group.forEach(id=>{
-  categories.set(id,category);order.set(id,order.size);
- }));
- const definitions=new Map<string,Technology>();
- for(const id of ids){
-  const parents=technologyParents(id).map(parent=>({
-   id:parent,level:PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1
-  }));
-  for(const parent of parents)if(!known.has(parent.id))
-   throw Error('Missing technology prerequisite: '+id+' -> '+parent.id);
-  const preferred=MAIN_PATH[id];
-  const primary=parents.find(parent=>parent.id===preferred)?.id??parents[0]?.id;
-  definitions.set(id,{
-   id,category:categories.get(id)??11,levels:maximum(id),
-   index:order.get(id)??999,parents,primary
+ const available=new Set(ids);
+ const assigned=new Set<string>();
+ const divisions=DIVISIONS.map(group=>{
+  const included=group.projects.filter(id=>available.has(id));
+  included.forEach(id=>{
+   if(assigned.has(id))throw Error('Duplicate project in tree: '+id);
+   assigned.add(id);
   });
- }
- const children=new Map<string,string[]>();
- for(const def of definitions.values()){
-  if(!def.primary)continue;
-  const group=children.get(def.primary)??[];
-  group.push(def.id);children.set(def.primary,group);
- }
- for(const [parent,group] of children){
-  const sequence=BRANCH_SEQUENCE[parent]??[];
-  group.sort((a,b)=>{
-   const ai=sequence.indexOf(a),bi=sequence.indexOf(b);
-   return (ai<0?100+(order.get(a)??999):ai)-
-    (bi<0?100+(order.get(b)??999):bi);
-  });
- }
- // Prerequisites are computed using their real required level. The manual
- // root spacing and branch order guide placement without changing tech rules.
- const depthCache=new Map<string,number>(),visiting=new Set<string>();
- const nominalDepth=(id:string):number=>{
-  if(depthCache.has(id))return depthCache.get(id)!;
-  if(visiting.has(id))throw Error('Cyclic research prerequisites '+id);
-  visiting.add(id);
-  const def=definitions.get(id);
-  if(!def)throw Error('Unknown research '+id);
-  const depth=def.parents.length?Math.max(...def.parents.map(parent=>
-   nominalDepth(parent.id)+parent.level)):INITIAL_RANK;
-  visiting.delete(id);depthCache.set(id,depth);return depth;
- };
- ids.forEach(nominalDepth);
- const scheduled=[...definitions.values()].sort((a,b)=>
-  nominalDepth(a.id)-nominalDepth(b.id)||
-  (ROOT_SEQUENCE.indexOf(a.id)<0?99:ROOT_SEQUENCE.indexOf(a.id))-
-  (ROOT_SEQUENCE.indexOf(b.id)<0?99:ROOT_SEQUENCE.indexOf(b.id))||
-  a.index-b.index
- );
- const coords=new Map<string,{column:number;rank:number}>();
- const occupied=new Set<string>();
- for(const def of scheduled){
-  if(def.parents.some(parent=>!coords.has(parent.id)))
-   throw Error('Unscheduled visual prerequisite for '+def.id);
-  let wanted=ROOT_COLUMNS[def.id]??0;
-  let earliest:number=INITIAL_RANK;
-  if(def.parents.length){
-   earliest=Math.max(...def.parents.map(parent=>
-    coords.get(parent.id)!.rank+parent.level));
-   const primary=coords.get(def.primary!)!;
-   const siblings=children.get(def.primary!)??[def.id];
-   const siblingIndex=siblings.indexOf(def.id);
-   const delta=lateralOffset(siblingIndex,siblings.length);
-   wanted=primary.column+delta;
-   // A child of a five-level technology belongs on a nearby *side*
-   // instead of drawing a confusing line through its parent's own levels.
-   if(siblings.length===1&&def.primary){
-    wanted+=((categories.get(def.id)??0)%2===0?-1:1);
-   }
-   // Later integrated technologies form a small central canopy rather than
-   // spreading ever outward. This provides the narrowing, joined lower
-   // silhouette seen in a deliberately designed technology tree.
-   const late=newProjects.find(project=>project.id===def.id);
-   if(late&&late.tier>=4)
-    wanted*=late.tier>=5?.42:.74;
-   // Offset sibling forks by 0–2 rows to create the curved, compact
-   // branch hierarchy in the reference rather than a single long row.
-   earliest+=siblings.length>1?siblingIndex%3:0;
-  }
-  if(!def.parents.length){
-   const col=ROOT_COLUMNS[def.id];
-   if(col===undefined)throw Error('Unmapped research foundation '+def.id);
-   wanted=col;
-  }
-  let choice:{column:number;rank:number;score:number}|undefined;
-  const cx=Math.max(-MAX_COLUMN,Math.min(MAX_COLUMN,Math.round(wanted)));
-  for(let delay=0;delay<=96;delay++){
-   for(let spread=0;spread<=7;spread++){
-    for(const candidate of spread===0?[cx]:[cx-spread,cx+spread]){
-     if(candidate < -MAX_COLUMN||candidate>MAX_COLUMN)continue;
-     const rank=earliest+delay;
-     let available=true;
-     for(let level=0;level<def.levels;level++)
-      if(occupied.has(candidate+':'+(rank+level))){available=false;break;}
-     if(!available)continue;
-     const parentDistance=def.primary?Math.abs(candidate-coords.get(def.primary)!.column):0;
-     const score=delay*7+Math.abs(candidate-wanted)*11+parentDistance*3;
-     if(!choice||score<choice.score)
-      choice={column:candidate,rank,score};
-    }
-   }
-   // Once a nearby place exists, delaying more than five additional
-   // rows can never be preferable. Keep forks visually local.
-   if(choice&&delay>5)break;
-  }
-  if(!choice)throw Error('Research hierarchy failed to place '+def.id);
-  coords.set(def.id,{column:choice.column,rank:choice.rank});
-  for(let i=0;i<def.levels;i++)occupied.add(choice.column+':'+(choice.rank+i));
- }
- const minCol=Math.min(0,...[...coords.values()].map(p=>p.column));
- const maxCol=Math.max(0,...[...coords.values()].map(p=>p.column));
- const shift=PADDING-minCol*COLUMN;
- const width=(maxCol-minCol)*COLUMN+RESEARCH_TILE_SIZE+PADDING*2;
- const maxRank=Math.max(INITIAL_RANK-1,...[...coords].map(([id,p])=>
-  p.rank+definitions.get(id)!.levels-1));
- const height=TOP+(maxRank+1)*ROW+80;
- const nodes:HierarchyNode[]=[];
- const byId=new Map<string,HierarchyNode>();
- const push=(node:HierarchyNode)=>{nodes.push(node);byId.set(node.id,node);};
- for(const stage of STARTER_STAGES)push({
-  id:'starter:'+stage.level,projectId:'starter',level:stage.level,
-  category:-1,kind:'starter',rank:stage.level-1,
-  x:shift,y:TOP+(stage.level-1)*ROW
+  return {...group,included};
  });
- for(const def of scheduled){
-  const pos=coords.get(def.id)!;
-  for(let level=1;level<=def.levels;level++)push({
-   id:researchNodeId(def.id,level),projectId:def.id,level,
-   category:def.category,kind:'research',
-   rank:pos.rank+level-1,x:shift+pos.column*COLUMN,
-   y:TOP+(pos.rank+level-1)*ROW
-  });
+ const missing=ids.filter(id=>!assigned.has(id));
+ if(missing.length)throw Error('Unassigned technology: '+missing.join(', '));
+ const widthByDivision=divisions.map(group=>Math.max(215,2*group.lanes*COL+RESEARCH_TILE_SIZE+SPACE));
+ const centers:number[]=[];
+ let cursor=120;
+ for(let i=0;i<divisions.length;i++){
+  const group=divisions[i];
+  const radius=group.lanes*COL+RESEARCH_TILE_SIZE/2;
+  centers.push(cursor+radius);
+  cursor+=widthByDivision[i];
  }
- const edges:HierarchyEdge[]=[],junctions:HierarchyJunction[]=[];
- const link=(fromId:string,toId:string,kind:HierarchyEdge['kind'],visible=true)=>{
-  const from=byId.get(fromId),to=byId.get(toId);
-  if(!from||!to)throw Error('Unresolved research node '+fromId+' -> '+toId);
-  edges.push({from:fromId,to:toId,kind,visible,path:mapPath(from,to)});
+ const width=cursor+120;
+ const center=width/2-RESEARCH_TILE_SIZE/2;
+ const nodes:HierarchyNode[]=[],edges:HierarchyEdge[]=[],junctions:HierarchyJunction[]=[];
+ const byId=new Map<string,HierarchyNode>();
+ const add=(node:HierarchyNode)=>{nodes.push(node);byId.set(node.id,node);};
+ const link=(source:string,target:string,kind:HierarchyEdge['kind'],visible=true)=>{
+  const from=byId.get(source),to=byId.get(target);
+  if(!from||!to)throw Error('Unknown research connection: '+source+' → '+target);
+  edges.push({from:source,to:target,kind,visible,path:connectPath(from,to)});
  };
- for(let i=2;i<=STARTER_STAGES.length;i++)
-  link('starter:'+(i-1),'starter:'+i,'starter');
- for(const def of scheduled){
-  const target=researchNodeId(def.id,1);
-  for(const parent of def.parents)
-   link(researchNodeId(parent.id,parent.level),target,'prerequisite',parent.id===def.primary);
-  if(!def.parents.length&&!INDEPENDENT_ROOTS.has(def.id))
-   link('starter:4',target,'starter');
-  for(let level=2;level<=def.levels;level++)
-   link(researchNodeId(def.id,level-1),researchNodeId(def.id,level),'level');
-  if(def.parents.length>1){
-   const node=byId.get(target)!;
-   junctions.push({id:target,x:node.x+RESEARCH_TILE_SIZE/2,y:node.y-11,inputs:def.parents.length});
+ for(const stage of STARTER_STAGES){
+  add({id:'starter:'+stage.level,projectId:'starter',level:stage.level,
+   category:-1,kind:'starter',rank:stage.level-1,x:center,
+   y:START_Y+(stage.level-1)*ROW});
+  if(stage.level>1)link('starter:'+(stage.level-1),'starter:'+stage.level,'starter');
+ }
+ let lowest=DIVISION_Y+ROW;
+ for(let g=0;g<divisions.length;g++){
+  const group=divisions[g],baseX=centers[g]-RESEARCH_TILE_SIZE/2;
+  const divisionId='division:'+group.key;
+  add({id:divisionId,projectId:group.root,level:0,kind:'division',
+   category:group.category,division:group.key,rank:STARTER_STAGES.length,
+   x:baseX,y:DIVISION_Y});
+  link('starter:'+STARTER_STAGES.length,divisionId,'division');
+  if(!group.included.length)continue;
+  const localSet=new Set(group.included);
+  const parents=new Map<string,string|undefined>();
+  for(const id of group.included){
+   if(id===group.root){parents.set(id,undefined);continue;}
+   const actual=technologyParents(id).filter(parent=>localSet.has(parent));
+   const preferred=VISIBLE_PARENT[id];
+   parents.set(id,preferred&&actual.includes(preferred)?preferred:
+    actual[0]??group.root);
+  }
+  const children=new Map<string,string[]>();
+  for(const [id,parent] of parents){
+   if(!parent)continue;
+   const groupChildren=children.get(parent)??[];
+   groupChildren.push(id);children.set(parent,groupChildren);
+  }
+  for(const [parent,groupChildren] of children){
+   groupChildren.sort((a,b)=>orderFor(parent,a,group.included.indexOf(a))-
+    orderFor(parent,b,group.included.indexOf(b)));
+  }
+  const ready=new Set<string>(),depthMemo=new Map<string,number>(),seen=new Set<string>();
+  const depth=(id:string):number=>{
+   if(depthMemo.has(id))return depthMemo.get(id)!;
+   if(seen.has(id))throw Error('Cycle in visual division '+group.key+': '+id);
+   seen.add(id);
+   const parent=parents.get(id);
+   const d=parent?depth(parent)+1:0;
+   seen.delete(id);depthMemo.set(id,d);return d;
+  };
+  const sorted=[...group.included].sort((a,b)=>depth(a)-depth(b)||
+   group.included.indexOf(a)-group.included.indexOf(b));
+  type Placed={col:number;rank:number};
+  const placed=new Map<string,Placed>();
+  const occupied=new Set<string>();
+  for(const id of sorted){
+   const parent=parents.get(id);
+   const cap=maximum(id);
+   const siblings=parent?children.get(parent)??[]:[];
+   const index=siblings.indexOf(id);
+   const offset=index-(siblings.length-1)/2;
+   const upstream=parent?placed.get(parent):undefined;
+   if(parent&&!upstream)throw Error('Missing division parent '+parent);
+   const preferred=upstream?upstream.col+Math.round(offset*1.65):0;
+   const row=upstream?upstream.rank+Math.min(maximum(parent!),visualParentLevel(parent!,id))+1:0;
+   let choice:{col:number;rank:number;score:number}|undefined;
+   for(let delay=0;delay<=130;delay++){
+    for(let radius=0;radius<=group.lanes*2;radius++){
+     const candidates=radius===0?[preferred]:[preferred-radius,preferred+radius];
+     for(const col of candidates){
+      if(col< -group.lanes||col>group.lanes)continue;
+      const rank=row+delay;
+      let clear=true;
+      for(let l=0;l<cap;l++){
+       if(occupied.has(col+':'+(rank+l))){clear=false;break;}
+      }
+      if(!clear)continue;
+      const score=delay*4+Math.abs(col-preferred)*9;
+      if(!choice||score<choice.score)choice={col,rank,score};
+     }
+    }
+    if(choice&&delay>4)break;
+   }
+   if(!choice)throw Error('Cannot place technology '+id);
+   placed.set(id,choice);
+   for(let l=0;l<cap;l++){
+    occupied.add(choice.col+':'+(choice.rank+l));
+    const level=l+1,y=TECH_Y+(choice.rank+l)*ROW;
+    add({id:researchNodeId(id,level),projectId:id,level,
+     kind:'research',division:group.key,category:group.category,
+     rank:STARTER_STAGES.length+2+choice.rank+l,
+     x:baseX+choice.col*COL,y});
+    lowest=Math.max(lowest,y+RESEARCH_TILE_SIZE);
+   }
+   ready.add(id);
+  }
+  // Author each branch, while retaining every extra actual dependency as
+  // metadata-only connectors (displayed in the node's requirements drawer).
+  for(const id of sorted){
+   const parent=parents.get(id);
+   const target=researchNodeId(id,1);
+   const source=parent?researchNodeId(parent,Math.min(maximum(parent),visualParentLevel(parent,id))):divisionId;
+   if(!parent)link(divisionId,target,'division');
+   const real=technologyParents(id);
+   const primaryLevel=parent?PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1:0;
+   let visibleMatches=false;
+   for(const realParent of real){
+    const realSource=researchNodeId(realParent,PARENT_LEVEL_REQUIREMENTS[id]?.[realParent]??1);
+    if(!byId.has(realSource))continue;
+    const visible=realSource===source;
+    link(realSource,target,'prerequisite',visible);
+    if(visible)visibleMatches=true;
+   }
+   if(parent&&!visibleMatches)link(source,target,'visual');
+   for(let level=2;level<=maximum(id);level++)
+    link(researchNodeId(id,level-1),researchNodeId(id,level),'level');
+   if(real.length>=2){
+    const to=byId.get(target)!;
+    junctions.push({id:target,x:to.x+RESEARCH_TILE_SIZE/2,y:to.y-12,inputs:real.length});
+   }
   }
  }
+ const height=lowest+175;
  return {width,height,nodes,edges,junctions,byId,initialId:'starter:1'};
 }
