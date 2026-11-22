@@ -1,4 +1,4 @@
-import {maximum,technologyParents} from './researchProgress';
+import {maximum,newProjects,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
 import {RESEARCH_LANES} from './researchGraph';
 
@@ -147,6 +147,12 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
    if(siblings.length===1&&def.primary){
     wanted+=((categories.get(def.id)??0)%2===0?-1:1);
    }
+   // Later integrated technologies form a small central canopy rather than
+   // spreading ever outward. This provides the narrowing, joined lower
+   // silhouette seen in a deliberately designed technology tree.
+   const late=newProjects.find(project=>project.id===def.id);
+   if(late&&late.tier>=4)
+    wanted*=late.tier>=5?.42:.74;
    // Offset sibling forks by 0–2 rows to create the curved, compact
    // branch hierarchy in the reference rather than a single long row.
    earliest+=siblings.length>1?siblingIndex%3:0;
