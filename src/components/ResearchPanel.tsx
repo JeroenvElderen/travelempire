@@ -23,7 +23,6 @@ const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n));
 const fmt=(n:number)=>Math.floor(Math.max(0,n||0)).toLocaleString('en-IE');
 const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=10000?
  (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
-const starterIconCategory=[3,2,4,0,6] as const;
 const starterIcons=['🗺️','🚕','📋','📈','⭐'] as const;
 const divisionIcons:Record<DivisionKey,string>={
  revenue:'🪙',taxis:'🚕',explorers:'🧭',hotels:'🏨',
