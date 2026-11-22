@@ -144,9 +144,9 @@ export function propertyOperations(p:Pick<PropertyHolding,'id'|'kind'|'valuation
 export function settlePropertyDividends(
  portfolio:PropertyPortfolio,gameNow:number,
  operatedPeriods?:ReadonlyMap<string,readonly {fromHour:number;toHour?:number}[]>
-):{portfolio:PropertyPortfolio;incomeCents:number;hours:number}{
+):{portfolio:PropertyPortfolio;incomeCents:number;hours:number;parkingSpaceHours:number}{
  const hour=currentHour(gameNow);
- let incomeCents=0,hours=0,changed=false;
+ let incomeCents=0,hours=0,changed=false,parkingSpaceHours=0;
  const holdings={...portfolio.holdings};
  for(const [id,h] of Object.entries(portfolio.holdings)){
   if(!h||!Number.isFinite(h.valuationCents)||!Number.isFinite(h.investedCents)||h.valuationCents<=0)continue;
@@ -160,11 +160,12 @@ export function settlePropertyDividends(
    const periods=h.kind==='hotel'?operatedPeriods?.get(id):undefined;
    if(periods?.some(p=>p.fromHour<=t-1&&(p.toHour===undefined||t-1<p.toHour)))continue;
    const operations=propertyOperations(h,t-1);
+   if(h.kind==='parking')parkingSpaceHours+=Math.round(operations.occupiedUnits*ownership(h));
    payment+=Math.round(operations.netCents*ownership(h));
   }
   incomeCents+=payment;hours=Math.max(hours,hour-from);changed=true;
   holdings[id]={...h,dividendsCents:(h.dividendsCents??0)+payment,lastHour:hour};
  }
- return {portfolio:changed?{holdings}:portfolio,incomeCents,hours};
+ return {portfolio:changed?{holdings}:portfolio,incomeCents,hours,parkingSpaceHours};
 }
 export const euro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(cents/100);
