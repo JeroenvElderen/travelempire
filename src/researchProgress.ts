@@ -69,7 +69,7 @@ export const newProjects:readonly AdvancedProject[]=[
  * technology has not yet been researched.
  */
 export const legacyTechnologyLinks:Readonly<Record<string,readonly string[]>>={
- peakPricing:['pricing'],premium:['pricing'],longDistance:['pricing'],
+ peakPricing:['pricing'],premium:['peakPricing'],longDistance:['premium'],
  fuelInjection:['engine'],durability:['engine'],lubrication:['durability'],lightweight:['engine'],
  dispatchResearch:['fleetAnalytics'],routing:['dispatchResearch'],
  navigation:['survey'],patrol:['navigation'],explorerExpansion:['navigation'],
@@ -83,14 +83,20 @@ export const legacyTechnologyLinks:Readonly<Record<string,readonly string[]>>={
  * already-functional gameplay or previously completed save levels.
  */
 export const hierarchyFoundationLinks:Readonly<Record<string,readonly string[]>>={
- fleetAnalytics:['pricing'],
+ // Passenger revenue and financial research form independent paths.
+ // Fleet operations, surveying and depots need not be linked to those paths.
  trainingResearch:['fleetAnalytics'],
  advertising:['pricing'],
  engine:['depotEfficiency'],
  portAnalytics:['survey'],
  occupancyForecast:['advertising'],
  modularBuilding:['depotEfficiency'],
- corporateDueDiligence:['procurement']
+ corporateDueDiligence:['procurement'],
+ // A three-way merge followed by two different branches: regional operations
+ // demand fleet analytics, route optimisation and actual navigation research.
+ regionalReposition:['navigation'],
+ advancedScheduling:['regionalReposition'],
+ profitAwareFleet:['advancedScheduling']
 };
 export function technologyParents(id:string):readonly string[]{
  const primary=newProjects.find(p=>p.id===id)?.requires??legacyTechnologyLinks[id]??[];
