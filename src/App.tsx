@@ -2070,13 +2070,15 @@ export default function App(){
      console.warn('[TravelEmpire] Slow simulation tick',{durationMs:Math.round(tickMs),vehicles:old.taxis.length,exploredRoads:discovered.size,averageMs:Math.round(perf.totalMs/perf.samples),maxMs:Math.round(perf.maxMs)});
      perf.lastReport=now;perf.samples=0;perf.totalMs=0;perf.maxMs=0;
     }
+    const previousServices=new Map(old.taxis.map(t=>[t.id,t.serviceCount??0]));
+    const completedServices=taxis.reduce((sum,t)=>sum+Math.max(0,(t.serviceCount??0)-(previousServices.get(t.id)??0)),0);
     return{...old,transportAnalytics:recordCompletedTransportFares(
       old.transportAnalytics,tickDay,transportFares),
       accounting:taxSettlement.accounting,depotFinanceHistory:depotHistory.filter(h=>h.day>=new Date(gameNow-365*86400000).toISOString().slice(0,10)).slice(-2500),depotFacilityExpense:(old.depotFacilityExpense??0)+facilityCost,financePaymentsMade:(old.financePaymentsMade??0)+repaymentCount,
       creditMisses:(old.creditMisses??0)+securedTick.missed,
       creditDefaults:(old.creditDefaults??0)+securedTick.repossessions.length,
       drivers,taxis:securedTick.taxis.filter(t=>!expiredLeaseIds.has(t.id)),leases:leaseTick.leases,leaseExpense:(old.leaseExpense??0)+leaseTick.payments,revenue:old.revenue+revenue,completed:old.completed+completed,paidPassengerJobIds:[...paidPassengerJobs].slice(-512),exploredEdgeIds:updatedIds,
-      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,explorationExpense:(old.explorationExpense??0)+explorationExpense,
+      fuelExpense:(old.fuelExpense??0)+fuelExpense,maintenanceExpense:(old.maintenanceExpense??0)+maintenanceExpense,serviceExpense:(old.serviceExpense??0)+serviceExpense,researchServicesTotal:(old.researchServicesTotal??0)+completedServices,explorationExpense:(old.explorationExpense??0)+explorationExpense,
       distanceKm:(old.distanceKm??0)+distanceKm,driverWages:(old.driverWages??0)+driverWages,
       insuranceExpense:(old.insuranceExpense??0)+insuranceExpense,overheadExpense:(old.overheadExpense??0)+overhead+facilityCost,
       financeJournal:postFinance(old.financeJournal,([
