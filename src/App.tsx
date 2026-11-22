@@ -3031,7 +3031,7 @@ export default function App(){
   const settle=()=>{
    if(document.visibilityState==='hidden'||companyRef.current?.id!==companyId)return;
    const now=gameClockRef.current?.epochMs;if(now===undefined)return;
-   const result=settlePropertyDividends(portfolioRef.current,now,activeHotelPeriods(constructionRef.current));
+   const result=settlePropertyDividends(portfolioRef.current,now,activeHotelPeriods(constructionRef.current),Resources.unlockedBonus(research.levels,'parking'));
    if(result.portfolio===portfolioRef.current)return;
    try{savePortfolio(companyId,result.portfolio)}catch(error){diagnostic('investments:save-error',String(error));return;}
    portfolioRef.current=result.portfolio;setPortfolio(result.portfolio);
