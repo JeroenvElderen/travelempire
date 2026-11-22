@@ -233,7 +233,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
       onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
       <span className="factory-tech-icon">
        <ResearchPixelIcon category={node.kind==='starter'?
-        starterIconCategory[node.level-1]:node.category} projectId={node.kind==='research'?node.projectId:undefined} size={30}/>
+        starterIconCategory[node.level-1]:node.category} projectId={node.kind==='research'?node.projectId:undefined} level={node.level} size={30}/>
       </span>
       {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
       {done&&<span className="factory-check"><CheckCircle2 size={13}/></span>}
@@ -275,7 +275,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
     onClick={e=>e.stopPropagation()}>
     <header><span className="factory-detail-icon">
      <ResearchPixelIcon category={selected.kind==='starter'?
-      starterIconCategory[selected.level-1]:selected.category} projectId={selected.kind==='research'?selected.projectId:undefined} size={37}/>
+      starterIconCategory[selected.level-1]:selected.category} projectId={selected.kind==='research'?selected.projectId:undefined} level={selected.level} size={37}/>
     </span>
      <div><small>{selected.kind==='starter'?'STARTER TECHNOLOGY':
       ADVANCED_CATEGORIES[selectedProject?.category??0]}</small>
