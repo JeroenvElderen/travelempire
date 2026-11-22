@@ -1,10 +1,11 @@
 import {describe,it,expect} from 'vitest';
 import {allocateResearchProducts} from './researchProductionEngine';
-import {productRequirements,recipeAvailable,recipeIngredients,PRODUCT_KEYS,RECIPES} from './researchProducts';
+import {productRequirements,recipeAvailable,recipeIngredients,PRODUCT_KEYS,RECIPES,recipeById} from './researchProducts';
 import {advanceAutomaticTree} from './researchAutomatic';
 import {lockedFeature} from './researchUnlocks';
 import {empty,projects} from './research';
-import {safeBag,resourceKeys,newProjects} from './researchProgress';
+import {safeBag,resourceKeys,newProjects,technologyParents,maximum} from './researchProgress';
+import {PARENT_LEVEL_REQUIREMENTS} from './researchAutomatic';
 
 const ledger={};
 const ctx={roads:12000,explorers:2,depots:2,freshStart:true};
@@ -21,6 +22,44 @@ describe('automatic multi-stage research manufacturing',()=>{
   expect(recipeAvailable('marketBrief',{pricing:1})).toBe(true);
   expect(recipeAvailable('demandForecast',{pricing:5})).toBe(false);
   expect(recipeIngredients('demandForecast').some(i=>i.kind==='product')).toBe(true);
+ });
+ it('has no technology-product unlock cycles or impossible recipe prerequisites',()=>{
+  const known=[...projects,...newProjects];
+  const technology=new Map(known.map(p=>[p.id,p]));
+  const visiting=new Set<string>(),finished=new Set<string>();
+  const depends=(id:string,level:number):string[]=>{
+   const direct=level>1?[id+':'+(level-1)]:
+    technologyParents(id).map(parent=>
+     parent+':'+(PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1));
+   const pending=new Set<string>();
+   const addProduct=(product:string,history=new Set<string>())=>{
+    if(history.has(product))throw new Error('Circular recipe '+product);
+    const recipe=recipeById.get(product as typeof PRODUCT_KEYS[number]);
+    if(!recipe)throw new Error('Unknown recipe '+product);
+    if(!technology.has(recipe.unlock.project)||
+     maximum(recipe.unlock.project)<recipe.unlock.level)throw new Error('Recipe cannot unlock '+product);
+    pending.add(recipe.unlock.project+':'+recipe.unlock.level);
+    const trace=new Set([...history,product]);
+    for(const ingredient of recipeIngredients(recipe.id))
+     if(ingredient.kind==='product')addProduct(ingredient.key,trace);
+   };
+   for(const product of Object.keys(productRequirements(id,level,projects)))addProduct(product);
+   return [...direct,...pending];
+  };
+  const visit=(id:string)=>{
+   if(finished.has(id))return;
+   if(visiting.has(id))throw new Error('Unreachable research production cycle at '+id);
+   visiting.add(id);
+   const delimiter=id.lastIndexOf(':');
+   const project=id.slice(0,delimiter),level=Number(id.slice(delimiter+1));
+   if(!technology.has(project)||level<1||level>maximum(project))
+    throw new Error('Missing technology '+id);
+   for(const parent of depends(project,level))visit(parent);
+   visiting.delete(id);finished.add(id);
+  };
+  for(const project of known)
+   for(let level=1;level<=maximum(project.id);level++)visit(project.id+':'+level);
+  expect(finished.size).toBe(172);
  });
  it('automatically consumes raw income exactly once to manufacture level-two research products',()=>{
   const levels={pricing:1};
