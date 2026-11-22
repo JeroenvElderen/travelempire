@@ -127,7 +127,7 @@ export function buildLevelResearchDiagram(allIds:readonly string[]):LevelDiagram
  };
  for(let level=2;level<=STARTER_STAGES.length;level++)
   connect(byId.get('starter:'+(level-1)),byId.get('starter:'+level),'starter');
- const gate=byId.get('starter:4');
+ const gate=byId.get('starter:'+STARTER_STAGES.length);
  for(const lane of RESEARCH_LANES){
   const first=lane.find(id=>available.has(id));
   if(first){
