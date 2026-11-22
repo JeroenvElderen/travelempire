@@ -130,20 +130,33 @@ export function advanceAutomaticTree<T extends AutomaticState>(
    if(!eligible.length||resources[resource]<=0)continue;
    const count=eligible.length;
    const start=(resourceCursor[resource]??0)%count;
+   const rotated=eligible.slice(start).concat(eligible.slice(0,start));
+   // Fill eligible nodes in fair rounds. A first pass may leave inventory
+   // behind because one project needs less than its allotment. Reallocate
+   // that remainder immediately, so running the same snapshot twice is
+   // idempotent and no resources are minted, duplicated or stranded.
    let remaining=resources[resource];
-   for(let j=0;j<count&&remaining>0;j++){
-    const candidate=eligible[(start+j)%count];
-    const need=Math.max(0,(candidate.goal[resource]??0)-(candidate.given[resource]??0));
-    const share=Math.max(1,Math.floor(remaining/(count-j)));
-    const amount=Math.min(need,share,remaining);
-    if(amount<=0)continue;
-    candidate.given[resource]=(candidate.given[resource]??0)+amount;
-    contributions[candidate.key]=candidate.given;
-    resources[resource]-=amount;
-    remaining-=amount;
-    deliveredThisWave=true;changed=true;
+   while(remaining>0){
+    const waiting=rotated.filter(candidate=>
+     (candidate.goal[resource]??0)>(candidate.given[resource]??0));
+    if(!waiting.length)break;
+    const share=Math.max(1,Math.floor(remaining/waiting.length));
+    let distributed=0;
+    for(const candidate of waiting){
+     if(!remaining)break;
+     const need=Math.max(0,(candidate.goal[resource]??0)-(candidate.given[resource]??0));
+     const amount=Math.min(need,share,remaining);
+     if(amount<=0)continue;
+     candidate.given[resource]=(candidate.given[resource]??0)+amount;
+     contributions[candidate.key]=candidate.given;
+     resources[resource]-=amount;
+     remaining-=amount;
+     distributed+=amount;
+     deliveredThisWave=true;changed=true;
+    }
+    if(distributed<=0)break;
    }
-   resourceCursor[resource]=((start+1)%count);
+   if(deliveredThisWave)resourceCursor[resource]=(start+1)%count;
   }
   let unlocked=false;
   for(const candidate of candidates){
