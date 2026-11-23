@@ -6,6 +6,9 @@ import {
  SquareParking, Star, Target, TrendingUp, Truck, Users, Wrench,
 } from 'lucide-react';
 import type {DivisionKey} from '../researchHierarchy';
+import type {ResourceKey} from '../researchProgress';
+import type {ProductKey} from '../researchProducts';
+
 
 /** TravelEmpire's own Aurora Glass icon vocabulary. Unlike the former
  * Builderment-style pixel sprites these are crisp vectors at every zoom.
@@ -56,4 +59,32 @@ export default function ResearchTechIcon({
   TECH_ICONS[projectId]??CATEGORY_FALLBACK[Math.max(0,Math.min(CATEGORY_FALLBACK.length-1,category))];
  return <Glyph aria-hidden="true" size={size} strokeWidth={kind==='division'?2.2:1.9}
   className="factory-vector-icon"/>;
+}
+
+/** Raw operating resources and manufactured research ingredients share the
+ * same line icon treatment as the tree, without changing underlying data. */
+const RESOURCE_ICONS:Record<ResourceKey,Glyph>={
+ roads:Route,passengers:CarFront,revenue:Coins,parking:SquareParking,
+ hotels:Hotel,ferries:Ship,distance:Compass,maintenance:Wrench,
+ construction:HardHat,corporate:Building2,
+};
+const PRODUCT_ICONS:Partial<Record<ProductKey,Glyph>>={
+ marketBrief:ClipboardCheck,routeReport:Map,fleetReport:BarChart3,
+ driverStudy:Users,vehicleStudy:Gauge,depotAudit:Building2,
+ brandStudy:Megaphone,creditMemo:Landmark,harbourReport:Ship,
+ guestProfile:BedDouble,buildReport:HardHat,corporateReport:Building2,
+ demandForecast:TrendingUp,navigationModel:Compass,maintenanceModel:Wrench,
+ trafficAnalysis:Route,financialForecast:Banknote,hospitalityModel:Hotel,
+ maritimeStudy:Ship,propertyPlan:Building2,investmentStrategy:CreditCard,
+ integratedMobility:Navigation,advancedVehicleTech:Gauge,
+ autonomousFleet:CarFront,tourismNetwork:Map,
+ constructionSystem:HardHat,internationalStrategy:Landmark
+};
+export function ResearchResourceIcon({resource,size=18}:{resource:ResourceKey;size?:number}){
+ const Icon=RESOURCE_ICONS[resource];
+ return <Icon className="factory-vector-icon" aria-hidden="true" size={size} strokeWidth={1.9}/>;
+}
+export function ResearchProductIcon({product,size=18}:{product:ProductKey;size?:number}){
+ const Icon=PRODUCT_ICONS[product]??Package;
+ return <Icon className="factory-vector-icon" aria-hidden="true" size={size} strokeWidth={1.9}/>;
 }
