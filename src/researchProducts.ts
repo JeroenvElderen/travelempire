@@ -8,7 +8,9 @@ export const PRODUCT_KEYS=['marketBrief','routeReport','fleetReport','driverStud
  'demandForecast','navigationModel','maintenanceModel','trafficAnalysis','financialForecast',
  'hospitalityModel','maritimeStudy','propertyPlan','investmentStrategy',
  'integratedMobility','advancedVehicleTech','autonomousFleet','tourismNetwork',
- 'constructionSystem','internationalStrategy'] as const;
+ 'constructionSystem','internationalStrategy',
+ 'ticketingModel','harbourSchedule','roadTelemetry','stayRevenueForecast',
+ 'parkingFlowModel','creditPortfolioReport','fleetReliabilityMap','developmentBlueprint'] as const;
 export type ProductKey=typeof PRODUCT_KEYS[number];
 export type ProductBag=Partial<Record<ProductKey,number>>;
 export type Recipe={id:ProductKey;name:string;icon:string;inputs:ResourceCosts;parts?:ProductBag;unlock:{project:string;level:number}};
@@ -39,7 +41,17 @@ export const RECIPES:readonly Recipe[]=[
  {id:'autonomousFleet',name:'Autonomous Fleet Network',icon:'🤖',inputs:{revenue:3000},parts:{integratedMobility:2,maintenanceModel:2,driverStudy:3},unlock:{project:'regionalReposition',level:1}},
  {id:'tourismNetwork',name:'Tourism Network',icon:'🌴',inputs:{revenue:3500},parts:{hospitalityModel:2,maritimeStudy:2,marketBrief:2},unlock:{project:'tourismPartnerships',level:1}},
  {id:'constructionSystem',name:'Construction Technology System',icon:'🏗️',inputs:{revenue:3000},parts:{propertyPlan:2,buildReport:5,creditMemo:1},unlock:{project:'materialLogistics',level:1}},
- {id:'internationalStrategy',name:'International Research Strategy',icon:'🌍',inputs:{revenue:5000},parts:{investmentStrategy:2,maritimeStudy:2,hospitalityModel:2},unlock:{project:'subsidiaryIntegration',level:1}}
+ {id:'internationalStrategy',name:'International Research Strategy',icon:'🌍',inputs:{revenue:5000},parts:{investmentStrategy:2,maritimeStudy:2,hospitalityModel:2},unlock:{project:'subsidiaryIntegration',level:1}},
+ // New interlinked materials use existing earned operational resources. Each
+ // recipe unlocks before any of its consuming technologies, avoiding cycles.
+ {id:'ticketingModel',name:'Ticketing Model',icon:'🎟️',inputs:{passengers:20,revenue:500},parts:{marketBrief:2,trafficAnalysis:1},unlock:{project:'fareBundles',level:1}},
+ {id:'harbourSchedule',name:'Harbour Schedule',icon:'⚓',inputs:{ferries:50,revenue:400},parts:{maritimeStudy:2,routeReport:2},unlock:{project:'harbourConnections',level:1}},
+ {id:'roadTelemetry',name:'Road Telemetry',icon:'🛣️',inputs:{roads:250,distance:200},parts:{navigationModel:2,routeReport:2},unlock:{project:'terrainMapping',level:1}},
+ {id:'stayRevenueForecast',name:'Stay Revenue Forecast',icon:'🏨',inputs:{hotels:35,revenue:1200},parts:{hospitalityModel:2,financialForecast:1},unlock:{project:'frontDeskAnalytics',level:1}},
+ {id:'parkingFlowModel',name:'Parking Flow Model',icon:'🅿️',inputs:{parking:35,revenue:500},parts:{depotAudit:2,trafficAnalysis:1},unlock:{project:'parkingDemandPrediction',level:1}},
+ {id:'creditPortfolioReport',name:'Credit Portfolio Report',icon:'💳',inputs:{passengers:30,revenue:1500},parts:{creditMemo:2,financialForecast:1},unlock:{project:'creditPortfolio',level:1}},
+ {id:'fleetReliabilityMap',name:'Fleet Reliability Map',icon:'🛠️',inputs:{maintenance:3,distance:700},parts:{maintenanceModel:2,vehicleStudy:2},unlock:{project:'tyreTelemetry',level:1}},
+ {id:'developmentBlueprint',name:'Development Blueprint',icon:'🏗️',inputs:{roads:300,construction:3},parts:{buildReport:2,routeReport:2},unlock:{project:'siteSurveys',level:1}}
 ];
 export const recipeById=new Map<ProductKey,Recipe>(RECIPES.map(r=>[r.id,r]));
 export const recipeAvailable=(id:ProductKey,levels:Partial<Record<string,number>>)=>{
@@ -62,6 +74,14 @@ export function productRequirements(id:string,level:number,legacy:readonly Resea
  const category=previous?.category??next?.category;
  if(category===undefined)return {};
  const tier=previous?level:(next?.tier??1);
+ // Newly authored branches deliberately combine different manufactured
+ // resources. Legacy technologies retain their original automatic recipes.
+ if(next?.products){
+  for(const [key,quantity] of Object.entries(next.products))
+   if(!recipeById.has(key as ProductKey)||!Number.isFinite(quantity)||quantity<=0)
+    throw Error('Invalid manufactured research requirement '+id+' → '+key);
+  return {...next.products} as ProductBag;
+ }
  if(tier<2)return id==='explorerExpansion'?{navigationModel:2}:{};
  // Never require a product whose recipe is unlocked by the very same
  // technology. Corporate due diligence must open before Corporate Reports
