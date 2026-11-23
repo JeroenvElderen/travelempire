@@ -62,6 +62,24 @@ const TECH_ICONS:Readonly<Record<string,Glyph>>={
 const CATEGORY_FALLBACK:readonly Glyph[]=[
  Coins,Gauge,CarFront,Compass,Users,Wrench,Megaphone,Landmark,Ship,Hotel,HardHat,Building2,
 ];
+/** Distinguish all newly researched items by subject, without relying on
+ * platform-dependent emojis or a wall of identical category pictograms.
+ */
+const topicIcon=(id:string,category:number):Glyph=>{
+ const text=id.replace(/([A-Z])/g,' $1').toLowerCase();
+ if(/island|harbour|maritime|ferry|port|berth/.test(text))return Ship;
+ if(/hotel|guest|room|resort|conference|reservation|concierge|hospitality/.test(text))return Hotel;
+ if(/parking|valet|park ride|sensor/.test(text))return SquareParking;
+ if(/bank|funding|lending|loan|liquidity|credit|treasury|capital|settlement|finance/.test(text))return Landmark;
+ if(/fleet|taxi|driver|dispatch|vehicle|passenger|transfer/.test(text))return CarFront;
+ if(/tyre|battery|fuel|brake|engine|component|workshop|reliability/.test(text))return Wrench;
+ if(/mapping|atlas|recon|road|route|traffic|survey|terrain/.test(text))return Map;
+ if(/demand|price|fare|yield|revenue|forecast|subscription/.test(text))return TrendingUp;
+ if(/construction|contractor|material|build|site|structural|procurement/.test(text))return HardHat;
+ if(/loyalty|family|travel|journey|destination/.test(text))return Users;
+ if(/planning|coordination|operations|automation/.test(text))return Settings2;
+ return CATEGORY_FALLBACK[Math.max(0,Math.min(CATEGORY_FALLBACK.length-1,category))];
+};
 export default function ResearchTechIcon({
  kind,division,projectId,category,level=1,size=27,
 }:{
@@ -70,7 +88,7 @@ export default function ResearchTechIcon({
 }){
  const Glyph:Glyph=kind==='starter'?STARTER_ICONS[Math.max(0,Math.min(STARTER_ICONS.length-1,level-1))]:
   kind==='division'?DIVISION_ICONS[division??'revenue']:
-  TECH_ICONS[projectId]??CATEGORY_FALLBACK[Math.max(0,Math.min(CATEGORY_FALLBACK.length-1,category))];
+  TECH_ICONS[projectId]??topicIcon(projectId,category);
  return <Glyph aria-hidden="true" size={size} strokeWidth={kind==='division'?2.2:1.9}
   className="factory-vector-icon"/>;
 }
@@ -95,7 +113,10 @@ const PRODUCT_ICONS:Partial<Record<ProductKey,Glyph>>={
  constructionSystem:HardHat,internationalStrategy:Landmark,
  ticketingModel:CreditCard,harbourSchedule:Ship,roadTelemetry:Route,
  stayRevenueForecast:TrendingUp,parkingFlowModel:SquareParking,
- creditPortfolioReport:Landmark,fleetReliabilityMap:Wrench,developmentBlueprint:HardHat
+ creditPortfolioReport:Landmark,fleetReliabilityMap:Wrench,developmentBlueprint:HardHat,
+ fareMatrix:TrendingUp,dispatchProtocol:Route,cartographyAtlas:Map,
+ guestJourneyMap:Hotel,parkingAutomationPlan:SquareParking,
+ bankRiskGrid:Landmark,componentBlueprint:Wrench,siteDigitalTwin:Building2
 };
 export function ResearchResourceIcon({resource,size=18}:{resource:ResourceKey;size?:number}){
  const Icon=RESOURCE_ICONS[resource];
