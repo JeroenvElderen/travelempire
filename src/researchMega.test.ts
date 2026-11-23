@@ -3,7 +3,7 @@ import {allProjects,projects} from './research';
 import {buildResearchHierarchy,DIVISIONS} from './researchHierarchy';
 import {MEGA_RESEARCH_BRANCHES,MEGA_RESEARCH_DIVISIONS,
  MEGA_RESEARCH_ANCHORS,MEGA_RESEARCH_PRODUCTS} from './researchMegaCatalog';
-import {newProjects,maximum,resourceKeys,safeBag,unlockedBonus} from './researchProgress';
+import {maximum,resourceKeys,safeBag,unlockedBonus} from './researchProgress';
 import {allocateResearchProducts} from './researchProductionEngine';
 import {PRODUCT_KEYS,productRequirements,recipeById} from './researchProducts';
 import {advancedBankRateDiscount,ADVANCED_BANK_RESEARCH} from './simulation/vehicleFinancing';
