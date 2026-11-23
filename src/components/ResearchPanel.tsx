@@ -8,7 +8,7 @@ import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyL
 import {RESEARCH_RESOURCE_GLYPHS} from '../researchGraph';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
-import ResearchPixelIcon from './ResearchPixelIcon';
+import ResearchTechIcon from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
@@ -23,11 +23,6 @@ const clamp=(n:number,lo:number,hi:number)=>Math.min(hi,Math.max(lo,n));
 const fmt=(n:number)=>Math.floor(Math.max(0,n||0)).toLocaleString('en-IE');
 const small=(n:number)=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'m':n>=10000?
  (n/1000).toFixed(1).replace(/\.0$/,'')+'k':fmt(n);
-const starterIcons=['🗺️','🚕','📋','📈','⭐'] as const;
-const divisionIcons:Record<DivisionKey,string>={
- revenue:'🪙',taxis:'🚕',explorers:'🧭',hotels:'🏨',
- parking:'🅿️',finance:'🏦',vehicles:'🛠️',construction:'🏗️'
-};
 const divisionNames:Record<DivisionKey,string>=Object.fromEntries(
  DIVISIONS.map(division=>[division.key,division.name])
 ) as Record<DivisionKey,string>;
@@ -211,7 +206,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
     aria-expanded={resourceOpen} aria-label="Toggle research resources">
     <Coins size={19}/><span>Resources</span><ChevronDown size={12}/>
    </button>
-   <h1>TECHNOLOGY</h1>
+   <h1>Research <span>Centre</span></h1>
    <button className="factory-close" type="button" aria-label="Close Research" onClick={onClose}><X size={23}/></button>
   </header>
   <div className="factory-viewport" ref={viewport} onPointerDown={onPointerDown}
@@ -240,6 +235,8 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
       projects.get(node.projectId)?.name??node.projectId;
      return <button key={node.id} type="button" data-tech-id={node.id}
       className={'factory-tech'+(node.kind==='division'?' factory-tech-division':'')+
+       (node.kind==='starter'?' factory-tech-starter':'')+
+       (node.division?' factory-division-'+node.division:'')+
        (done?' factory-tech-done':open?' factory-tech-open':' factory-tech-locked')+
        (started?' factory-tech-in-progress':'')+(selectedId===node.id?' factory-tech-selected':'')}
       style={{left:node.x,top:node.y}} title={title+(node.kind==='research'?' Level '+node.level:'')}
@@ -247,9 +244,8 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
        (done?', completed':open?', collecting resources':', locked')}
       onClick={e=>{if(e.detail===0)setSelectedId(node.id);}}>
       <span className="factory-tech-icon">
-       {node.kind==='starter'?<span className="factory-sprite-emoji">{starterIcons[node.level-1]}</span>:
-        node.kind==='division'?<span className="factory-sprite-emoji">{divisionIcons[node.division!]}</span>:
-        <ResearchPixelIcon category={node.category} projectId={node.projectId} level={node.level} size={30}/>}
+       <ResearchTechIcon kind={node.kind} division={node.division}
+        projectId={node.projectId} category={node.category} level={node.level} size={28}/>
       </span>
       {node.kind==='division'&&<span className="factory-division-name">{title}</span>}
       {!done&&!open&&<LockKeyhole className="factory-padlock" size={19} strokeWidth={2.7}/>}
@@ -288,12 +284,11 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   </div>}
   {selected&&<div className="factory-detail-backdrop" role="presentation"
    onPointerDown={e=>e.stopPropagation()} onClick={()=>setSelectedId(null)}>
-   <section className="factory-details" role="dialog" aria-label="Technology requirements"
+   <section className={'factory-details'+(selected.division?' factory-division-'+selected.division:'')} role="dialog" aria-label="Technology requirements"
     onClick={e=>e.stopPropagation()}>
     <header><span className="factory-detail-icon">
-     {selected.kind==='starter'?<span>{starterIcons[selected.level-1]}</span>:
-      selected.kind==='division'?<span>{divisionIcons[selected.division!]}</span>:
-      <ResearchPixelIcon category={selected.category} projectId={selected.projectId} level={selected.level} size={37}/>}
+     <ResearchTechIcon kind={selected.kind} division={selected.division}
+      projectId={selected.projectId} category={selected.category} level={selected.level} size={30}/>
     </span>
      <div><small>{selected.kind==='starter'?'STARTER MILESTONES':
       selected.kind==='division'?'RESEARCH DIVISION':
