@@ -3,22 +3,22 @@ import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researc
 
 /** Curated compact research diagram: real prerequisite connectors, not
  * arbitrary "cards in category columns". Coordinates are CSS pixels in the
- * unscaled scroll/zoom canvas; all 64 real technologies have one node.
+ * unscaled scroll/zoom canvas; all real technologies have one node.
  */
 export const RESEARCH_NODE_SIZE=54;
 export const RESEARCH_CANVAS_WIDTH=760;
 export const RESEARCH_LANES:readonly (readonly string[])[]=[
- ['pricing','peakPricing','premium','longDistance','demandIntelligence','airportMarkets','corporatePassengers'],
- ['engine','fuelInjection','durability','lubrication','lightweight','conditionPrediction','powertrainAdaptation','vehicleLifecycle'],
- ['fleetAnalytics','dispatchResearch','routing','regionalReposition','multiDepotDispatch','profitAwareFleet'],
- ['survey','navigation','patrol','explorerExpansion','coordinatedFrontiers','coverageIntelligence','harbourSurvey'],
- ['trainingResearch','ecoDriving','defensive','driverSpecialisation','advancedScheduling','safetyCertification'],
- ['depotEfficiency','workshopResearch','parts','preventiveCalendar','parkingYield','networkLogistics'],
+ ['pricing','peakPricing','premium','longDistance','demandIntelligence','airportMarkets','corporatePassengers','fareBundles','commuterPasses','eventSurgeForecast','vipTransfers','destinationPackages'],
+ ['engine','fuelInjection','durability','lubrication','lightweight','conditionPrediction','powertrainAdaptation','vehicleLifecycle','tyreTelemetry','hybridPowertrains','partsStandardisation','fleetLifecycleAI'],
+ ['fleetAnalytics','dispatchResearch','routing','regionalReposition','multiDepotDispatch','profitAwareFleet','smartPooling','hubTransfers'],
+ ['survey','navigation','patrol','explorerExpansion','coordinatedFrontiers','coverageIntelligence','harbourSurvey','terrainMapping','expeditionPlanning','roadGraphInference','islandRecon'],
+ ['trainingResearch','ecoDriving','defensive','driverSpecialisation','advancedScheduling','safetyCertification','fleetShiftHandover'],
+ ['depotEfficiency','workshopResearch','parts','preventiveCalendar','parkingYield','networkLogistics','parkingDemandPrediction','smartTariffs','automatedAccess','hotelParkingPackages'],
  ['advertising','brand','loyalty','regionalReputation','tourismPartnerships','customerRetention'],
- ['procurement','insuranceResearch','efficiency','creditRiskModels','financeNegotiation','treasuryForecast'],
- ['portAnalytics','ferryTimetabling','fleetTurnaround'],
- ['occupancyForecast','guestExperience','hotelAutomation'],
- ['modularBuilding','materialLogistics','qualityInspection'],
+ ['procurement','insuranceResearch','efficiency','creditRiskModels','financeNegotiation','treasuryForecast','liquiditySignals','creditPortfolio','financeAutomation','assetBackedFunding','globalSettlement'],
+ ['portAnalytics','ferryTimetabling','fleetTurnaround','harbourConnections','interIslandTickets','premiumFerryServices'],
+ ['occupancyForecast','guestExperience','hotelAutomation','frontDeskAnalytics','roomYield','conciergeNetwork','resortOperations'],
+ ['modularBuilding','materialLogistics','qualityInspection','siteSurveys','greenBuildings','supplyChains','prefabHotels','mixedUseProjects'],
  ['corporateDueDiligence','subsidiaryIntegration','crossBorderTreasury']
 ];
 export type ResearchDiagramNode={id:string;x:number;y:number;lane:number;order:number};
@@ -70,7 +70,7 @@ export function buildResearchDiagram(allIds:readonly string[]):ResearchDiagram{
    edges.push({from:parent,to:to.id,path:`M ${sx} ${sy} V ${mid} H ${ex} V ${ey}`});
   }
  }
- return {width:RESEARCH_CANVAS_WIDTH,height:1400,nodes,edges};
+ return {width:RESEARCH_CANVAS_WIDTH,height:Math.max(1400,...nodes.map(n=>n.y+RESEARCH_NODE_SIZE+80)),nodes,edges};
 }
 
 /** Each research level is a distinct tile with its own prerequisites.
@@ -147,5 +147,5 @@ export function buildLevelResearchDiagram(allIds:readonly string[]):LevelDiagram
    }
   }
  }
- return {width,height:3720,nodes,edges,divisions};
+ return {width,height:Math.max(3720,...nodes.map(n=>n.y+RESEARCH_NODE_SIZE+80)),nodes,edges,divisions};
 }
