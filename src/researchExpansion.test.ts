@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import {allProjects,projects} from './research';
 import {DIVISIONS,buildResearchHierarchy} from './researchHierarchy';
-import {newProjects,maximum,resourceKeys,technologyParents} from './researchProgress';
+import {newProjects,maximum,resourceKeys} from './researchProgress';
 import {PRODUCT_KEYS,recipeById,productRequirements} from './researchProducts';
 import {PARENT_LEVEL_REQUIREMENTS,technologyLevelRequirements} from './researchAutomatic';
 
