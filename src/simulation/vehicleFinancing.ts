@@ -23,8 +23,15 @@ export function vehicleFinanceQuote(
  researchLevels:Partial<Record<string,number>>={}
 ){
  const assessment=lendingAssessment(company,fleet,gameNow);
+ // The finance branch now has five additional, real APR reductions.
+ // Each unlock is independently funded through automatic research materials.
  const financeResearchDiscount=(researchLevels.creditRiskModels?0.0015:0)+
-  (researchLevels.financeNegotiation?0.005:0)+(researchLevels.treasuryForecast?0.003:0);
+  (researchLevels.financeNegotiation?0.005:0)+(researchLevels.treasuryForecast?0.003:0)+
+  (researchLevels.liquiditySignals?0.001:0)+
+  (researchLevels.creditPortfolio?0.0015:0)+
+  (researchLevels.financeAutomation?0.001:0)+
+  (researchLevels.assetBackedFunding?0.002:0)+
+  (researchLevels.globalSettlement?0.002:0);
  const rate=Math.max(.035,Math.round((securedRate(assessment.score,days)-financeResearchDiscount)*10000)/10000);
  const validPrice=Number.isFinite(unitPrice)&&unitPrice>0;
  const validQuantity=Number.isInteger(quantity)&&quantity>=1&&quantity<=50;
