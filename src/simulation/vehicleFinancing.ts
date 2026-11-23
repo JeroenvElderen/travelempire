@@ -6,6 +6,14 @@ import {financeQuote,FINANCE_TERMS} from '../economy';
 import {lendingAssessment,securedRate} from './securedLoans';
 
 const money=(value:number)=>Math.round((value+Number.EPSILON)*100)/100;
+/** Research-based bank infrastructure lowers eligible new-loan APRs by
+ * 0.05 percentage points per technology, subject to the existing rate floor.
+ * These are actual finance technology IDs, never a fabricated rate toggle. */
+export const ADVANCED_BANK_RESEARCH=["interbankLiquidity","fleetCashForecast","lendingRiskHeatmap","vehicleResidualModels","loanPortfolioDesk","greenVehicleFinance","refinancingStrategy","hotelAssetFinance","portAssetFinance","corporateCreditLines","riskWeightedFunding","internationalPaymentRails","multisectorCapitalPlan","treasuryCommandCentre"] as const;
+export function advancedBankRateDiscount(researchLevels:Partial<Record<string,number>>):number{
+ return ADVANCED_BANK_RESEARCH.reduce((total,id)=>total+(researchLevels[id]?0.0005:0),0);
+}
+
 
 /** New vehicles supply their own collateral, even when the general company
  * credit facility has no headroom. The advance is limited by credit score and
@@ -31,7 +39,7 @@ export function vehicleFinanceQuote(
   (researchLevels.creditPortfolio?0.0015:0)+
   (researchLevels.financeAutomation?0.001:0)+
   (researchLevels.assetBackedFunding?0.002:0)+
-  (researchLevels.globalSettlement?0.002:0);
+  (researchLevels.globalSettlement?0.002:0)+advancedBankRateDiscount(researchLevels);
  const rate=Math.max(.035,Math.round((securedRate(assessment.score,days)-financeResearchDiscount)*10000)/10000);
  const validPrice=Number.isFinite(unitPrice)&&unitPrice>0;
  const validQuantity=Number.isInteger(quantity)&&quantity>=1&&quantity<=50;
