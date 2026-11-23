@@ -523,3 +523,21 @@
 @media(prefers-reduced-motion:reduce){
  .factory-tech,.factory-close,.factory-resources-trigger{transition:none}
 }
+
+
+/* Recipe and inventory pictograms use the same glass treatment as the tree. */
+.factory-resource .factory-resource-icon{
+ flex:0 0 32px;display:grid;place-items:center;width:32px;height:32px;
+ border:1px solid rgba(208,176,255,.27);border-radius:10px;
+ background:linear-gradient(145deg,rgba(126,78,189,.27),rgba(56,66,126,.21));
+ color:#d7b4ff;
+}
+.factory-requirement-label{
+ display:inline-flex;align-items:center;gap:7px;min-width:0;
+}
+.factory-requirement-label>.factory-vector-icon{
+ flex-shrink:0;color:#cda6ff;
+}
+.factory-recipe-ingredients .factory-requirement-label{
+ color:#d9dcf0;line-height:1.35;
+}
