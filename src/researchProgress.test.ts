@@ -6,10 +6,10 @@ const context:OperationalContext={roads:20000,explorers:2,depots:2};
 const counters=(patch:Partial<typeof EMPTY_RESOURCES>={})=>({...EMPTY_RESOURCES,...patch});
 
 describe('automatic research economy',()=>{
- it('contains 36 connected new technologies in addition to the 28 existing programmes',()=>{
+ it('contains 73 advanced technologies including 37 new branches beside 28 legacy programmes',()=>{
   expect(projects).toHaveLength(28);
-  expect(newProjects).toHaveLength(36);
-  expect(new Set([...projects,...newProjects].map(p=>p.id)).size).toBe(64);
+  expect(newProjects).toHaveLength(73);
+  expect(new Set([...projects,...newProjects].map(p=>p.id)).size).toBe(101);
  });
  it('awards resources only for positive settled counter deltas',()=>{
   const initial=observation(empty(),counters({roads:120,passengers:10,revenue:500}));
