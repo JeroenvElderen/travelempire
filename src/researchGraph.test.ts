@@ -4,10 +4,10 @@ import {buildResearchDiagram,RESEARCH_CANVAS_WIDTH,RESEARCH_NODE_SIZE} from './r
 import {technologyParents,prerequisites} from './researchProgress';
 
 describe('connected Builderment-style research diagram',()=>{
- it('places all 64 unique technologies on a compact map',()=>{
+ it('places all 101 unique technologies on a compact map',()=>{
   const diagram=buildResearchDiagram(allProjects.map(p=>p.id));
   expect(diagram.nodes).toHaveLength(101);
-  expect(new Set(diagram.nodes.map(node=>node.id)).size).toBe(64);
+  expect(new Set(diagram.nodes.map(node=>node.id)).size).toBe(101);
   expect(diagram.width).toBe(RESEARCH_CANVAS_WIDTH);
   expect(diagram.nodes.every(n=>n.x>=0&&n.x+RESEARCH_NODE_SIZE<=diagram.width)).toBe(true);
   expect(diagram.nodes.every(n=>n.y>=0&&n.y+RESEARCH_NODE_SIZE<=diagram.height)).toBe(true);
