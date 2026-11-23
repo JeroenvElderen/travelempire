@@ -44,6 +44,20 @@ const TECH_ICONS:Readonly<Record<string,Glyph>>={
  powertrainAdaptation:Fuel,vehicleLifecycle:CarFront,
  workshopResearch:Wrench,parts:Package,preventiveCalendar:CalendarDays,
  modularBuilding:Building2,materialLogistics:Truck,qualityInspection:CheckCheck,
+ // Extra original Aurora Glass technology symbols for the new branches.
+ fareBundles:Coins,commuterPasses:CreditCard,eventSurgeForecast:TrendingUp,
+ vipTransfers:Star,destinationPackages:Map,
+ smartPooling:Users,fleetShiftHandover:CalendarDays,harbourConnections:Ship,
+ interIslandTickets:CreditCard,hubTransfers:Route,premiumFerryServices:Star,
+ terrainMapping:Map,expeditionPlanning:Compass,roadGraphInference:Route,islandRecon:Ship,
+ frontDeskAnalytics:ClipboardCheck,roomYield:TrendingUp,conciergeNetwork:Users,resortOperations:Hotel,
+ parkingDemandPrediction:BarChart3,smartTariffs:Coins,automatedAccess:SquareParking,
+ hotelParkingPackages:Hotel,
+ liquiditySignals:TrendingUp,creditPortfolio:CreditCard,financeAutomation:Settings2,
+ assetBackedFunding:Landmark,globalSettlement:Building2,
+ tyreTelemetry:Gauge,hybridPowertrains:Fuel,partsStandardisation:Package,fleetLifecycleAI:CarFront,
+ siteSurveys:Map,greenBuildings:Building2,supplyChains:Truck,prefabHotels:Hotel,
+ mixedUseProjects:Building2,
 };
 const CATEGORY_FALLBACK:readonly Glyph[]=[
  Coins,Gauge,CarFront,Compass,Users,Wrench,Megaphone,Landmark,Ship,Hotel,HardHat,Building2,
@@ -78,7 +92,10 @@ const PRODUCT_ICONS:Partial<Record<ProductKey,Glyph>>={
  maritimeStudy:Ship,propertyPlan:Building2,investmentStrategy:CreditCard,
  integratedMobility:Navigation,advancedVehicleTech:Gauge,
  autonomousFleet:CarFront,tourismNetwork:Map,
- constructionSystem:HardHat,internationalStrategy:Landmark
+ constructionSystem:HardHat,internationalStrategy:Landmark,
+ ticketingModel:CreditCard,harbourSchedule:Ship,roadTelemetry:Route,
+ stayRevenueForecast:TrendingUp,parkingFlowModel:SquareParking,
+ creditPortfolioReport:Landmark,fleetReliabilityMap:Wrench,developmentBlueprint:HardHat
 };
 export function ResearchResourceIcon({resource,size=18}:{resource:ResourceKey;size?:number}){
  const Icon=RESOURCE_ICONS[resource];
