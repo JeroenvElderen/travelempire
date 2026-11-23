@@ -11,7 +11,7 @@ describe('approved eight-division research technology tree',()=>{
  it('keeps every real research level plus exactly five startup milestones and eight division entrances',()=>{
   expect(STARTER_STAGES.map(s=>s.jobs)).toEqual([10,20,30,40,50]);
   expect(STARTER_STAGES.map(s=>s.roads)).toEqual([50,200,500,1000,2000]);
-  expect(researchLevels).toBe(172);
+  expect(researchLevels).toBe(209);
   expect(diagram.nodes).toHaveLength(researchLevels+5+8);
   expect(diagram.nodes.filter(n=>n.kind==='starter')).toHaveLength(5);
   expect(diagram.nodes.filter(n=>n.kind==='division')).toHaveLength(8);
