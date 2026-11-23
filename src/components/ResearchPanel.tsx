@@ -5,10 +5,9 @@ import type {Company} from '../company';
 import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
-import {RESEARCH_RESOURCE_GLYPHS} from '../researchGraph';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
-import ResearchTechIcon from './ResearchTechIcon';
+import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
@@ -199,7 +198,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   zoomAt({x:e.clientX-rect.left,y:e.clientY-rect.top},camera.current.scale>.95?.65:1.5);
  };
  const resourceItems=resourceKeys.map(key=>({key,name:RESOURCE_INFO[key].name,
-  glyph:RESEARCH_RESOURCE_GLYPHS[key],balance:inventory[key],total:earned[key]}));
+  balance:inventory[key],total:earned[key]}));
  return <section className="research-factory" role="application" aria-label="Research technology hierarchy">
   <header className="research-factory-header">
    <button className="factory-resources-trigger" type="button" onClick={()=>{setResourceOpen(v=>!v);setSelectedId(null);}}
@@ -267,14 +266,15 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
    <header><strong>Research resources</strong><button type="button" onClick={()=>setResourceOpen(false)} aria-label="Close resource inventory"><X size={17}/></button></header>
    <div className="factory-resources-grid">
     {resourceItems.map(item=><div className="factory-resource" key={item.key}>
-     <span>{item.glyph}</span><div><strong>{item.name}</strong><small>{small(item.balance)} available</small></div>
+     <span className="factory-resource-icon"><ResearchResourceIcon resource={item.key} size={18}/></span>
+     <div><strong>{item.name}</strong><small>{small(item.balance)} available</small></div>
      <b>{small(item.total)}</b>
     </div>)}
    </div>
    <strong className="factory-section-caption">Processed research products</strong>
    <div className="factory-resources-grid">
     {PRODUCT_KEYS.filter(key=>(state.productProduced?.[key]??0)>0).map(key=><div className="factory-resource" key={key}>
-     <span>{recipeById.get(key)?.icon??'📦'}</span>
+     <span className="factory-resource-icon"><ResearchProductIcon product={key} size={18}/></span>
      <div><strong>{recipeById.get(key)?.name??key}</strong>
       <small>{fmt(state.productInventory?.[key]??0)} in stock</small></div>
      <b>{fmt(state.productProduced?.[key]??0)}</b>
@@ -326,7 +326,9 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
         const need=costs(selected)[key]??0;
         const count=Math.min(need,delivered(selected)[key]??0);
         return <div key={key} className="factory-requirement">
-         <div><span>{RESEARCH_RESOURCE_GLYPHS[key]} {RESOURCE_INFO[key].name}</span>
+         <div><span className="factory-requirement-label">
+          <ResearchResourceIcon resource={key} size={15}/>{RESOURCE_INFO[key].name}
+         </span>
           <b>{fmt(count)} / {fmt(need)}</b></div>
          <span className="factory-requirement-bar"><i style={{width:Math.min(100,count/need*100)+'%'}}/></span>
         </div>;
@@ -339,15 +341,20 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
          const need=productCosts(selected)[key]??0;
          const made=productDelivered(selected)[key]??0;
          return <details key={key} className="factory-product-chain">
-          <summary><span>{recipe?.icon??'📦'} {recipe?.name??key}</span>
+          <summary><span className="factory-requirement-label">
+           <ResearchProductIcon product={key} size={17}/>{recipe?.name??key}
+          </span>
            <b>{fmt(made)} / {fmt(need)}</b></summary>
           {recipe&&!recipeAvailable(key,state.levels)&&
            <small className="factory-product-lock">Unlock {projects.get(recipe.unlock.project)?.name??recipe.unlock.project} Level {recipe.unlock.level} first</small>}
           <div className="factory-recipe-ingredients">
            {recipeIngredients(key).map(ingredient=><div key={ingredient.kind+':'+ingredient.key}>
-            <span>{ingredient.kind==='raw'?
-             RESEARCH_RESOURCE_GLYPHS[ingredient.key]:recipeById.get(ingredient.key)?.icon}
-             {' '}{ingredient.kind==='raw'?RESOURCE_INFO[ingredient.key].name:recipeById.get(ingredient.key)?.name}</span>
+            <span className="factory-requirement-label">
+             {ingredient.kind==='raw'?
+              <ResearchResourceIcon resource={ingredient.key} size={15}/>:
+              <ResearchProductIcon product={ingredient.key} size={15}/>}
+             {ingredient.kind==='raw'?RESOURCE_INFO[ingredient.key].name:recipeById.get(ingredient.key)?.name}
+            </span>
             <b>× {fmt(ingredient.count)}</b>
            </div>)}
           </div>
