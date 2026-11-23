@@ -10,7 +10,9 @@ export const PRODUCT_KEYS=['marketBrief','routeReport','fleetReport','driverStud
  'integratedMobility','advancedVehicleTech','autonomousFleet','tourismNetwork',
  'constructionSystem','internationalStrategy',
  'ticketingModel','harbourSchedule','roadTelemetry','stayRevenueForecast',
- 'parkingFlowModel','creditPortfolioReport','fleetReliabilityMap','developmentBlueprint'] as const;
+ 'parkingFlowModel','creditPortfolioReport','fleetReliabilityMap','developmentBlueprint',
+ 'fareMatrix','dispatchProtocol','cartographyAtlas','guestJourneyMap',
+ 'parkingAutomationPlan','bankRiskGrid','componentBlueprint','siteDigitalTwin'] as const;
 export type ProductKey=typeof PRODUCT_KEYS[number];
 export type ProductBag=Partial<Record<ProductKey,number>>;
 export type Recipe={id:ProductKey;name:string;icon:string;inputs:ResourceCosts;parts?:ProductBag;unlock:{project:string;level:number}};
@@ -51,7 +53,17 @@ export const RECIPES:readonly Recipe[]=[
  {id:'parkingFlowModel',name:'Parking Flow Model',icon:'🅿️',inputs:{parking:35,revenue:500},parts:{depotAudit:2,trafficAnalysis:1},unlock:{project:'parkingDemandPrediction',level:1}},
  {id:'creditPortfolioReport',name:'Credit Portfolio Report',icon:'💳',inputs:{passengers:30,revenue:1500},parts:{creditMemo:2,financialForecast:1},unlock:{project:'creditPortfolio',level:1}},
  {id:'fleetReliabilityMap',name:'Fleet Reliability Map',icon:'🛠️',inputs:{maintenance:3,distance:700},parts:{maintenanceModel:2,vehicleStudy:2},unlock:{project:'tyreTelemetry',level:1}},
- {id:'developmentBlueprint',name:'Development Blueprint',icon:'🏗️',inputs:{roads:300,construction:3},parts:{buildReport:2,routeReport:2},unlock:{project:'siteSurveys',level:1}}
+ {id:'developmentBlueprint',name:'Development Blueprint',icon:'🏗️',inputs:{roads:300,construction:3},parts:{buildReport:2,routeReport:2},unlock:{project:'siteSurveys',level:1}},
+ // New late-game manufactured materials: every branch unlocks its material
+ // before descendants can use it. No factories or manual contributions.
+ {id:'fareMatrix',name:'Fare Matrix',icon:'📈',inputs:{passengers:35,revenue:950},parts:{trafficAnalysis:1,marketBrief:2},unlock:{project:'fareElasticity',level:1}},
+ {id:'dispatchProtocol',name:'Dispatch Protocol',icon:'🚕',inputs:{passengers:45,roads:160,revenue:1200},parts:{fleetReport:2,routeReport:2},unlock:{project:'dispatchTelemetry',level:1}},
+ {id:'cartographyAtlas',name:'Cartography Atlas',icon:'🗺️',inputs:{roads:350,distance:250,revenue:1300},parts:{roadTelemetry:2,navigationModel:1},unlock:{project:'satelliteRecon',level:1}},
+ {id:'guestJourneyMap',name:'Guest Journey Map',icon:'🏨',inputs:{hotels:45,revenue:1650},parts:{stayRevenueForecast:1,hospitalityModel:2},unlock:{project:'reservationSignals',level:1}},
+ {id:'parkingAutomationPlan',name:'Parking Automation Plan',icon:'🅿️',inputs:{parking:55,revenue:1600},parts:{parkingFlowModel:2,depotAudit:2},unlock:{project:'parkingSensorNetwork',level:1}},
+ {id:'bankRiskGrid',name:'Bank Risk Grid',icon:'🏦',inputs:{revenue:3200,passengers:30},parts:{creditPortfolioReport:2,financialForecast:2},unlock:{project:'interbankLiquidity',level:1}},
+ {id:'componentBlueprint',name:'Component Blueprint',icon:'🔧',inputs:{distance:600,maintenance:4,revenue:1550},parts:{fleetReliabilityMap:2,vehicleStudy:2},unlock:{project:'batteryDiagnostics',level:1}},
+ {id:'siteDigitalTwin',name:'Site Digital Twin',icon:'🏗️',inputs:{roads:420,construction:4,revenue:2500},parts:{developmentBlueprint:2,propertyPlan:1},unlock:{project:'structuralBIM',level:1}}
 ];
 export const recipeById=new Map<ProductKey,Recipe>(RECIPES.map(r=>[r.id,r]));
 export const recipeAvailable=(id:ProductKey,levels:Partial<Record<string,number>>)=>{
