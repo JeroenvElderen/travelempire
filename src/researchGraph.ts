@@ -1,3 +1,4 @@
+import {MEGA_RESEARCH_DIVISIONS} from './researchMegaCatalog';
 import {technologyParents,maximum} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
 
@@ -8,17 +9,17 @@ import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researc
 export const RESEARCH_NODE_SIZE=54;
 export const RESEARCH_CANVAS_WIDTH=760;
 export const RESEARCH_LANES:readonly (readonly string[])[]=[
- ['pricing','peakPricing','premium','longDistance','demandIntelligence','airportMarkets','corporatePassengers','fareBundles','commuterPasses','eventSurgeForecast','vipTransfers','destinationPackages'],
- ['engine','fuelInjection','durability','lubrication','lightweight','conditionPrediction','powertrainAdaptation','vehicleLifecycle','tyreTelemetry','hybridPowertrains','partsStandardisation','fleetLifecycleAI'],
- ['fleetAnalytics','dispatchResearch','routing','regionalReposition','multiDepotDispatch','profitAwareFleet','smartPooling','hubTransfers'],
- ['survey','navigation','patrol','explorerExpansion','coordinatedFrontiers','coverageIntelligence','harbourSurvey','terrainMapping','expeditionPlanning','roadGraphInference','islandRecon'],
+ ['pricing','peakPricing','premium','longDistance','demandIntelligence','airportMarkets','corporatePassengers','fareBundles','commuterPasses','eventSurgeForecast','vipTransfers','destinationPackages',...MEGA_RESEARCH_DIVISIONS.revenue],
+ ['engine','fuelInjection','durability','lubrication','lightweight','conditionPrediction','powertrainAdaptation','vehicleLifecycle','tyreTelemetry','hybridPowertrains','partsStandardisation','fleetLifecycleAI',...MEGA_RESEARCH_DIVISIONS.vehicles],
+ ['fleetAnalytics','dispatchResearch','routing','regionalReposition','multiDepotDispatch','profitAwareFleet','smartPooling','hubTransfers',...MEGA_RESEARCH_DIVISIONS.taxis],
+ ['survey','navigation','patrol','explorerExpansion','coordinatedFrontiers','coverageIntelligence','harbourSurvey','terrainMapping','expeditionPlanning','roadGraphInference','islandRecon',...MEGA_RESEARCH_DIVISIONS.explorers],
  ['trainingResearch','ecoDriving','defensive','driverSpecialisation','advancedScheduling','safetyCertification','fleetShiftHandover'],
- ['depotEfficiency','workshopResearch','parts','preventiveCalendar','parkingYield','networkLogistics','parkingDemandPrediction','smartTariffs','automatedAccess','hotelParkingPackages'],
+ ['depotEfficiency','workshopResearch','parts','preventiveCalendar','parkingYield','networkLogistics','parkingDemandPrediction','smartTariffs','automatedAccess','hotelParkingPackages',...MEGA_RESEARCH_DIVISIONS.parking],
  ['advertising','brand','loyalty','regionalReputation','tourismPartnerships','customerRetention'],
- ['procurement','insuranceResearch','efficiency','creditRiskModels','financeNegotiation','treasuryForecast','liquiditySignals','creditPortfolio','financeAutomation','assetBackedFunding','globalSettlement'],
+ ['procurement','insuranceResearch','efficiency','creditRiskModels','financeNegotiation','treasuryForecast','liquiditySignals','creditPortfolio','financeAutomation','assetBackedFunding','globalSettlement',...MEGA_RESEARCH_DIVISIONS.finance],
  ['portAnalytics','ferryTimetabling','fleetTurnaround','harbourConnections','interIslandTickets','premiumFerryServices'],
- ['occupancyForecast','guestExperience','hotelAutomation','frontDeskAnalytics','roomYield','conciergeNetwork','resortOperations'],
- ['modularBuilding','materialLogistics','qualityInspection','siteSurveys','greenBuildings','supplyChains','prefabHotels','mixedUseProjects'],
+ ['occupancyForecast','guestExperience','hotelAutomation','frontDeskAnalytics','roomYield','conciergeNetwork','resortOperations',...MEGA_RESEARCH_DIVISIONS.hotels],
+ ['modularBuilding','materialLogistics','qualityInspection','siteSurveys','greenBuildings','supplyChains','prefabHotels','mixedUseProjects',...MEGA_RESEARCH_DIVISIONS.construction],
  ['corporateDueDiligence','subsidiaryIntegration','crossBorderTreasury']
 ];
 export type ResearchDiagramNode={id:string;x:number;y:number;lane:number;order:number};
