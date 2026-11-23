@@ -31,7 +31,7 @@ describe('new branching research extensions',()=>{
   expect(new Set(additions).size).toBe(additions.length);
   expect(additions.every(id=>newProjects.some(p=>p.id===id))).toBe(true);
   expect(additions.every(id=>maximum(id)===1)).toBe(true);
-  expect(projects).toHaveLength(27);
+  expect(projects).toHaveLength(28);
  });
  it('locates every new technology in exactly one of the eight original divisions',()=>{
   const hierarchy=buildResearchHierarchy(allProjects.map(p=>p.id));
