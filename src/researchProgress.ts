@@ -1,3 +1,5 @@
+import {MEGA_RESEARCH_BRANCHES} from './researchMegaCatalog';
+
 /**
  * Resource-driven Research Centre. All resources originate in settled company
  * operations. The selected technology receives them automatically, excess is
@@ -101,6 +103,7 @@ export const newProjects:readonly AdvancedProject[]=[
  {id:"supplyChains",name:"Construction Supply Chains",category:10,tier:3,requires:["materialLogistics","siteSurveys"],resources:{"construction":70,"roads":6500,"revenue":380000},products:{"developmentBlueprint":3,"depotAudit":4},effect:"Reduce construction spending a further 3% using connected material logistics",bonus:"construction",rate:0.03},
  {id:"prefabHotels",name:"Prefabricated Hotels",category:10,tier:4,requires:["qualityInspection","guestExperience","siteSurveys"],resources:{"construction":190,"hotels":750,"revenue":950000},products:{"developmentBlueprint":4,"hospitalityModel":3},effect:"Reduce construction spending a further 4% through prefabricated hospitality",bonus:"construction",rate:0.04},
  {id:"mixedUseProjects",name:"Mixed-Use Developments",category:10,tier:5,requires:["prefabHotels","greenBuildings","parkingYield"],resources:{"construction":360,"parking":2300,"hotels":1250,"revenue":2200000},products:{"propertyPlan":3,"developmentBlueprint":4},effect:"Reduce construction spending a further 4% on integrated mixed-use developments",bonus:"construction",rate:0.04},
+ ...MEGA_RESEARCH_BRANCHES
 ] as const;
 
 /** Genuine links for existing programmes, preserved on older saves.
