@@ -28,7 +28,20 @@ export const PARENT_LEVEL_REQUIREMENTS:Record<string,Readonly<Record<string,numb
  safetyCertification:{defensive:2},
  networkLogistics:{depotEfficiency:3},
  customerRetention:{loyalty:2},
- treasuryForecast:{efficiency:2}
+ treasuryForecast:{efficiency:2},
+ // New branches demand specific parent levels before automatic product
+ // manufacturing begins; completed older saves are never rolled back.
+ fareBundles:{peakPricing:2},
+ eventSurgeForecast:{fleetAnalytics:2,peakPricing:2},
+ vipTransfers:{peakPricing:2},
+ smartPooling:{routing:2},
+ terrainMapping:{survey:2},
+ resortOperations:{procurement:2},
+ smartTariffs:{peakPricing:2},
+ liquiditySignals:{procurement:2},
+ financeAutomation:{efficiency:2},
+ tyreTelemetry:{engine:2,durability:2},
+ hybridPowertrains:{durability:2}
 };
 export const REQUIRED_LEVELS=(id:string,parent:string)=>
  PARENT_LEVEL_REQUIREMENTS[id]?.[parent]??1;
