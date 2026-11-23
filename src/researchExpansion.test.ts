@@ -26,8 +26,8 @@ const crafted=[
 describe('new branching research extensions',()=>{
  it('adds exactly 37 new one-level technologies without altering previously completed levels',()=>{
   expect(additions).toHaveLength(37);
-  expect(allProjects).toHaveLength(101);
-  expect(allProjects.reduce((n,p)=>n+maximum(p.id),0)).toBe(209);
+  expect(allProjects).toHaveLength(197);
+  expect(allProjects.reduce((n,p)=>n+maximum(p.id),0)).toBe(305);
   expect(new Set(allProjects.map(p=>p.id)).size).toBe(allProjects.length);
   expect(new Set(additions).size).toBe(additions.length);
   expect(additions.every(id=>newProjects.some(p=>p.id===id))).toBe(true);
@@ -36,7 +36,7 @@ describe('new branching research extensions',()=>{
  });
  it('locates every new technology in exactly one of the eight original divisions',()=>{
   const hierarchy=buildResearchHierarchy(allProjects.map(p=>p.id));
-  expect(hierarchy.nodes).toHaveLength(209+5+8);
+  expect(hierarchy.nodes).toHaveLength(305+5+8);
   for(const id of additions){
    const groups=DIVISIONS.filter(d=>d.projects.includes(id));
    expect(groups.map(g=>g.key),id).toHaveLength(1);
@@ -44,7 +44,7 @@ describe('new branching research extensions',()=>{
    expect(node?.kind).toBe('research');
    expect(node?.division).toBe(groups[0].key);
   }
-  expect(DIVISIONS.map(d=>d.projects.length)).toEqual([18,21,11,7,7,14,15,8]);
+  expect(DIVISIONS.map(d=>d.projects.length)).toEqual([32,39,23,15,15,28,27,18]);
  });
  it('branches across multiple technologies and industries rather than a single long chain',()=>{
   const all=new Set(allProjects.map(p=>p.id));
@@ -70,7 +70,7 @@ describe('new branching research extensions',()=>{
  });
  it('produces eight genuine recipe chains, consumed by descendants of their unlocks',()=>{
   expect(crafted).toHaveLength(8);
-  expect(PRODUCT_KEYS).toHaveLength(35);
+  expect(PRODUCT_KEYS).toHaveLength(43);
   for(const id of crafted){
    const recipe=recipeById.get(id);
    expect(recipe,id).toBeDefined();
