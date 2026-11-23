@@ -58,6 +58,19 @@ describe('vehicle financing shares the business credit facility',()=>{
   expect(quote.approved).toBe(false);
   expect(quote.reason).toContain('upfront');
  });
+ it('new finance research lowers the actual quoted APR and interest without changing credit headroom',()=>{
+  const base=vehicleFinanceQuote(company,emptyFleet(),0,20000,2,25,365);
+  const researched=vehicleFinanceQuote(company,emptyFleet(),0,20000,2,25,365,{
+   liquiditySignals:1,creditPortfolio:1,financeAutomation:1,
+   assetBackedFunding:1,globalSettlement:1
+  });
+  expect(base.approved).toBe(true);
+  expect(researched.approved).toBe(true);
+  expect(researched.rate).toBeCloseTo(base.rate-.0075,5);
+  expect(researched.totalInterest).toBeLessThan(base.totalInterest);
+  expect(researched.available).toBe(base.available);
+  expect(researched.principal).toBe(base.principal);
+ });
  it('rejects poor credit, invalid deposit and unsupported term',()=>{
   const poor={...emptyFleet(),creditMisses:25};
   expect(vehicleFinanceQuote(company,poor,0,20000,1,25,365).reason).toContain('credit score');
