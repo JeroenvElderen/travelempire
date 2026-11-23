@@ -192,8 +192,17 @@ export function prerequisites(id:string,levels:Partial<Record<string,number>>,co
  return missing;
 }
 const allResearchNames:Record<string,string>=Object.fromEntries(newProjects.map(p=>[p.id,p.name]));
+/** New branches gradually expand the relevant operational research bonus
+ * ceiling. Existing saves with none of these 96 branches retain the original
+ * 30% limit and their existing income and operating costs.
+ */
+export function megaResearchMastery(levels:Partial<Record<string,number>>,group:AdvancedProject['bonus']):number{
+ const completed=MEGA_RESEARCH_BRANCHES.filter(p=>p.bonus===group&&(levels[p.id]??0)>0).length;
+ return Math.min(.25,completed*.012);
+}
 export function unlockedBonus(levels:Record<string,number>|Partial<Record<string,number>>,group:AdvancedProject['bonus']){
- return Math.min(.30,newProjects.filter(p=>p.bonus===group&&(levels[p.id]??0)>0).reduce((a,p)=>a+p.rate,0));
+ const earned=newProjects.filter(p=>p.bonus===group&&(levels[p.id]??0)>0).reduce((a,p)=>a+p.rate,0);
+ return Math.min(.30+megaResearchMastery(levels,group),earned);
 }
 export function normalizeResources<T extends ResourceState>(s:T):T{
  if(s.researchV3)return s;
