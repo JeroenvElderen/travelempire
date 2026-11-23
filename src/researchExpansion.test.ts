@@ -1,7 +1,8 @@
 import {describe,expect,it} from 'vitest';
 import {allProjects,projects} from './research';
 import {DIVISIONS,buildResearchHierarchy} from './researchHierarchy';
-import {newProjects,maximum,resourceKeys} from './researchProgress';
+import {newProjects,maximum,resourceKeys,safeBag} from './researchProgress';
+import {allocateResearchProducts} from './researchProductionEngine';
 import {PRODUCT_KEYS,recipeById,productRequirements} from './researchProducts';
 import {PARENT_LEVEL_REQUIREMENTS,technologyLevelRequirements} from './researchAutomatic';
 
@@ -85,6 +86,23 @@ describe('new branching research extensions',()=>{
     expect(needed,id).toBeGreaterThan(0);
    }
   }
+ });
+ it('automatically manufactures a new ticketing research item with exact resource accounting',()=>{
+  const materials=safeBag({passengers:200,roads:500,revenue:10000});
+  const levels={pricing:1,peakPricing:2,survey:1,fareBundles:1};
+  const first=allocateResearchProducts([
+   {key:'commuterPasses:1',goal:{ticketingModel:1}}
+  ],levels,materials,{});
+  expect(first.changed).toBe(true);
+  expect(first.ledger.productContributions?.['commuterPasses:1']?.ticketingModel).toBe(1);
+  expect(first.ledger.productProduced?.ticketingModel).toBe(1);
+  for(const k of resourceKeys)
+   expect(first.resources[k]+(first.ledger.productRawSpent?.[k]??0)).toBe(materials[k]);
+  const repeat=allocateResearchProducts([
+   {key:'commuterPasses:1',goal:{ticketingModel:1}}
+  ],levels,first.resources,first.ledger);
+  expect(repeat.changed).toBe(false);
+  expect(repeat.ledger).toBe(first.ledger);
  });
  it('requires researched parent levels for the most complex crossroads',()=>{
   const context={roads:200000,explorers:6,depots:4,freshStart:true,starterLevel:5};
