@@ -1,3 +1,4 @@
+import {MEGA_RESEARCH_DIVISIONS} from './researchMegaCatalog';
 import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
 
@@ -27,38 +28,46 @@ export const DIVISIONS:readonly {
  key:DivisionKey;name:string;category:number;root:string;
  projects:readonly string[];lanes:number;
 }[]=[
- {key:'revenue',name:'Revenue',category:0,root:'pricing',lanes:3,projects:[
+ {key:'revenue',name:'Revenue',category:0,root:'pricing',lanes:4,projects:[
   'pricing','peakPricing','fareBundles','commuterPasses','premium','vipTransfers',
   'longDistance','demandIntelligence','eventSurgeForecast','airportMarkets',
   'corporatePassengers','advertising','brand','loyalty','regionalReputation',
-  'tourismPartnerships','customerRetention','destinationPackages']},
- {key:'taxis',name:'Taxis & Ferries',category:2,root:'fleetAnalytics',lanes:3,projects:[
+  'tourismPartnerships','customerRetention','destinationPackages',
+  ...MEGA_RESEARCH_DIVISIONS.revenue]},
+ {key:'taxis',name:'Taxis & Ferries',category:2,root:'fleetAnalytics',lanes:5,projects:[
   'fleetAnalytics','dispatchResearch','routing','smartPooling','regionalReposition',
   'multiDepotDispatch','hubTransfers','profitAwareFleet','trainingResearch','ecoDriving',
   'defensive','driverSpecialisation','advancedScheduling','fleetShiftHandover',
   'safetyCertification','portAnalytics','harbourConnections','ferryTimetabling',
-  'interIslandTickets','fleetTurnaround','premiumFerryServices']},
- {key:'explorers',name:'Explorers',category:3,root:'survey',lanes:2,projects:[
+  'interIslandTickets','fleetTurnaround','premiumFerryServices',
+  ...MEGA_RESEARCH_DIVISIONS.taxis]},
+ {key:'explorers',name:'Explorers',category:3,root:'survey',lanes:4,projects:[
   'survey','navigation','terrainMapping','patrol','explorerExpansion','coordinatedFrontiers',
-  'expeditionPlanning','coverageIntelligence','roadGraphInference','harbourSurvey','islandRecon']},
- {key:'hotels',name:'Hotels',category:9,root:'occupancyForecast',lanes:2,projects:[
+  'expeditionPlanning','coverageIntelligence','roadGraphInference','harbourSurvey','islandRecon',
+  ...MEGA_RESEARCH_DIVISIONS.explorers]},
+ {key:'hotels',name:'Hotels',category:9,root:'occupancyForecast',lanes:3,projects:[
   'occupancyForecast','frontDeskAnalytics','roomYield','guestExperience',
-  'conciergeNetwork','hotelAutomation','resortOperations']},
- {key:'parking',name:'Parking',category:5,root:'depotEfficiency',lanes:2,projects:[
+  'conciergeNetwork','hotelAutomation','resortOperations',
+  ...MEGA_RESEARCH_DIVISIONS.hotels]},
+ {key:'parking',name:'Parking',category:5,root:'depotEfficiency',lanes:3,projects:[
   'depotEfficiency','parkingYield','parkingDemandPrediction','smartTariffs',
-  'automatedAccess','hotelParkingPackages','networkLogistics']},
- {key:'finance',name:'Banking & Finance',category:7,root:'procurement',lanes:2,projects:[
+  'automatedAccess','hotelParkingPackages','networkLogistics',
+  ...MEGA_RESEARCH_DIVISIONS.parking]},
+ {key:'finance',name:'Banking & Finance',category:7,root:'procurement',lanes:4,projects:[
   'procurement','liquiditySignals','insuranceResearch','efficiency','creditRiskModels',
   'creditPortfolio','financeAutomation','financeNegotiation','treasuryForecast',
   'assetBackedFunding','corporateDueDiligence','subsidiaryIntegration',
-  'crossBorderTreasury','globalSettlement']},
- {key:'vehicles',name:'Fleet & Vehicles',category:1,root:'engine',lanes:2,projects:[
+  'crossBorderTreasury','globalSettlement',
+  ...MEGA_RESEARCH_DIVISIONS.finance]},
+ {key:'vehicles',name:'Fleet & Vehicles',category:1,root:'engine',lanes:4,projects:[
   'engine','fuelInjection','durability','conditionPrediction','tyreTelemetry','lubrication',
   'lightweight','powertrainAdaptation','hybridPowertrains','vehicleLifecycle',
-  'fleetLifecycleAI','workshopResearch','parts','partsStandardisation','preventiveCalendar']},
- {key:'construction',name:'Construction',category:10,root:'modularBuilding',lanes:2,projects:[
+  'fleetLifecycleAI','workshopResearch','parts','partsStandardisation','preventiveCalendar',
+  ...MEGA_RESEARCH_DIVISIONS.vehicles]},
+ {key:'construction',name:'Construction',category:10,root:'modularBuilding',lanes:3,projects:[
   'modularBuilding','siteSurveys','materialLogistics','greenBuildings','supplyChains',
-  'qualityInspection','prefabHotels','mixedUseProjects']}
+  'qualityInspection','prefabHotels','mixedUseProjects',
+  ...MEGA_RESEARCH_DIVISIONS.construction]}
 ] as const;
 const COL=70,ROW=72,START_Y=78,DIVISION_Y=START_Y+STARTER_STAGES.length*ROW+88;
 const TECH_Y=DIVISION_Y+108,SPACE=48;
@@ -266,7 +275,7 @@ export function buildResearchHierarchy(ids:readonly string[]):ResearchHierarchy{
    const preferred=upstream?upstream.col+Math.round(offset*1.65):0;
    const row=upstream?upstream.rank+Math.min(maximum(parent!),visualParentLevel(parent!,id))+1:0;
    let choice:{col:number;rank:number;score:number}|undefined;
-   for(let delay=0;delay<=130;delay++){
+   for(let delay=0;delay<=260;delay++){
     for(let radius=0;radius<=group.lanes*2;radius++){
      const candidates=radius===0?[preferred]:[preferred-radius,preferred+radius];
      for(const col of candidates){
