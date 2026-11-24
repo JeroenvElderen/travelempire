@@ -66,7 +66,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   if(isDone(node))return 100;
   const c=costs(node),d=delivered(node),entries=Object.entries(c);
   const productEntries=Object.entries(productCosts(node));
-  const part=node.kind==='research'&&state.collector?collectorRequirement(node.category,node.level):null;
+  const part=node.kind==='research'&&state.collector?collectorRequirement(projects.get(node.projectId)?.category??node.category,node.level):null;
   const total=entries.length+productEntries.length+(part?1:0);
   if(!total)return 0;
   const raw=entries.reduce((sum,[key,n])=>
@@ -346,7 +346,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
         </div>;
        })}</div>
       {selected.kind==='research'&&state.collector&&(()=>{
-       const requirement=collectorRequirement(selected.category,selected.level);
+       const requirement=collectorRequirement(projects.get(selected.projectId)?.category??selected.category,selected.level);
        const available=state.collector.stock[requirement.part]??0;
        return <div className="factory-product-chains"><strong>Collector delivery required</strong><div className="factory-requirement"><div><span>{COLLECTOR_NAMES[requirement.part]}</span><b>{fmt(Math.min(available,requirement.quantity))} / {fmt(requirement.quantity)}</b></div><span className="factory-requirement-bar"><i style={{width:Math.min(100,available/requirement.quantity*100)+'%'}}/></span><small>Shared depot inventory; consumed once when all research requirements are met.</small></div></div>;
       })()}
