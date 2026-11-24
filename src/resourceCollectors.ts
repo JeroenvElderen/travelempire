@@ -26,7 +26,7 @@ export function collectorPosition(trip:CollectorTrip,now:number):Point{
 }
 /** An independent depot-based collector. Only discovered, non-taxi-only roads
  * are eligible. A shipment is credited once, on return to the depot.
- * Prototype supply sites are reachable road nodes, not OSM business POIs. */
+ * Prefer mapped suppliers; local simulated supply points maintain rural access. */
 export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|null,discovered:Set<string>,hq:Point,options:{capacity?:number;speed?:number;priority?:CollectorPart;offset?:number;loadingMs?:number;suppliers?:readonly CollectorSupplier[];warehouseId?:string}={}):CollectorState{
  if(state.trip){
   if(now<state.trip.endsAt)return state;
@@ -99,7 +99,7 @@ export function configureCollector(state:CollectorState,id:string,change:{priori
  const vehicles=collectorVehicles(state);
  if(!vehicles.some(v=>v.id===id))return state;
  if(change.priority!==undefined&&!levels.collectorPriority)return state;
- if(change.warehouseId!==undefined&&(!levels.collectorRegional||!state.warehouses?.some(w=>w.id===change.warehouseId)&&change.warehouseId!=='main'||vehicles.some(v=>v.id===id&&v.trip)))return state;
+ if(change.warehouseId!==undefined&&(!levels.collectorRegional||!state.warehouses?.some(w=>w.id===change.warehouseId)&&change.warehouseId!=='main'||vehicles.some(v=>v.id===id&&(v.trip||!v.paused))))return state;
  return {...state,trip:undefined,vehicles:vehicles.map(v=>v.id===id?{...v,...(change.paused!==undefined?{paused:change.paused}:{}),...(change.priority!==undefined?{priority:change.priority??undefined}:{}),...(change.warehouseId!==undefined?{warehouseId:change.warehouseId}:{})}:v)};
 }
 export function collectorCapacity(model:CollectorModel,levels:Levels):number{
@@ -107,8 +107,8 @@ export function collectorCapacity(model:CollectorModel,levels:Levels):number{
 }
 /** Preserve the old starter journey, settle each van once, and share one depot inventory. */
 export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGraph|null,discovered:Set<string>,hq:Point,levels:Levels,suppliers:readonly CollectorSupplier[]=[],depots:readonly CollectorDepot[]=[]):CollectorState{
- let stock=state.stock,delivered=state.delivered,trips=state.trips,changed=!state.vehicles;
- let warehouses=state.warehouses;
+ let stock=state.stock,delivered=state.delivered,trips=state.trips,changed=!state.vehicles||!state.warehouses;
+ let warehouses=state.warehouses??[{id:'main',trips:state.trips,delivered:{...state.delivered}}];
  const available=collectorWarehouses(state,depots,hq);
  const vehicles=collectorVehicles(state).map(v=>{
   if(v.paused&&!v.trip)return v;
@@ -120,7 +120,7 @@ export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGra
   if(next===previous)return v;
   changed=true;stock=next.stock;delivered=next.delivered;
   trips+=next.trips-v.trips;
-  if(v.trip&&!next.trip){const id=v.trip.warehouseId??'main';const prior=warehouses??[];const old=prior.find(w=>w.id===id);const item={id,delivered:{...old?.delivered,[v.trip.part]:(old?.delivered[v.trip.part]??0)+v.trip.quantity},trips:(old?.trips??0)+1};warehouses=[...prior.filter(w=>w.id!==id),item];}
+  if(v.trip&&!next.trip){const id=v.trip.warehouseId??'main';const prior=warehouses;const old=prior.find(w=>w.id===id);const item={id,delivered:{...old?.delivered,[v.trip.part]:(old?.delivered[v.trip.part]??0)+v.trip.quantity},trips:(old?.trips??0)+1};warehouses=[...prior.filter(w=>w.id!==id),item];}
   return {...v,trips:next.trips,trip:next.trip,distanceKm:v.distanceKm+(v.trip&&!next.trip?v.trip.distance/1000:0)};
  });
  return changed?{...state,stock,delivered,trips,trip:undefined,vehicles,warehouses}:state;
