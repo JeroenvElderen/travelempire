@@ -83,7 +83,7 @@ import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBas
 import * as Research from "./research";
 import * as Resources from "./researchProgress";
 import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
-import {lockedFeature} from "./researchUnlocks";
+import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -2173,7 +2173,7 @@ export default function App(){
 
  const buyRoadExplorer=(requested?:Taxi['explorerRole'])=>{
   if(company?.researchProgression===2&&!automaticUnlocked(researchRef.current,true)){
-   setSimError('Complete Starter Research Level 4 to unlock additional vehicle purchases.');
+   setSimError('Complete Starter Research Level 5 to unlock additional vehicle purchases.');
    setPage('Research');return;
   }
   if(!company||!graph)return;
@@ -2363,10 +2363,11 @@ export default function App(){
   const current=companyRef.current;
   const currentFleet=fleetSaveRef.current;
   if(current?.researchProgression===2&&!automaticUnlocked(researchRef.current,true)){
-   setSimError('Complete Starter Research Level 4 to unlock the vehicle dealership.');
+   setSimError('Complete Starter Research Level 5 to unlock the vehicle dealership.');
    setPage('Research');return;
   }
   if(!current||!graph)return;
+  const vehicleLock=vehicleResearchLock(researchRef.current,offer);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
   try{
    if(!Number.isInteger(quantity)||quantity<1||quantity>50)throw Error('Choose 1–50 vehicles.');
    // Enforce parking *before* charging or preparing finance. Pending vehicle
@@ -2422,10 +2423,12 @@ export default function App(){
  };
  const buyTaxi=(driver:string,offer:VehicleOffer,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90,depotId='main')=>{
   if(company?.researchProgression===2&&!automaticUnlocked(researchRef.current,true)){
-   setSimError('Complete Starter Research Level 4 to unlock the vehicle dealership.');
+   setSimError('Complete Starter Research Level 5 to unlock the vehicle dealership.');
    setPage('Research');return;
   }
-  if(!company||!graph)return;try{
+  if(!company||!graph)return;
+  const vehicleLock=vehicleResearchLock(researchRef.current,offer);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
+  try{
   const currentFleet=fleetSaveRef.current;
   const deliveryDepot=requireDepotParking(company,currentFleet,depotId,1);
   if(!driver.trim())throw Error('Enter a driver name.');
@@ -2761,6 +2764,7 @@ export default function App(){
  };
  const buyUpgrade=(id:EconomyUpgrade)=>{const offer=UPGRADES.find(u=>u.id===id);if(!offer||!companyRef.current)return;
   if((fleet.upgrades??[]).includes(id))return;
+  const restriction=upgradeResearchLock(researchRef.current,id);if(restriction){setSimError(restriction);setResearchError(restriction);setPage('Research');return;}
   if(companyRef.current.cash+pendingCashRef.current<offer.cost){setSimError('Insufficient cash for this upgrade.');return;}
   pendingCashRef.current-=offer.cost;
   setFleet(old=>({...old,upgrades:[...(old.upgrades??[]),id],transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:offer.name,amount:-offer.cost},...(old.transactions??[])].slice(0,100)}));setSimError('');};
@@ -3397,7 +3401,7 @@ export default function App(){
   const timer=window.setInterval(settle,10000);return()=>window.clearInterval(timer);
  },[company?.id]);
  const freshProgression=company?.researchProgression===2;
- const lockReason=(name:string)=>company?lockedFeature(name,freshProgression,research):null;
+ const lockReason=(name:string)=>company?((name==='Ferries'&&(company.purchasedFerryRouteIds??[]).length>0)||(name==='Investments'&&Object.keys(portfolio.holdings).length>0)||(name==='Hotels'&&Object.keys(construction.sites).length>0)?null:lockedFeature(name,freshProgression,research)):null;
  const dealershipLocked=Boolean(lockReason('Dealership'));
  const go=(name:Page)=>{
   const reason=lockReason(name);
@@ -3409,12 +3413,12 @@ export default function App(){
   // Also guard direct UI state transitions, deep links and internal prompts.
   // Newly created companies may only use the map, Research and starter fleet
   // until individual branches have been earned.
-  if(!company||(!showSetup&&page==='Company'&&company.researchProgression!==2))return;
-  const reason=lockedFeature(page,company.researchProgression===2,research);
+  if(!company)return;
+  const reason=lockReason(page);
   if(reason&&!(page==='Company'&&showSetup)){
    setResearchError(reason);setPage('Research');
   }
- },[page,company?.id,company?.researchProgression,showSetup,research.levels,research.starterLevel]);
+ },[page,company?.id,company?.researchProgression,company?.purchasedFerryRouteIds,portfolio.holdings,construction.sites,showSetup,research.levels,research.starterLevel]);
  const onLocation=(value:Headquarters)=>{if(placingHotelLand){purchaseHotelPlot(value);return;}if(placingDepot){addDepot(value);return;}setSelection(value);setSelecting(false);setPage('Company');setShowSetup(true);};
  const activeResearch=research.active;
  const activeResearchProject=activeResearch?Research.projects.find(project=>project.id===activeResearch.id):undefined;
