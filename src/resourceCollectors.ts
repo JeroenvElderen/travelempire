@@ -1,5 +1,6 @@
 import {meters,nearest,routeDiscovered,type Point,type RoadGraph} from './simulation/taxi';
 
+import type {ResourceMarket} from './resourceMarket';
 import type {CollectorSupplier} from './collectorSuppliers';
 import {reserveSupplier,supplierStock,type GeneratedSupplier} from './generatedSuppliers';
 
@@ -8,7 +9,7 @@ export type CollectorPart=typeof COLLECTOR_PARTS[number];
 export const COLLECTOR_NAMES:Record<CollectorPart,string>={mechanical:'Mechanical parts',electronics:'Electronic components',business:'Business resources',construction:'Construction materials',marine:'Marine components',research:'Research data',energy:'Energy components',rare:'Rare components'};
 export type CollectorStock=Partial<Record<CollectorPart,number>>;
 export type CollectorTrip={path:Point[];outboundMetres:number;distance:number;startedAt:number;endsAt:number;part:CollectorPart;quantity:number;supplierId?:string;supplierName?:string;warehouseId?:string};
-export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses};
+export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses;market?:ResourceMarket};
 export const emptyCollector=():CollectorState=>({stock:{},delivered:{},trips:0});
 const categoryParts:CollectorPart[]=['business','mechanical','electronics','research','business','mechanical','business','rare','marine','business','construction','energy'];
 export function collectorRequirement(category:number,level:number):{part:CollectorPart;quantity:number}{
