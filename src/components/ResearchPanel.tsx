@@ -290,13 +290,13 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
         <option value="">{state.levels.collectorPriority?'Automatic rotation':'Priority research locked'}</option>
         {COLLECTOR_PARTS.map(part=><option key={part} value={part}>{COLLECTOR_NAMES[part]}</option>)}
        </select>
-       <select aria-label={'Assigned warehouse '+(index+1)} disabled={!!vehicle.trip||!state.levels.collectorRegional} value={vehicle.warehouseId??'main'} onChange={e=>onConfigureCollector?.(vehicle.id,{warehouseId:e.target.value})}>
+       <select aria-label={'Assigned warehouse '+(index+1)} disabled={!!vehicle.trip||!vehicle.paused||!state.levels.collectorRegional} value={vehicle.warehouseId??'main'} onChange={e=>onConfigureCollector?.(vehicle.id,{warehouseId:e.target.value})}>
         {warehouses.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
        </select>
       </div>
      </div>)}
      <strong>Regional warehouses</strong>
-     <small>Warehouse deliveries feed the shared research inventory. Pause at depot before reassigning.</small>
+     <small>Warehouse deliveries feed the shared research inventory. Pause at depot before administrative redeployment to another warehouse.</small>
      {warehouses.map(w=><div key={w.id} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>
       <strong>{w.name}</strong><small style={{display:'block'}}>{w.trips} deliveries · {Object.values(w.delivered).reduce((sum,n)=>sum+(n??0),0)} lifetime units</small>
      </div>)}
