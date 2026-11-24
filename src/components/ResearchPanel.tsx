@@ -7,13 +7,13 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
-import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
 type Props={company:Company|null;state:Research.ResearchState;discoveredRoads:number;
- explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;collectorCash?:number;onBuyCollector?:(model:CollectorModel)=>string|null;onConfigureCollector?:(id:string,change:{priority?:CollectorPart|null;paused?:boolean})=>void;onClose:()=>void};
+ explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;collectorCash?:number;onBuyCollector?:(model:CollectorModel)=>string|null;onConfigureCollector?:(id:string,change:{priority?:CollectorPart|null;paused?:boolean;warehouseId?:string})=>void;onBuyWarehouse?:(id:string)=>string|null;onClose:()=>void};
 type Vector={x:number;y:number};
 type Camera={x:number;y:number;scale:number};
 type Gesture={tapId:string|null;pointerId:number;down:Vector;moved:boolean;multi:boolean};
@@ -27,7 +27,7 @@ const divisionNames:Record<DivisionKey,string>=Object.fromEntries(
  DIVISIONS.map(division=>[division.key,division.name])
 ) as Record<DivisionKey,string>;
 
-export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,collectorCash=0,onBuyCollector,onConfigureCollector,onClose}:Props){
+export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,freshStart=false,collectorCash=0,onBuyCollector,onConfigureCollector,onBuyWarehouse,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
  const projects=useMemo(()=>new Map(Research.allProjects.map(p=>[p.id,p])),[]);
  const viewport=useRef<HTMLDivElement>(null);
@@ -40,6 +40,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [resourceOpen,setResourceOpen]=useState(false);
  const [collectorError,setCollectorError]=useState('');
+ const warehouses=state.collector&&company?collectorWarehouses(state.collector,company.depots??[],[company.headquarters.lng,company.headquarters.lat]):[];
  const [zoomLabel,setZoomLabel]=useState('70%');
  const inventory=safeBag(state.resources),earned=safeBag(state.earned);
  const starterLevel=freshStart?state.starterLevel??0:STARTER_LEVELS;
@@ -282,15 +283,28 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      {collectorVehicles(state.collector).map((vehicle,index)=><div key={vehicle.id} style={{padding:9,border:'1px solid #8495aa55',borderRadius:8}}>
       <strong>{COLLECTOR_MODELS[vehicle.model].name} #{index+1}</strong>
       <small style={{display:'block'}}>{collectorCapacity(vehicle.model,state.levels)} units · {vehicle.trips} trips · {vehicle.distanceKm.toFixed(1)} km</small>
-      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':'Waiting for discovered round-trip route'}</small>
+      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+' · '+(vehicle.trip.supplierName??'Local supply point')+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':'Waiting for discovered round-trip route'}</small>
       <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
        <button type="button" onClick={()=>onConfigureCollector?.(vehicle.id,{paused:!vehicle.paused})}>{vehicle.paused?'Resume':'Pause at depot'}</button>
        <select aria-label={'Collection priority '+(index+1)} disabled={!state.levels.collectorPriority} value={vehicle.priority??''} onChange={e=>onConfigureCollector?.(vehicle.id,{priority:(e.target.value||null) as CollectorPart|null})}>
         <option value="">{state.levels.collectorPriority?'Automatic rotation':'Priority research locked'}</option>
         {COLLECTOR_PARTS.map(part=><option key={part} value={part}>{COLLECTOR_NAMES[part]}</option>)}
        </select>
+       <select aria-label={'Assigned warehouse '+(index+1)} disabled={!!vehicle.trip||!state.levels.collectorRegional} value={vehicle.warehouseId??'main'} onChange={e=>onConfigureCollector?.(vehicle.id,{warehouseId:e.target.value})}>
+        {warehouses.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
+       </select>
       </div>
      </div>)}
+     <strong>Regional warehouses</strong>
+     <small>Warehouse deliveries feed the shared research inventory. Pause at depot before reassigning.</small>
+     {warehouses.map(w=><div key={w.id} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>
+      <strong>{w.name}</strong><small style={{display:'block'}}>{w.trips} deliveries · {Object.values(w.delivered).reduce((sum,n)=>sum+(n??0),0)} lifetime units</small>
+     </div>)}
+     {(company?.depots??[]).filter(d=>!warehouses.some(w=>w.id===d.id)).map(d=><div key={d.id} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>
+      <strong>{d.name}</strong><small style={{display:'block'}}>Warehouse conversion · €{fmt(REGIONAL_WAREHOUSE_PRICE)}</small>
+      <button type="button" disabled={!state.levels.collectorRegional||collectorCash<REGIONAL_WAREHOUSE_PRICE||!onBuyWarehouse} onClick={()=>setCollectorError(onBuyWarehouse?.(d.id)??'')}>{!state.levels.collectorRegional?'Regional Collector Network required':'Open warehouse'}</button>
+     </div>)}
+     {!(company?.depots??[]).length&&<small>Create an additional company depot to open a regional warehouse.</small>}
      <strong>Collector dealership</strong>
      {(Object.keys(COLLECTOR_MODELS) as CollectorModel[]).map(model=>{
       const offer=COLLECTOR_MODELS[model],reason=collectorPurchaseLock(state.collector!,model,state.levels)??(collectorCash<offer.price?'Insufficient cash':null);
