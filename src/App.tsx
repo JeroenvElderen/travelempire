@@ -19,7 +19,9 @@ import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
-import type {PassengerDemandPlace} from './simulation/passengerPlaces';
+import {GREEK_DISTRICT_DEMAND_PLACES,GREEK_AIRPORT_DEMAND_PLACES,type PassengerDemandPlace} from './simulation/passengerPlaces';
+import {stationSupplier,placeSupplier,type CollectorSupplier} from './collectorSuppliers';
+import {loadCollectorSupplierTile} from './data/collectorSupplierTiles';
 import type {TrafficIncident} from './simulation/trafficConditions';
 import {isTaxiDispatchMode,type TaxiDispatchMode} from './simulation/taxiDispatchStrategy';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
@@ -84,7 +86,7 @@ import * as Research from "./research";
 import * as Resources from "./researchProgress";
 import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
 import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
-import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
+import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -407,6 +409,7 @@ export default function App(){
 
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
+ const collectorSupplierRef=useRef(new Map<string,CollectorSupplier>());
  const restStopsRef=useRef<Map<string,RestStop>>(new Map());
  const [investmentPois,setInvestmentPois]=useState<InvestablePOI[]>([]);
  const [portfolio,setPortfolio]=useState(()=>loadPortfolio(company?.id));
@@ -687,6 +690,19 @@ export default function App(){
   setResearch(old=>advanceAutomaticTree(
    Resources.observation(old,snapshot),Research.projects,context));
  },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
+ // Load offline supplier tiles near company depots, without requesting extra road graph tiles.
+ useEffect(()=>{
+  if(!company)return;
+  let cancelled=false;const loaded=new Set<string>();collectorSupplierRef.current.clear();
+  const refresh=()=>{
+   for(const point of [company.headquarters,...(company.depots??[])])for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+    const lng=(Math.floor(point.lng*10)+dx+.5)/10,lat=(Math.floor(point.lat*10)+dy+.5)/10,key=lng+':'+lat;
+    if(loaded.has(key))continue;loaded.add(key);
+    void loadCollectorSupplierTile(lng,lat).then(items=>{if(!cancelled)for(const item of items)collectorSupplierRef.current.set(item.id,item);}).catch(()=>loaded.delete(key));
+    void loadStationTile(lng,lat).then(items=>{if(!cancelled)for(const item of items){const supplier=stationSupplier(item);if(supplier)collectorSupplierRef.current.set(supplier.id,supplier);}}).catch(()=>{});
+   }
+  };refresh();const timer=window.setInterval(refresh,30000);return()=>{cancelled=true;window.clearInterval(timer)};
+ },[company?.id,company?.depots]);
  // Dedicated collector uses the game clock and its own saved route/inventory.
  useEffect(()=>{
   if(!company||researchLoadedFor!==company.id||fleetLoadedFor!==company.id)return;
@@ -694,10 +710,11 @@ export default function App(){
    const clock=gameClockRef.current;if(!clock)return;
    const currentFleet=fleetSaveRef.current;
    const cache=discoveredCacheRef.current;
+   const suppliers=[...collectorSupplierRef.current.values(),...([...GREEK_DISTRICT_DEMAND_PLACES,...GREEK_AIRPORT_DEMAND_PLACES,...harbourDemandPlacesRef.current].map(placeSupplier).filter((p):p is CollectorSupplier=>p!==null))];
    setResearch(old=>{
     const previous=old.collector??emptyCollector();
     const roads=cache?.set??new Set(currentFleet.exploredEdgeIds??[]);
-    const next=tickCollectorFleet(previous,clock.epochMs,graphRef.current,roads,[company.headquarters.lng,company.headquarters.lat],old.levels);
+    const next=tickCollectorFleet(previous,clock.epochMs,graphRef.current,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,suppliers,company.depots??[]);
     if(next===previous&&old.collector)return old;
     return advanceAutomaticTree({...old,collector:next},Research.projects,{
      roads:Math.max(cache?.ids.length??0,currentFleet.exploredEdgeIds?.length??0),
@@ -719,8 +736,20 @@ export default function App(){
   setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Collector purchase · '+offer.name,amount:-offer.price},...(old.transactions??[])].slice(0,100)}));
   return null;
  };
- const updateCollector=(id:string,change:{priority?:CollectorPart|null;paused?:boolean})=>{
+ const updateCollector=(id:string,change:{priority?:CollectorPart|null;paused?:boolean;warehouseId?:string})=>{
   setResearch(old=>({...old,collector:configureCollector(old.collector??emptyCollector(),id,change,old.levels)}));
+ };
+ const purchaseCollectorWarehouse=(id:string):string|null=>{
+  const current=companyRef.current,researchNow=researchRef.current;
+  if(!current||researchLoadedFor!==current.id)return 'Company is not ready';
+  if(current.cash+pendingCashRef.current<REGIONAL_WAREHOUSE_PRICE)return 'Insufficient company cash';
+  try{
+   const next={...researchNow,collector:openCollectorWarehouse(researchNow.collector??emptyCollector(),id,researchNow.levels,current.depots??[])};
+   pendingCashRef.current-=REGIONAL_WAREHOUSE_PRICE;
+   researchRef.current=next;Research.save(current.id,next);setResearch(next);
+   setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Regional collector warehouse · '+id,amount:-REGIONAL_WAREHOUSE_PRICE},...(old.transactions??[])].slice(0,100)}));
+   return null;
+  }catch(error){return error instanceof Error?error.message:'Unable to open warehouse';}
  };
  const ensureResearchFeature=(feature:string):string|null=>{
   const current=companyRef.current;
@@ -3569,7 +3598,7 @@ export default function App(){
  {page==='Investments'&&!lockReason('Investments')&&<div className="investments-map-overlay" role="dialog" aria-label="Property investments"><button type="button" className="investments-map-close" aria-label="Close Investments and return to map" onClick={()=>go('World')}><X size={20}/></button><InvestmentsPanel available={investmentPois} portfolio={portfolio} gameNow={gameClock?.epochMs??Date.now()} companyCash={(company?.cash??0)+pendingCashRef.current} onInvest={investInProperty} operatedHotelIds={Object.values(construction.sites).filter(site=>site.sourceHoldingId&&hotelActiveAt(site.operations,Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS))).map(site=>site.sourceHoldingId!)} error={investmentError}/></div>}
  {page==='Hotels'&&!lockReason('Hotels')&&<div className="hotel-builder-overlay" role="dialog" aria-label="Internal hotel construction"><button type="button" className="hotel-builder-close" aria-label="Close hotel builder and return to map" onClick={()=>go('World')}><X size={19}/></button><InternalBuilderPanel company={company} state={construction} portfolio={portfolio} gameHour={Math.floor((gameClock?.epochMs??Date.now())/HOUR_MS)} gameNowHour={(gameClock?.epochMs??Date.now())/HOUR_MS} cash={(company?.cash??0)+pendingCashRef.current} error={constructionError} onAddHeadquarters={setupHeadquartersBuilding} onSelectLand={size=>{if(!companyRef.current){setConstructionError('Create a company first.');return;}if(!validHotelPlotSize(size)){setConstructionError('Select valid plot dimensions.');return;}setHotelPlotSize(size);setConstructionError('');setPlacingHotelLand(true);setSelecting(true);setPage('World');setDrawerOpen(false);}} onAdoptHolding={adoptExistingHotel} onChangeSite={applyConstructionSite} onStartProject={startInternalBuild} onAssignFreight={projectId=>attachLegacyConstructionFreight(projectId)} onTrackFreight={id=>{setFreightFocus(old=>({id,token:(old?.token??0)+1}));setPage('World');setDrawerOpen(false);}} onOrderSupplies={orderInternalHotelSupplies} onHotelSetting={configureHotel} onHotelOpening={changeHotelOpening} onHireWorker={recruitConstructionWorker} onDismissWorker={dismissConstructionWorker}/></div>}
  {page==='Finance'&&!lockReason('Finance')&&<div className="finance-map-overlay" role="dialog" aria-label="Company finances"><button type="button" className="finance-map-close" aria-label="Close Finance and return to map" onClick={()=>go('World')}><X size={20}/></button><FinancePanel company={company} fleet={fleet} gameEpochMs={gameClock?.epochMs??Date.now()} onAcquire={acquireSubsidiary} onFoundSubsidiary={createSubsidiary} onCorporateTransfer={transferSubsidiary} onCorporateMerge={mergeCorporate} onCorporateRestructure={restructureCorporate} onCorporateAssetTransfer={moveSubsidiaryAssets} onFoundForeign={foundForeign} onAcquireForeign={acquireForeign} onTransferForeign={transferForeign} onInvest={investInCompany} onIssueShares={issueCompanyShares} onDividend={distributeDividend} onBuyback={repurchaseShares} onLoan={takeLoan} onBankPartnership={acceptBankPartnership} onBankPartnershipBuyout={buyOutBankPartnership} onEarlyRepayment={repayVehicleLoan} onTransfer={bankTransfer} onBankSettings={bankSettings} onDepotUpgrade={upgradeDepot} onAccountingSettings={accountingSettings} onUpgrade={buyUpgrade} onWageChange={multiplier=>setFleet(old=>({...old,wageMultiplier:multiplier}))} error={simError}/></div>}
- {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><ResearchPanel company={company} state={research} collectorCash={(company?.cash??0)+pendingCashRef.current} onBuyCollector={purchaseCollector} onConfigureCollector={updateCollector} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} freshStart={company?.researchProgression===2} depots={1+(company?.depots?.length??0)} onClose={()=>go('World')}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
+ {page==='Research'&&<div className="research-map-overlay" role="dialog" aria-label="Research centre"><ResearchPanel company={company} state={research} collectorCash={(company?.cash??0)+pendingCashRef.current} onBuyCollector={purchaseCollector} onConfigureCollector={updateCollector} onBuyWarehouse={purchaseCollectorWarehouse} discoveredRoads={Math.max(discoveredCacheRef.current?.ids.length??0,fleet.exploredEdgeIds?.length??0)} explorerSpecializations={new Set(fleet.taxis.filter(t=>t.kind==='explorer'&&t.explorerRole).map(t=>t.explorerRole)).size} gameNow={gameClock?.epochMs??Date.now()} freshStart={company?.researchProgression===2} depots={1+(company?.depots?.length??0)} onClose={()=>go('World')}/>{researchError&&<p className="research-map-error" role="alert">{researchError}</p>}</div>}
  {isFutureModule(page)&&<FutureModulePanel key={page} moduleId={page}/>}
  {page==='World'&&placingHotelLand&&<div className="hotel-land-pick"><div><strong><Building2 size={17}/> Select hotel development land</strong><small>Tap near a road · {hotelPlotSize.width} × {hotelPlotSize.height} m ({hotelPlotSize.width*hotelPlotSize.height} m²) · {new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(hotelPlotCostCents(hotelPlotSize)/100)}</small></div><button type="button" onClick={()=>{setPlacingHotelLand(false);setSelecting(false);setPage('Hotels');}}>Cancel</button></div>}
  {!company&&page==='World'&&!selecting&&<button className="start-company-button" onClick={()=>{setPage('Company');setShowSetup(true);}}>+ Create company</button>}
