@@ -7,6 +7,7 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
@@ -65,14 +66,16 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
   if(isDone(node))return 100;
   const c=costs(node),d=delivered(node),entries=Object.entries(c);
   const productEntries=Object.entries(productCosts(node));
-  const total=entries.length+productEntries.length;
+  const part=node.kind==='research'&&state.collector?collectorRequirement(node.category,node.level):null;
+  const total=entries.length+productEntries.length+(part?1:0);
   if(!total)return 0;
   const raw=entries.reduce((sum,[key,n])=>
    sum+Math.min(1,(d[key as ResourceKey]??0)/Math.max(1,n)),0);
   const supplied=productDelivered(node);
   const crafted=productEntries.reduce((sum,[key,n])=>
    sum+Math.min(1,(supplied[key]??0)/Math.max(1,n)),0);
-  return Math.round((raw+crafted)*100/total);
+  const suppliedParts=part?Math.min(1,(state.collector?.stock[part.part]??0)/part.quantity):0;
+  return Math.min(99,Math.round((raw+crafted+suppliedParts)*100/total));
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
  const selectedProject=selected?.kind==='research'?projects.get(selected.projectId):undefined;
@@ -271,6 +274,15 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
      <b>{small(item.total)}</b>
     </div>)}
    </div>
+   {state.collector&&<>
+    <strong className="factory-section-caption">Resource collector · Depot inventory</strong>
+    <small className="factory-resources-caption">{state.collector.trip?'Collecting '+COLLECTOR_NAMES[state.collector.trip.part]+' · '+state.collector.trip.quantity+' units': 'Waiting for a discovered round-trip route'} · {state.collector.trips} completed deliveries</small>
+    <div className="factory-resources-grid">
+     {COLLECTOR_PARTS.map(part=><div className="factory-resource" key={part}>
+      <span className="factory-resource-icon">🚚</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{fmt(state.collector?.stock[part]??0)} available</small></div><b>{fmt(state.collector?.delivered[part]??0)}</b>
+     </div>)}
+    </div>
+   </>}
    <strong className="factory-section-caption">Processed research products</strong>
    <div className="factory-resources-grid">
     {PRODUCT_KEYS.filter(key=>(state.productProduced?.[key]??0)>0).map(key=><div className="factory-resource" key={key}>
@@ -333,6 +345,11 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
          <span className="factory-requirement-bar"><i style={{width:Math.min(100,count/need*100)+'%'}}/></span>
         </div>;
        })}</div>
+      {selected.kind==='research'&&state.collector&&(()=>{
+       const requirement=collectorRequirement(selected.category,selected.level);
+       const available=state.collector.stock[requirement.part]??0;
+       return <div className="factory-product-chains"><strong>Collector delivery required</strong><div className="factory-requirement"><div><span>{COLLECTOR_NAMES[requirement.part]}</span><b>{fmt(Math.min(available,requirement.quantity))} / {fmt(requirement.quantity)}</b></div><span className="factory-requirement-bar"><i style={{width:Math.min(100,available/requirement.quantity*100)+'%'}}/></span><small>Shared depot inventory; consumed once when all research requirements are met.</small></div></div>;
+      })()}
       {selected.kind==='research'&&PRODUCT_KEYS.some(key=>(productCosts(selected)[key]??0)>0)&&
        <div className="factory-product-chains">
         <strong>Manufactured research requirements</strong>
