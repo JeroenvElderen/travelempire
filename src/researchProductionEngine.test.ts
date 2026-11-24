@@ -126,12 +126,15 @@ describe('research-gated business access',()=>{
   for(const feature of ['Dealership','Drivers','Operations','Ferries','Investments','Hotels','Company','Finance','Infrastructure','Tourism'])
    expect(lockedFeature(feature,true,blank)).not.toBeNull();
  });
- it('unlocks each division through its own research and preserves old companies',()=>{
+ it('unlocks each division through its own research for new and old companies',()=>{
   const save={...blank,starterLevel:5,levels:{portAnalytics:1,advertising:2,depotEfficiency:2,trainingResearch:1,procurement:1,fleetAnalytics:1}};
   for(const feature of ['Dealership','Drivers','Operations','Ferries','Investments','Hotels','Company','Finance'])
    expect(lockedFeature(feature,true,save)).toBeNull();
-  for(const feature of ['Dealership','Drivers','Ferries','Hotels','Finance'])
-   expect(lockedFeature(feature,false,blank)).toBeNull();
+  expect(lockedFeature('Dealership',false,blank)).toBeNull();
+  for(const feature of ['Drivers','Ferries','Hotels','Finance']){
+   expect(lockedFeature(feature,false,blank)).not.toBeNull();
+   expect(lockedFeature(feature,false,save)).toBeNull();
+  }
  });
  it('does not demand ferry customers before ferry research can unlock',()=>{
   const ferry=newProjects.find(p=>p.id==='portAnalytics');
