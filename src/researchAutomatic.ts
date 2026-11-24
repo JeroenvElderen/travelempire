@@ -16,7 +16,7 @@ export const STARTER_STAGES=[
  {level:2,name:'Operations I',jobs:20,roads:200,unlocks:'Operations II'},
  {level:3,name:'Operations II',jobs:30,roads:500,unlocks:'Operations III'},
  {level:4,name:'Operations III',jobs:40,roads:1000,unlocks:'Operations IV'},
- {level:5,name:'Operations IV',jobs:50,roads:2000,unlocks:'Dealership and eight research divisions'}
+ {level:5,name:'Operations IV',jobs:50,roads:2000,unlocks:'Dealership and nine research divisions'}
 ] as const;
 
 export const STARTER_LEVELS=STARTER_STAGES.length;

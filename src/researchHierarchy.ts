@@ -3,7 +3,7 @@ import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES,researchNodeId} from './researchAutomatic';
 
 export const RESEARCH_TILE_SIZE=46;
-export type DivisionKey='revenue'|'taxis'|'explorers'|'hotels'|'parking'|'finance'|'vehicles'|'construction';
+export type DivisionKey='revenue'|'taxis'|'explorers'|'hotels'|'parking'|'finance'|'vehicles'|'construction'|'collectors';
 export type HierarchyNode={
  id:string;projectId:string;level:number;category:number;rank:number;x:number;y:number;
  kind:'starter'|'division'|'research';division?:DivisionKey;
@@ -67,7 +67,8 @@ export const DIVISIONS:readonly {
  {key:'construction',name:'Construction',category:10,root:'modularBuilding',lanes:3,projects:[
   'modularBuilding','siteSurveys','materialLogistics','greenBuildings','supplyChains',
   'qualityInspection','prefabHotels','mixedUseProjects',
-  ...MEGA_RESEARCH_DIVISIONS.construction]}
+  ...MEGA_RESEARCH_DIVISIONS.construction]},
+ {key:'collectors',name:'Resource Collectors',category:2,root:'collectorBasics',lanes:4,projects:["collectorBasics","collectorMedium","collectorHeavy","collectorUtility","collectorCargo","collectorLoading","collectorPriority","collectorRouting","collectorDispatch","collectorRegional"]}
 ] as const;
 const COL=70,ROW=72,START_Y=78,DIVISION_Y=START_Y+STARTER_STAGES.length*ROW+88;
 const TECH_Y=DIVISION_Y+108,SPACE=48;

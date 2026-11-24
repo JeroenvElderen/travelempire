@@ -16,10 +16,11 @@ import type {ProductKey} from '../researchProducts';
 type Glyph=ComponentType<SVGProps<SVGSVGElement>&{size?:number;strokeWidth?:number}>;
 const DIVISION_ICONS:Record<DivisionKey,Glyph>={
  revenue:Coins,taxis:CarFront,explorers:Compass,hotels:Hotel,
- parking:SquareParking,finance:Landmark,vehicles:Wrench,construction:HardHat
+ parking:SquareParking,finance:Landmark,vehicles:Wrench,construction:HardHat,collectors:Truck
 };
 const STARTER_ICONS:readonly Glyph[]=[Map,CarFront,ClipboardCheck,TrendingUp,Star];
 const TECH_ICONS:Readonly<Record<string,Glyph>>={
+ collectorBasics:Truck,collectorMedium:Truck,collectorHeavy:Truck,collectorUtility:Truck,collectorCargo:Package,collectorLoading:Gauge,collectorPriority:Target,collectorRouting:Route,collectorDispatch:Settings2,collectorRegional:Map,
  pricing:Coins,peakPricing:TrendingUp,premium:Star,longDistance:Route,
  demandIntelligence:BarChart3,airportMarkets:Navigation,corporatePassengers:Users,
  advertising:Megaphone,brand:Target,loyalty:Users,regionalReputation:Star,
