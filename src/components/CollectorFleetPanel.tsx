@@ -1,10 +1,12 @@
 import {useState} from 'react';
-import {Truck,Package,Warehouse,MapPin,Fuel,Wrench,Route,ChevronRight,Search,Pause,Play,ArrowLeft,Plus} from 'lucide-react';
+import {Truck,Package,Warehouse,MapPin,Fuel,Wrench,Route,ChevronRight,Search,Pause,Play,ArrowLeft,Plus,ShoppingCart} from 'lucide-react';
 import type {Company} from '../company';
 import {COLLECTOR_MODELS,COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorCapacity,collectorLimit,collectorPurchaseLock,collectorWarehouses,collectorStorageCapacity,collectorStorageUsage,collectorFuelRate,collectorExpenseTotal,emptyCollectorExpenses,COLLECTOR_SERVICE_KM,REGIONAL_WAREHOUSE_PRICE,type CollectorState,type CollectorVehicle,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import './collector-fleet.css';
+import ResourceMarketPanel from './ResourceMarketPanel';
+import type {MarketSide} from '../resourceMarket';
 
-export type CollectorFleetControls={state?:CollectorState;levels:Partial<Record<string,number>>;cash:number;gameNow:number;onBuy:(model:CollectorModel)=>string|null;onConfigure:(id:string,change:{priority?:CollectorPart|null;paused?:boolean;warehouseId?:string})=>void;onBuyWarehouse:(id:string)=>string|null;onLocate:(id:string)=>void;onResearch:()=>void};
+export type CollectorFleetControls={state?:CollectorState;levels:Partial<Record<string,number>>;cash:number;gameNow:number;onBuy:(model:CollectorModel)=>string|null;onConfigure:(id:string,change:{priority?:CollectorPart|null;paused?:boolean;warehouseId?:string})=>void;onBuyWarehouse:(id:string)=>string|null;onLocate:(id:string)=>void;onResearch:()=>void;onTrade:(part:CollectorPart,side:MarketSide,quantity:number,expectedTotalCents:number)=>string|null};
 const money=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(value);
 const count=(value:number)=>value.toLocaleString('en-IE',{maximumFractionDigits:1});
 export function collectorStatus(vehicle:CollectorVehicle,now:number){
@@ -14,8 +16,8 @@ export function collectorStatus(vehicle:CollectorVehicle,now:number){
  return vehicle.waitingReason??'Awaiting dispatch';
 }
 export default function CollectorFleetPanel({company,controls}:{company:Company;controls:CollectorFleetControls}){
- const {state,levels,cash,gameNow,onBuy,onConfigure,onBuyWarehouse,onLocate,onResearch}=controls;
- const [view,setView]=useState<'vehicles'|'dealership'|'warehouses'>('vehicles');
+ const {state,levels,cash,gameNow,onBuy,onConfigure,onBuyWarehouse,onLocate,onResearch,onTrade}=controls;
+ const [view,setView]=useState<'vehicles'|'dealership'|'warehouses'|'market'>('vehicles');
  const [selected,setSelected]=useState<string|null>(null);
  const [search,setSearch]=useState('');
  const [filter,setFilter]=useState<'all'|'active'|'idle'|'service'>('all');
@@ -44,7 +46,7 @@ export default function CollectorFleetPanel({company,controls}:{company:Company;
    <article><Route size={17}/><small>Distance</small><b>{count(vehicles.reduce((n,v)=>n+v.distanceKm,0))} km</b></article>
   </div>
   <div className="collector-overview"><div><small>Lifetime operating costs</small><strong>{money(collectorExpenseTotal(expenses)/100)}</strong></div><div><small>Warehouse usage</small><strong>{count(storage.stored+storage.reserved)} / {count(capacity)}</strong></div><progress aria-label="Storage including inbound cargo" max={capacity} value={Math.min(capacity,storage.stored+storage.reserved)}/></div>
-  <nav className="collector-tabs" aria-label="Collector sections">{([['vehicles','Vehicles',Truck],['dealership','Buy',Plus],['warehouses','Warehouses',Warehouse]] as const).map(([key,label,Icon])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>open(key)}><Icon size={17}/>{label}</button>)}</nav>
+  <nav className="collector-tabs" aria-label="Collector sections">{([['vehicles','Vehicles',Truck],['dealership','Buy',Plus],['warehouses','Warehouses',Warehouse],['market','Market',ShoppingCart]] as const).map(([key,label,Icon])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>open(key)}><Icon size={17}/>{label}</button>)}</nav>
   {error&&<p className="collector-error" role="alert">{error}</p>}
   {view==='vehicles'&&!vehicle&&<>
    <div className="collector-search"><Search size={17}/><input aria-label="Search collectors" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vehicles, warehouses…"/></div>
@@ -78,6 +80,7 @@ export default function CollectorFleetPanel({company,controls}:{company:Company;
    const model=COLLECTOR_MODELS[key],lock=collectorPurchaseLock(state,key,levels)??(cash<model.price?'Insufficient company cash':null);
    return <article key={key} className="collector-offer"><span className="collector-icon"><Truck size={26}/></span><div><strong>{model.name}</strong><small>{collectorCapacity(key,levels)} units · {collectorFuelRate(key,levels).toFixed(1)} L/100 km</small><b>{money(model.price)}</b><button type="button" disabled={!!lock} onClick={()=>setError(onBuy(key)??'')}>{lock??'Purchase vehicle'}</button></div></article>;
   })}<button className="collector-back" type="button" onClick={onResearch}>View collector research</button></div>}
+  {view==='market'&&<ResourceMarketPanel state={state} levels={levels} cash={cash} gameNow={gameNow} onTrade={onTrade}/>}
   {view==='warehouses'&&<div className="collector-detail"><h3>Warehouse network</h3><p>Shared research storage · {count(storage.stored)} stored · {count(storage.reserved)} incoming.</p>{warehouses.map(w=><article className="collector-offer" key={w.id}><span className="collector-icon"><Warehouse size={25}/></span><div><strong>{w.name}</strong><small>{vehicles.filter(v=>(v.warehouseId??'main')===w.id).length} assigned · {w.trips} deliveries</small><small>{count(Object.values(w.delivered).reduce((n,q)=>n+(q??0),0))} lifetime units</small></div></article>)}{(company.depots??[]).filter(d=>!warehouses.some(w=>w.id===d.id)).map(d=><article className="collector-offer" key={d.id}><span className="collector-icon"><Warehouse size={25}/></span><div><strong>{d.name}</strong><small>{money(REGIONAL_WAREHOUSE_PRICE)} conversion</small><button disabled={!levels.collectorRegional||cash<REGIONAL_WAREHOUSE_PRICE} type="button" onClick={()=>setError(onBuyWarehouse(d.id)??'')}>{!levels.collectorRegional?'Regional research required':cash<REGIONAL_WAREHOUSE_PRICE?'Insufficient cash':'Open warehouse'}</button></div></article>)}{!(company.depots??[]).length&&<p>Add a regional company depot to expand your warehouse network.</p>}</div>}
  </section>;
 }
