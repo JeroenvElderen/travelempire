@@ -1,3 +1,4 @@
+import type {CollectorState} from './resourceCollectors';
 import {MEGA_RESEARCH_BRANCHES} from './researchMegaCatalog';
 
 /**
@@ -147,6 +148,7 @@ export function technologyParents(id:string):readonly string[]{
 export const ADVANCED_CATEGORIES=['Passenger Markets & Pricing','Vehicle Engineering','Fleet Management & Dispatch','Exploration & Cartography','Drivers & Personnel','Depots, Maintenance & Parking','Marketing & Reputation','Banking & Financial Technology','Maritime & Ports','Hotels & Hospitality','Construction & Property','Corporate & International'] as const;
 export type ResearchSnapshot=ResourceBag;
 export type ResourceState={
+ collector?:CollectorState;
  resources?:ResourceBag;earned?:ResourceBag;sourceSnapshot?:ResourceBag;
  contributions?:Record<string,ResourceCosts>;selected?:string;queue?:string[];
  researchV3?:true;
