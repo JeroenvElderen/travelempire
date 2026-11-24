@@ -8,7 +8,7 @@ const eur=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',curren
 export default function ResourceMarketPanel({state,levels,cash,gameNow,onTrade}:MarketControls){
  const [part,setPart]=useState<CollectorPart>('mechanical'),[side,setSide]=useState<MarketSide>('buy'),[qty,setQty]=useState('1'),[notice,setNotice]=useState(''),[error,setError]=useState(false);
  const market=marketForDay(state,gameNow),quantity=Number(qty);
- const valid=Number.isSafeInteger(quantity)&&quantity>0;
+ const valid=Number.isSafeInteger(quantity)&&quantity>0&&quantity<=100000;
  const quote=valid?marketQuote(state,levels,cash,gameNow,part,side,quantity):null;
  const max=marketQuote(state,levels,cash,gameNow,part,side,1).maxQuantity;
  const submit=()=>{if(!quote||quote.reason)return;const result=onTrade(part,side,quantity,quote.totalCents);setError(!!result);setNotice(result??(side==='buy'?'Purchased ':'Sold ')+quantity+' '+COLLECTOR_NAMES[part]);};
