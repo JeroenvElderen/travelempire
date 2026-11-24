@@ -70,7 +70,7 @@ describe('approved nine-division research technology tree',()=>{
    expect(node.x).toBeGreaterThanOrEqual(0);
    expect(node.y).toBeGreaterThanOrEqual(0);
    expect(node.x+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.width);
-   expect(node.y+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.hnine);
+   expect(node.y+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.height);
    const key=node.x+':'+node.y;
    expect(occupied.has(key),key).toBe(false);
    occupied.add(key);
@@ -85,6 +85,6 @@ describe('approved nine-division research technology tree',()=>{
   expect(diagram.nodes.filter(n=>n.kind==='division').every(n=>n.level===0)).toBe(true);
   const ids=new Set(diagram.nodes.filter(n=>n.kind==='research').map(n=>n.projectId));
   expect(ids).toEqual(new Set(allProjects.map(p=>p.id)));
-  expect(diagram.hnine).toBeGreaterThan(1100);
+  expect(diagram.height).toBeGreaterThan(1100);
  });
 });
