@@ -85,7 +85,7 @@ import * as Research from "./research";
 import * as Resources from "./researchProgress";
 import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
 import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
-import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
+import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,collectorExpenseTotal,emptyCollectorExpenses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -723,7 +723,7 @@ export default function App(){
     const existing=previous.suppliers??{};
     const suppliers=currentGraph?generateSuppliers(existing,currentGraph,roads,nodes,company.id,clock.epochMs,coasts,cities):existing;
     const prepared=previous.suppliers===suppliers?previous:{...previous,suppliers};
-    const next=tickCollectorFleet(prepared,clock.epochMs,currentGraph,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,[],company.depots??[]);
+    const next=tickCollectorFleet(prepared,clock.epochMs,currentGraph,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,[],company.depots??[],{cash:Math.max(0,(companyRef.current?.cash??0)+pendingCashRef.current-Math.max(0,collectorExpenseTotal(previous.expenses??emptyCollectorExpenses())-(companyRef.current?.collectorExpensePaidCents??0))/100)});
     if(next===previous&&old.collector)return old;
     return advanceAutomaticTree({...old,collector:next},Research.projects,{
      roads:Math.max(cache?.ids.length??0,currentFleet.exploredEdgeIds?.length??0),
@@ -733,6 +733,25 @@ export default function App(){
   };
   tick();const timer=window.setInterval(tick,5000);return()=>window.clearInterval(timer);
  },[company?.id,company?.depots?.length,researchLoadedFor,fleetLoadedFor]);
+ // Dispatch expenses are accumulated in the pure research simulation. Settle
+ // against a company-side persisted watermark, not a React state updater.
+ useEffect(()=>{
+  const current=companyRef.current;
+  if(!current||researchLoadedFor!==current.id||fleetLoadedFor!==current.id)return;
+  const total=collectorExpenseTotal(research.collector?.expenses??emptyCollectorExpenses());
+  const paid=current.collectorExpensePaidCents??0;
+  if(total<=paid)return;
+  const charge=(total-paid)/100,delta=pendingCashRef.current;
+  const updated={...current,cash:Math.round((current.cash+delta-charge)*100)/100,collectorExpensePaidCents:total};
+  // Persist the charged watermark together with the cash balance.
+  saveCompany(updated);pendingCashRef.current=0;companyRef.current=updated;setCompany(updated);
+  const at=gameClockRef.current?.epochMs??Date.now();
+  setFleet(old=>{
+   const id='collector-operating-'+total;
+   if(old.transactions?.some(t=>t.id===id))return old;
+   return {...old,transactions:[{id,time:at,description:'Collector operating expenses · fuel / maintenance / service',amount:-charge},...(old.transactions??[])].slice(0,100),accounting:bookAccounting(old.accounting,periodMonth(at),0,charge,charge,0)};
+  });
+ },[company?.id,research.collector?.expenses,researchLoadedFor,fleetLoadedFor]);
  const purchaseCollector=(model:CollectorModel):string|null=>{
   const current=companyRef.current, researchNow=researchRef.current;
   if(!current||researchLoadedFor!==current.id)return 'Company is not ready';
