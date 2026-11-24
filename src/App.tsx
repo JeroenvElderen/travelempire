@@ -687,7 +687,7 @@ export default function App(){
    explorers:fleet.taxis.filter(t=>t.kind==='explorer').length,
    depots:1+(company.depots?.length??0),freshStart:company.researchProgression===2};
   setResearch(old=>advanceAutomaticTree(
-   Resources.observation(old,snapshot),Research.projects,context));
+   Resources.observation(old.collector?old:{...old,collector:emptyCollector()},snapshot),Research.projects,context));
  },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
  // Dedicated collector uses the game clock and its own saved route/inventory.
  useEffect(()=>{
