@@ -9,7 +9,7 @@ import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,typ
 import {supplierStock,SUPPLIER_COLORS} from '../generatedSuppliers';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import {collectorResearchCosts} from '../collectorResearch';
-import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart,type CollectorStock} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
@@ -70,7 +70,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  const productCosts=(node:HierarchyNode)=>node.kind==='research'?
   productRequirements(node.projectId,node.level,Research.projects):{};
  const productDelivered=(node:HierarchyNode)=>state.productContributions?.[node.id]??{};
- const materialCosts=(node:HierarchyNode)=>node.kind==='research'&&state.collector?collectorResearchCosts(projects.get(node.projectId)??{id:node.projectId,category:node.category},node.level):{};
+ const materialCosts=(node:HierarchyNode):CollectorStock=>node.kind==='research'&&state.collector?collectorResearchCosts(projects.get(node.projectId)??{id:node.projectId,category:node.category},node.level):{};
  const progress=(node:HierarchyNode)=>{
   if(isDone(node))return 100;
   const c=costs(node),d=delivered(node),entries=Object.entries(c);
