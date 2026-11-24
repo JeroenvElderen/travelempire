@@ -4,24 +4,24 @@ import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE} from './researchHie
 import {maximum,technologyParents} from './researchProgress';
 import {PARENT_LEVEL_REQUIREMENTS,STARTER_STAGES} from './researchAutomatic';
 
-describe('approved eight-division research technology tree',()=>{
+describe('approved nine-division research technology tree',()=>{
  const diagram=buildResearchHierarchy(allProjects.map(p=>p.id));
  const byId=diagram.byId;
  const researchLevels=allProjects.reduce((n,p)=>n+maximum(p.id),0);
- it('keeps every real research level plus exactly five startup milestones and eight division entrances',()=>{
+ it('keeps every real research level plus exactly five startup milestones and nine division entrances',()=>{
   expect(STARTER_STAGES.map(s=>s.jobs)).toEqual([10,20,30,40,50]);
   expect(STARTER_STAGES.map(s=>s.roads)).toEqual([50,200,500,1000,2000]);
-  expect(researchLevels).toBe(305);
-  expect(diagram.nodes).toHaveLength(researchLevels+5+8);
+  expect(researchLevels).toBe(315);
+  expect(diagram.nodes).toHaveLength(researchLevels+5+9);
   expect(diagram.nodes.filter(n=>n.kind==='starter')).toHaveLength(5);
-  expect(diagram.nodes.filter(n=>n.kind==='division')).toHaveLength(8);
+  expect(diagram.nodes.filter(n=>n.kind==='division')).toHaveLength(9);
   expect(diagram.nodes.filter(n=>n.kind==='research')).toHaveLength(researchLevels);
   expect(new Set(diagram.nodes.map(n=>n.id)).size).toBe(diagram.nodes.length);
  });
- it('opens eight unequal, separately growing research divisions, without a common final',()=>{
+ it('opens nine unequal, separately growing research divisions, without a common final',()=>{
   expect(DIVISIONS.map(d=>d.name)).toEqual([
    'Revenue','Taxis & Ferries','Explorers','Hotels','Parking',
-   'Banking & Finance','Fleet & Vehicles','Construction']);
+   'Banking & Finance','Fleet & Vehicles','Construction','Resource Collectors']);
   const lengths=DIVISIONS.map(d=>d.projects.length);
   expect(lengths[1]).toBeGreaterThan(lengths[3]);
   expect(lengths[0]).toBeGreaterThan(lengths[4]);
@@ -31,12 +31,12 @@ describe('approved eight-division research technology tree',()=>{
   expect(nodes.every(n=>n.y>byId.get('starter:5')!.y)).toBe(true);
   expect(diagram.nodes.some(n=>n.id.includes('final')||n.id.includes('trophy'))).toBe(false);
  });
- it('connects the five intro milestones and fans out to exactly eight entrances',()=>{
+ it('connects the five intro milestones and fans out to exactly nine entrances',()=>{
   const visible=diagram.edges.filter(e=>e.visible);
   const wired=new Set(visible.map(e=>e.from+'>'+e.to));
   for(let l=2;l<=5;l++)expect(wired.has('starter:'+(l-1)+'>starter:'+l)).toBe(true);
   const entrances=visible.filter(e=>e.from==='starter:5'&&e.to.startsWith('division:'));
-  expect(entrances).toHaveLength(8);
+  expect(entrances).toHaveLength(9);
   for(const division of DIVISIONS){
    expect(wired.has('division:'+division.key+'>'+division.root+':1')).toBe(true);
   }
@@ -70,7 +70,7 @@ describe('approved eight-division research technology tree',()=>{
    expect(node.x).toBeGreaterThanOrEqual(0);
    expect(node.y).toBeGreaterThanOrEqual(0);
    expect(node.x+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.width);
-   expect(node.y+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.height);
+   expect(node.y+RESEARCH_TILE_SIZE).toBeLessThanOrEqual(diagram.hnine);
    const key=node.x+':'+node.y;
    expect(occupied.has(key),key).toBe(false);
    occupied.add(key);
@@ -85,6 +85,6 @@ describe('approved eight-division research technology tree',()=>{
   expect(diagram.nodes.filter(n=>n.kind==='division').every(n=>n.level===0)).toBe(true);
   const ids=new Set(diagram.nodes.filter(n=>n.kind==='research').map(n=>n.projectId));
   expect(ids).toEqual(new Set(allProjects.map(p=>p.id)));
-  expect(diagram.height).toBeGreaterThan(1100);
+  expect(diagram.hnine).toBeGreaterThan(1100);
  });
 });

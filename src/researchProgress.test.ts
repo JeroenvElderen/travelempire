@@ -9,7 +9,7 @@ describe('automatic research economy',()=>{
  it('contains 169 advanced technologies including 133 new branches beside 28 legacy programmes',()=>{
   expect(projects).toHaveLength(28);
   expect(newProjects).toHaveLength(169);
-  expect(new Set([...projects,...newProjects].map(p=>p.id)).size).toBe(197);
+  expect(new Set([...projects,...newProjects].map(p=>p.id)).size).toBe(207);
  });
  it('awards resources only for positive settled counter deltas',()=>{
   const initial=observation(empty(),counters({roads:120,passengers:10,revenue:500}));
