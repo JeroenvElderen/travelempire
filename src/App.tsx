@@ -21,6 +21,7 @@ import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
 import {GREEK_DISTRICT_DEMAND_PLACES,type PassengerDemandPlace} from './simulation/passengerPlaces';
 import {generateSuppliers} from './generatedSuppliers';
+import {executeMarketTrade,type MarketSide} from './resourceMarket';
 import type {TrafficIncident} from './simulation/trafficConditions';
 import {isTaxiDispatchMode,type TaxiDispatchMode} from './simulation/taxiDispatchStrategy';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
@@ -85,7 +86,7 @@ import * as Research from "./research";
 import * as Resources from "./researchProgress";
 import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
 import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
-import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,collectorExpenseTotal,emptyCollectorExpenses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
+import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,collectorExpenseTotal,emptyCollectorExpenses,COLLECTOR_NAMES,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -778,6 +779,24 @@ export default function App(){
    setFleet(old=>({...old,transactions:[{id:crypto.randomUUID(),time:gameClockRef.current?.epochMs??Date.now(),description:'Regional collector warehouse · '+id,amount:-REGIONAL_WAREHOUSE_PRICE},...(old.transactions??[])].slice(0,100)}));
    return null;
   }catch(error){return error instanceof Error?error.message:'Unable to open warehouse';}
+ };
+ const tradeCollectorResource=(part:CollectorPart,side:MarketSide,quantity:number,expectedTotalCents:number):string|null=>{
+  const current=companyRef.current,rs=researchRef.current;
+  if(!current||researchLoadedFor!==current.id||fleetLoadedFor!==current.id||!rs.collector)return 'Company is not ready';
+  const at=gameClockRef.current?.epochMs??Date.now();
+  const outstanding=Math.max(0,collectorExpenseTotal(rs.collector.expenses??emptyCollectorExpenses())-(current.collectorExpensePaidCents??0))/100;
+  try{
+   const result=executeMarketTrade(rs.collector,rs.levels,current.cash+pendingCashRef.current-outstanding,at,part,side,quantity,crypto.randomUUID(),expectedTotalCents);
+   const amount=result.cashDeltaCents/100;
+   const updated={...current,cash:Math.round((current.cash+pendingCashRef.current+amount)*100)/100};
+   const next={...rs,collector:result.state};
+   // Persist the two game balances immediately rather than waiting for the periodic tick.
+   Research.save(current.id,next);saveCompany(updated);
+   pendingCashRef.current=0;companyRef.current=updated;researchRef.current=next;setCompany(updated);setResearch(next);
+   const transaction={id:result.trade.id,time:at,description:'Resource market · '+(side==='buy'?'Bought ':'Sold ')+quantity+' '+COLLECTOR_NAMES[part],amount};
+   setFleet(old=>({...old,transactions:[transaction,...(old.transactions??[])].slice(0,100),accounting:bookAccounting(old.accounting,periodMonth(at),Math.max(0,amount),Math.max(0,-amount),0,0)}));
+   return null;
+  }catch(error){return error instanceof Error?error.message:'Resource trade failed';}
  };
  const ensureResearchFeature=(feature:string):string|null=>{
   const current=companyRef.current;
@@ -3612,7 +3631,7 @@ export default function App(){
   depots={company?[{id:'main',name:'Main depot'},...(company.depots??[]).map(d=>({id:d.id,name:d.name}))]:[]}
   onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
   onAutoAssignmentChange={setAutoDriverStaffing} onTripPreferenceChange={setDriverTripPreference}/></div>}
-  {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} collectors={{state:research.collector,levels:research.levels,cash:(company?.cash??0)+pendingCashRef.current,gameNow:gameClock?.epochMs??0,onBuy:purchaseCollector,onConfigure:updateCollector,onBuyWarehouse:purchaseCollectorWarehouse,onLocate:id=>{setVehicleFocus(previous=>({id,token:(previous?.token??0)+1}));go('World')},onResearch:()=>go('Research')}} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
+  {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} collectors={{state:research.collector,levels:research.levels,cash:(company?.cash??0)+pendingCashRef.current,gameNow:gameClock?.epochMs??0,onBuy:purchaseCollector,onConfigure:updateCollector,onBuyWarehouse:purchaseCollectorWarehouse,onLocate:id=>{setVehicleFocus(previous=>({id,token:(previous?.token??0)+1}));go('World')},onResearch:()=>go('Research'),onTrade:tradeCollectorResource}} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
  {page==='Dealership'&&company&&!dealershipLocked&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} researchLevels={research.levels} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&!lockReason('Operations')&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
   roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
