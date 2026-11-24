@@ -146,7 +146,7 @@ export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGra
   }
   const freeByPart:CollectorStock={};
   const free=Math.max(0,capacity-stored-reserved);
-  for(const part of COLLECTOR_PARTS)freeByPart[part]=Math.max(0,Math.min(free,Math.floor(capacity/8)-(stock[part]??0)-(reservedByPart[part]??0)));
+  for(const part of COLLECTOR_PARTS)freeByPart[part]=Math.max(0,Math.min(free,Math.floor(capacity/8)-(state.stock[part]??0)-(reservedByPart[part]??0)));
   if(!v.trip&&economy&&(!free||!COLLECTOR_PARTS.some(p=>(freeByPart[p]??0)>0)))return wait('Warehouse storage full');
   const previous:CollectorState={stock,delivered,trips:v.trips,trip:v.trip};
   const warehouse=available.find(w=>w.id===(v.warehouseId??'main'))??available[0];
