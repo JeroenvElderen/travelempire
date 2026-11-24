@@ -21,7 +21,7 @@ describe('96 new TravelEmpire research branches',()=>{
   expect(new Set(allProjects.map(p=>p.id)).size).toBe(207);
   expect(projects).toHaveLength(28);
   const diagram=buildResearchHierarchy(allProjects.map(p=>p.id));
-  expect(diagram.nodes).toHaveLength(318);
+  expect(diagram.nodes).toHaveLength(329);
   for(const [division,ids] of groups){
    expect(DIVISIONS.some(d=>d.key===division)).toBe(true);
    for(const id of ids){
