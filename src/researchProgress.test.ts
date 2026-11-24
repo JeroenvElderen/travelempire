@@ -8,7 +8,7 @@ const counters=(patch:Partial<typeof EMPTY_RESOURCES>={})=>({...EMPTY_RESOURCES,
 describe('automatic research economy',()=>{
  it('contains 169 advanced technologies including 133 new branches beside 28 legacy programmes',()=>{
   expect(projects).toHaveLength(28);
-  expect(newProjects).toHaveLength(169);
+  expect(newProjects).toHaveLength(179);
   expect(new Set([...projects,...newProjects].map(p=>p.id)).size).toBe(207);
  });
  it('awards resources only for positive settled counter deltas',()=>{

@@ -85,7 +85,7 @@ describe('Builderment-style fully automatic research progression',()=>{
  });
  it('draws a unique tile for every research level and five starter milestones',()=>{
   const graph=buildLevelResearchDiagram(allProjects.map(p=>p.id));
-  expect(graph.nodes).toHaveLength(5+27*5+1+36+37+96);
+  expect(graph.nodes).toHaveLength(5+27*5+1+36+37+96+10);
   expect(new Set(graph.nodes.map(n=>n.id)).size).toBe(graph.nodes.length);
   expect(graph.nodes.filter(n=>n.type==='starter')).toHaveLength(5);
   expect(graph.nodes.filter(n=>n.projectId==='pricing')).toHaveLength(5);

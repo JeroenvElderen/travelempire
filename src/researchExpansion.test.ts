@@ -44,7 +44,7 @@ describe('new branching research extensions',()=>{
    expect(node?.kind).toBe('research');
    expect(node?.division).toBe(groups[0].key);
   }
-  expect(DIVISIONS.map(d=>d.projects.length)).toEqual([32,39,23,15,15,28,27,18]);
+  expect(DIVISIONS.map(d=>d.projects.length)).toEqual([32,39,23,15,15,28,27,18,10]);
  });
  it('branches across multiple technologies and industries rather than a single long chain',()=>{
   const all=new Set(allProjects.map(p=>p.id));
