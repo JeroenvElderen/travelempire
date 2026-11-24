@@ -25,7 +25,7 @@ import ConstructionFreightLayer from './ConstructionFreightLayer';
 import ResourceCollectorLayer from './ResourceCollectorLayer';
 import GeneratedSupplierLayer from './GeneratedSupplierLayer';
 import type {GeneratedSupplier} from '../generatedSuppliers';
-import type {CollectorVehicle} from '../resourceCollectors';
+import {collectorPosition,type CollectorVehicle} from '../resourceCollectors';
 import {freightPosition,freightStage,freightStatusLabel,type ConstructionFreight} from '../constructionLogistics';
 import {Map as MapIcon,Satellite} from 'lucide-react';
 import type {Headquarters} from '../company';
@@ -544,8 +544,11 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
  useEffect(()=>{
   if(!ready||!map.current||!vehicleFocus)return;
   const target=taxisRef.current.find(t=>t.id===vehicleFocus.id);
-  if(!target)return;
-  map.current.flyTo({center:target.position,
+  const collector=collectorFleet.find(v=>v.id===vehicleFocus.id);
+  const depot=collector&&depots.find(d=>d.id===collector.warehouseId);
+  const point=target?.position??(collector?(collector.trip?collectorPosition(collector.trip,gameClock?.epochMs??collector.trip.startedAt):depot?[depot.lng,depot.lat] as [number,number]:headquarters?[headquarters.lng,headquarters.lat] as [number,number]:null):null);
+  if(!point)return;
+  map.current.flyTo({center:point,
    zoom:Math.max(map.current.getZoom(),13.3),speed:1.3,essential:true});
  },[ready,vehicleFocus?.id,vehicleFocus?.token]);
 
