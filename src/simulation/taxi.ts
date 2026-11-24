@@ -1121,7 +1121,7 @@ const clamp=(value:number,low:number,high:number)=>Math.max(low,Math.min(high,va
 // Road graphs are keyed by OSM node IDs, not coordinate strings.
 // Cache an edge-ID speed index per graph snapshot to avoid O(E) work per frame.
 const roadSpeedIndex=new WeakMap<RoadGraph,Map<string,number>>();
-function speedForEdge(graph:RoadGraph,id:string|undefined):number{
+export function speedForEdge(graph:RoadGraph,id:string|undefined):number{
  if(!id)return 50;
  let index=roadSpeedIndex.get(graph);
  if(!index){
