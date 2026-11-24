@@ -19,9 +19,8 @@ import {isFutureModule} from './futureModules';
 import {loadPortfolio,savePortfolio,buyPropertyShare,settlePropertyDividends,ownership,type InvestablePOI} from './investments';
 import type {RestStop} from './simulation/driverRest';
 import {demandAt} from './simulation/demand';
-import {GREEK_DISTRICT_DEMAND_PLACES,GREEK_AIRPORT_DEMAND_PLACES,type PassengerDemandPlace} from './simulation/passengerPlaces';
-import {stationSupplier,placeSupplier,type CollectorSupplier} from './collectorSuppliers';
-import {loadCollectorSupplierTile} from './data/collectorSupplierTiles';
+import {GREEK_DISTRICT_DEMAND_PLACES,type PassengerDemandPlace} from './simulation/passengerPlaces';
+import {generateSuppliers} from './generatedSuppliers';
 import type {TrafficIncident} from './simulation/trafficConditions';
 import {isTaxiDispatchMode,type TaxiDispatchMode} from './simulation/taxiDispatchStrategy';
 import {weatherTaxiSpeedFactor} from './simulation/livingWorld';
@@ -409,7 +408,6 @@ export default function App(){
 
  const networkRef=useRef<RoadNetworkManager|null>(null);
  const stationsRef=useRef<Map<string,Station>>(new Map());
- const collectorSupplierRef=useRef(new Map<string,CollectorSupplier>());
  const restStopsRef=useRef<Map<string,RestStop>>(new Map());
  const [investmentPois,setInvestmentPois]=useState<InvestablePOI[]>([]);
  const [portfolio,setPortfolio]=useState(()=>loadPortfolio(company?.id));
@@ -690,31 +688,42 @@ export default function App(){
   setResearch(old=>advanceAutomaticTree(
    Resources.observation(old,snapshot),Research.projects,context));
  },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
- // Load offline supplier tiles near company depots, without requesting extra road graph tiles.
- useEffect(()=>{
-  if(!company)return;
-  let cancelled=false;const loaded=new Set<string>();collectorSupplierRef.current.clear();
-  const refresh=()=>{
-   for(const point of [company.headquarters,...(company.depots??[])])for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
-    const lng=(Math.floor(point.lng*10)+dx+.5)/10,lat=(Math.floor(point.lat*10)+dy+.5)/10,key=lng+':'+lat;
-    if(loaded.has(key))continue;loaded.add(key);
-    void loadCollectorSupplierTile(lng,lat).then(items=>{if(!cancelled)for(const item of items)collectorSupplierRef.current.set(item.id,item);}).catch(()=>loaded.delete(key));
-    void loadStationTile(lng,lat).then(items=>{if(!cancelled)for(const item of items){const supplier=stationSupplier(item);if(supplier)collectorSupplierRef.current.set(supplier.id,supplier);}}).catch(()=>{});
-   }
-  };refresh();const timer=window.setInterval(refresh,30000);return()=>{cancelled=true;window.clearInterval(timer)};
- },[company?.id,company?.depots]);
  // Dedicated collector uses the game clock and its own saved route/inventory.
  useEffect(()=>{
   if(!company||researchLoadedFor!==company.id||fleetLoadedFor!==company.id)return;
+  let scanCursor=0;
   const tick=()=>{
    const clock=gameClockRef.current;if(!clock)return;
    const currentFleet=fleetSaveRef.current;
    const cache=discoveredCacheRef.current;
-   const suppliers=[...collectorSupplierRef.current.values(),...([...GREEK_DISTRICT_DEMAND_PLACES,...GREEK_AIRPORT_DEMAND_PLACES,...harbourDemandPlacesRef.current].map(placeSupplier).filter((p):p is CollectorSupplier=>p!==null))];
+   const roads=cache?.set??new Set(currentFleet.exploredEdgeIds??[]);
+   const currentGraph=graphRef.current;
+   const nodes:string[]=[];
+   if(currentGraph){
+    // Bootstrap suppliers near every operating depot, then scan loaded graph
+    // slices so exploration elsewhere creates persistent suppliers as well.
+    const seen=new Set<string>();
+    for(const depot of [company.headquarters,...(company.depots??[])]){
+     const start=nearest(currentGraph,[depot.lng,depot.lat]);if(!start)continue;
+     const queue=[start],visited=new Set(queue);
+     for(let n=0;n<queue.length&&n<1800;n++){
+      const node=queue[n];seen.add(node);
+      for(const edge of currentGraph.edges.get(node)??[])if(!edge.taxiOnly&&roads.has(edge.id)&&!visited.has(edge.to)){visited.add(edge.to);queue.push(edge.to);}
+     }
+    }
+    const keys=currentGraph.nodeKeys;
+    if(scanCursor>=keys.length)scanCursor=0;
+    for(const node of keys.slice(scanCursor,scanCursor+5000))seen.add(node);
+    scanCursor+=5000;nodes.push(...seen);
+   }
+   const coasts=harbourDemandPlacesRef.current.map(p=>p.position);
+   const cities=GREEK_DISTRICT_DEMAND_PLACES.filter(p=>p.kind==='business').map(p=>p.position);
    setResearch(old=>{
     const previous=old.collector??emptyCollector();
-    const roads=cache?.set??new Set(currentFleet.exploredEdgeIds??[]);
-    const next=tickCollectorFleet(previous,clock.epochMs,graphRef.current,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,suppliers,company.depots??[]);
+    const existing=previous.suppliers??{};
+    const suppliers=currentGraph?generateSuppliers(existing,currentGraph,roads,nodes,company.id,clock.epochMs,coasts,cities):existing;
+    const prepared=previous.suppliers===suppliers?previous:{...previous,suppliers};
+    const next=tickCollectorFleet(prepared,clock.epochMs,currentGraph,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,[],company.depots??[]);
     if(next===previous&&old.collector)return old;
     return advanceAutomaticTree({...old,collector:next},Research.projects,{
      roads:Math.max(cache?.ids.length??0,currentFleet.exploredEdgeIds?.length??0),
@@ -3512,7 +3521,7 @@ export default function App(){
  </button>:
  <LiveFinanceTicker history={fleet.financeHistory??[]} transactions={fleet.transactions??[]} financeJournal={fleet.financeJournal}
   bankCollectionsByDay={fleet.bankPartnershipPaidByDay} gameNow={gameClock?.epochMs??Date.now()}/> )}
- {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onTrafficIncidentsChange={incidents=>{trafficIncidentsRef.current=incidents;}} onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} collectorFleet={research.collector?collectorVehicles(research.collector):[]} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
+ {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onTrafficIncidentsChange={incidents=>{trafficIncidentsRef.current=incidents;}} onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} collectorFleet={research.collector?collectorVehicles(research.collector):[]} collectorSuppliers={research.collector?.suppliers} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
  </div>{page==='Company'&&(!company||showSetup)&&<div className="company-map-overlay" role="dialog" aria-label="Create company"><button type="button" className="company-map-close" aria-label="Close company setup and return to map" onClick={()=>go('World')}><X size={20}/></button><CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/></div>}
  {page==='Company'&&company&&!showSetup&&!lockReason('Company')&&<div className="company-map-overlay" role="dialog" aria-label="Company management"><button type="button" className="company-map-close" aria-label="Close Company and return to map" onClick={()=>go('World')}><X size={20}/></button><section className="company-dashboard company-v213 company-v3">
  <header className="company-v3-header"><span className="company-v3-icon"><Building2 size={23}/></span><div><h1>Company</h1><p>Business &amp; depots</p></div></header>
