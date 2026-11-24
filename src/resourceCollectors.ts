@@ -45,7 +45,7 @@ export function collectorPosition(trip:CollectorTrip,now:number):Point{return co
 /** An independent depot-based collector. Only discovered, non-taxi-only roads
  * are eligible. A shipment is credited once, on return to the depot.
  * Prefer mapped suppliers; local simulated supply points maintain rural access. */
-export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|null,discovered:Set<string>,hq:Point,options:{capacity?:number;speed?:number;priority?:CollectorPart;offset?:number;loadingMs?:number;suppliers?:readonly CollectorSupplier[];generated?:readonly GeneratedSupplier[];warehouseId?:string;maxDistanceKm?:number;freeByPart?:CollectorStock}={}):CollectorState{
+export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|null,discovered:Set<string>,hq:Point,options:{capacity?:number;speed?:number;priority?:CollectorPart;offset?:number;loadingMs?:number;suppliers?:readonly CollectorSupplier[];generated?:readonly GeneratedSupplier[];warehouseId?:string;maxDistanceKm?:number;freeByPart?:CollectorStock;smartRouting?:boolean}={}):CollectorState{
  if(state.trip){
   if(now<state.trip.endsAt)return state;
   const {part,quantity}=state.trip;
@@ -57,8 +57,8 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
  const part=options.priority??COLLECTOR_PARTS[(state.trips+(options.offset??0))%COLLECTOR_PARTS.length];
  const candidatesBySupplier=(options.suppliers??[]).filter(p=>p.parts.includes(part)&&meters(origin,p.position)<=25000).sort((a,b)=>meters(origin,a.position)-meters(origin,b.position)).slice(0,16);
  const makeTrip=(end:string,supplier?:{id:string;name:string},resource=part,quantity=options.capacity??12):CollectorState|null=>{
-  const out=routeDiscovered(graph,start,end,discovered,'',false,10000);
-  const back=routeDiscovered(graph,end,start,discovered,'',false,10000);
+  const out=routeDiscovered(graph,start,end,discovered,'',false,options.smartRouting?18000:10000);
+  const back=routeDiscovered(graph,end,start,discovered,'',false,options.smartRouting?18000:10000);
   if(!out||!back||out.path.length<2||back.path.length<2)return null;
   const path=[...out.path,...back.path.slice(1)];
   const distance=path.slice(1).reduce((n,p,j)=>n+meters(path[j],p),0);
@@ -74,9 +74,9 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
   // Automatic vehicles rotate the preferred resource, but may collect another
   // available type when that resource is not yet reachable. Explicit priorities
   // wait for a matching supplier rather than silently changing the cargo.
-  const nearby=options.generated.filter(p=>(!options.priority||p.part===options.priority)&&supplierStock(p,now)>0&&(options.freeByPart?.[p.part]??Infinity)>0&&meters(origin,p.position)<=25000)
+  const nearby=options.generated.filter(p=>(!options.priority||p.part===options.priority)&&supplierStock(p,now)>0&&(options.freeByPart?.[p.part]??Infinity)>0&&meters(origin,p.position)<=(options.smartRouting?35000:25000))
    .sort((a,b)=>Number(b.part===part)-Number(a.part===part)||meters(origin,a.position)-meters(origin,b.position));
-  for(const supplier of nearby.slice(0,24)){
+  for(const supplier of nearby.slice(0,options.smartRouting?40:24)){
    if(!graph.nodes.has(supplier.node)||supplier.node===start)continue;
    const trip=makeTrip(supplier.node,supplier,supplier.part,Math.min(options.capacity??12,supplierStock(supplier,now)));
    if(trip)return trip;
@@ -170,7 +170,7 @@ export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGra
   if(!v.trip&&economy&&(!free||!COLLECTOR_PARTS.some(p=>(freeByPart[p]??0)>0)))return wait('Warehouse storage full');
   const previous:CollectorState={stock,delivered,trips:v.trips,trip:v.trip};
   const warehouse=available.find(w=>w.id===(v.warehouseId??'main'))??available[0];
-  const next=tickCollector(previous,now,graph,discovered,warehouse.position,{suppliers,generated:generated?Object.values(generated):undefined,warehouseId:warehouse.id,freeByPart:economy?freeByPart:undefined,maxDistanceKm:economy?model.tank*100/collectorFuelRate(v.model,levels):undefined,capacity:collectorCapacity(v.model,levels),priority:v.priority,offset:v.offset,loadingMs:levels.collectorLoading?30000:90000});
+  const next=tickCollector(previous,now,graph,discovered,warehouse.position,{suppliers,generated:generated?Object.values(generated):undefined,warehouseId:warehouse.id,freeByPart:economy?freeByPart:undefined,maxDistanceKm:economy?model.tank*100/collectorFuelRate(v.model,levels):undefined,capacity:collectorCapacity(v.model,levels),smartRouting:!!levels.collectorRouting,priority:v.priority,offset:v.offset,loadingMs:levels.collectorLoading?30000:90000});
   if(next===previous)return economy?wait(v.priority&&(freeByPart[v.priority]??0)<=0?'Resource storage full':'Waiting for reachable supplier'):v;
   let tripExpenses:CollectorExpenses|undefined,tripLitres=0;
   if(!v.trip&&next.trip&&economy){

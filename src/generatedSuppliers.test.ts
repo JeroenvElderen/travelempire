@@ -27,10 +27,12 @@ describe('procedural supplier network',()=>{
   const next=tickCollectorFleet(state,0,graph,discovered,a,{});
   expect(collectorVehicles(next).map(v=>v.trip?.quantity)).toEqual([12,3]);
   expect(next.suppliers?.[supplier.id].stock).toBe(0);
-  const completed=tickCollectorFleet(next,1000000,graph,discovered,a,{});
+  const third=addCollector(next,'light','third',{collectorBasics:1});
+  expect(collectorVehicles(tickCollectorFleet(third,0,graph,discovered,a,{}))[2].trip).toBeUndefined();
+  const finish=Math.max(...collectorVehicles(next).map(v=>v.trip!.endsAt));
+  const completed=tickCollectorFleet(next,finish,graph,discovered,a,{});
   expect(completed.stock.mechanical).toBe(15);
-  const exhausted=tickCollectorFleet(completed,1000000,graph,discovered,a,{});
-  expect(collectorVehicles(exhausted).every(v=>!v.trip)).toBe(true);
+  expect(collectorVehicles(completed).every(v=>!v.trip)).toBe(true);
  });
 });
 
@@ -56,7 +58,7 @@ describe('collector operating economy',()=>{
   expect(next.suppliers?.[supplier.id].stock).toBe(10);
   expect(collectorVehicles(next)[0].trip?.quantity).toBe(5);
   expect(collectorVehicles(next)[1].trip).toBeUndefined();
-  const completed=tickCollectorFleet(next,1000000,graph,discovered,a,{},[],[],{cash:100});
+  const completed=tickCollectorFleet(next,collectorVehicles(next)[0].trip!.endsAt,graph,discovered,a,{},[],[],{cash:100});
   expect(completed.stock.mechanical).toBe(150);
   expect(completed.expenses).toEqual(next.expenses);
  });

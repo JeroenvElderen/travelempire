@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {openCollectorWarehouse,collectorWarehouses,addCollector,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,configureCollector,tickCollectorFleet,collectorPosition,collectorRequirement,emptyCollector,tickCollector,type CollectorTrip} from './resourceCollectors';
+import {openCollectorWarehouse,collectorWarehouses,addCollector,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,configureCollector,tickCollectorFleet,collectorPosition,collectorMotion,collectorRequirement,emptyCollector,tickCollector,type CollectorTrip} from './resourceCollectors';
 import type {RoadGraph,Point} from './simulation/taxi';
 const a:Point=[23.7,38],b:Point=[23.71,38];
 const graph:RoadGraph={nodes:new Map([['a',a],['b',b]]),nodeKeys:['a','b'],edges:new Map([
@@ -84,5 +84,21 @@ describe('mapped suppliers and regional warehouses',()=>{
   expect(collectorWarehouses(complete,depots,a)[1].delivered.mechanical).toBe(12);
   expect(collectorWarehouses(complete,depots,a)[0].trips).toBe(0);
   expect(tickCollectorFleet(complete,1000,null,new Set(),a,{},[],depots)).toBe(complete);
+ });
+});
+
+describe('collector real-time road movement',()=>{
+ it('matches posted speeds, stops for loading and faces the return road',()=>{
+  const trip=tickCollector(emptyCollector(),0,graph,new Set(['ab','ba']),a,{loadingMs:90000}).trip!;
+  expect(trip.legMs).toHaveLength(2);
+  const outbound=trip.legMs![0];
+  const halfway=collectorMotion(trip,outbound/2);
+  expect(halfway.speedKph).toBeCloseTo(40,5);
+  expect(halfway.position[0]).toBeCloseTo((a[0]+b[0])/2,7);
+  expect(outbound/24/1000).toBeGreaterThan(70);
+  expect(collectorMotion(trip,outbound+45000).position).toEqual(b);
+  expect(collectorMotion(trip,outbound+45000).speedKph).toBe(0);
+  expect(collectorMotion(trip,outbound+90001).heading).toBeCloseTo(-90,1);
+  expect(collectorMotion(trip,trip.endsAt).position).toEqual(a);
  });
 });
