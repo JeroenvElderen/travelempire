@@ -12,6 +12,8 @@ export function collectorRequirement(category:number,level:number):{part:Collect
  return {part:categoryParts[category]??'research',quantity:Math.max(1,Math.ceil(level*2))};
 }
 export function collectorPosition(trip:CollectorTrip,now:number):Point{
+ if(now<=trip.startedAt)return trip.path[0];
+ if(now>=trip.endsAt)return trip.path[trip.path.length-1];
  let left=trip.distance*Math.max(0,Math.min(1,(now-trip.startedAt)/(trip.endsAt-trip.startedAt)));
  for(let i=1;i<trip.path.length;i++){
   const a=trip.path[i-1],b=trip.path[i],d=meters(a,b);
