@@ -1,8 +1,6 @@
 import type {ResearchState} from './research';
 
-/** Unlocks apply only to new progression-enabled saves. Existing games
- * retain their acquired services and menus without regression.
- */
+/** All saves must earn technology; legacy saves retain starter graduation. */
 export const BUSINESS_UNLOCKS={
  Dealership:{name:'Vehicle Dealership',starter:5},
  Drivers:{name:'Driver Management',id:'trainingResearch',level:1},
@@ -13,7 +11,7 @@ export const BUSINESS_UNLOCKS={
  Company:{name:'Company Management',id:'depotEfficiency',level:1},
  Finance:{name:'Finance & Banking',id:'procurement',level:1},
  Energy:{name:'Energy Management',id:'engine',level:2},
- 'Stock Market':{name:'Stock Market',id:'corporateDueDiligence',level:1},
+ 'Stock Market':{name:'Stock Market',id:'procurement',level:2},
  Infrastructure:{name:'Infrastructure',id:'modularBuilding',level:1},
  Tourism:{name:'Tourism',id:'tourismPartnerships',level:1},
  Contracts:{name:'Contracts',id:'corporatePassengers',level:1},
@@ -23,11 +21,10 @@ export const BUSINESS_UNLOCKS={
 export type LockedFeature=keyof typeof BUSINESS_UNLOCKS;
 export const BASE_GAME_FEATURES=['World','Research','Fleet'] as const;
 export function lockedFeature(feature:string,companyIsNew:boolean,state:ResearchState):string|null{
- if(!companyIsNew)return null;
  if((BASE_GAME_FEATURES as readonly string[]).includes(feature))return null;
  const rule=BUSINESS_UNLOCKS[feature as LockedFeature];
  if(!rule)return 'Continue research to unlock '+feature;
- if('starter' in rule)return (state.starterLevel??0)>=rule.starter?null:
+ if('starter' in rule)return (!companyIsNew||(state.starterLevel??0)>=rule.starter)?null:
   rule.name+' requires Starter Level '+rule.starter+' (50 completed taxi jobs and 2,000 discovered roads)';
  return (state.levels[rule.id]??0)>=rule.level?null:
   rule.name+' requires '+rule.id+' Level '+rule.level;
