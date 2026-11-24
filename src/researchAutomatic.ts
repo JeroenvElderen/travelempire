@@ -2,7 +2,7 @@ import {
  allResearch,normalizeResources,prerequisites,resourceKeys,researchCosts,safeBag,
  type OperationalContext,type ResearchProject,type ResourceBag,type ResourceCosts,type ResourceKey,type ResourceState
 } from './researchProgress';
-import {collectorRequirement} from './resourceCollectors';
+import {collectorResearchCosts,consumeCollectorResearch} from './collectorResearch';
 import {allocateResearchProducts,type ProductionLedger} from './researchProductionEngine';
 import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
@@ -104,7 +104,7 @@ export function advanceAutomaticTree<T extends AutomaticState>(
  let starterLevel=context.freshStart?Math.max(0,Math.min(STARTER_LEVELS,base.starterLevel??0)):STARTER_LEVELS;
  let levels={...base.levels};
  let collector=base.collector;
- const projectCategories=new Map(allResearch(legacy).map(p=>[p.id,p.category]));
+ const projectById=new Map(allResearch(legacy).map(p=>[p.id,p]));
  let resources=safeBag(base.resources);
  const earned=safeBag(base.earned);
  const contributions:Record<string,ResourceCosts>={...(base.contributions??{})};
@@ -201,10 +201,10 @@ export function advanceAutomaticTree<T extends AutomaticState>(
      (production.productContributions?.[candidate.key]?.[product]??0)>=
      (candidate.productGoal[product]??0))){
     if(collector){
-     const requirement=collectorRequirement(projectCategories.get(candidate.id)??-1,candidate.level);
-     const available=collector.stock[requirement.part]??0;
-     if(available<requirement.quantity)continue;
-     collector={...collector,stock:{...collector.stock,[requirement.part]:available-requirement.quantity}};
+     const project=projectById.get(candidate.id)!;
+     const next=consumeCollectorResearch(collector,collectorResearchCosts(project,candidate.level));
+     if(!next)continue;
+     collector=next;
     }
     levels[candidate.id]=candidate.level;
     unlocked=true;changed=true;

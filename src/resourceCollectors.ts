@@ -10,7 +10,7 @@ export type CollectorPart=typeof COLLECTOR_PARTS[number];
 export const COLLECTOR_NAMES:Record<CollectorPart,string>={mechanical:'Mechanical parts',electronics:'Electronic components',business:'Business resources',construction:'Construction materials',marine:'Marine components',research:'Research data',energy:'Energy components',rare:'Rare components'};
 export type CollectorStock=Partial<Record<CollectorPart,number>>;
 export type CollectorTrip={path:Point[];outboundMetres:number;distance:number;startedAt:number;endsAt:number;part:CollectorPart;quantity:number;supplierId?:string;supplierName?:string;warehouseId?:string;legMs?:number[];loadingMs?:number;outboundLegs?:number};
-export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses;market?:ResourceMarket};
+export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses;market?:ResourceMarket;researchSpent?:CollectorStock};
 export const emptyCollector=():CollectorState=>({stock:{},delivered:{},trips:0});
 const categoryParts:CollectorPart[]=['business','mechanical','electronics','research','business','mechanical','business','rare','marine','business','construction','energy'];
 export function collectorRequirement(category:number,level:number):{part:CollectorPart;quantity:number}{
@@ -21,7 +21,8 @@ export function collectorRequirement(category:number,level:number):{part:Collect
 export function collectorMotion(trip:CollectorTrip,now:number):{position:Point;heading:number;speedKph:number}{
  const path=trip.path;
  const heading=(i:number)=>{const a=path[i],b=path[i+1];if(!a||!b)return 0;return Math.atan2((b[0]-a[0])*Math.cos((a[1]+b[1])*Math.PI/360),b[1]-a[1])*180/Math.PI;};
- if(path.length<2)return {position:path[0],heading:0,speedKph:0};
+ if(path.length<2||now<=trip.startedAt)return {position:path[0],heading:heading(0),speedKph:0};
+ if(now>=trip.endsAt)return {position:path[path.length-1],heading:heading(path.length-2),speedKph:0};
  if(trip.legMs?.length===path.length-1){
   let left=Math.max(0,now-trip.startedAt);
   for(let i=0;i<trip.legMs.length;i++){

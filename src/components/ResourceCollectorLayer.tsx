@@ -20,7 +20,7 @@ export default function ResourceCollectorLayer({map,vehicles,gameClock}:Props){
     let marker=markers.get(vehicle.id);
     if(!marker){
      const element=document.createElement('div');
-     element.style.cssText='width:20px;height:38px;pointer-events:auto;filter:drop-shadow(0 1px 2px #0008);';
+     element.style.cssText='width:11px;height:23px;pointer-events:auto;filter:drop-shadow(0 1px 2px #0008);';
      const image=document.createElement('img');image.src=import.meta.env.BASE_URL+'assets/collector-truck.png';image.alt='';image.draggable=false;image.style.cssText='width:100%;height:100%;object-fit:contain;display:block;';element.appendChild(image);
      marker=new maplibregl.Marker({element,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(point).addTo(map);
      markers.set(vehicle.id,marker);
