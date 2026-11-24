@@ -35,7 +35,7 @@ export function vehicleResearchLock(state:ResearchState,offer:{className:string;
  if((offer.fuel==='Electric'||offer.fuel==='Hybrid')&&(state.levels.engine??0)<2)return 'Electric and hybrid vehicles require Engine Efficiency Level 2';
  return null;
 }
-const UPGRADE_TECH={fuel:'engine',workshop:'workshopResearch',dispatch:'dispatchResearch',training:'trainingResearch'} as const;
+const UPGRADE_TECH={fuel:'engine',workshop:'workshopResearch',dispatch:'dispatchResearch',training:'trainingResearch','depot-capacity':'depotEfficiency'} as const;
 export function upgradeResearchLock(state:ResearchState,id:keyof typeof UPGRADE_TECH):string|null{
  const tech=UPGRADE_TECH[id];return (state.levels[tech]??0)>=1?null:id+' upgrade requires '+tech+' Level 1';
 }
