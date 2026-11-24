@@ -7,13 +7,13 @@ import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
-import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement} from '../resourceCollectors';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
 
 type Props={company:Company|null;state:Research.ResearchState;discoveredRoads:number;
- explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;onClose:()=>void};
+ explorerSpecializations:number;depots:number;gameNow:number;freshStart?:boolean;collectorCash?:number;onBuyCollector?:(model:CollectorModel)=>string|null;onConfigureCollector?:(id:string,change:{priority?:CollectorPart|null;paused?:boolean})=>void;onClose:()=>void};
 type Vector={x:number;y:number};
 type Camera={x:number;y:number;scale:number};
 type Gesture={tapId:string|null;pointerId:number;down:Vector;moved:boolean;multi:boolean};
@@ -27,7 +27,7 @@ const divisionNames:Record<DivisionKey,string>=Object.fromEntries(
  DIVISIONS.map(division=>[division.key,division.name])
 ) as Record<DivisionKey,string>;
 
-export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,onClose}:Props){
+export default function ResearchPanel({state,discoveredRoads,explorerSpecializations,depots,freshStart=false,collectorCash=0,onBuyCollector,onConfigureCollector,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
  const projects=useMemo(()=>new Map(Research.allProjects.map(p=>[p.id,p])),[]);
  const viewport=useRef<HTMLDivElement>(null);
@@ -39,6 +39,7 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
  const initialized=useRef(false);
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [resourceOpen,setResourceOpen]=useState(false);
+ const [collectorError,setCollectorError]=useState('');
  const [zoomLabel,setZoomLabel]=useState('70%');
  const inventory=safeBag(state.resources),earned=safeBag(state.earned);
  const starterLevel=freshStart?state.starterLevel??0:STARTER_LEVELS;
@@ -276,7 +277,30 @@ export default function ResearchPanel({state,discoveredRoads,explorerSpecializat
    </div>
    {state.collector&&<>
     <strong className="factory-section-caption">Resource collector · Depot inventory</strong>
-    <small className="factory-resources-caption">{state.collector.trip?'Collecting '+COLLECTOR_NAMES[state.collector.trip.part]+' · '+state.collector.trip.quantity+' units': 'Waiting for a discovered round-trip route'} · {state.collector.trips} completed deliveries</small>
+    <small className="factory-resources-caption">{collectorVehicles(state.collector).length} / {collectorLimit(state.levels)} collectors · {state.collector.trips} completed deliveries</small>
+    <div className="factory-collector-fleet" style={{display:'grid',gap:8,margin:'8px 0'}}>
+     {collectorVehicles(state.collector).map((vehicle,index)=><div key={vehicle.id} style={{padding:9,border:'1px solid #8495aa55',borderRadius:8}}>
+      <strong>{COLLECTOR_MODELS[vehicle.model].name} #{index+1}</strong>
+      <small style={{display:'block'}}>{collectorCapacity(vehicle.model,state.levels)} units · {vehicle.trips} trips · {vehicle.distanceKm.toFixed(1)} km</small>
+      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':'Waiting for discovered round-trip route'}</small>
+      <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+       <button type="button" onClick={()=>onConfigureCollector?.(vehicle.id,{paused:!vehicle.paused})}>{vehicle.paused?'Resume':'Pause at depot'}</button>
+       <select aria-label={'Collection priority '+(index+1)} disabled={!state.levels.collectorPriority} value={vehicle.priority??''} onChange={e=>onConfigureCollector?.(vehicle.id,{priority:(e.target.value||null) as CollectorPart|null})}>
+        <option value="">{state.levels.collectorPriority?'Automatic rotation':'Priority research locked'}</option>
+        {COLLECTOR_PARTS.map(part=><option key={part} value={part}>{COLLECTOR_NAMES[part]}</option>)}
+       </select>
+      </div>
+     </div>)}
+     <strong>Collector dealership</strong>
+     {(Object.keys(COLLECTOR_MODELS) as CollectorModel[]).map(model=>{
+      const offer=COLLECTOR_MODELS[model],reason=collectorPurchaseLock(state.collector!,model,state.levels)??(collectorCash<offer.price?'Insufficient cash':null);
+      return <div key={model} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>
+       <strong>{offer.name}</strong><small style={{display:'block'}}>{collectorCapacity(model,state.levels)} units · €{fmt(offer.price)}</small>
+       <button type="button" disabled={!!reason||!onBuyCollector} onClick={()=>setCollectorError(onBuyCollector?.(model)??'')}>{reason??'Purchase collector'}</button>
+      </div>;
+     })}
+     {collectorError&&<small role="alert">{collectorError}</small>}
+    </div>
     <div className="factory-resources-grid">
      {COLLECTOR_PARTS.map(part=><div className="factory-resource" key={part}>
       <span className="factory-resource-icon">🚚</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{fmt(state.collector?.stock[part]??0)} available</small></div><b>{fmt(state.collector?.delivered[part]??0)}</b>
