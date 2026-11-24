@@ -6,6 +6,7 @@ import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
+import {supplierStock,SUPPLIER_COLORS} from '../generatedSuppliers';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
@@ -27,7 +28,7 @@ const divisionNames:Record<DivisionKey,string>=Object.fromEntries(
  DIVISIONS.map(division=>[division.key,division.name])
 ) as Record<DivisionKey,string>;
 
-export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,freshStart=false,collectorCash=0,onBuyCollector,onConfigureCollector,onBuyWarehouse,onClose}:Props){
+export default function ResearchPanel({company,state,discoveredRoads,explorerSpecializations,depots,gameNow,freshStart=false,collectorCash=0,onBuyCollector,onConfigureCollector,onBuyWarehouse,onClose}:Props){
  const hierarchy=useMemo(()=>buildResearchHierarchy(Research.allProjects.map(p=>p.id)),[]);
  const projects=useMemo(()=>new Map(Research.allProjects.map(p=>[p.id,p])),[]);
  const viewport=useRef<HTMLDivElement>(null);
@@ -295,6 +296,14 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
        </select>
       </div>
      </div>)}
+     {state.collector.suppliers&&<><strong>Discovered suppliers · {Object.keys(state.collector.suppliers).length}</strong>
+      <div className="factory-resources-grid">
+       {COLLECTOR_PARTS.map(part=>{
+        const locations=Object.values(state.collector!.suppliers!).filter(s=>s.part===part);
+        const units=locations.reduce((n,s)=>n+supplierStock(s,gameNow),0);
+        return <div key={part} className="factory-resource"><span className="factory-resource-icon" style={{color:SUPPLIER_COLORS[part]}}>▣</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{locations.length} locations · {fmt(units)} supply units</small></div></div>;
+       })}
+      </div><small>Supplier stock replenishes hourly in game time. Map markers appear when zoomed in.</small></>}
      <strong>Regional warehouses</strong>
      <small>Warehouse deliveries feed the shared research inventory. Pause at depot before administrative redeployment to another warehouse.</small>
      {warehouses.map(w=><div key={w.id} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>
