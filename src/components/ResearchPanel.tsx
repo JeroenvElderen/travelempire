@@ -8,7 +8,7 @@ import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyL
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
 import {supplierStock,SUPPLIER_COLORS} from '../generatedSuppliers';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
-import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorRequirement,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
@@ -41,6 +41,10 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [resourceOpen,setResourceOpen]=useState(false);
  const [collectorError,setCollectorError]=useState('');
+ const storage=state.collector?collectorStorageUsage(state.collector):{stored:0,reserved:0};
+ const storageCapacity=state.collector?collectorStorageCapacity(state.collector,state.levels):1200;
+ const expenses=state.collector?.expenses??emptyCollectorExpenses();
+ const euro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(cents/100);
  const warehouses=state.collector&&company?collectorWarehouses(state.collector,company.depots??[],[company.headquarters.lng,company.headquarters.lat]):[];
  const [zoomLabel,setZoomLabel]=useState('70%');
  const inventory=safeBag(state.resources),earned=safeBag(state.earned);
@@ -281,10 +285,23 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
     <strong className="factory-section-caption">Resource collector · Depot inventory</strong>
     <small className="factory-resources-caption">{collectorVehicles(state.collector).length} / {collectorLimit(state.levels)} collectors · {state.collector.trips} completed deliveries</small>
     <div className="factory-collector-fleet" style={{display:'grid',gap:8,margin:'8px 0'}}>
+     <div style={{padding:10,border:'1px solid #8495aa55',borderRadius:8}}>
+      <strong>Warehouse storage · {fmt(storage.stored)} / {fmt(storageCapacity)} units</strong>
+      <progress aria-label="Warehouse capacity including reserved shipments" style={{width:'100%'}} value={Math.min(storageCapacity,storage.stored+storage.reserved)} max={storageCapacity}/>
+      <small style={{display:'block'}}>{fmt(storage.reserved)} incoming · {fmt(Math.max(0,storageCapacity-storage.stored-storage.reserved))} free · {fmt(Math.floor(storageCapacity/8))} units reserved per resource category</small>
+      <small>HQ 1,200 units + 2,000 per regional warehouse; depot efficiency increases capacity.</small>
+     </div>
+     <div style={{padding:10,border:'1px solid #8495aa55',borderRadius:8}}>
+      <strong>Lifetime collector operating expenses · {euro(collectorExpenseTotal(expenses))}</strong>
+      <small style={{display:'block'}}>Fuel {euro(expenses.fuelCents)} · Wear {euro(expenses.maintenanceCents)} · Service {euro(expenses.serviceCents)}</small>
+      <small>Depot refuelling · €{COLLECTOR_FUEL_PRICE.toFixed(2)}/L (simulated)</small>
+     </div>
      {collectorVehicles(state.collector).map((vehicle,index)=><div key={vehicle.id} style={{padding:9,border:'1px solid #8495aa55',borderRadius:8}}>
       <strong>{COLLECTOR_MODELS[vehicle.model].name} #{index+1}</strong>
       <small style={{display:'block'}}>{collectorCapacity(vehicle.model,state.levels)} units · {vehicle.trips} trips · {vehicle.distanceKm.toFixed(1)} km</small>
-      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+' · '+(vehicle.trip.supplierName??'Local supply point')+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':'Waiting for discovered round-trip route'}</small>
+      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+' · '+(vehicle.trip.supplierName??'Local supply point')+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':vehicle.waitingReason??'Waiting for discovered round-trip route'}</small>
+      <small style={{display:'block'}}>{collectorFuelRate(vehicle.model,state.levels).toFixed(1)} L/100 km · {fmt(vehicle.fuelLitres??0)} L purchased · {euro(collectorExpenseTotal(vehicle.expenses??emptyCollectorExpenses()))} lifetime expenses</small>
+      <small style={{display:'block'}}>Next service in {fmt(Math.max(0,COLLECTOR_SERVICE_KM-(vehicle.distanceKm-(vehicle.lastServiceKm??0))))} km</small>
       <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
        <button type="button" onClick={()=>onConfigureCollector?.(vehicle.id,{paused:!vehicle.paused})}>{vehicle.paused?'Resume':'Pause at depot'}</button>
        <select aria-label={'Collection priority '+(index+1)} disabled={!state.levels.collectorPriority} value={vehicle.priority??''} onChange={e=>onConfigureCollector?.(vehicle.id,{priority:(e.target.value||null) as CollectorPart|null})}>
