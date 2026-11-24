@@ -84,6 +84,7 @@ import * as Research from "./research";
 import * as Resources from "./researchProgress";
 import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
 import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
+import {emptyCollector,tickCollector} from "./resourceCollectors";
 import CompanySetup from "./components/CompanySetup";
 import {clearCompany,loadCompany, saveCompany,type Company,type Headquarters} from './company';
 import "./map-update.css";
@@ -686,6 +687,27 @@ export default function App(){
   setResearch(old=>advanceAutomaticTree(
    Resources.observation(old,snapshot),Research.projects,context));
  },[company?.id,company?.depots?.length,fleet,fleetLoadedFor,researchLoadedFor]);
+ // Dedicated collector uses the game clock and its own saved route/inventory.
+ useEffect(()=>{
+  if(!company||researchLoadedFor!==company.id||fleetLoadedFor!==company.id)return;
+  const tick=()=>{
+   const clock=gameClockRef.current;if(!clock)return;
+   const currentFleet=fleetSaveRef.current;
+   const cache=discoveredCacheRef.current;
+   setResearch(old=>{
+    const previous=old.collector??emptyCollector();
+    if(previous.trip&&clock.epochMs<previous.trip.endsAt)return old;
+    const roads=cache?.set??new Set(currentFleet.exploredEdgeIds??[]);
+    const next=tickCollector(previous,clock.epochMs,graphRef.current,roads,[company.headquarters.lng,company.headquarters.lat]);
+    if(next===previous&&old.collector)return old;
+    return advanceAutomaticTree({...old,collector:next},Research.projects,{
+     roads:Math.max(cache?.ids.length??0,currentFleet.exploredEdgeIds?.length??0),
+     explorers:currentFleet.taxis.filter(t=>t.kind==='explorer').length,
+     depots:1+(company.depots?.length??0),freshStart:company.researchProgression===2});
+   });
+  };
+  tick();const timer=window.setInterval(tick,5000);return()=>window.clearInterval(timer);
+ },[company?.id,company?.depots?.length,researchLoadedFor,fleetLoadedFor]);
  const ensureResearchFeature=(feature:string):string|null=>{
   const current=companyRef.current;
   const reason=current?lockedFeature(feature,current.researchProgression===2,researchRef.current):null;
@@ -3447,7 +3469,7 @@ export default function App(){
  </button>:
  <LiveFinanceTicker history={fleet.financeHistory??[]} transactions={fleet.transactions??[]} financeJournal={fleet.financeJournal}
   bankCollectionsByDay={fleet.bankPartnershipPaidByDay} gameNow={gameClock?.epochMs??Date.now()}/> )}
- {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onTrafficIncidentsChange={incidents=>{trafficIncidentsRef.current=incidents;}} onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
+ {consoleOpen&&(consoleMode==='financial'?<FinancialConsole transactions={fleet.transactions??[]}/>:<FrontendConsole/>)}<div style={{display:consoleOpen?'none':'contents'}}><section className="world" style={{display:page==='World'||page==='Fleet'||page==='Dealership'||page==='Drivers'||page==='Operations'||page==='Ferries'||page==='Investments'||page==='Hotels'||page==='Company'||page==='Finance'||page==='Research'?'block':'none'}}><WorldMap onTrafficIncidentsChange={incidents=>{trafficIncidentsRef.current=incidents;}} onViewportChange={bounds=>networkRef.current?.considerViewport(bounds.west,bounds.east,bounds.south,bounds.north)} layersToggleToken={layersToggleToken} companyId={company?.id} purchasedFerryRouteIds={company?.purchasedFerryRouteIds??[]} ferryServiceStartedAt={company?.ferryServiceStartedAt??{}} unlockedHarbourIds={unlockedHarbours} selecting={selecting} onLocationSelected={onLocation} depots={company?.depots??[]} headquarters={company?.headquarters??null} ownedProperties={ownedMapProperties} constructionSites={constructionSiteMarkers} constructionFreight={constructionFreight} collectorTrip={research.collector?.trip} constructionFreightFocus={freightFocus} vehicleFocus={vehicleFocus} taxis={[...fleet.taxis,...recoveries.map(job=>job.truck)]} drivers={fleet.drivers??[]} exploredEdgeIds={fleet.exploredEdgeIds??[]} graph={graph} roadGraphVersion={roadGraphVersion} gameClock={gameClock} onExplorerCommand={controlExplorer} onRequestRecovery={requestRecoveryTruck} recoveryTargetIds={recoveries.map(j=>j.targetId)} recoveryRequestedIds={[...manualRecoveryRequestsRef.current]}/>{harbourNotice&&<div role="status" aria-live="polite" style={{position:'absolute',top:90,left:'50%',transform:'translateX(-50%)',zIndex:30,width:'min(90vw,380px)',background:'#102c39',color:'white',border:'1px solid #42d5a9',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 28px #0006',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1}}><strong>⚓ Harbour unlocked!</strong><div>{harbourNotice.name}</div><small>New ferry connections available</small></div><button type="button" aria-label="Close harbour notification" onClick={()=>setHarbourNotice(null)} style={{color:'white',fontSize:22}}>×</button><button type="button" onClick={()=>{setHarbourNotice(null);setPage('Ferries')}} style={{color:'#6ef1ce'}}>View</button></div>}{selecting&&<div className="location-hint"><strong>{placingDepot?'Choose new depot':'Choose headquarters'}</strong><span>Click a location on the map to select it.</span><button onClick={()=>{setSelecting(false);setPlacingDepot(false);setPage('Company');}}>Cancel</button></div>}</section>
  </div>{page==='Company'&&(!company||showSetup)&&<div className="company-map-overlay" role="dialog" aria-label="Create company"><button type="button" className="company-map-close" aria-label="Close company setup and return to map" onClick={()=>go('World')}><X size={20}/></button><CompanySetup selection={selection} selecting={selecting} onSelectingChange={setSelecting} onShowMap={()=>setPage('World')} onCreated={value=>{setCompany(value);setShowSetup(false);setPage('Company');}}/></div>}
  {page==='Company'&&company&&!showSetup&&!lockReason('Company')&&<div className="company-map-overlay" role="dialog" aria-label="Company management"><button type="button" className="company-map-close" aria-label="Close Company and return to map" onClick={()=>go('World')}><X size={20}/></button><section className="company-dashboard company-v213 company-v3">
  <header className="company-v3-header"><span className="company-v3-icon"><Building2 size={23}/></span><div><h1>Company</h1><p>Business &amp; depots</p></div></header>
