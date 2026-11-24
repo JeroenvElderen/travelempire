@@ -29,3 +29,13 @@ export function lockedFeature(feature:string,companyIsNew:boolean,state:Research
  return (state.levels[rule.id]??0)>=rule.level?null:
   rule.name+' requires '+rule.id+' Level '+rule.level;
 }
+
+export function vehicleResearchLock(state:ResearchState,offer:{className:string;fuel:string}):string|null{
+ if((offer.className==='Premium'||offer.className==='XL')&&(state.levels.premium??0)<1)return 'Premium and XL vehicles require Premium Passenger Service Level 1';
+ if((offer.fuel==='Electric'||offer.fuel==='Hybrid')&&(state.levels.engine??0)<2)return 'Electric and hybrid vehicles require Engine Efficiency Level 2';
+ return null;
+}
+const UPGRADE_TECH={fuel:'engine',workshop:'workshopResearch',dispatch:'dispatchResearch',training:'trainingResearch'} as const;
+export function upgradeResearchLock(state:ResearchState,id:keyof typeof UPGRADE_TECH):string|null{
+ const tech=UPGRADE_TECH[id];return (state.levels[tech]??0)>=1?null:id+' upgrade requires '+tech+' Level 1';
+}
