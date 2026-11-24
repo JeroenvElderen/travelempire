@@ -59,7 +59,7 @@ describe('automatic multi-stage research manufacturing',()=>{
   };
   for(const project of known)
    for(let level=1;level<=maximum(project.id);level++)visit(project.id+':'+level);
-  expect(finished.size).toBe(305);
+  expect(finished.size).toBe(315);
  });
  it('automatically consumes raw income exactly once to manufacture level-two research products',()=>{
   const levels={pricing:1};
