@@ -194,11 +194,28 @@ describe('Explorer Autopilot Phase 3 — progress monitoring and safe retries',(
   const t=explorer();
   const start=watchExplorerProgress(undefined,t,1000);
   expect(start.stalledMs).toBe(0);
-  const stalled=watchExplorerProgress(start.watch,t,92000);
+  let sample=start;
+  for(const now of [21000,41000,61000,81000])sample=watchExplorerProgress(sample.watch,t,now);
+  const stalled=watchExplorerProgress(sample.watch,t,92000);
   expect(stalled.stalledMs).toBe(91000);
   const moved=watchExplorerProgress(stalled.watch,{...t,leg:1,position:B},93000);
   expect(moved.stalledMs).toBe(0);
   expect(watchExplorerProgress(moved.watch,{...t,leg:1,position:B},95000).stalledMs).toBe(2000);
+ });
+ it('accumulates small movements instead of falsely reporting a stalled scout',()=>{
+  const t=explorer();
+  let sample=watchExplorerProgress(undefined,t,1000);
+  for(let i=1;i<=10;i++){
+   sample=watchExplorerProgress(sample.watch,{...t,distanceIntoLeg:i*.5},1000+i*1000);
+   expect(sample.stalledMs).toBeLessThan(4000);
+  }
+ });
+ it('does not count successor planning as physical movement and resets after missing observations',()=>{
+  const t=explorer();
+  const start=watchExplorerProgress(undefined,t,1000);
+  const appended=watchExplorerProgress(start.watch,{...t,scoutingRuns:4,edgeIds:[...t.edgeIds,'next']},21000);
+  expect(appended.stalledMs).toBe(20000);
+  expect(watchExplorerProgress(appended.watch,t,100000).stalledMs).toBe(0);
  });
  it('excludes ferry crossings, scheduled breaks, recovery, refuelling, and insufficient fuel',()=>{
   const t=explorer();

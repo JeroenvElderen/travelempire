@@ -24,3 +24,13 @@ export function passengerRouteAdvanced(
  return after.leg>before.leg||
   (after.leg===before.leg&&after.distanceIntoLeg>before.distanceIntoLeg+0.2);
 }
+
+/** Keep a cumulative movement anchor, not the immediately previous frame.
+ * Replacing or rewinding an itinerary also starts a new observation window.
+ * A suspended browser must never count as time spent physically stationary. */
+export type PassengerProgressWatch={leg:number;distanceIntoLeg:number;roadId:string|null;lastProgressAt:number;lastObservedAt:number};
+export function watchPassengerProgress(previous:PassengerProgressWatch|undefined,taxi:Pick<Taxi,'leg'|'distanceIntoLeg'|'edgeIds'>,now:number):PassengerProgressWatch{
+ const current={leg:taxi.leg,distanceIntoLeg:taxi.distanceIntoLeg,roadId:taxi.edgeIds[taxi.leg]??null,lastProgressAt:now,lastObservedAt:now};
+ if(!previous||now<previous.lastObservedAt||now-previous.lastObservedAt>10000||previous.roadId!==current.roadId||taxi.leg<previous.leg||taxi.distanceIntoLeg<previous.distanceIntoLeg-.2||passengerRouteAdvanced(previous,taxi))return current;
+ return {...previous,lastObservedAt:now};
+}

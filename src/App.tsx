@@ -70,7 +70,7 @@ import type {DepotUpgradeKind,DepotFinanceRecord} from './simulation/taxi';
 import type {EconomyUpgrade} from "./simulation/taxi";
 import {loadRoadGraph,loadFleet,saveFleet,tickTaxi,DRIVER_COST,nearest,route,type RoadGraph,type FleetState, type Taxi, type PassengerRequest,meters,type FinancialTransaction} from "./simulation/taxi";
 import {registerNewRoadDistance} from './simulation/explorerDiscoveryDistance';
-import {passengerRouteIssue,passengerRouteAdvanced} from './simulation/passengerRouteRecovery';
+import {passengerRouteIssue,watchPassengerProgress,type PassengerProgressWatch} from './simulation/passengerRouteRecovery';
 import {adoptTaxiTrafficDetour,type TaxiTrafficDetour,type MovingTrafficSnapshot} from './simulation/taxiTrafficReroute';
 import {createDepotStarterExplorers,reconcileDepotStarterExplorers,type DepotStarterAnchor} from './simulation/depotStarterExplorers';
 import {missingDepotAccessSeeds} from './simulation/depotRoadSeeds';
@@ -437,9 +437,8 @@ export default function App(){
  const dispatchStartedRef=useRef(0);
  const routeSequenceRef=useRef(0);
  // Per-passenger-job progress tracking, never persisted in a fleet save.
- const passengerRouteWatchRef=useRef(new Map<string,{
-  job:string;status:'TO_PICKUP'|'TO_DROPOFF';leg:number;distanceIntoLeg:number;
-  lastProgressAt:number;lastAttemptAt:number;pending:boolean
+ const passengerRouteWatchRef=useRef(new Map<string,PassengerProgressWatch&{
+  job:string;status:'TO_PICKUP'|'TO_DROPOFF';lastAttemptAt:number;pending:boolean
  }>());
  // Ignore dispatcher responses computed before a manual vehicle reset.
  const trafficDetourPendingRef=useRef(new Map<number,{vehicleId:string;requestedAt:number;
@@ -1876,16 +1875,13 @@ export default function App(){
       const job=delivered.activeJobId??'legacy:'+String(delivered.pickup)+':'+String(delivered.dropoff);
       const previous=passengerRouteWatchRef.current.get(delivered.id);
       const fresh=!previous||previous.job!==job||previous.status!==status;
+      const progress=watchPassengerProgress(fresh?undefined:previous,delivered,now);
       const watch=fresh?
-       {job,status,leg:delivered.leg,distanceIntoLeg:delivered.distanceIntoLeg,
-        lastProgressAt:now,lastAttemptAt:0,pending:false}:previous!;
+       {...progress,job,status,lastAttemptAt:0,pending:false}:previous!;
       const issue=passengerRouteIssue(delivered);
-      if(!fresh&&passengerRouteAdvanced(watch,delivered)){
-       watch.lastProgressAt=now;
-       watch.pending=false;
-      }
-      watch.leg=delivered.leg;
-      watch.distanceIntoLeg=delivered.distanceIntoLeg;
+      if(!fresh&&progress.lastProgressAt!==watch.lastProgressAt)watch.pending=false;
+      // Preserve the watch object used by outstanding worker callbacks.
+      Object.assign(watch,progress);
       passengerRouteWatchRef.current.set(delivered.id,watch);
       const targetPosition=status==='TO_PICKUP'?delivered.pickup:delivered.dropoff;
       const alreadyAtTarget=!!targetPosition&&meters(delivered.position,targetPosition)<=12;

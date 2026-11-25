@@ -17,7 +17,7 @@ export type ExplorerRouteHealth=
 
 export type ExplorerProgressWatch={
  position:Point;leg:number;distanceIntoLeg:number;scoutingRuns:number;
- remainingRoadId:string|null;lastProgressAt:number;
+ remainingRoadId:string|null;lastProgressAt:number;lastObservedAt:number;
 };
 
 /** An unchanged vehicle is not necessarily stuck: exclude every valid
@@ -45,17 +45,22 @@ export function watchExplorerProgress(
  const current:ExplorerProgressWatch={
   position:[...vehicle.position],leg:vehicle.leg,
   distanceIntoLeg:vehicle.distanceIntoLeg,scoutingRuns:vehicle.scoutingRuns??0,
-  remainingRoadId:vehicle.edgeIds[vehicle.leg]??null,lastProgressAt:now,
+  remainingRoadId:vehicle.edgeIds[vehicle.leg]??null,lastProgressAt:now,lastObservedAt:now,
  };
- if(!previous||now<previous.lastProgressAt)return {watch:current,stalledMs:0};
+ // Time without dispatcher observations (background tabs or worker resets)
+ // is not evidence of a stationary vehicle.
+ if(!previous||now<previous.lastObservedAt||now-previous.lastObservedAt>30000)
+  return {watch:current,stalledMs:0};
  const advanced=meters(previous.position,vehicle.position)>=2||
   previous.leg!==current.leg||
   Math.abs(previous.distanceIntoLeg-vehicle.distanceIntoLeg)>=2||
-  previous.scoutingRuns!==current.scoutingRuns||
   previous.remainingRoadId!==current.remainingRoadId;
  if(advanced)return {watch:current,stalledMs:0};
- current.lastProgressAt=previous.lastProgressAt;
- return {watch:current,stalledMs:Math.max(0,now-previous.lastProgressAt)};
+ // Keep the last meaningful progress anchor so sub-two-metre movement
+ // across successive samples accumulates. Appending a successor alone is
+ // not physical movement and must not reset the stall timer.
+ return {watch:{...previous,lastObservedAt:now,scoutingRuns:current.scoutingRuns},
+  stalledMs:Math.max(0,now-previous.lastProgressAt)};
 }
 
 /** Validate the still-to-be-driven part of an active *saved* mission.
