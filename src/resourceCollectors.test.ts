@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {openCollectorWarehouse,collectorWarehouses,addCollector,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,configureCollector,tickCollectorFleet,collectorPosition,collectorMotion,collectorRequirement,emptyCollector,tickCollector,type CollectorTrip} from './resourceCollectors';
 import type {RoadGraph,Point} from './simulation/taxi';
+import type {GeneratedSupplier} from './generatedSuppliers';
 const a:Point=[23.7,38],b:Point=[23.71,38];
 const graph:RoadGraph={nodes:new Map([['a',a],['b',b]]),nodeKeys:['a','b'],edges:new Map([
  ['a',[{to:'b',meters:876,id:'ab',speedKph:40}]],
@@ -104,5 +105,47 @@ describe('collector real-time road movement',()=>{
   expect(collectorMotion(trip,outbound+45000).speedKph).toBe(0);
   expect(collectorMotion(trip,outbound+90001).heading).toBeCloseTo(-90,1);
   expect(collectorMotion(trip,trip.endsAt).position).toEqual(a);
+ });
+});
+
+
+describe('budget-aware collector dispatch',()=>{
+ const c:Point=[23.74,38];
+ const routeGraph:RoadGraph={nodes:new Map([['a',a],['b',b],['c',c]]),nodeKeys:['a','b','c'],edges:new Map([
+  ['a',[{to:'b',meters:876,id:'ab',speedKph:40},{to:'c',meters:3504,id:'ac',speedKph:40}]],
+  ['b',[{to:'a',meters:876,id:'ba',speedKph:40}]],
+  ['c',[{to:'a',meters:3504,id:'ca',speedKph:40}]]
+ ])};
+ const roads=new Set(['ab','ba','ac','ca']);
+ const near:GeneratedSupplier={id:'near',name:'Nearby business supply',position:b,node:'b',part:'business',capacity:50,stock:12,updatedAt:0,size:'Small'};
+ const far:GeneratedSupplier={id:'far',name:'Distant mechanical supply',position:c,node:'c',part:'mechanical',capacity:50,stock:12,updatedAt:0,size:'Small'};
+ const state=()=>({...emptyCollector(),suppliers:{near,far}});
+ it('chooses a cheaper supplier instead of rejecting an unaffordable preferred first stop',()=>{
+  const result=tickCollectorFleet(state(),0,routeGraph,roads,a,{},[],[],{cash:.5});
+  const vehicle=collectorVehicles(result)[0];
+  expect(vehicle.trip?.supplierId).toBe('near');
+  expect(vehicle.trip?.quantity).toBe(12);
+  expect(result.suppliers?.near.reservations?.[0]?.quantity).toBe(12);
+  expect(result.suppliers?.far.reservations).toBeUndefined();
+  expect((result.expenses?.fuelCents??0)+(result.expenses?.maintenanceCents??0)).toBeLessThanOrEqual(50);
+ });
+ it('reports insufficient cash without reserving or charging cargo if every route is unaffordable',()=>{
+  const result=tickCollectorFleet(state(),0,routeGraph,roads,a,{},[],[],{cash:0});
+  expect(collectorVehicles(result)[0].trip).toBeUndefined();
+  expect(collectorVehicles(result)[0].waitingReason).toBe('Insufficient operating cash');
+  expect(result.suppliers?.near.reservations).toBeUndefined();
+  expect(result.suppliers?.far.reservations).toBeUndefined();
+  expect(result.expenses?.fuelCents).toBe(0);
+ });
+ it('honours explicitly configured resource priority even if a different supplier is affordable',()=>{
+  const initial=configureCollector(state(),'starter-collector',{priority:'mechanical'},{collectorPriority:1});
+  const result=tickCollectorFleet(initial,0,routeGraph,roads,a,{collectorPriority:1},[],[],{cash:.5});
+  expect(collectorVehicles(result)[0].trip).toBeUndefined();
+  expect(collectorVehicles(result)[0].waitingReason).toBe('Insufficient operating cash');
+ });
+ it('checks the budget for legacy non-procedural routes too',()=>{
+  const result=tickCollectorFleet(emptyCollector(),0,graph,new Set(['ab','ba']),a,{},[],[],{cash:0});
+  expect(collectorVehicles(result)[0].trip).toBeUndefined();
+  expect(collectorVehicles(result)[0].waitingReason).toBe('Insufficient operating cash');
  });
 });

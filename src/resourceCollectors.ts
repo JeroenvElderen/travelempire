@@ -74,7 +74,7 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
   if(!out||!back||out.path.length<2||back.path.length<2)return null;
   const path=[...out.path,...back.path.slice(1)];
   const distance=path.slice(1).reduce((n,p,j)=>n+meters(path[j],p),0);
-  if(distance<200||distance/1000>(options.maxDistanceKm??Infinity))return null;
+  if(distance<200||distance/1000>(options.maxDistanceKm??Infinity)||options.canExtend&&!options.canExtend(distance/1000))return null;
   quantity=Math.min(quantity,options.freeByPart?.[resource]??Infinity);if(quantity<=0)return null;
   const ids=[...out.edgeIds,...back.edgeIds];
   const legMs=path.slice(1).map((p,i)=>meters(path[i],p)*3600/Math.max(5,Math.min(160,speedForEdge(graph,ids[i])))*GAME_TIME_SCALE/GAME_SPEED);
@@ -111,7 +111,7 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
     const back=routeDiscovered(graph,supplier.node,start,discovered,'',false,options.smartRouting?18000:10000);
     if(!out||!back||out.path.length<2||back.path.length<2)continue;
     const distance=routeDistance(out),roundTrip=outboundMetres+distance+routeDistance(back);
-    if(roundTrip<200||roundTrip/1000>(options.maxDistanceKm??Infinity)||stops.length>0&&options.canExtend&&!options.canExtend(roundTrip/1000))continue;
+    if(roundTrip<200||roundTrip/1000>(options.maxDistanceKm??Infinity)||options.canExtend&&!options.canExtend(roundTrip/1000))continue;
     append(out);outboundMetres+=distance;
     stops.push({supplierId:supplier.id,supplierName:supplier.name,part:supplier.part,quantity,legIndex:path.length-1,arrivesAt:now+elapsed,leavesAt:now+elapsed+loadingMs});
     elapsed+=loadingMs;cargo[supplier.part]=(cargo[supplier.part]??0)+quantity;total+=quantity;
@@ -216,8 +216,11 @@ export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGra
   if(!v.trip&&economy&&(!free||!COLLECTOR_PARTS.some(p=>(freeByPart[p]??0)>0)))return wait('Warehouse storage full');
   const previous:CollectorState={stock,delivered,trips:v.trips,trip:v.trip};
   const warehouse=available.find(w=>w.id===(v.warehouseId??'main'))??available[0];
-  const next=tickCollector(previous,now,graph,discovered,warehouse.position,{suppliers,generated:generated?Object.values(generated):undefined,warehouseId:warehouse.id,freeByPart:economy?freeByPart:undefined,maxDistanceKm:economy?model.tank*100/collectorFuelRate(v.model,levels):undefined,capacity:Math.min(collectorCapacity(v.model,levels),economy?free:Infinity),canExtend:economy?km=>collectorExpenseTotal(collectorTripCost(v.model,km,levels,economy.fuelPrice).expenses)<=budget:undefined,smartRouting:!!levels.collectorRouting,priority:v.priority,offset:v.offset,loadingMs:levels.collectorLoading?30000:90000});
-  if(next===previous)return economy?wait(v.priority&&(freeByPart[v.priority]??0)<=0?'Resource storage full':'Waiting for reachable supplier'):v;
+  // Check affordability for every candidate, including the first pickup.
+  // A rejected preferred supplier must not prevent a cheaper alternative.
+  let rejectedForBudget=false;
+  const next=tickCollector(previous,now,graph,discovered,warehouse.position,{suppliers,generated:generated?Object.values(generated):undefined,warehouseId:warehouse.id,freeByPart:economy?freeByPart:undefined,maxDistanceKm:economy?model.tank*100/collectorFuelRate(v.model,levels):undefined,capacity:Math.min(collectorCapacity(v.model,levels),economy?free:Infinity),canExtend:economy?km=>{const affordable=collectorExpenseTotal(collectorTripCost(v.model,km,levels,economy.fuelPrice).expenses)<=budget;if(!affordable)rejectedForBudget=true;return affordable;}:undefined,smartRouting:!!levels.collectorRouting,priority:v.priority,offset:v.offset,loadingMs:levels.collectorLoading?30000:90000});
+  if(next===previous)return economy?wait(v.priority&&(freeByPart[v.priority]??0)<=0?'Resource storage full':rejectedForBudget?'Insufficient operating cash':'Waiting for reachable supplier'):v;
   let tripExpenses:CollectorExpenses|undefined,tripLitres=0;
   if(!v.trip&&next.trip&&economy){
    const quote=collectorTripCost(v.model,next.trip.distance/1000,levels,economy.fuelPrice);
