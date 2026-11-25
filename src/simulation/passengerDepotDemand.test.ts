@@ -98,3 +98,15 @@ describe('regional taxi passenger demand and local discovered roads',()=>{
   expect(taxiOnly.has('taxi-permitted-only')).toBe(true);
  });
 });
+
+
+it('weights busy markets without permanently starving quieter discovered regions',()=>{
+ const activity=new Map([['main',1.8],['island',.65]]);
+ const served=new Map([['main',10],['island',10]]);
+ const busy=regionalPassengerDemand(locations,[],null,activity,served,10);
+ expect(busy[0].id).toBe('main');
+ expect(busy[0].maxWaiting).toBeGreaterThan(busy[1].maxWaiting);
+ const quiet=regionalPassengerDemand(locations,[],'main',activity,new Map([['main',24],['island',10]]),24);
+ expect(quiet[0].id).toBe('island');
+ expect(regionalPassengerDemand([{...locations[0],available:0},locations[1]],[],null,activity).map(r=>r.id)).toEqual(['island']);
+});

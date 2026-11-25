@@ -3,7 +3,7 @@ import {createPassengerRequest,meters,type RoadGraph,type Point} from './taxi';
 import {passengerProfileFor} from './passengerProfiles';
 import {
  GREEK_AIRPORT_DEMAND_PLACES,GREEK_DISTRICT_DEMAND_PLACES,
- passengerHotspotCandidates,passengerPlaceAccessRadius,passengerPlaceWeight,
+ passengerHotspotCandidates,passengerPlaceAccessRadius,passengerPlaceWeight,regionalPassengerActivity,
  pickupPlaceForRoad,type PassengerDemandPlace,
 } from './passengerPlaces';
 
@@ -77,4 +77,14 @@ describe('geographically authentic passenger origins',()=>{
   expect(make('business').business).toBeGreaterThan(55);
   expect(make('nightlife').nightlife).toBeGreaterThan(75);
  });
+});
+
+
+it('models seasonal airports and hotels without claiming live passenger counts',()=>{
+ const winter=Date.parse('2026-01-12T10:00:00Z'),summer=Date.parse('2026-07-13T09:00:00Z');
+ expect(passengerPlaceWeight('airport',summer)).toBeGreaterThan(passengerPlaceWeight('airport',winter));
+ expect(passengerPlaceWeight('hotel',summer)).toBeGreaterThan(passengerPlaceWeight('hotel',winter));
+ expect(regionalPassengerActivity(240,[16])).toBeGreaterThan(regionalPassengerActivity(20,[]));
+ expect(regionalPassengerActivity(100000,[1000])).toBeLessThanOrEqual(1.8);
+ expect(regionalPassengerActivity(0,[])).toBeGreaterThan(0);
 });

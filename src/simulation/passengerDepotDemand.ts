@@ -200,14 +200,23 @@ export function regionalPassengerDemand(
  regions:readonly PassengerDepotRegion[],
  pending:readonly PassengerRequest[],
  lastSelectedId:string|null=null,
+ activity?:ReadonlyMap<string,number>,lastServed?:ReadonlyMap<string,number>,sequence=0,
 ):PassengerRegionStatus[]{
  const counts=passengerQueueByDepot(pending,regions);
+ const factor=(id:string)=>Math.max(.65,Math.min(1.8,activity?.get(id)??1));
+ const age=(id:string)=>Math.max(0,sequence-(lastServed?.get(id)??sequence-8));
+ const pressure=(r:PassengerRegionStatus)=>activity?
+  (r.waiting+1)/(r.available*factor(r.id))-Math.min(3,age(r.id)*.15):
+  r.waiting/r.available;
  return regions.filter(r=>r.available>0).map(region=>{
   const waiting=counts.get(region.id)??0;
-  return {...region,waiting,maxWaiting:Math.min(4,Math.max(2,region.available*2))};
+  return {...region,waiting,maxWaiting:activity?
+   Math.min(4,Math.max(1,Math.round(region.available*2*factor(region.id)))):
+   Math.min(4,Math.max(2,region.available*2))};
  }).sort((a,b)=>{
-  const aPressure=a.waiting/a.available;
-  const bPressure=b.waiting/b.available;
+  // An underserved region accumulates priority even if its market is quiet.
+  const aPressure=pressure(a);
+  const bPressure=pressure(b);
   if(aPressure!==bPressure)return aPressure-bPressure;
   if(a.id===lastSelectedId)return 1;
   if(b.id===lastSelectedId)return -1;

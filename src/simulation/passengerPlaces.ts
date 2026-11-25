@@ -71,13 +71,22 @@ export function passengerPlaceWeight(kind:PassengerPlaceKind,at:number,period=gr
  const rush=!weekend&&(hour>=7&&hour<10||hour>=16&&hour<20);
  const late=hour>=21||hour<4;
  switch(kind){
-  case 'airport':return 12;
+  case 'airport':return month>=5&&month<=9?16:month===4||month===10?12:9;
   case 'harbour':return hour>=6&&hour<23?(month>=5&&month<=9?12:8):2;
-  case 'hotel':return hour>=7&&hour<12||hour>=15&&hour<23?12:5;
+  case 'hotel':return (hour>=7&&hour<12||hour>=15&&hour<23?12:5)*(month>=5&&month<=9?1.3:month===4||month===10?1:.8);
   case 'business':return !weekend&&hour>=7&&hour<20?(rush?15:11):2;
   case 'nightlife':return late?(weekend?20:14):hour>=17?5:1;
   case 'residential':return rush?12:weekend?8:6;
  }
+}
+/** A lightweight local market proxy, not census population. Only the
+ * caller's discovered legal stop count and accessible venues contribute.
+ * The bounded square-root curve prevents dense OSM micro-segments or large
+ * numbers of nearby hotels from overwhelming the rest of the map. */
+export function regionalPassengerActivity(discoveredStops:number,accessibleVenueWeights:readonly number[]):number{
+ const density=Math.sqrt(Math.min(240,Math.max(0,Number.isFinite(discoveredStops)?discoveredStops:0))/240);
+ const venue=Math.max(0,...accessibleVenueWeights.filter(Number.isFinite));
+ return Math.min(1.8,.65+.65*density+Math.min(.5,venue/40));
 }
 function hash(seed:string):number{
  let h=2166136261;
