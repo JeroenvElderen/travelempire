@@ -1,5 +1,5 @@
 import {COLLECTOR_PARTS,collectorStorageCapacity,collectorStorageUsage,collectorVehicles,collectorTripCargo,type CollectorPart,type CollectorState} from './resourceCollectors';
-import {supplierStock} from './generatedSuppliers';
+import {supplierAvailable} from './generatedSuppliers';
 
 export type MarketSide='buy'|'sell';
 export type MarketTrade={id:string;at:number;part:CollectorPart;side:MarketSide;quantity:number;totalCents:number};
@@ -16,7 +16,7 @@ export function marketForDay(state:CollectorState,now:number):ResourceMarket{
 }
 export function marketUnitPrices(state:CollectorState,part:CollectorPart,now:number){
  const market=marketForDay(state,now),v=market.volume[part]??{bought:0,sold:0},limit=MARKET_DAILY_LIMIT[part];
- const discoveredSupply=Object.values(state.suppliers??{}).filter(s=>s.part===part).reduce((n,s)=>n+supplierStock(s,now),0);
+ const discoveredSupply=Object.values(state.suppliers??{}).filter(s=>s.part===part).reduce((n,s)=>n+supplierAvailable(s,now),0);
  const scarcity=1.15-Math.min(.30,discoveredSupply/3000*.30);
  const daily=.85+(hash(part+':'+market.day)%301)/1000;
  const pressure=clamp(1+(v.bought-v.sold)/limit*.25,.75,1.25);

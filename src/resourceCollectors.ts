@@ -3,7 +3,7 @@ import {meters,nearest,routeDiscovered,speedForEdge,GAME_SPEED,type Point,type R
 import {GAME_TIME_SCALE} from './simulation/gameClock';
 import type {ResourceMarket} from './resourceMarket';
 import type {CollectorSupplier} from './collectorSuppliers';
-import {reserveSupplier,supplierStock,type GeneratedSupplier} from './generatedSuppliers';
+import {reserveSupplier,supplierAvailable,type GeneratedSupplier} from './generatedSuppliers';
 
 export const COLLECTOR_PARTS=['mechanical','electronics','business','construction','marine','research','energy','rare'] as const;
 export type CollectorPart=typeof COLLECTOR_PARTS[number];
@@ -87,7 +87,7 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
   // stop must have a discovered return path; the fleet reserves all cargo
   // together only after affordability and storage checks pass.
   const limit=Math.max(0,Math.floor(options.capacity??12));
-  const nearby=options.generated.filter(p=>(!options.priority||p.part===options.priority)&&supplierStock(p,now)>0&&(options.freeByPart?.[p.part]??Infinity)>0&&graph.nodes.has(p.node)&&p.node!==start&&meters(origin,p.position)<=(options.smartRouting?35000:25000))
+  const nearby=options.generated.filter(p=>(!options.priority||p.part===options.priority)&&supplierAvailable(p,now)>0&&(options.freeByPart?.[p.part]??Infinity)>0&&graph.nodes.has(p.node)&&p.node!==start&&meters(origin,p.position)<=(options.smartRouting?35000:25000))
    .sort((a,b)=>Number(b.part===part)-Number(a.part===part)||meters(origin,a.position)-meters(origin,b.position)).slice(0,options.smartRouting?120:80);
   const path:Point[]=[origin],stops:CollectorStop[]=[],cargo:CollectorStock={};
   const visited=new Set<string>(),loadingMs=options.loadingMs??0;
@@ -105,7 +105,7 @@ export function tickCollector(state:CollectorState,now:number,graph:RoadGraph|nu
    let selected=false;
    for(const supplier of candidates.slice(0,options.smartRouting?24:16)){
     visited.add(supplier.id);
-    const quantity=Math.floor(Math.min(limit-total,supplierStock(supplier,now),(options.freeByPart?.[supplier.part]??Infinity)-(cargo[supplier.part]??0)));
+    const quantity=Math.floor(Math.min(limit-total,supplierAvailable(supplier,now),(options.freeByPart?.[supplier.part]??Infinity)-(cargo[supplier.part]??0)));
     if(quantity<=0)continue;
     const out=routeDiscovered(graph,node,supplier.node,discovered,'',false,options.smartRouting?18000:10000);
     const back=routeDiscovered(graph,supplier.node,start,discovered,'',false,options.smartRouting?18000:10000);
@@ -223,10 +223,10 @@ export function tickCollectorFleet(state:CollectorState,now:number,graph:RoadGra
    if(collectorExpenseTotal(tripExpenses)>budget)return wait('Insufficient operating cash');
   }
   if(!v.trip&&next.trip&&generated){
-   const stops=next.trip.stops??[{supplierId:next.trip.supplierId??'',quantity:next.trip.quantity}];
+   const stops=next.trip.stops??[{supplierId:next.trip.supplierId??'',quantity:next.trip.quantity,leavesAt:now}];
    const reservations:Record<string,GeneratedSupplier>={};
    for(const stop of stops){const supplier=reservations[stop.supplierId]??generated[stop.supplierId];if(!supplier)return v;
-    const reservation=reserveSupplier(supplier,now,stop.quantity);if(reservation.quantity!==stop.quantity)return v;reservations[supplier.id]=reservation.supplier;}
+    const reservation=reserveSupplier(supplier,now,stop.quantity,stop.leavesAt);if(reservation.quantity!==stop.quantity)return v;reservations[supplier.id]=reservation.supplier;}
    generated={...generated,...reservations};
   }
   if(!v.trip&&next.trip){reserved+=next.trip.quantity;for(const part of COLLECTOR_PARTS)reservedByPart[part]=(reservedByPart[part]??0)+(collectorTripCargo(next.trip)[part]??0);}

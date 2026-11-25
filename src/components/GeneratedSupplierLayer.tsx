@@ -1,6 +1,6 @@
 import {useEffect,useRef} from 'react';
 import maplibregl from 'maplibre-gl';
-import {supplierStock,supplierVisible,SUPPLIER_PRODUCTION_HOURS,SUPPLIER_COLORS,type GeneratedSupplier} from '../generatedSuppliers';
+import {supplierStock,supplierAvailable,supplierReserved,supplierVisible,SUPPLIER_PRODUCTION_HOURS,SUPPLIER_COLORS,type GeneratedSupplier} from '../generatedSuppliers';
 import {COLLECTOR_NAMES} from '../resourceCollectors';
 type Props={map:maplibregl.Map|null;suppliers?:Record<string,GeneratedSupplier>;enabled:boolean;now:number};
 export default function GeneratedSupplierLayer({map,suppliers,enabled,now}:Props){
@@ -25,9 +25,9 @@ export default function GeneratedSupplierLayer({map,suppliers,enabled,now}:Props
       marker=new maplibregl.Marker({element,anchor:'center'}).setLngLat(supplier.position).addTo(map);
       markers.set(supplier.id,marker);
      }
-     const stock=supplierStock(supplier,current.current.now),element=marker.getElement();
-     element.style.background=SUPPLIER_COLORS[supplier.part];
-     const title=supplier.name+' · '+COLLECTOR_NAMES[supplier.part]+' · '+stock+'/'+supplier.capacity+' units · +2 every '+SUPPLIER_PRODUCTION_HOURS[supplier.part]+' game hours';
+     const stock=supplierStock(supplier,current.current.now),reserved=supplierReserved(supplier,current.current.now),available=supplierAvailable(supplier,current.current.now),element=marker.getElement();
+     element.style.background=SUPPLIER_COLORS[supplier.part];element.style.opacity=available>0?'1':'.65';
+     const title=supplier.name+' · '+COLLECTOR_NAMES[supplier.part]+' · '+stock+'/'+supplier.capacity+' units on site · '+available+' available · '+reserved+' reserved · +2 every '+SUPPLIER_PRODUCTION_HOURS[supplier.part]+' game hours';
      element.title=title;element.setAttribute('aria-label',title);
      const popup=document.createElement('div');popup.textContent=title;
      const existing=marker.getPopup();if(existing)existing.setDOMContent(popup);else marker.setPopup(new maplibregl.Popup({offset:14}).setDOMContent(popup));
