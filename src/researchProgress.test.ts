@@ -31,7 +31,7 @@ describe('automatic research economy',()=>{
   const result=selectTechnology(initial,'pricing',projects,context);
   expect(result.levels.pricing).toBe(1);
   expect(result.levels.demandIntelligence).toBe(1);
-  expect(result.resources?.roads).toBe(4700);
+  expect(result.resources?.roads).toBe(0);
   expect(result.resources?.passengers).toBe(410);
   expect(result.resources?.revenue).toBe(141000);
   expect(result.selected).toBeUndefined();
@@ -43,7 +43,7 @@ describe('automatic research economy',()=>{
   expect(first.levels.pricing).toBeUndefined();
   expect(first.contributions?.['pricing:1']?.passengers).toBe(20);
   const paused={...first,selected:undefined};
-  const resumed=selectTechnology({...paused,resources:safeBag({passengers:20,revenue:3000})},
+  const resumed=selectTechnology({...paused,resources:safeBag({passengers:20,revenue:3000,roads:2500})},
    'pricing',projects,context);
   expect(resumed.levels.pricing).toBe(1);
  });
@@ -66,7 +66,7 @@ describe('automatic research economy',()=>{
  });
  it('uses level-based resource costs for previously researched programme families',()=>{
   expect(researchCosts('pricing',2,projects).passengers).toBeGreaterThan(researchCosts('pricing',1,projects).passengers!);
-  expect(researchCosts('explorerExpansion',1,projects).roads).toBe(5000);
+  expect(researchCosts('explorerExpansion',1,projects).roads).toBe(25000);
  });
  it('keeps completed technologies stable with no new resource awards',()=>{
   const state={...empty(),researchV3:true as const,levels:{pricing:5},resources:safeBag({passengers:0,revenue:0})};

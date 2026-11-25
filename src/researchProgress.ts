@@ -179,9 +179,17 @@ export type OperationalContext={explorers:number;roads:number;depots:number;fres
 export const safeBag=(bag?:ResourceCosts):ResourceBag=>Object.fromEntries(resourceKeys.map(k=>[k,Math.max(0,Number(bag?.[k]??0)||0)])) as ResourceBag;
 export const allResearch=(legacy:readonly ResearchProject[])=>[...legacy,...newProjects];
 export function maximum(id:string){return id==='explorerExpansion'||newProjects.some(p=>p.id===id)?1:5;}
+// Five starter explorers produce road data concurrently. Every non-starter technology
+// now requires substantial unique discoveries, with a steep tier/level curve.
+export const ROAD_DATA_TIER_MINIMUM=[2500,6000,15000,35000,75000] as const;
+export const ROAD_DATA_MULTIPLIER=5;
+export function balancedRoadData(existing:number|undefined,tier:number):number{
+ const index=Math.max(0,Math.min(ROAD_DATA_TIER_MINIMUM.length-1,Math.floor(tier)-1));
+ return Math.max(ROAD_DATA_TIER_MINIMUM[index],Math.ceil((existing??0)*ROAD_DATA_MULTIPLIER));
+}
 export function researchCosts(id:string,l:number,legacy:readonly ResearchProject[]):ResourceCosts{
  const project=newProjects.find(p=>p.id===id);
- if(project)return project.resources;
+ if(project)return {...project.resources,roads:balancedRoadData(project.resources.roads,project.tier)};
  const old=legacy.find(p=>p.id===id);
  if(!old)return {};
  const factor=Math.pow(2.25,Math.max(0,l-1));
@@ -192,8 +200,9 @@ export function researchCosts(id:string,l:number,legacy:readonly ResearchProject
   old.category===4?{passengers:30,distance:300,revenue:3000}:
   old.category===5?{distance:200,revenue:4000}:
   old.category===6?{passengers:45,revenue:4000}:{revenue:4500,passengers:15};
- if(id==='explorerExpansion')return {roads:5000,distance:2000,revenue:25000};
- return Object.fromEntries(Object.entries(base).map(([k,v])=>[k,Math.ceil(v*factor)])) as ResourceCosts;
+ if(id==='explorerExpansion')return {roads:balancedRoadData(5000,3),distance:2000,revenue:25000};
+ const costs=Object.fromEntries(Object.entries(base).map(([k,v])=>[k,Math.ceil(v*factor)])) as ResourceCosts;
+ return {...costs,roads:balancedRoadData(costs.roads,l)};
 }
 export function prerequisites(id:string,levels:Partial<Record<string,number>>,context:OperationalContext):string[]{
  const missing=technologyParents(id).filter(dependency=>(levels[dependency]??0)<1)

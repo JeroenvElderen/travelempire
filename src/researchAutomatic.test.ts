@@ -44,7 +44,7 @@ describe('Builderment-style fully automatic research progression',()=>{
   expect(technologyLevelRequirements('pricing',1,{}, {...context,starterLevel:5})).toEqual([]);
  });
  it('automatically researches consecutive levels without user selection or a queue',()=>{
-  const s=advanceAutomaticTree(state({passengers:500,revenue:75000,roads:5000,distance:10000}),projects,context);
+  const s=advanceAutomaticTree(state({passengers:500,revenue:75000,roads:100000,distance:10000}),projects,context);
   expect(s.starterLevel).toBe(5);
   expect((s.levels.pricing??0)).toBeGreaterThan(0);
   expect((s.levels.depotEfficiency??0)).toBeGreaterThan(0);
@@ -95,5 +95,21 @@ describe('Builderment-style fully automatic research progression',()=>{
   expect(edges.has('pricing:1>pricing:2')).toBe(true);
   expect(edges.has('premium:2>airportMarkets:1')).toBe(true);
   expect(graph.nodes.every(n=>n.y+54<=graph.height)).toBe(true);
+ });
+});
+
+describe('five-explorer road data economy',()=>{
+ it('adds scaled road data requirements to every research technology',()=>{
+  for(const p of allProjects){
+   expect(effectiveCosts(p.id,1,{},projects).roads,p.id).toBeGreaterThanOrEqual(2500);
+  }
+  expect([1,2,3,4,5].map(level=>effectiveCosts('pricing',level,{},projects).roads)).toEqual([2500,6000,15000,35000,75000]);
+ });
+ it('retains completed levels and prior contributions but requires new road data for unfinished nodes',()=>{
+  const prior={...state({passengers:500,revenue:75000,roads:100000},{passengers:0,revenue:0,roads:0}),starterLevel:5,levels:{engine:1},contributions:{'pricing:1':{roads:200,passengers:40,revenue:4000}}};
+  const blocked=advanceAutomaticTree(prior,projects,context);
+  expect(blocked.levels.engine).toBe(1);
+  expect(blocked.levels.pricing??0).toBe(0);
+  expect(blocked.contributions?.['pricing:1']?.roads).toBe(200);
  });
 });
