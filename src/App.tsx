@@ -252,7 +252,7 @@ export default function App(){
    for(const arrival of settlement.arrivals){
     const route=ferryRoutes.get(arrival.routeId);
     if(!route)continue;
-    const {passengers:adjustedPassengers,revenue,cost}=ferryVoyageEconomics(arrival.durationMinutes,arrival.completedAt,current.ferryTicketPrices?.[arrival.routeId]);
+    const {passengers:adjustedPassengers,revenue,cost}=ferryVoyageEconomics(arrival.durationMinutes,arrival.completedAt-Math.max(10,arrival.durationMinutes)*60000,current.ferryTicketPrices?.[arrival.routeId]);
     const ticketIncome=Math.round(revenue*(1+ferryResearchBonus)*100)/100;
      gross+=ticketIncome;costs+=cost;passengersSettled+=adjustedPassengers;
     // A real-world OSM import direction is the initial outbound orientation.

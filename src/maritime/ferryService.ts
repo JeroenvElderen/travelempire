@@ -31,6 +31,13 @@ export function ferryPhase(startGameMs:number,durationMinutes:number,nowGameMs:n
   lastArrivalAt:completedCount>0?startGameMs+turnaround+
    completedCount*duration+(completedCount-1)*turnaround:undefined};
 }
+/** Departure of the sailing in progress, or the next sailing if docked. */
+export function ferryForecastDeparture(startGameMs:number,durationMinutes:number,nowGameMs:number):number{
+ const phase=ferryPhase(startGameMs,durationMinutes,nowGameMs);
+ const duration=Math.max(10,Number.isFinite(durationMinutes)?durationMinutes:10);
+ const index=phase.voyageIndex+(phase.phase==='turnaround'?1:0);
+ return startGameMs+(FERRY_TURNAROUND_MINUTES+index*(duration+FERRY_TURNAROUND_MINUTES))*MINUTE_MS;
+}
 export type FerryArrival={routeId:string;direction:'outbound'|'return';
  completedAt:number;durationMinutes:number;voyageIndex:number};
 export function completedFerryArrivals(

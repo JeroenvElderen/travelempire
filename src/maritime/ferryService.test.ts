@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {completedFerryArrivals,ferryPhase,FERRY_TURNAROUND_MINUTES} from './ferryService';
+import {completedFerryArrivals,ferryPhase,ferryForecastDeparture,FERRY_TURNAROUND_MINUTES} from './ferryService';
 
 const minute=60000;
 const duration=180;
@@ -63,4 +63,12 @@ describe('shared ferry arrivals and visible boat position',()=>{
   expect(settled.arrivals).toHaveLength(2);
   expect(settled.arrivals.map(a=>a.routeId).sort()).toEqual(['island','mainland']);
  });
+});
+
+
+it('forecasts the departure of the active sailing or the next one during turnaround',()=>{
+ expect(ferryForecastDeparture(0,duration,0)).toBe(boarding*minute);
+ expect(ferryForecastDeparture(0,duration,60*minute)).toBe(boarding*minute);
+ expect(ferryForecastDeparture(0,duration,(boarding+duration)*minute)).toBe((boarding+duration+boarding)*minute);
+ expect(ferryForecastDeparture(0,duration,(boarding+duration+boarding+5)*minute)).toBe((boarding+duration+boarding)*minute);
 });

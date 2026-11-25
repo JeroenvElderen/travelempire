@@ -3,7 +3,8 @@ import {Anchor,ArrowLeftRight,CheckCircle2,ChevronDown,Clock3,LockKeyhole,MapPin
 import type {Company,Headquarters} from '../company';
 import type {FerryNetwork,FerryRoute,FerryPort} from '../maritime/ferries';
 import {ferryRoutePrice} from '../maritime/routePlanning';
-import {ferryPhase} from '../maritime/ferryService';
+import {ferryPhase,ferryForecastDeparture} from '../maritime/ferryService';
+import {ferryVoyageEconomics,standardFerryFare} from '../maritime/ferryEconomics';
 import './ferry-routes.css';
 import './ferry-floating.css';
 
@@ -24,7 +25,6 @@ const euros=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',curr
 const minuteText=(minutes:number)=>minutes>=60?`${Math.floor(minutes/60)}h ${Math.round(minutes%60)}m`:`${Math.round(minutes)}m`;
 const distance=(a:[number,number],b:[number,number])=>
  Math.hypot((a[0]-b[0])*Math.cos((a[1]+b[1])*Math.PI/360),a[1]-b[1]);
-const expectedFare=(duration:number)=>4+Math.max(10,Math.min(240,duration))*0.16;
 const displayName=(port:FerryPort|undefined,id:string)=>port?.name||id;
 
 export default function FerryRoutesPanel({
@@ -130,9 +130,12 @@ export default function FerryRoutesPanel({
     const goingBack=phase?.direction==='return';
     const originName=goingBack?to:from,destinationName=goingBack?from:to;
     const progress=phase?(phase.phase==='sailing'?phase.progress:phase.phase==='turnaround'?1:0):0;
-    const fare=company?.ferryTicketPrices?.[route.id]??expectedFare(route.durationMinutes);
-    const base=expectedFare(route.durationMinutes);
-    const estimatedPassengers=Math.min(90,Math.max(0,Math.round((12+Math.min(55,route.durationMinutes*.22))*Math.max(.2,Math.min(1.8,Math.pow(fare/base,-.75))))));
+    const fare=company?.ferryTicketPrices?.[route.id]??standardFerryFare(route.durationMinutes);
+    const start=company?.ferryServiceStartedAt?.[route.id];
+    const departure=owned&&typeof start==='number'&&Number.isFinite(start)?
+     ferryForecastDeparture(start,route.durationMinutes,gameNow):gameNow;
+    const quote=ferryVoyageEconomics(route.durationMinutes,departure,fare);
+    const estimatedPassengers=quote.passengers;
     const price=ferryRoutePrice(route.id),accessible=discovered.has(route.from)||discovered.has(route.to);
     const phaseText=phase?.phase==='sailing'?'En route':phase?.phase==='turnaround'?'Docked · turnaround':phase?'Boarding':'Not started';
     return <article className="ferry-route-card" key={route.id}>
@@ -158,9 +161,12 @@ export default function FerryRoutesPanel({
        <div className="ferry-route-details">
         <div><Ticket size={15}/><span>Fare</span><strong>€{fare.toFixed(2)}</strong></div>
         <div><Clock3 size={15}/><span>Crossing</span><strong>{minuteText(route.durationMinutes)}</strong></div>
-        <div><UsersRound size={15}/><span>Est. passengers</span><strong>{estimatedPassengers}</strong></div>
+        <div><UsersRound size={15}/><span>Est. passengers</span><strong>{estimatedPassengers}/{quote.capacity}</strong></div>
+        <div><UsersRound size={15}/><span>Est. occupancy</span><strong>{Math.round(quote.occupancy*100)}%</strong></div>
+        <div><Ticket size={15}/><span>Operating cost</span><strong>{euros(quote.cost)}</strong></div>
+        <div><TrendingUp size={15}/><span>Est. net / crossing</span><strong>{euros(quote.net)}</strong></div>
        </div>
-       {owned&&<div className="ferry-fare-control"><label htmlFor={'ferry-fare-'+route.id}><span>Ticket price</span><strong>€{fare.toFixed(2)}</strong></label><input id={'ferry-fare-'+route.id} type="range" min="1" max="100" step="0.5" value={Math.max(1,Math.min(100,Math.round(fare*2)/2))} onChange={e=>onTicketPriceChange(route.id,Number(e.target.value))}/><small>Estimated crossing income: {euros(estimatedPassengers*fare)} before costs</small></div>}
+       {owned&&<div className="ferry-fare-control"><label htmlFor={'ferry-fare-'+route.id}><span>Ticket price</span><strong>€{fare.toFixed(2)}</strong></label><input id={'ferry-fare-'+route.id} type="range" min="1" max="100" step="0.5" value={Math.max(1,Math.min(100,Math.round(fare*2)/2))} onChange={e=>onTicketPriceChange(route.id,Number(e.target.value))}/><small>Estimated revenue {euros(quote.revenue)} · net {euros(quote.net)} before research bonuses and bank deductions.</small></div>}
       </div>
      </details>
     </article>;
