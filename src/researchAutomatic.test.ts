@@ -106,7 +106,7 @@ describe('five-explorer road data economy',()=>{
   expect([1,2,3,4,5].map(level=>effectiveCosts('pricing',level,{},projects).roads)).toEqual([2500,6000,15000,35000,75000]);
  });
  it('retains completed levels and prior contributions but requires new road data for unfinished nodes',()=>{
-  const prior={...state({passengers:500,revenue:75000,roads:100000},{passengers:0,revenue:0,roads:0}),starterLevel:5,levels:{engine:1},contributions:{'pricing:1':{roads:200,passengers:40,revenue:4000}}};
+  const prior={...state({passengers:500,revenue:75000,roads:100000},{passengers:0,revenue:0,roads:0}),starterLevel:5,levels:{engine:1} as Partial<Record<string,number>>,contributions:{'pricing:1':{roads:200,passengers:40,revenue:4000}}};
   const blocked=advanceAutomaticTree(prior,projects,context);
   expect(blocked.levels.engine).toBe(1);
   expect(blocked.levels.pricing??0).toBe(0);
