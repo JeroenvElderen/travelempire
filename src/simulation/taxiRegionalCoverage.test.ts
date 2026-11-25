@@ -127,3 +127,11 @@ describe('Autopilot 2.1 — new discovered-road regional markets',()=>{
    .toEqual(['known','connected']);
  });
 });
+
+
+it('coverage counts future drop-offs but ignores interrupted or unavailable arrivals',()=>{
+ const region={position:P(23.2)};
+ expect(isCoverageUnderserved(region,[makeTaxi({status:'TO_DROPOFF',dropoff:region.position})])).toBe(false);
+ expect(isCoverageUnderserved(region,[makeTaxi({status:'REPOSITIONING',repositionTarget:region.position,repositionStopPending:true})])).toBe(true);
+ expect(isCoverageUnderserved(region,[makeTaxi({status:'REFUELLING',position:region.position})])).toBe(true);
+});

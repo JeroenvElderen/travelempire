@@ -6,7 +6,7 @@ import {normalDriverTripPreference,driverTripMatchBonus,driverCoveragePriority,
 import {rankUnservedCoverage,taxiCanCoverRegion,taxiHasDutyForCoverage,
  COVERAGE_MAX_ROUTE_VISITS} from './taxiRegionalCoverage';
 import {taxiCanStartRepositioning,taxiCanCompleteRepositioning,
- taxiRepositionWorthwhile,taxiDemandScore,TAXI_REPOSITION_GLOBAL_INTERVAL_MS,
+ taxiRepositionWorthwhile,taxiDemandScore,projectedTaxiSupply,taxiCanLeaveMarket,TAXI_REPOSITION_GLOBAL_INTERVAL_MS,
  TAXI_REPOSITION_MIN_METRES,TAXI_REPOSITION_MAX_METRES
 } from './taxiRepositioning';
 import {taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode,type TaxiQuoteEconomy} from './taxiDispatchStrategy';
@@ -1185,6 +1185,12 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    const available=taxis.filter(t=>taxiCanStartRepositioning(t,now,
     availableIds.has(t.id),idleSince.get(t.id)??now)&&
     now-(taxiRepositionRetryAt.get(t.id)??-Infinity)>=60000)
+    .filter(t=>taxiCanLeaveMarket(
+     queue.filter(q=>meters(t.position,q.pickup)<=2200).length,
+     taxis.filter(other=>other.id!==t.id&&other.status==='IDLE'&&
+      (!other.kind||other.kind==='taxi')&&availableIds.has(other.id)&&
+      !other.refillRequested&&!other.shiftParked&&!other.restStopId&&!other.serviceDestination&&!other.recoveryPending&&
+      energyPercent(other)>10&&meters(other.position,t.position)<=2500).length))
     .sort((a,b)=>(idleSince.get(a.id)??now)-(idleSince.get(b.id)??now));
    const vehicle=available[0];
    if(vehicle){
@@ -1275,9 +1281,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      const demandAtPoint=(point:Point)=>({
       localStops:passengerSpatialStops.countNear(point,lookup,2000,120),
       pendingPickups:queue.filter(q=>meters(point,q.pickup)<=2200).length,
-      competingIdleTaxis:taxis.filter(t=>t.id!==vehicle.id&&
-       (!t.kind||t.kind==='taxi')&&t.status==='IDLE'&&
-       availableIds.has(t.id)&&meters(t.position,point)<=2500).length,
+      competingIdleTaxis:projectedTaxiSupply(point,taxis,vehicle.id,availableIds),
      });
      const baseline=demandAtPoint(vehicle.position);
      const waitTargets=queue.filter(q=>
@@ -1308,7 +1312,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
        taxiRepositionRouteFailures++;continue;
       }
       const distance=passengerRouteMetres(route.path);
-      if(!taxiCanCompleteRepositioning(vehicle,distance))continue;
+      if(!taxiCanCompleteRepositioning(vehicle,distance)||
+         !taxiRepositionWorthwhile(baseline,demandAtPoint(target.point),distance))continue;
       const index=taxis.findIndex(t=>t.id===vehicle.id);
       if(index<0)break;
       taxis[index]={...vehicle,status:'REPOSITIONING',

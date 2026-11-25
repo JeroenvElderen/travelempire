@@ -4,7 +4,7 @@ import {PassengerStopSpatialIndex} from './passengerDepotDemand';
 import {meters,passengerRouteMetres,routeDiscovered,tickTaxi,
  type Point,type RoadGraph,type Taxi} from './taxi';
 import {taxiCanStartRepositioning,taxiCanCompleteRepositioning,
- taxiDemandScore,taxiRepositionWorthwhile,
+ taxiDemandScore,taxiRepositionWorthwhile,projectedTaxiSupply,taxiCanLeaveMarket,
  TAXI_REPOSITION_COOLDOWN_MS,TAXI_REPOSITION_MIN_METRES,
  TAXI_REPOSITION_MAX_METRES} from './taxiRepositioning';
 
@@ -155,5 +155,37 @@ describe('Taxi Phase 2 — real roads, same taxi speeds, no phantom revenue',()=
   expect(current.repositionStopPending).toBeUndefined();
   expect(current.repositionTarget).toBeUndefined();
   expect(earned).toBe(0);
+ });
+});
+
+
+describe('fleet-aware repositioning',()=>{
+ it('counts committed arrivals and upcoming drop-offs once, not their old locations',()=>{
+  const origin=point(23),target=point(23.06);
+  const fleet=[
+   taxi({id:'self',position:target}),
+   taxi({id:'idle',position:target}),
+   taxi({id:'incoming',position:origin,status:'REPOSITIONING',repositionTarget:target}),
+   taxi({id:'passenger',position:origin,status:'TO_DROPOFF',dropoff:target}),
+   taxi({id:'interrupted',status:'REPOSITIONING',repositionTarget:target,repositionStopPending:true}),
+   taxi({id:'resting',position:target,status:'PAUSED',shiftParked:true}),
+   taxi({id:'fuel',position:target,status:'REFUELLING'}),
+   taxi({id:'offduty',position:target}),
+  ];
+  const available=new Set(['self','idle']);
+  expect(projectedTaxiSupply(target,fleet,'self',available)).toBe(2.5);
+  expect(projectedTaxiSupply(origin,fleet,'self',available)).toBe(0);
+ });
+ it('keeps enough idle taxis to cover waiting customers before speculative moves',()=>{
+  expect(taxiCanLeaveMarket(1,0)).toBe(false);
+  expect(taxiCanLeaveMarket(3,2)).toBe(false);
+  expect(taxiCanLeaveMarket(1,1)).toBe(true);
+  expect(taxiCanLeaveMarket(0,0)).toBe(true);
+ });
+ it('discourages a second taxi from moving to the same single-customer market',()=>{
+  const home={localStops:60,pendingPickups:0,competingIdleTaxis:0};
+  const target={localStops:60,pendingPickups:1,competingIdleTaxis:0};
+  expect(taxiRepositionWorthwhile(home,target,2800)).toBe(true);
+  expect(taxiRepositionWorthwhile(home,{...target,competingIdleTaxis:1},2800)).toBe(false);
  });
 });

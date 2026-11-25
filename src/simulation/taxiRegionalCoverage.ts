@@ -5,6 +5,7 @@
 import {energyRangeKm} from './energy';
 import {meters,type Taxi} from './taxi';
 import type {DiscoveredServiceRegion} from './passengerDepotDemand';
+import {projectedTaxiSupply} from './taxiRepositioning';
 
 export const COVERAGE_MIN_METRES=6500;
 export const COVERAGE_MAX_ROAD_METRES=65000;
@@ -21,11 +22,7 @@ export function isCoverageUnderserved(
  region:Pick<DiscoveredServiceRegion,'position'>,
  fleet:readonly Taxi[],
 ):boolean{
- return !fleet.some(t=>
-  (!t.kind||t.kind==='taxi')&&t.status!=='PAUSED'&&
-  (meters(t.position,region.position)<COVERAGE_SUPPLY_RADIUS_METRES||
-   t.status==='REPOSITIONING'&&!!t.repositionTarget&&
-   meters(t.repositionTarget,region.position)<COVERAGE_SUPPLY_RADIUS_METRES));
+ return projectedTaxiSupply(region.position,fleet,'',undefined,COVERAGE_SUPPLY_RADIUS_METRES)===0;
 }
 
 /** Sort distant uncovered markets with a moderate empty-mileage penalty.
