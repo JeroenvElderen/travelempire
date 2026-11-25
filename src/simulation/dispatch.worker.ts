@@ -9,7 +9,7 @@ import {taxiCanStartRepositioning,taxiCanCompleteRepositioning,
  taxiRepositionWorthwhile,taxiDemandScore,TAXI_REPOSITION_GLOBAL_INTERVAL_MS,
  TAXI_REPOSITION_MIN_METRES,TAXI_REPOSITION_MAX_METRES
 } from './taxiRepositioning';
-import {taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode} from './taxiDispatchStrategy';
+import {taxiJobAcceptable,isTaxiDispatchMode,type TaxiDispatchMode,type TaxiQuoteEconomy} from './taxiDispatchStrategy';
 import {advancedTaxiBid,rankPassengerQueue,withPassengerPickupDeadline} from './taxiAdvancedMatching';
 import {resolvePurpleExplorerStart,prependPurpleStart} from './explorerStart';
 import {planSpecialistMission,usesAutopilotRoutePlanner} from './explorerPlanCore';
@@ -630,7 +630,7 @@ type FuelPlanRequest={type:'fuelPlan';revision:number;requestId:number;vehicleId
 type RouteRequest={type:'routeRequest';revision:number;requestId:number;from:Point;to:Point;discoveredOnly?:boolean;allowTaxiOnly?:boolean;activeRoad?:{edgeId:string;start:Point;end:Point}};
 type TrafficRerouteRequest={type:'trafficReroute';revision:number;requestId:number;vehicleId:string;
  snapshot:Omit<MovingTrafficSnapshot,'fromNode'|'toNode'>;trafficIncidents:TrafficIncident[]};
-type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;trafficIncidents?:TrafficIncident[];demandPlaces?:PassengerDemandPlace[]};
+type Dispatch={type:'dispatch';revision:number;now:number;gameNow?:number;taxis:Taxi[];queue:PassengerRequest[];discovered:string[];hq:Point;allowMission:boolean;allowTaxiShift:boolean;allowScout:boolean;stations?:Point[];poiTargets?:Point[];poiMissions?:{vehicleId:string;portId:string;point:Point}[];harbourTargets?:Point[];parkingTargets?:Point[];availableTaxiIds?:string[];depots?:Array<{id:string;position:Point}>;taxiDispatchMode?:TaxiDispatchMode;driverTripPreferences?:Record<string,DriverTripPreference>;driverDutyRemainingSeconds?:Record<string,number>;taxiQuoteEconomies?:Record<string,TaxiQuoteEconomy>;trafficIncidents?:TrafficIncident[];demandPlaces?:PassengerDemandPlace[]};
 self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|FuelPlanRequest|OperationalRouteRequest|TrafficRerouteRequest>)=>{
  const msg=event.data;
  try{
@@ -1100,7 +1100,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    msg.taxiDispatchMode:'max-profit';
   const onDutyIdle=taxis.filter(t=>(!t.kind||t.kind==='taxi')&&
    t.status==='IDLE'&&availableIds.has(t.id));
-  const rankedQueue=rankPassengerQueue(queue,taxiMode,onDutyIdle,now,msg.gameNow??now);
+  const rankedQueue=rankPassengerQueue(queue,taxiMode,onDutyIdle,now,msg.gameNow??now,msg.taxiQuoteEconomies);
   const pending:PassengerRequest[]=[];
   for(const mission of rankedQueue){
    let best:{index:number;taxi:Taxi;etaSeconds:number;score:number;
@@ -1131,7 +1131,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     etaSeconds+=Math.min(12,assigned.edgeIds.length*0.5+4);
     const preference=normalDriverTripPreference(msg.driverTripPreferences?.[taxi.id]);
     const bid=advancedTaxiBid(taxiMode,taxi,mission,approachMetres,etaSeconds,
-     now,msg.gameNow??now,msg.driverDutyRemainingSeconds?.[taxi.id],preference);
+     now,msg.gameNow??now,msg.driverDutyRemainingSeconds?.[taxi.id],preference,msg.taxiQuoteEconomies?.[taxi.id]);
     if(!bid)continue;
     if(!taxiJobAcceptable(taxiMode,bid.estimate)){
      taxiUnprofitableSkips++;continue;

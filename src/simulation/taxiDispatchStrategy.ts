@@ -13,6 +13,15 @@ export const TAXI_DISPATCH_MODES:readonly TaxiDispatchMode[]=
 export const isTaxiDispatchMode=(mode:unknown):mode is TaxiDispatchMode=>
  mode==='max-jobs'||mode==='balanced'||mode==='max-profit';
 
+/** Serializable snapshot of the current operating economy. All multipliers
+ * are estimates for dispatch only; the normal settlement owns actual cash. */
+export type TaxiQuoteEconomy={
+ energyUseMultiplier:number;energyPriceMultiplier:number;
+ maintenanceMultiplier:number;wageMultiplier:number;insuranceMultiplier:number;
+ fareMultiplier:number;
+};
+const quoteFactor=(value:number|undefined,fallback=1)=>value!==undefined&&Number.isFinite(value)&&value>=0?value:fallback;
+
 export type TaxiJobEstimate={
  fare:number;approachMetres:number;passengerMetres:number;
  pickupEtaSeconds:number;tripEtaSeconds:number;fuelCost:number;
@@ -26,7 +35,7 @@ export type TaxiJobEstimate={
 export function estimateTaxiJob(
  taxi:Pick<Taxi,'vehicleFuel'|'drivingPolicy'|'vehicleRevenueBonus'>,
  request:Pick<PassengerRequest,'fare'|'tripDistanceMeters'|'tripTravelSeconds'>,
- approachMetres:number,pickupEtaSeconds:number,
+ approachMetres:number,pickupEtaSeconds:number,economy?:TaxiQuoteEconomy,
 ):TaxiJobEstimate|null{
  const passengerMetres=request.tripDistanceMeters;
  const tripEtaSeconds=request.tripTravelSeconds;
@@ -40,16 +49,16 @@ export function estimateTaxiJob(
  const spec=energySpec(taxi);
  const fuelFactor=taxi.drivingPolicy==='economy'?0.85:
   taxi.drivingPolicy==='performance'?1.12:1;
- const fuelCost=distanceKm/100*spec.per100km*spec.pricePerUnit*fuelFactor;
- const maintenanceCost=distanceKm*.075;
+ const fuelCost=distanceKm/100*spec.per100km*spec.pricePerUnit*fuelFactor*quoteFactor(economy?.energyUseMultiplier)*quoteFactor(economy?.energyPriceMultiplier);
+ const maintenanceCost=distanceKm*.075*quoteFactor(economy?.maintenanceMultiplier);
  const seconds=pickupEtaSeconds+tripEtaSeconds;
- const labourCost=seconds*.009;
- const insuranceCost=seconds*.00085;
+ const labourCost=seconds*.009*quoteFactor(economy?.wageMultiplier);
+ const insuranceCost=seconds*.00085*quoteFactor(economy?.insuranceMultiplier);
  const operatingCost=fuelCost+maintenanceCost+labourCost+insuranceCost;
- // The actual economy applies researched bonuses at completed drop-off.
- // Include only known vehicle bonus, never invent research levels.
- const fare=request.fare*Math.min(1.6,
-  1+Math.max(0,Math.min(200,taxi.vehicleRevenueBonus??0))/100);
+ // The supplied fare multiplier already includes the vehicle premium.
+ // Legacy callers retain the original vehicle-only estimate.
+ const fare=request.fare*quoteFactor(economy?.fareMultiplier,Math.min(1.6,
+  1+Math.max(0,Math.min(200,taxi.vehicleRevenueBonus??0))/100));
  return {fare,approachMetres,passengerMetres,pickupEtaSeconds,
   tripEtaSeconds,fuelCost,maintenanceCost,labourCost,insuranceCost,
   operatingCost,contribution:fare-operatingCost};

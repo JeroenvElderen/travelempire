@@ -130,3 +130,16 @@ describe('Taxi Autopilot 2.0 Phase 1 — profitable but unchanged driving',()=>{
   expect(choice?.name).toBe('lucrative');
  });
 });
+
+
+it('quotes the current research, depot and driver economy without applying the vehicle premium twice',()=>{
+ const t=taxi({vehicleRevenueBonus:25}),job=mission();
+ const baseline=estimateTaxiJob(t,job,2000,240)!;
+ const upgraded=estimateTaxiJob(t,job,2000,240,{energyUseMultiplier:.8,energyPriceMultiplier:.9,maintenanceMultiplier:.7,wageMultiplier:1.2,insuranceMultiplier:.85,fareMultiplier:1.5})!;
+ expect(upgraded.fare).toBe(30);
+ expect(upgraded.fuelCost).toBeCloseTo(baseline.fuelCost*.72);
+ expect(upgraded.maintenanceCost).toBeCloseTo(baseline.maintenanceCost*.7);
+ expect(upgraded.labourCost).toBeCloseTo(baseline.labourCost*1.2);
+ expect(upgraded.insuranceCost).toBeCloseTo(baseline.insuranceCost*.85);
+ expect(upgraded.contribution).toBeCloseTo(upgraded.fare-upgraded.operatingCost);
+});

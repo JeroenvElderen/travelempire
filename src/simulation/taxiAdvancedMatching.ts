@@ -5,7 +5,7 @@
  */
 import {GAME_TIME_SCALE} from './gameClock';
 import {regionalTrafficFactor} from './trafficConditions';
-import {estimateTaxiJob,taxiDispatchScore,type TaxiJobEstimate,type TaxiDispatchMode} from './taxiDispatchStrategy';
+import {estimateTaxiJob,taxiDispatchScore,type TaxiJobEstimate,type TaxiDispatchMode,type TaxiQuoteEconomy} from './taxiDispatchStrategy';
 import {driverTripMatchBonus,type DriverTripPreference} from './driverTripPreferences';
 import type {PassengerRequest,Taxi} from './taxi';
 
@@ -89,13 +89,13 @@ export type AdvancedTaxiBid={
 export function advancedTaxiBid(
  mode:TaxiDispatchMode,taxi:Taxi,mission:PassengerRequest,
  approachMetres:number,pickupEtaSeconds:number,now:number,gameAt:number,
- remainingDutyGameSeconds:number|undefined,preference:DriverTripPreference,
+ remainingDutyGameSeconds:number|undefined,preference:DriverTripPreference,economy?:TaxiQuoteEconomy,
 ):AdvancedTaxiBid|null{
  if(!passengerPickupCanArrive(mission,now,pickupEtaSeconds))return null;
  const tripEtaSeconds=currentPassengerTripSeconds(mission,gameAt);
  const currentMission=tripEtaSeconds===undefined?mission:
   {...mission,tripTravelSeconds:tripEtaSeconds};
- const estimate=estimateTaxiJob(taxi,currentMission,approachMetres,pickupEtaSeconds);
+ const estimate=estimateTaxiJob(taxi,currentMission,approachMetres,pickupEtaSeconds,economy);
  const satisfaction=passengerPickupSatisfaction(mission,now,pickupEtaSeconds);
  // Conversion is crucial: the simulation vehicle moves in real seconds,
  // while the driver's roster advances at GAME_TIME_SCALE = 24x.
@@ -125,7 +125,7 @@ export function advancedTaxiBid(
  */
 export function rankPassengerQueue(
  queue:readonly PassengerRequest[],mode:TaxiDispatchMode,
- availableTaxis:readonly Taxi[],now:number,gameAt:number,
+ availableTaxis:readonly Taxi[],now:number,gameAt:number,economies?:Readonly<Record<string,TaxiQuoteEconomy>>,
 ):PassengerRequest[]{
  const fleet=availableTaxis.slice(0,24);
  const priority=(job:PassengerRequest)=>{
@@ -136,7 +136,7 @@ export function rankPassengerQueue(
    // Zero empty kilometres is a best-case bound, not an invented route;
    // actual empty travel is charged in advancedTaxiBid.
    for(const taxi of fleet){
-    const e=estimateTaxiJob(taxi,preview,0,0);
+    const e=estimateTaxiJob(taxi,preview,0,0,economies?.[taxi.id]);
     if(!e)continue;
     const value=mode==='max-profit'?
      e.contribution/Math.max(1/12,e.tripEtaSeconds/3600):
@@ -155,6 +155,8 @@ export function rankPassengerQueue(
   const deadlineBonus=urgency*urgency*(mode==='max-profit'?25:40);
   return opportunity+ageing+deadlineBonus;
  };
- return [...queue].sort((a,b)=>priority(b)-priority(a)||
-  a.createdAt-b.createdAt||a.id.localeCompare(b.id));
+ // Compute each opportunity once instead of re-quoting the entire fleet
+ // for every comparison in the sort.
+ return queue.map(job=>({job,score:priority(job)})).sort((a,b)=>b.score-a.score||
+  a.job.createdAt-b.job.createdAt||a.job.id.localeCompare(b.job.id)).map(entry=>entry.job);
 }

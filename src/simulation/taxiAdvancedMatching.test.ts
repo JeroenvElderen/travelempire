@@ -121,3 +121,16 @@ describe('Phase 4 advanced taxi job matching',()=>{
   expect(source[0]).toBe(fresh);
  });
 });
+
+
+it('uses live quote economics for individual bids and waiting-job ranking',()=>{
+ const taxi=t(),request=job({fare:15,tripTravelSeconds:1000});
+ const economy={energyUseMultiplier:.55,energyPriceMultiplier:.8,maintenanceMultiplier:.6,wageMultiplier:1,insuranceMultiplier:.75,fareMultiplier:1.6};
+ const before=advancedTaxiBid('max-profit',taxi,request,1000,120,baseTime,baseTime,undefined,'flexible')!;
+ const after=advancedTaxiBid('max-profit',taxi,request,1000,120,baseTime,baseTime,undefined,'flexible',economy)!;
+ expect(after.estimate!.contribution).toBeGreaterThan(before.estimate!.contribution);
+ expect(after.score).toBeGreaterThan(before.score);
+ const efficient=job({id:'efficient',fare:30,tripTravelSeconds:500});
+ const long=job({id:'long',fare:90,tripTravelSeconds:4000});
+ expect(rankPassengerQueue([long,efficient],'max-profit',[taxi],baseTime,baseTime,{[taxi.id]:economy})[0].id).toBe('efficient');
+});

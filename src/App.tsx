@@ -1202,13 +1202,35 @@ export default function App(){
    const driverTripPreferences=Object.fromEntries(taxis.filter(t=>
     !t.kind||t.kind==='taxi').map(t=>[t.id,normalDriverTripPreference(
     fleetSaveRef.current.drivers?.find(d=>d.name.toLowerCase()===t.driver.toLowerCase())?.tripPreference)]));
+   // Match the current settlement economy when quoting future passenger jobs.
+   // Energy is an amortised cost here (cash is still charged only at refill).
+   const fleetSnapshot=fleetSaveRef.current;
+   const levels=researchRef.current.levels;
+   const level=(id:Parameters<typeof Research.level>[1])=>Research.level(researchRef.current,id);
+   const energyResearch=1-Math.min(.45,level('engine')*.05+level('fuelInjection')*.02+level('lightweight')*.02+level('ecoDriving')*.03+Resources.unlockedBonus(levels,'energy'));
+   const maintenanceResearch=1-Math.min(.45+Math.min(.08,Resources.megaResearchMastery(levels,'maintenance')),level('lubrication')*.04+level('routing')*.02+level('workshopResearch')*.04+level('parts')*.03+Resources.unlockedBonus(levels,'maintenance'));
+   const fareResearch=(1+Resources.unlockedBonus(levels,'taxi'))*(1+Math.min(.75,level('pricing')*.05+level('peakPricing')*.03+level('premium')*.03+level('longDistance')*.02+level('dispatchResearch')*.02+level('fleetAnalytics')*.01+level('trainingResearch')*.02+level('advertising')*.02+level('brand')*.02+level('loyalty')*.01));
+   const drivers=new Map(roster.map(driver=>[driver.name.toLowerCase(),driver]));
+   const taxiQuoteEconomies=Object.fromEntries(taxis.filter(t=>!t.kind||t.kind==='taxi').map(t=>{
+    const experience=Math.min(4,Math.max(0,Math.floor((drivers.get(t.driver.toLowerCase())?.completedTrips??0)/25)));
+    const depot=upgradesFor(fleetSnapshot,t.depotId??'main');
+    const priceDiscount=energySpec(t).unit==='L'?.08*(depot.fuel??0):.12*(depot.charging??0);
+    return [t.id,{
+     energyUseMultiplier:energyResearch*(1-.03*experience),
+     energyPriceMultiplier:(1-priceDiscount)*((fleetSnapshot.upgrades??[]).includes('fuel')?.95:1),
+     maintenanceMultiplier:maintenanceResearch*((fleetSnapshot.upgrades??[]).includes('workshop')?.9:1)*(1-.1*(depot.workshop??0)),
+     wageMultiplier:(fleetSnapshot.wageMultiplier??1)*(1+Math.min(.20,experience*.04)),
+     insuranceMultiplier:1-level('insuranceResearch')*.05,
+     fareMultiplier:Math.min(1.6+Math.min(.25,Resources.megaResearchMastery(levels,'taxi')),fareResearch*(1+Math.max(0,Math.min(200,t.vehicleRevenueBonus??0))/100)*(1+.02*experience)*((fleetSnapshot.upgrades??[]).includes('dispatch')?1.05:1)*(1+.03*(depot.dispatch??0)))
+    }];
+   }));
    const activeHotelDemandPlaces:PassengerDemandPlace[]=Object.values(constructionRef.current.sites)
     .filter(site=>hotelActiveAt(site.operations,Math.floor(gameTime/HOUR_MS)))
     .map(site=>({id:'hotel:'+site.id,name:site.name,kind:'hotel' as const,
      position:[site.longitude,site.latitude] as [number,number]}));
    dispatchWorkerRef.current.postMessage({type:'dispatch',revision,now,
     demandPlaces:[...harbourDemandPlacesRef.current,...activeHotelDemandPlaces],
-    trafficIncidents:trafficIncidentsRef.current,driverTripPreferences,driverDutyRemainingSeconds,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
+    trafficIncidents:trafficIncidentsRef.current,driverTripPreferences,driverDutyRemainingSeconds,taxiQuoteEconomies,taxiDispatchMode:taxiDispatchModeRef.current,gameNow:gameClockRef.current?.epochMs??now,taxis,queue,discovered,
     hq:[company.headquarters.lng,company.headquarters.lat],
     depots:[{id:'main',position:[company.headquarters.lng,company.headquarters.lat] as [number,number]},
      ...(company.depots??[]).map(d=>({id:d.id,position:[d.lng,d.lat] as [number,number]}))],
