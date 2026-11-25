@@ -17,7 +17,7 @@ import {explorerWaitingForRoads} from './explorerParking';
 import {validateExplorerMission} from './explorerMissionValidation';
 import {canRetryStalledExplorer,evaluateExplorerRoute,safeExplorerRoutePrefix,explorerFerryEligible,explorerMovementEligible,watchExplorerProgress,
  type ExplorerExhaustionProof,type ExplorerProgressWatch,type ExplorerRouteHealth} from './explorerRecoveryController';
-import {explorerPlannerIdleQuota,explorerPlannerResultCurrent,explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,reserveExplorerDiscoveries} from './explorerAutopilot';
+import {explorerPlannerIdleQuota,explorerPlannerResultCurrent,explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,reserveExplorerDiscoveries,pendingExplorerRoads} from './explorerAutopilot';
 import type {ExplorerRecoveryEvent} from './explorerOperations';
 import {inspectExplorerComponent,componentFailureSignature,type DirectedComponentReport} from './explorerConnectivity';
 import {routeStrandedExplorerToPurple} from './explorerRecovery';
@@ -1683,7 +1683,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     failedRouteCache.delete('successor|'+taxi.id);
     missionLastEndpoint.set(taxi.id,destinationKey);
     taxis[index]=next;
-    for(const id of decision.route?.discoveryEdgeIds??[])reservedEdges.add(id);
+    for(const id of pendingExplorerRoads(next,explored))reservedEdges.add(id);
     reservedTargets.add(check.endNode);
     recordExplorerMission(next,now);
     missionSequence.set(taxi.id,(missionSequence.get(taxi.id)??0)+1);
@@ -1781,7 +1781,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
          journeyEdges:[],leg:0,distanceIntoLeg:0,
          scoutingRuns:(idleVehicle.scoutingRuns??0)+1};
         taxis[index]=assignment;
-        for(const id of route.discoveryEdgeIds)reservedEdges.add(id);
+        for(const id of pendingExplorerRoads(assignment,explored))reservedEdges.add(id);
         if(destination)reservedTargets.add(destination);
         majorSearches.delete(idleVehicle.id);
         explorerSearchTier.set(idleVehicle.id,0);
@@ -1933,15 +1933,16 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
     const purpleOrigin=purpleStartNear(idleVehicle.position,explored);
     if(!purpleOrigin){explorerPlanSkipReason.set(idleVehicle.id,'no-purple-segment-near-vehicle');continue;}
     const anchoredTaxi={...idleVehicle,position:graph.nodes.get(purpleOrigin.node)!};
-    const targeted=majorRoad?targetMajorRoadMission(anchoredTaxi,graph,candidates,explored,reservedTargets,reservedEdges,discoveryRoads(idleVehicle).size):null;
+    // Tentative major-road routes must not claim global reservations until admitted.
+    const candidateTargets=new Set(reservedTargets);
+    const candidateRoads=new Set(reservedEdges);
+    const targeted=majorRoad?targetMajorRoadMission(anchoredTaxi,graph,candidates,explored,candidateTargets,candidateRoads,discoveryRoads(idleVehicle).size):null;
     // Search-budget exhaustion is inconclusive. Do not immediately repeat
     // another large graph search with dispatchScout in the same dispatch.
     const majorStats=majorRoadSearchDiagnostics.get(idleVehicle.id);
     // The legacy regional fallback is still used for some iPhone saves.
     // It must NOT mutate global reservations until a fully directed route
     // passes the same admission standard as Autopilot 2.0.
-    const candidateTargets=new Set(reservedTargets);
-    const candidateRoads=new Set(reservedEdges);
     const plannedScout=targeted??(majorRoad&&majorStats?.outcome==='search-in-progress'
      ?idleVehicle
      :await dispatchScout(anchoredTaxi,graph,explored,hq,candidateTargets,candidateRoads,undefined,purpleAllowedRoads,discoveryRoads(taxis[index]),undefined,undefined,undefined,poiTargets,frontierFor(taxis[index]),revealedNodes,()=>msg.revision===activeRevision,candidates));
@@ -1977,6 +1978,10 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       assignment=idleVehicle;
      }
     }
+    if(assignment.status==='EXPLORING'&&[...pendingExplorerRoads(assignment,explored)].some(id=>reservedEdges.has(id))){
+     explorerPlanSkipReason.set(idleVehicle.id,'legacy-candidate-reserved-road');
+     assignment=idleVehicle;
+    }
     // No immediate second expensive search: retry in a later planning turn.
     if(assignment.status!=='IDLE'){
      explorerSearchTier.set(idleVehicle.id,0);
@@ -1984,7 +1989,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      idleRetryAt.delete(idleVehicle.id);poiRetryWallClock.delete(idleVehicle.id);
      taxis[index]=assignment;autoParkedExplorers.delete(idleVehicle.id);
      explorerRecoveryReason.delete(idleVehicle.id);
-     for(const id of assignment.discoveryEdgeIds??[])if(!explored.has(id))reservedEdges.add(id);
+     for(const id of pendingExplorerRoads(assignment,explored))reservedEdges.add(id);
      const goal=assignment.path.at(-1);
      if(goal){const node=nearest(activeGraph,goal);if(node)reservedTargets.add(node);}
      missionSequence.set(idleVehicle.id,(missionSequence.get(idleVehicle.id)??0)+1);
@@ -2044,12 +2049,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    }
    // Only active explorer routes reserve discovery edges. Purple transit can
    // be shared, but no two planners may claim an undiscovered road.
-   const reservedTargets=new Set<string>(),reservedEdges=new Set<string>();
-   for(const vehicle of taxis)if(vehicle.kind==='explorer'&&vehicle.status==='EXPLORING'){
-    for(const id of vehicle.discoveryEdgeIds??[])if(!explored.has(id))reservedEdges.add(id);
-    const end=vehicle.path.at(-1);
-    if(end){const node=nearest(graph,end);if(node)reservedTargets.add(node);}
-   }
+   const {edges:reservedEdges,targets:reservedTargets}=reserveExplorerDiscoveries(taxis,explored,point=>nearest(activeGraph,point));
    // Apply finished routes only after checking the latest purple network,
    // mission endpoint, role reservations and the vehicle's current status.
    for(let index=0;index<taxis.length;index++){
@@ -2122,7 +2122,6 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      reservedEdges,reservedTargets,
      append?nearest(graph,current.path.at(-1)!):undefined);
     if(!verified.ok){reject(verified.reason);continue;}
-    const selected=new Set(route.discoveryEdgeIds??[]);
     const end=verified.endNode;
     const next:Taxi=append?{...current,
      path:[...current.path,...route.path.slice(1)],
@@ -2134,7 +2133,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
       deliveryUntil:current.deliveryUntil,vehicleCondition:current.vehicleCondition,
       energyRemaining:current.energyRemaining};
     taxis[index]=next;
-    for(const id of selected)reservedEdges.add(id);
+    for(const id of pendingExplorerRoads(next,explored))reservedEdges.add(id);
     if(end)reservedTargets.add(end);
     recordExplorerMission(next,now);
     missionSequence.set(current.id,(missionSequence.get(current.id)??0)+1);

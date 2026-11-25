@@ -4,7 +4,7 @@ import {
  estimateExplorerFrontierGain,scoreExplorerFrontier,
  explorerPlannerIdleQuota,explorerPlannerResultCurrent,
  explorerRemainingEdges,explorerSuccessorDue,explorerSuccessorUrgent,
- reserveExplorerDiscoveries,
+ reserveExplorerDiscoveries,pendingExplorerRoads,
 } from './explorerAutopilot';
 import type {Point,RoadGraph} from './taxi';
 
@@ -97,6 +97,24 @@ describe('Explorer Autopilot 2.0 — continuous mission scheduler',()=>{
    p=>String(p[0]));
   expect([...result.edges].sort()).toEqual(['new-one','new-two']);
   expect(result.targets).toEqual(new Set(['23.001','23.002']));
+ });
+ it('reserves pending escape roads across the fleet without locking purple or completed roads',()=>{
+  const A:Point=[23,38],B:Point=[23.001,38],C:Point=[23.002,38];
+  const vehicle={kind:'explorer' as const,status:'EXPLORING' as const,path:[A,B,C],
+   discoveryEdgeIds:['already-driven','new'],escapeTransitEdgeIds:['escape','purple'],
+   edgeIds:['already-driven','new','escape','purple'],leg:1};
+  const discovered=new Set(['purple']);
+  const claims=reserveExplorerDiscoveries([vehicle],discovered,p=>String(p[0]));
+  expect(claims.edges).toEqual(new Set(['new','escape']));
+  expect(pendingExplorerRoads({...vehicle,leg:3},discovered)).toEqual(new Set());
+  expect(reserveExplorerDiscoveries([{...vehicle,status:'IDLE'}],discovered,p=>String(p[0])).edges.size).toBe(0);
+ });
+ it('routes another explorer away from a red road reserved as an escape',()=>{
+  const g=graph(),explored=new Set(['purple-a','purple-b']);
+  const claims=pendingExplorerRoads({discoveryEdgeIds:[],escapeTransitEdgeIds:['big1']},explored);
+  const result=planConnectedFrontier(g,'A',explored,new Set(['tiny','big1','big2','big3']),
+   claims,new Set(),'residential',500);
+  expect(result.route?.discoveryEdgeIds).toEqual(['tiny']);
  });
  it('rejects old worker results after a newer mission or changed road-class assignment',()=>{
   const current={status:'EXPLORING' as const,explorerRole:'residential' as const,

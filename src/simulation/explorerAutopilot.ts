@@ -68,17 +68,33 @@ export function explorerSuccessorUrgent(vehicle:Pick<Taxi,'status'|'edgeIds'|'le
 export function explorerPlannerIdleQuota(availableSlots:number,urgentSuccessor:boolean):number{
  return Math.max(0,availableSlots-(urgentSuccessor?1:0));
 }
+/** Reserve red discovery AND escape roads until they are driven or the
+ * mission ends. Escape roads are not credited as discoveries by this helper.
+ * A shared purple transit edge is never locked. */
+export function pendingExplorerRoads(
+ mission:Pick<Taxi,'discoveryEdgeIds'|'escapeTransitEdgeIds'>&Partial<Pick<Taxi,'edgeIds'|'leg'>>,
+ discovered:ReadonlySet<string>,
+):Set<string>{
+ const remaining=mission.edgeIds&&mission.leg!==undefined?
+  new Set(mission.edgeIds.slice(Math.max(0,mission.leg))):undefined;
+ const pending=new Set<string>();
+ for(const id of [...(mission.discoveryEdgeIds??[]),...(mission.escapeTransitEdgeIds??[])]){
+  if(!discovered.has(id)&&(!remaining||remaining.has(id)))pending.add(id);
+ }
+ return pending;
+}
+
 /** Duplicate routes may reuse already-purple streets but must never claim
  * the same as-yet-undiscovered edge or another explorer's reserved endpoint.
  */
 export function reserveExplorerDiscoveries(
- vehicles:ReadonlyArray<Pick<Taxi,'kind'|'status'|'discoveryEdgeIds'|'path'>>,
+ vehicles:ReadonlyArray<Pick<Taxi,'kind'|'status'|'discoveryEdgeIds'|'escapeTransitEdgeIds'|'path'>&Partial<Pick<Taxi,'edgeIds'|'leg'>>>,
  discovered:ReadonlySet<string>,getNode:(position:[number,number])=>string,
 ):{edges:Set<string>;targets:Set<string>}{
  const edges=new Set<string>(),targets=new Set<string>();
  for(const vehicle of vehicles){
   if(vehicle.kind!=='explorer'||vehicle.status!=='EXPLORING')continue;
-  for(const id of vehicle.discoveryEdgeIds??[])if(!discovered.has(id))edges.add(id);
+  for(const id of pendingExplorerRoads(vehicle,discovered))edges.add(id);
   const end=vehicle.path.at(-1);
   if(end){const node=getNode(end);if(node)targets.add(node);}
  }
