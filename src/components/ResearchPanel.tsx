@@ -9,7 +9,7 @@ import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,typ
 import {supplierStock,SUPPLIER_PRODUCTION_HOURS,SUPPLIER_COLORS} from '../generatedSuppliers';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import {collectorResearchCosts} from '../collectorResearch';
-import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart,type CollectorStock} from '../resourceCollectors';
+import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorNextStop,collectorCargoAt,collectorUnits,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart,type CollectorStock} from '../resourceCollectors';
 import ResearchTechIcon,{ResearchResourceIcon,ResearchProductIcon} from './ResearchTechIcon';
 import {productRequirements,recipeById,recipeIngredients,PRODUCT_KEYS,recipeAvailable} from '../researchProducts';
 import './research-v4.css';
@@ -301,7 +301,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
      {collectorVehicles(state.collector).map((vehicle,index)=><div key={vehicle.id} style={{padding:9,border:'1px solid #8495aa55',borderRadius:8}}>
       <strong>{COLLECTOR_MODELS[vehicle.model].name} #{index+1}</strong>
       <small style={{display:'block'}}>{collectorCapacity(vehicle.model,state.levels)} units · {vehicle.trips} trips · {vehicle.distanceKm.toFixed(1)} km</small>
-      <small style={{display:'block'}}>{vehicle.trip?'Collecting '+COLLECTOR_NAMES[vehicle.trip.part]+' · '+(vehicle.trip.supplierName??'Local supply point')+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':vehicle.waitingReason??'Waiting for discovered round-trip route'}</small>
+      <small style={{display:'block'}}>{vehicle.trip?(collectorNextStop(vehicle.trip,gameNow)?.supplierName??(vehicle.trip.stops?'Returning to warehouse':vehicle.trip.supplierName??'Local supply point'))+' · '+collectorUnits(collectorCargoAt(vehicle.trip,gameNow))+'/'+vehicle.trip.quantity+' loaded'+(vehicle.paused?' · pausing at depot':''):vehicle.paused?'Paused at depot':vehicle.waitingReason??'Waiting for discovered round-trip route'}</small>
       <small style={{display:'block'}}>{collectorFuelRate(vehicle.model,state.levels).toFixed(1)} L/100 km · {fmt(vehicle.fuelLitres??0)} L purchased · {euro(collectorExpenseTotal(vehicle.expenses??emptyCollectorExpenses()))} lifetime expenses</small>
       <small style={{display:'block'}}>Next service in {fmt(Math.max(0,COLLECTOR_SERVICE_KM-(vehicle.distanceKm-(vehicle.lastServiceKm??0))))} km</small>
       <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>

@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import {Truck,Package,Warehouse,MapPin,Fuel,Wrench,Route,ChevronRight,Search,Pause,Play,ArrowLeft,Plus,ShoppingCart} from 'lucide-react';
 import type {Company} from '../company';
-import {COLLECTOR_MODELS,COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorCapacity,collectorLimit,collectorPurchaseLock,collectorWarehouses,collectorStorageCapacity,collectorStorageUsage,collectorFuelRate,collectorExpenseTotal,emptyCollectorExpenses,COLLECTOR_SERVICE_KM,REGIONAL_WAREHOUSE_PRICE,type CollectorState,type CollectorVehicle,type CollectorModel,type CollectorPart} from '../resourceCollectors';
+import {COLLECTOR_MODELS,COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorTripCargo,collectorCargoAt,collectorNextStop,collectorUnits,collectorCapacity,collectorLimit,collectorPurchaseLock,collectorWarehouses,collectorStorageCapacity,collectorStorageUsage,collectorFuelRate,collectorExpenseTotal,emptyCollectorExpenses,COLLECTOR_SERVICE_KM,REGIONAL_WAREHOUSE_PRICE,type CollectorState,type CollectorVehicle,type CollectorModel,type CollectorPart} from '../resourceCollectors';
 import './collector-fleet.css';
 import ResourceMarketPanel from './ResourceMarketPanel';
 import type {MarketSide} from '../resourceMarket';
@@ -10,7 +10,7 @@ export type CollectorFleetControls={state?:CollectorState;levels:Partial<Record<
 const money=(value:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(value);
 const count=(value:number)=>value.toLocaleString('en-IE',{maximumFractionDigits:1});
 export function collectorStatus(vehicle:CollectorVehicle,now:number){
- if(vehicle.trip)return vehicle.paused?'Returning before pause':'Collecting';
+ if(vehicle.trip){const stop=collectorNextStop(vehicle.trip,now);return vehicle.paused?'Finishing route before pause':stop?(now>=stop.arrivesAt?'Loading resources':'Collecting'):vehicle.trip.stops?'Returning to warehouse':'Collecting';}
  if((vehicle.serviceUntil??0)>now)return 'Servicing';
  if(vehicle.paused)return 'Paused at depot';
  return vehicle.waitingReason??'Awaiting dispatch';
@@ -34,7 +34,7 @@ export default function CollectorFleetPanel({company,controls}:{company:Company;
  const visible=vehicles.filter(v=>{
   const status=collectorStatus(v,gameNow);
   return (filter==='all'||filter==='active'&&!!v.trip||filter==='service'&&(status==='Servicing'||v.distanceKm-(v.lastServiceKm??0)>=COLLECTOR_SERVICE_KM)||filter==='idle'&&!v.trip&&status!=='Servicing')&&
-   [COLLECTOR_MODELS[v.model].name,warehouseName(v),status,v.id,v.priority?COLLECTOR_NAMES[v.priority]:'',v.trip?.supplierName].some(s=>String(s??'').toLowerCase().includes(search.toLowerCase().trim()));
+   [COLLECTOR_MODELS[v.model].name,warehouseName(v),status,v.id,v.priority?COLLECTOR_NAMES[v.priority]:'',v.trip?.supplierName,...(v.trip?.stops?.map(s=>s.supplierName)??[])].some(s=>String(s??'').toLowerCase().includes(search.toLowerCase().trim()));
  });
  const open=(next:typeof view)=>{setView(next);setSelected(null);setError('');};
  return <section className="collector-fleet" aria-label="Resource collector fleet">
@@ -51,7 +51,7 @@ export default function CollectorFleetPanel({company,controls}:{company:Company;
   {view==='vehicles'&&!vehicle&&<>
    <div className="collector-search"><Search size={17}/><input aria-label="Search collectors" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vehicles, warehouses…"/></div>
    <div className="collector-filters">{(['all','active','idle','service'] as const).map(f=><button key={f} type="button" aria-pressed={filter===f} onClick={()=>setFilter(f)}>{f==='all'?'All':f==='active'?'On route':f==='idle'?'Waiting':'Service'}</button>)}</div>
-   {visible.map(v=><button className="collector-vehicle" key={v.id} type="button" onClick={()=>setSelected(v.id)}><span className="collector-icon"><Truck size={25}/></span><span className="collector-vehicle-body"><strong>{COLLECTOR_MODELS[v.model].name} #{vehicles.indexOf(v)+1}</strong><small className={v.trip?'collector-active':''}>{collectorStatus(v,gameNow)}</small><small>{warehouseName(v)} · {collectorCapacity(v.model,levels)} units</small><small>{count(v.distanceKm)} km · {v.trips} deliveries</small></span><ChevronRight size={17}/></button>)}
+   {visible.map(v=><button className="collector-vehicle" key={v.id} type="button" onClick={()=>setSelected(v.id)}><span className="collector-icon"><Truck size={25}/></span><span className="collector-vehicle-body"><strong>{COLLECTOR_MODELS[v.model].name} #{vehicles.indexOf(v)+1}</strong><small className={v.trip?'collector-active':''}>{collectorStatus(v,gameNow)}</small><small>{warehouseName(v)} · {collectorCapacity(v.model,levels)} units</small><small>{v.trip?collectorUnits(collectorCargoAt(v.trip,gameNow))+'/'+collectorCapacity(v.model,levels)+' cargo · '+(v.trip.stops?.length??1)+' stops':count(v.distanceKm)+' km · '+v.trips+' deliveries'}</small></span><ChevronRight size={17}/></button>)}
    {!visible.length&&<p>No collectors match your search.</p>}
   </>}
   {view==='vehicles'&&vehicle&&(()=>{
@@ -60,7 +60,7 @@ export default function CollectorFleetPanel({company,controls}:{company:Company;
    return <div className="collector-detail">
     <button className="collector-back" type="button" onClick={()=>setSelected(null)}><ArrowLeft size={16}/> All collectors</button>
     <h3>{model.name} #{vehicles.indexOf(v)+1}</h3><p>{collectorStatus(v,gameNow)} · {warehouseName(v)}</p>
-    {trip&&<div className="collector-trip"><strong>{trip.supplierName??'Supplier'}</strong><small>{trip.quantity} × {COLLECTOR_NAMES[trip.part]} · {count(trip.distance/1000)} km round trip</small><progress aria-label="Collection trip progress" value={progress} max={1}/><small>{Math.round(progress*100)}% · {Math.max(0,Math.ceil((trip.endsAt-gameNow)/60000))} game minutes remaining</small></div>}
+    {trip&&<div className="collector-trip"><strong>{collectorNextStop(trip,gameNow)?.supplierName??(trip.stops?'Returning to warehouse':trip.supplierName??'Supplier')}</strong><small>{collectorUnits(collectorCargoAt(trip,gameNow))} loaded · {trip.quantity} reserved / {collectorCapacity(v.model,levels)} capacity · {count(trip.distance/1000)} km</small><progress aria-label="Cargo loaded" value={collectorUnits(collectorCargoAt(trip,gameNow))} max={collectorCapacity(v.model,levels)}/>{COLLECTOR_PARTS.filter(p=>(collectorTripCargo(trip)[p]??0)>0).map(p=><small key={p}>{COLLECTOR_NAMES[p]} · {collectorCargoAt(trip,gameNow)[p]??0}/{collectorTripCargo(trip)[p]??0} loaded</small>)}{trip.stops?.map((stop,i)=><small key={stop.supplierId}>{gameNow>=stop.leavesAt?'✓':gameNow>=stop.arrivesAt?'Loading':'Stop '+(i+1)} · {stop.supplierName} · {stop.quantity} units</small>)}<progress aria-label="Collection trip progress" value={progress} max={1}/><small>{Math.round(progress*100)}% · {Math.max(0,Math.ceil((trip.endsAt-gameNow)/60000))} game minutes remaining</small></div>}
     <div className="collector-detail-grid">
      <div><Package size={16}/><small>Cargo capacity</small><b>{collectorCapacity(v.model,levels)} units</b></div>
      <div><Route size={16}/><small>Distance</small><b>{count(v.distanceKm)} km</b></div>

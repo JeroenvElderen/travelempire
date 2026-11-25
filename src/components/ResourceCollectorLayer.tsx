@@ -1,6 +1,6 @@
 import {useEffect,useRef} from 'react';
 import maplibregl from 'maplibre-gl';
-import {collectorMotion,COLLECTOR_NAMES,COLLECTOR_MODELS,type CollectorVehicle} from '../resourceCollectors';
+import {collectorMotion,collectorCargoAt,collectorUnits,collectorNextStop,COLLECTOR_NAMES,COLLECTOR_MODELS,type CollectorVehicle} from '../resourceCollectors';
 import {GAME_TIME_SCALE,type GameClock} from '../simulation/gameClock';
 type Props={map:maplibregl.Map|null;vehicles:readonly CollectorVehicle[];gameClock?:GameClock|null};
 export default function ResourceCollectorLayer({map,vehicles,gameClock}:Props){
@@ -26,7 +26,7 @@ export default function ResourceCollectorLayer({map,vehicles,gameClock}:Props){
      markers.set(vehicle.id,marker);
     }
     marker.setLngLat(point).setRotation(motion.heading);
-    marker.getElement().title=COLLECTOR_MODELS[vehicle.model].name+' · '+COLLECTOR_NAMES[trip.part]+' · '+trip.quantity+' units · '+Math.round(motion.speedKph)+' km/h';
+    marker.getElement().title=COLLECTOR_MODELS[vehicle.model].name+' · '+(collectorNextStop(trip,now)?.supplierName??(trip.stops?'Returning to warehouse':COLLECTOR_NAMES[trip.part]))+' · '+collectorUnits(collectorCargoAt(trip,now))+'/'+trip.quantity+' units · '+Math.round(motion.speedKph)+' km/h';
    }
    for(const [id,marker] of markers)if(!visible.has(id)){marker.remove();markers.delete(id);}
   };

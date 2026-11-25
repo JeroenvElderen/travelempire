@@ -1,4 +1,4 @@
-import {COLLECTOR_PARTS,collectorStorageCapacity,collectorStorageUsage,collectorVehicles,type CollectorPart,type CollectorState} from './resourceCollectors';
+import {COLLECTOR_PARTS,collectorStorageCapacity,collectorStorageUsage,collectorVehicles,collectorTripCargo,type CollectorPart,type CollectorState} from './resourceCollectors';
 import {supplierStock} from './generatedSuppliers';
 
 export type MarketSide='buy'|'sell';
@@ -27,7 +27,7 @@ export function marketQuote(state:CollectorState,levels:Partial<Record<string,nu
  if(!COLLECTOR_PARTS.includes(part)||!['buy','sell'].includes(side)||!Number.isSafeInteger(quantity)||quantity<=0)throw Error('Enter a valid whole-unit quantity');
  const prices=marketUnitPrices(state,part,now);
  const storage=collectorStorageUsage(state),capacity=collectorStorageCapacity(state,levels);
- const incoming=collectorVehicles(state).reduce((n,v)=>n+(v.trip?.part===part?v.trip.quantity:0),0);
+ const incoming=collectorVehicles(state).reduce((n,v)=>n+(v.trip?(collectorTripCargo(v.trip)[part]??0):0),0);
  const free=Math.max(0,Math.min(capacity-storage.stored-storage.reserved,Math.floor(capacity/8)-(state.stock[part]??0)-incoming));
  const unitCents=side==='buy'?prices.buyCents:prices.sellCents;
  const totalCents=unitCents*quantity;
