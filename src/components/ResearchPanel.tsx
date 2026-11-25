@@ -43,7 +43,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
  const [resourceOpen,setResourceOpen]=useState(false);
  const [collectorError,setCollectorError]=useState('');
  const storage=state.collector?collectorStorageUsage(state.collector):{stored:0,reserved:0};
- const storageCapacity=state.collector?collectorStorageCapacity(state.collector,state.levels):1200;
+ const storageCapacity=state.collector?collectorStorageCapacity(state.collector,state.levels):5000;
  const expenses=state.collector?.expenses??emptyCollectorExpenses();
  const euro=(cents:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(cents/100);
  const warehouses=state.collector&&company?collectorWarehouses(state.collector,company.depots??[],[company.headquarters.lng,company.headquarters.lat]):[];
@@ -83,7 +83,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
   const supplied=productDelivered(node);
   const crafted=productEntries.reduce((sum,[key,n])=>
    sum+Math.min(1,(supplied[key]??0)/Math.max(1,n)),0);
-  const suppliedParts=parts.reduce((sum,p)=>sum+Math.min(1,(state.collector?.stock[p]??0)/(materials[p]??1)),0);
+  const suppliedParts=parts.reduce((sum,p)=>sum+Math.min(1,(state.collector?.researchAllocated?.[node.id]?.[p]??0)/(materials[p]??1)),0);
   return Math.min(99,Math.round((raw+crafted+suppliedParts)*100/total));
  };
  const selected=selectedId?hierarchy.byId.get(selectedId):undefined;
@@ -345,7 +345,7 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
     </div>
     <div className="factory-resources-grid">
      {COLLECTOR_PARTS.map(part=><div className="factory-resource" key={part}>
-      <span className="factory-resource-icon">🚚</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{fmt(state.collector?.stock[part]??0)} available · {fmt(state.collector?.researchSpent?.[part]??0)} used in research</small></div><b>{fmt(state.collector?.delivered[part]??0)}</b>
+      <span className="factory-resource-icon">🚚</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{fmt(state.collector?.stock[part]??0)} available · {fmt(Object.values(state.collector?.researchAllocated??{}).reduce((n,bag)=>n+(bag[part]??0),0))} allocated · {fmt(state.collector?.researchSpent?.[part]??0)} used in research</small></div><b>{fmt(state.collector?.delivered[part]??0)}</b>
      </div>)}
     </div>
    </>}
@@ -413,10 +413,10 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
        })}</div>
       {selected.kind==='research'&&state.collector&&<div className="factory-product-chains"><strong>Collected research materials</strong>
        {COLLECTOR_PARTS.filter(part=>(materialCosts(selected)[part]??0)>0).map(part=>{
-        const need=materialCosts(selected)[part]??0,available=state.collector?.stock[part]??0;
+        const need=materialCosts(selected)[part]??0,available=state.collector?.researchAllocated?.[selected.id]?.[part]??0;
         return <div className="factory-requirement" key={part}><div><span className="factory-requirement-label"><i style={{background:SUPPLIER_COLORS[part],width:10,height:10,borderRadius:3,display:'inline-block'}}/>{COLLECTOR_NAMES[part]}</span><b>{fmt(Math.min(available,need))} / {fmt(need)}</b></div><span className="factory-requirement-bar"><i style={{width:Math.min(100,available/need*100)+'%'}}/></span></div>;
        })}
-       <small>All materials must be available together. They are consumed only when research completes. Collect or buy missing stock in Fleet → Collectors.</small>
+       <small>Materials are automatically allocated once the operational and manufactured requirements are met. Allocated stock is reserved for this node, freeing warehouse space until research completes.</small>
       </div>}
       {selected.kind==='research'&&PRODUCT_KEYS.some(key=>(productCosts(selected)[key]??0)>0)&&
        <div className="factory-product-chains">

@@ -26,7 +26,7 @@ describe('resource marketplace',()=>{
  });
  it('reserves space for active shipments and never overfills per-resource storage',()=>{
   const trip:CollectorTrip={path:[[23,38],[23.01,38],[23,38]],outboundMetres:800,distance:1600,startedAt:0,endsAt:1000,part:'mechanical',quantity:12};
-  const base={...emptyCollector(),stock:{mechanical:135},trip};
+  const base={...emptyCollector(),stock:{mechanical:610},trip};
   const state=addCollector(base,'light','second',{collectorBasics:1});
   expect(collectorVehicles(state)[0].trip).toBe(trip);
   expect(collectorStorageUsage(state).reserved).toBe(12);
@@ -47,7 +47,7 @@ describe('resource marketplace',()=>{
 
 it('reserves warehouse space for every resource in a mixed shipment',()=>{
  const trip:CollectorTrip={path:[[23,38],[23.01,38],[23,38]],outboundMetres:800,distance:1600,startedAt:0,endsAt:1000,part:'mechanical',quantity:12,cargo:{mechanical:4,electronics:8}};
- const state={...emptyCollector(),stock:{electronics:140},trip};
+ const state={...emptyCollector(),stock:{electronics:615},trip};
  expect(marketQuote(state,{},100000,now,'electronics','buy',3).reason).toMatch(/warehouse/);
  expect(marketQuote(state,{},100000,now,'electronics','buy',2).maxQuantity).toBe(2);
 });

@@ -16,12 +16,12 @@ describe('96 new TravelEmpire research branches',()=>{
   expect(Object.fromEntries(groups.map(([key,nodes])=>[key,nodes.length]))).toEqual({
    revenue:14,taxis:18,explorers:12,hotels:8,parking:8,finance:14,vehicles:12,construction:10
   });
-  expect(allProjects).toHaveLength(207);
-  expect(allProjects.reduce((sum,p)=>sum+maximum(p.id),0)).toBe(315);
-  expect(new Set(allProjects.map(p=>p.id)).size).toBe(207);
+  expect(allProjects).toHaveLength(209);
+  expect(allProjects.reduce((sum,p)=>sum+maximum(p.id),0)).toBe(317);
+  expect(new Set(allProjects.map(p=>p.id)).size).toBe(209);
   expect(projects).toHaveLength(28);
   const diagram=buildResearchHierarchy(allProjects.map(p=>p.id));
-  expect(diagram.nodes).toHaveLength(329);
+  expect(diagram.nodes).toHaveLength(331);
   for(const [division,ids] of groups){
    expect(DIVISIONS.some(d=>d.key===division)).toBe(true);
    for(const id of ids){

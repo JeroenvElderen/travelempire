@@ -55,14 +55,14 @@ describe('collector operating economy',()=>{
   expect(next.suppliers?.[supplier.id].stock).toBe(15);
  });
  it('limits dispatch to remaining resource capacity, including simultaneous vehicles',()=>{
-  const state=addCollector({...ready,stock:{mechanical:145}},'light','second',{collectorBasics:1});
+  const state=addCollector({...ready,stock:{mechanical:620}},'light','second',{collectorBasics:1});
   const next=tickCollectorFleet(state,0,graph,discovered,a,{},[],[],{cash:100});
-  expect(collectorStorageUsage(next)).toEqual({stored:145,reserved:5});
+  expect(collectorStorageUsage(next)).toEqual({stored:620,reserved:5});
   expect(supplierAvailable(next.suppliers![supplier.id],0)).toBe(10);
   expect(collectorVehicles(next)[0].trip?.quantity).toBe(5);
   expect(collectorVehicles(next)[1].trip).toBeUndefined();
   const completed=tickCollectorFleet(next,collectorVehicles(next)[0].trip!.endsAt,graph,discovered,a,{},[],[],{cash:100});
-  expect(completed.stock.mechanical).toBe(150);
+  expect(completed.stock.mechanical).toBe(625);
   expect(completed.expenses).toEqual(next.expenses);
  });
  it('serves a due collector once and grows capacity through warehouses',()=>{
@@ -71,10 +71,10 @@ describe('collector operating economy',()=>{
   expect(service.expenses?.serviceCents).toBe(18000);
   expect(collectorVehicles(service)[0].serviceUntil).toBe(3600000);
   expect(tickCollectorFleet(service,1000,graph,discovered,a,{},[],[],{cash:1000})).toBe(service);
-  expect(collectorStorageCapacity(state,{})).toBe(1200);
+  expect(collectorStorageCapacity(state,{})).toBe(5000);
   const expanded=openCollectorWarehouse(state,'regional',{collectorRegional:1},[{id:'regional',name:'Regional',lng:a[0],lat:a[1]}]);
-  expect(collectorStorageCapacity(expanded,{})).toBe(3200);
-  expect(collectorStorageCapacity(expanded,{depotEfficiency:5})).toBe(4800);
+  expect(collectorStorageCapacity(expanded,{})).toBe(15000);
+  expect(collectorStorageCapacity(expanded,{depotEfficiency:5})).toBe(22500);
  });
 });
 

@@ -38,6 +38,10 @@ describe('collector fleet expansion',()=>{
   expect(collectorVehicles(expanded)).toHaveLength(2);
   expect(collectorCapacity('medium',{collectorCargo:1})).toBe(37);
   expect(collectorLimit({collectorRegional:1})).toBe(12);
+  expect(collectorLimit({collectorIndustrial:1})).toBe(25);
+  expect(collectorLimit({collectorNational:1})).toBe(50);
+  expect(collectorCapacity('industrial',{})).toBe(120);
+  expect(collectorCapacity('articulated',{collectorCargo:1})).toBe(300);
   expect(configureCollector(expanded,'van-2',{priority:'marine'},{})).toBe(expanded);
   const configured=configureCollector(expanded,'van-2',{priority:'marine'},{collectorPriority:1});
   expect(collectorVehicles(configured)[1].priority).toBe('marine');
