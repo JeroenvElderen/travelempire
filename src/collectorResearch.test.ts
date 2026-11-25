@@ -34,7 +34,7 @@ describe('multi-resource research recipes',()=>{
  it('blocks automatic completion until every material is available, then spends once',()=>{
   const context={freshStart:false,roads:10000,explorers:5,depots:2};
   const earned=safeBag({passengers:10000,roads:100000,revenue:10000000,distance:100000,maintenance:1000});
-  const initial={...empty(),earned,resources:earned,researchV3:true as const,collector:{...emptyCollector(),stock:{business:4}}};
+  const initial={...empty(),earned,resources:safeBag({}),contributions:{'pricing:1':{roads:2500,passengers:40,revenue:4000}},researchV3:true as const,collector:{...emptyCollector(),stock:{business:4}}};
   const blocked=advanceAutomaticTree(initial,projects,context);
   expect(blocked.levels.pricing??0).toBe(0);
   expect(blocked.collector?.researchAllocated?.['pricing:1']?.business).toBe(4);
