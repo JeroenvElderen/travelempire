@@ -2,7 +2,7 @@ import {
  allResearch,normalizeResources,prerequisites,resourceKeys,researchCosts,safeBag,
  type OperationalContext,type ResearchProject,type ResourceBag,type ResourceCosts,type ResourceKey,type ResourceState
 } from './researchProgress';
-import {collectorResearchCosts,consumeCollectorResearch} from './collectorResearch';
+import {collectorResearchCosts,allocateCollectorResearch,finishCollectorResearch} from './collectorResearch';
 import {allocateResearchProducts,type ProductionLedger} from './researchProductionEngine';
 import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
@@ -194,7 +194,10 @@ export function advanceAutomaticTree<T extends AutomaticState>(
    if(deliveredThisWave)resourceCursor[resource]=(start+1)%count;
   }
   let unlocked=false;
-  for(const candidate of candidates){
+  // Logistics upgrades take precedence among operationally ready nodes, so
+  // a single starter collector can unlock a larger fleet without starvation.
+  const ordered=[...candidates].sort((a,b)=>Number(b.id.startsWith('collector'))-Number(a.id.startsWith('collector'))||((projectById.get(a.id) as {tier?:number})?.tier??a.level)-((projectById.get(b.id) as {tier?:number})?.tier??b.level));
+  for(const candidate of ordered){
    if(resourceKeys.every(resource=>
     (candidate.given[resource]??0)+1e-8>=(candidate.goal[resource]??0))&&
     PRODUCT_KEYS.every(product=>
@@ -202,7 +205,10 @@ export function advanceAutomaticTree<T extends AutomaticState>(
      (candidate.productGoal[product]??0))){
     if(collector){
      const project=projectById.get(candidate.id)!;
-     const next=consumeCollectorResearch(collector,collectorResearchCosts(project,candidate.level));
+     const costs=collectorResearchCosts(project,candidate.level);
+     const allocated=allocateCollectorResearch(collector,candidate.key,costs);
+     if(allocated!==collector){collector=allocated;changed=true;deliveredThisWave=true;}
+     const next=finishCollectorResearch(collector,candidate.key,costs);
      if(!next)continue;
      collector=next;
     }

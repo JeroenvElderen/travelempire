@@ -11,7 +11,7 @@ export const COLLECTOR_NAMES:Record<CollectorPart,string>={mechanical:'Mechanica
 export type CollectorStock=Partial<Record<CollectorPart,number>>;
 export type CollectorStop={supplierId:string;supplierName:string;part:CollectorPart;quantity:number;legIndex:number;arrivesAt:number;leavesAt:number};
 export type CollectorTrip={path:Point[];outboundMetres:number;distance:number;startedAt:number;endsAt:number;part:CollectorPart;quantity:number;supplierId?:string;supplierName?:string;warehouseId?:string;legMs?:number[];loadingMs?:number;outboundLegs?:number;stops?:CollectorStop[];cargo?:CollectorStock};
-export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses;market?:ResourceMarket;researchSpent?:CollectorStock};
+export type CollectorState={stock:CollectorStock;delivered:CollectorStock;trips:number;trip?:CollectorTrip;vehicles?:CollectorVehicle[];warehouses?:CollectorWarehouse[];suppliers?:Record<string,GeneratedSupplier>;expenses?:CollectorExpenses;market?:ResourceMarket;researchSpent?:CollectorStock;researchAllocated?:Record<string,CollectorStock>};
 export const emptyCollector=():CollectorState=>({stock:{},delivered:{},trips:0});
 export function collectorTripCargo(trip:CollectorTrip):CollectorStock{return trip.cargo??{[trip.part]:trip.quantity};}
 export function collectorCargoAt(trip:CollectorTrip,now:number):CollectorStock{
@@ -153,7 +153,9 @@ export const COLLECTOR_MODELS={
  light:{name:'Light collector van',price:18000,capacity:12,speed:35,litresPer100Km:7.5,tank:55,maintenancePerKm:.065,servicePrice:180,research:'collectorBasics'},
  medium:{name:'Medium collector van',price:42000,capacity:30,speed:42,litresPer100Km:10,tank:75,maintenancePerKm:.09,servicePrice:300,research:'collectorMedium'},
  heavy:{name:'Heavy collector truck',price:85000,capacity:65,speed:32,litresPer100Km:26,tank:180,maintenancePerKm:.18,servicePrice:650,research:'collectorHeavy'},
- offroad:{name:'Utility collector pickup',price:56000,capacity:22,speed:38,litresPer100Km:11.5,tank:70,maintenancePerKm:.11,servicePrice:350,research:'collectorUtility'}
+ offroad:{name:'Utility collector pickup',price:56000,capacity:22,speed:38,litresPer100Km:11.5,tank:70,maintenancePerKm:.11,servicePrice:350,research:'collectorUtility'},
+ industrial:{name:'Industrial rigid truck',price:160000,capacity:120,speed:32,litresPer100Km:32,tank:260,maintenancePerKm:.23,servicePrice:1000,research:'collectorIndustrial'},
+ articulated:{name:'Articulated collector truck',price:285000,capacity:240,speed:32,litresPer100Km:38,tank:420,maintenancePerKm:.32,servicePrice:1500,research:'collectorNational'}
 } as const;
 export type CollectorModel=keyof typeof COLLECTOR_MODELS;
 export type CollectorVehicle={id:string;model:CollectorModel;trips:number;trip?:CollectorTrip;priority?:CollectorPart;paused?:boolean;offset:number;distanceKm:number;warehouseId?:string;fuelLitres?:number;expenses?:CollectorExpenses;lastServiceKm?:number;serviceUntil?:number;waitingReason?:string};
@@ -162,7 +164,7 @@ export function collectorVehicles(state:CollectorState):CollectorVehicle[]{
  return state.vehicles??[{id:'starter-collector',model:'light',trips:state.trips,trip:state.trip,offset:0,distanceKm:0}];
 }
 export function collectorLimit(levels:Levels):number{
- return levels.collectorRegional?12:levels.collectorDispatch?6:levels.collectorBasics?3:1;
+ return levels.collectorNational?50:levels.collectorIndustrial?25:levels.collectorRegional?12:levels.collectorDispatch?6:levels.collectorBasics?3:1;
 }
 export function collectorPurchaseLock(state:CollectorState,model:CollectorModel,levels:Levels):string|null{
  if(!levels[COLLECTOR_MODELS[model].research])return 'Requires '+COLLECTOR_MODELS[model].research+' research';
@@ -271,6 +273,6 @@ export function collectorTripCost(model:CollectorModel,km:number,levels:Levels,p
 export const collectorUnits=(stock:CollectorStock)=>COLLECTOR_PARTS.reduce((sum,p)=>sum+(stock[p]??0),0);
 export function collectorStorageCapacity(state:CollectorState,levels:Levels){
  const regional=state.warehouses?.filter(w=>w.id!=='main').length??0;
- return Math.floor((1200+regional*2000)*(1+Math.min(.5,(levels.depotEfficiency??0)*.10)));
+ return Math.floor((5000+regional*10000)*(1+Math.min(.5,(levels.depotEfficiency??0)*.10)));
 }
 export function collectorStorageUsage(state:CollectorState){return {stored:collectorUnits(state.stock),reserved:collectorVehicles(state).reduce((sum,v)=>sum+(v.trip?.quantity??0),0)};}

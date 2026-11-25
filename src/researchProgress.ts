@@ -114,6 +114,8 @@ export const newProjects:readonly AdvancedProject[]=[
  {"id":"collectorRouting","name":"Smart Collector Routing","category":2,"tier":3,"requires":["collectorPriority"],"resources":{"roads":1200,"revenue":16000},"effect":"Expand supplier search to 35 km and improve route planning","bonus":"depot","rate":0,"products":{}},
  {"id":"collectorDispatch","name":"Fleet Dispatch Expansion","category":2,"tier":3,"requires":["collectorMedium","collectorPriority"],"resources":{"roads":1800,"revenue":30000},"effect":"Increase collector fleet limit to 6","bonus":"depot","rate":0,"products":{}},
  {"id":"collectorRegional","name":"Regional Collector Network","category":2,"tier":4,"requires":["collectorDispatch","collectorHeavy","collectorRouting"],"resources":{"roads":4000,"revenue":70000},"effect":"Increase collector fleet limit to 12","bonus":"depot","rate":0,"products":{}},
+ {"id":"collectorIndustrial","name":"Industrial Collection Logistics","category":2,"tier":4,"requires":["collectorRegional","collectorCargo"],"resources":{"roads":8000,"revenue":140000},"effect":"Unlock 120-unit industrial trucks and expand collector fleet to 25","bonus":"depot","rate":0,"products":{}},
+ {"id":"collectorNational","name":"National Resource Logistics","category":2,"tier":5,"requires":["collectorIndustrial"],"resources":{"roads":16000,"revenue":300000},"effect":"Unlock 240-unit articulated trucks and expand collector fleet to 50","bonus":"depot","rate":0,"products":{}},
  ...MEGA_RESEARCH_BRANCHES
 ] as const;
 

@@ -68,7 +68,7 @@ export const DIVISIONS:readonly {
   'modularBuilding','siteSurveys','materialLogistics','greenBuildings','supplyChains',
   'qualityInspection','prefabHotels','mixedUseProjects',
   ...MEGA_RESEARCH_DIVISIONS.construction]},
- {key:'collectors',name:'Resource Collectors',category:2,root:'collectorBasics',lanes:4,projects:["collectorBasics","collectorMedium","collectorHeavy","collectorUtility","collectorCargo","collectorLoading","collectorPriority","collectorRouting","collectorDispatch","collectorRegional"]}
+ {key:'collectors',name:'Resource Collectors',category:2,root:'collectorBasics',lanes:4,projects:["collectorBasics","collectorMedium","collectorHeavy","collectorUtility","collectorCargo","collectorLoading","collectorPriority","collectorRouting","collectorDispatch","collectorRegional","collectorIndustrial","collectorNational"]}
 ] as const;
 const COL=70,ROW=72,START_Y=78,DIVISION_Y=START_Y+STARTER_STAGES.length*ROW+88;
 const TECH_Y=DIVISION_Y+108,SPACE=48;
