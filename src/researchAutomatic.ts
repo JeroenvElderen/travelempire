@@ -3,6 +3,7 @@ import {
  type OperationalContext,type ResearchProject,type ResourceBag,type ResourceCosts,type ResourceKey,type ResourceState
 } from './researchProgress';
 import {collectorResearchCosts,allocateCollectorResearch,finishCollectorResearch} from './collectorResearch';
+import {COLLECTOR_PARTS,type CollectorStock} from './resourceCollectors';
 import {allocateResearchProducts,type ProductionLedger} from './researchProductionEngine';
 import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProducts';
 
@@ -90,6 +91,36 @@ export function effectiveCosts(
 type Candidate={id:string;level:number;key:string;goal:ResourceCosts;given:ResourceCosts;productGoal:ProductBag};
 const hasAllStreams=(candidate:Candidate,earned:ResourceBag)=>
  resourceKeys.every(key=>!candidate.goal[key]||earned[key]>0);
+
+/** Outstanding physical recipes for technologies that can complete as soon
+ * as materials arrive. Allocated materials are deducted here; shared stock
+ * and incoming cargo are deducted by dispatch, exactly once for the fleet.
+ * Before the starter milestones or when nothing is ready, normal collection
+ * continues to build inventory. This is a read-only planning signal. */
+export function researchCollectorDemand(
+ state:AutomaticState,legacy:readonly ResearchProject[],context:OperationalContext
+):CollectorStock{
+ const starterLevel=context.freshStart?(state.starterLevel??0):STARTER_LEVELS;
+ if(starterLevel<STARTER_LEVELS)return {};
+ const demand:CollectorStock={};
+ for(const project of allResearch(legacy)){
+  const current=state.levels[project.id]??0;
+  const max=project.id==='explorerExpansion'||!legacy.some(p=>p.id===project.id)?1:5;
+  if(current>=max||state.active?.id===project.id)continue;
+  const level=current+1,key=researchNodeId(project.id,level);
+  if(technologyLevelRequirements(project.id,level,state.levels,{...context,starterLevel}).length)continue;
+  const costs=effectiveCosts(project.id,level,state.levels,legacy);
+  if(!resourceKeys.every(p=>(state.contributions?.[key]?.[p]??0)+1e-8>=(costs[p]??0)))continue;
+  const products=productRequirements(project.id,level,legacy);
+  if(!PRODUCT_KEYS.every(p=>(state.productContributions?.[key]?.[p]??0)>=(products[p]??0)))continue;
+  const materials=collectorResearchCosts(project,level);
+  for(const part of COLLECTOR_PARTS){
+   const missing=Math.max(0,(materials[part]??0)-(state.collector?.researchAllocated?.[key]?.[part]??0));
+   if(missing)demand[part]=(demand[part]??0)+missing;
+  }
+ }
+ return demand;
+}
 
 /** All eligible nodes compete fairly for each newly earned resource. No user
  * selection, queue, manual contribution, or timer is required. One resource

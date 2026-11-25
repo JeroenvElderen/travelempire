@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {allProjects,projects,empty} from './research';
 import {maximum,safeBag} from './researchProgress';
-import {advanceAutomaticTree} from './researchAutomatic';
+import {advanceAutomaticTree,researchCollectorDemand} from './researchAutomatic';
 import {collectorResearchCosts,consumeCollectorResearch,allocateCollectorResearch,finishCollectorResearch} from './collectorResearch';
 import {COLLECTOR_PARTS,emptyCollector} from './resourceCollectors';
 describe('multi-resource research recipes',()=>{
@@ -59,4 +59,14 @@ it('stores partial research allocations and completes without double spending',(
  expect(done.researchSpent).toEqual({mechanical:25,energy:5});
  expect(done.researchAllocated).toEqual({});
  expect(finishCollectorResearch(done,'engine:1',{mechanical:25,energy:5})).toBeNull();
+});
+
+
+it('reports only ready research recipes minus materials already allocated',()=>{
+ const context={freshStart:false,roads:10000,explorers:5,depots:2};
+ const state={...empty(),contributions:{'pricing:1':{roads:2500,passengers:40,revenue:4000}},collector:{...emptyCollector(),researchAllocated:{'pricing:1':{business:4}}}};
+ expect(researchCollectorDemand(state,projects,context)).toEqual({business:6,electronics:5,research:10});
+ expect(researchCollectorDemand({...state,contributions:{}},projects,context)).toEqual({});
+ expect(researchCollectorDemand(state,projects,{...context,freshStart:true})).toEqual({});
+ expect(researchCollectorDemand({...state,levels:{pricing:1}},projects,context)).toEqual({});
 });

@@ -143,6 +143,23 @@ describe('budget-aware collector dispatch',()=>{
   expect(collectorVehicles(result)[0].trip).toBeUndefined();
   expect(collectorVehicles(result)[0].waitingReason).toBe('Insufficient operating cash');
  });
+ it('prioritises ready research materials over normal rotation',()=>{
+  const result=tickCollectorFleet(state(),0,routeGraph,roads,a,{},[],[],{cash:100,researchDemand:{business:10}});
+  expect(collectorVehicles(result)[0].trip?.supplierId).toBe('near');
+ });
+ it('subtracts warehouse inventory and newly reserved cargo from fleet-wide research demand',()=>{
+  const stocked={...state(),stock:{business:10}};
+  const result=tickCollectorFleet(stocked,0,routeGraph,roads,a,{},[],[],{cash:100,researchDemand:{business:10}});
+  expect(collectorVehicles(result)[0].trip?.supplierId).toBe('far');
+  const expanded=addCollector(state(),'light','second',{collectorBasics:1});
+  const next=tickCollectorFleet(expanded,0,routeGraph,roads,a,{collectorBasics:1},[],[],{cash:100,researchDemand:{business:10}});
+  expect(collectorVehicles(next).map(v=>v.trip?.supplierId)).toEqual(['near','far']);
+ });
+ it('keeps manually configured material priorities ahead of automatic research demand',()=>{
+  const initial=configureCollector(state(),'starter-collector',{priority:'mechanical'},{collectorPriority:1});
+  const result=tickCollectorFleet(initial,0,routeGraph,roads,a,{collectorPriority:1},[],[],{cash:100,researchDemand:{business:10}});
+  expect(collectorVehicles(result)[0].trip?.supplierId).toBe('far');
+ });
  it('checks the budget for legacy non-procedural routes too',()=>{
   const result=tickCollectorFleet(emptyCollector(),0,graph,new Set(['ab','ba']),a,{},[],[],{cash:0});
   expect(collectorVehicles(result)[0].trip).toBeUndefined();

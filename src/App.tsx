@@ -84,7 +84,7 @@ import DailySummaryModal from './components/DailySummaryModal';
 import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBaseline,type DailySummary} from './simulation/dailySummary';
 import * as Research from "./research";
 import * as Resources from "./researchProgress";
-import {advanceAutomaticTree,automaticUnlocked} from "./researchAutomatic";
+import {advanceAutomaticTree,automaticUnlocked,researchCollectorDemand} from "./researchAutomatic";
 import {lockedFeature,vehicleResearchLock,upgradeResearchLock} from "./researchUnlocks";
 import {emptyCollector,tickCollectorFleet,collectorVehicles,collectorPurchaseLock,addCollector,configureCollector,openCollectorWarehouse,collectorExpenseTotal,emptyCollectorExpenses,COLLECTOR_NAMES,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart} from "./resourceCollectors";
 import CompanySetup from "./components/CompanySetup";
@@ -724,12 +724,13 @@ export default function App(){
     const existing=previous.suppliers??{};
     const suppliers=currentGraph?generateSuppliers(existing,currentGraph,roads,nodes,company.id,clock.epochMs,coasts,cities):existing;
     const prepared=previous.suppliers===suppliers?previous:{...previous,suppliers};
-    const next=tickCollectorFleet(prepared,clock.epochMs,currentGraph,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,[],company.depots??[],{cash:Math.max(0,(companyRef.current?.cash??0)+pendingCashRef.current-Math.max(0,collectorExpenseTotal(previous.expenses??emptyCollectorExpenses())-(companyRef.current?.collectorExpensePaidCents??0))/100)});
-    if(next===previous&&old.collector)return old;
-    return advanceAutomaticTree({...old,collector:next},Research.projects,{
+    const context:Resources.OperationalContext={
      roads:Math.max(cache?.ids.length??0,currentFleet.exploredEdgeIds?.length??0),
      explorers:currentFleet.taxis.filter(t=>t.kind==='explorer').length,
-     depots:1+(company.depots?.length??0),freshStart:company.researchProgression===2});
+     depots:1+(company.depots?.length??0),freshStart:company.researchProgression===2};
+    const next=tickCollectorFleet(prepared,clock.epochMs,currentGraph,roads,[company.headquarters.lng,company.headquarters.lat],old.levels,[],company.depots??[],{cash:Math.max(0,(companyRef.current?.cash??0)+pendingCashRef.current-Math.max(0,collectorExpenseTotal(previous.expenses??emptyCollectorExpenses())-(companyRef.current?.collectorExpensePaidCents??0))/100),researchDemand:researchCollectorDemand(old,Research.projects,context)});
+    if(next===previous&&old.collector)return old;
+    return advanceAutomaticTree({...old,collector:next},Research.projects,context);
    });
   };
   tick();const timer=window.setInterval(tick,5000);return()=>window.clearInterval(timer);
