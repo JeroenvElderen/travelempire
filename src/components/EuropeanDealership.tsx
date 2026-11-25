@@ -13,12 +13,13 @@ import {financeQuote,leaseQuote} from '../economy';
 import {vehicleFinanceQuote} from '../simulation/vehicleFinancing';
 import type {Company} from '../company';
 import type {FleetState} from '../simulation/taxi';
+import {dealershipModelAvailable,vehicleResearchLock} from '../researchUnlocks';
 import './EuropeanDealership.css';
 
-type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
-export default function EuropeanDealership({reviewing,onReviewChange,cash,company,fleet,gameNow,researchLevels,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
+type Props={reviewing:boolean;onReviewChange:(reviewing:boolean)=>void;cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;starterLevel?:number;ready:boolean;quantity:number;mode:'cash'|'finance'|'lease';depositPercent:number;termDays:number;depotName:string;parkingError:string;initialBrand?:string;initialModel?:string;onBack?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number)=>void};
+export default function EuropeanDealership({reviewing,onReviewChange,cash,company,fleet,gameNow,researchLevels,starterLevel,ready,quantity,mode,depositPercent,termDays,depotName,parkingError,onOrder,initialBrand='Toyota',initialModel,onBack}:Props){
  const brand=initialBrand;
- const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand),[brand]);
+ const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>m.brand===brand&&dealershipModelAvailable(m,starterLevel)),[brand,starterLevel]);
  const [selected,setSelected]=useState(initialModel??(models[0]?models[0].brand+' '+models[0].name:'Toyota Corolla Touring Sports'));
  const model:VehicleModel=models.find(m=>m.brand+' '+m.name===selected)??models[0];
  const [selectedYear,setYear]=useState(2026);
@@ -70,7 +71,7 @@ export default function EuropeanDealership({reviewing,onReviewChange,cash,compan
  const upfront=mode==='cash'?offer.price+DRIVER_COST:mode==='finance'?financeQuote(offer.price,depositPercent,termDays).deposit+DRIVER_COST:leaseQuote(offer.price,termDays).upfront+DRIVER_COST;
  const dueNow=financing?.upfront??Math.round(upfront*quantity*100)/100;
  const checkoutBlocker=!ready?'Road network is still loading. Open the map near your depot and try again.':
-  parkingError||financing?.reason||(dueNow>cash+.001?'Not enough operating cash for the upfront payment and driver costs.':'');
+  vehicleResearchLock({levels:researchLevels??{},starterLevel},offer,starterLevel!==undefined)||parkingError||financing?.reason||(dueNow>cash+.001?'Not enough operating cash for the upfront payment and driver costs.':'');
  const bonus=offer.revenueBonus??0;
  return <section className="eu-dealership">
   {onBack&&<button type="button" className="eu-back" onClick={onBack}>← Back to models</button>}

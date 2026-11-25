@@ -2493,12 +2493,8 @@ export default function App(){
  const buyTaxiBatch=(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90,depotId='main')=>{
   const current=companyRef.current;
   const currentFleet=fleetSaveRef.current;
-  if(current?.researchProgression===2&&!automaticUnlocked(researchRef.current,true)){
-   setSimError('Complete Starter Research Level 5 to unlock the vehicle dealership.');
-   setPage('Research');return;
-  }
   if(!current||!graph)return;
-  const vehicleLock=vehicleResearchLock(researchRef.current,offer);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
+  const vehicleLock=vehicleResearchLock(researchRef.current,offer,current.researchProgression===2);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
   try{
    if(!Number.isInteger(quantity)||quantity<1||quantity>50)throw Error('Choose 1–50 vehicles.');
    // Enforce parking *before* charging or preparing finance. Pending vehicle
@@ -2553,12 +2549,8 @@ export default function App(){
   }catch(error){setSimError(error instanceof Error?error.message:String(error));}
  };
  const buyTaxi=(driver:string,offer:VehicleOffer,mode:'cash'|'finance'|'lease'='cash',depositPercent=25,termDays=90,depotId='main')=>{
-  if(company?.researchProgression===2&&!automaticUnlocked(researchRef.current,true)){
-   setSimError('Complete Starter Research Level 5 to unlock the vehicle dealership.');
-   setPage('Research');return;
-  }
   if(!company||!graph)return;
-  const vehicleLock=vehicleResearchLock(researchRef.current,offer);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
+  const vehicleLock=vehicleResearchLock(researchRef.current,offer,company.researchProgression===2);if(vehicleLock){setSimError(vehicleLock);setResearchError(vehicleLock);setPage('Research');return;}
   try{
   const currentFleet=fleetSaveRef.current;
   const deliveryDepot=requireDepotParking(company,currentFleet,depotId,1);
@@ -2705,7 +2697,7 @@ export default function App(){
   if(companyRef.current.researchProgression===2&&
    !automaticUnlocked(researchRef.current,true)&&t.kind==='taxi'&&
    fleet.taxis.filter(vehicle=>vehicle.kind==='taxi').length<=1){
-   setSimError('Keep the starter taxi until the dealership unlocks at Starter Level 5.');
+   setSimError('Keep at least one taxi until completing Starter Level 5.');
    return;
   }
   if(t.status!=='IDLE'&&t.status!=='PAUSED'){setSimError('Vehicle must be idle or parked before selling.');return;}
@@ -3651,7 +3643,7 @@ export default function App(){
   onScheduleChange={updateShiftConfig} onHomeDepotChange={updateDriverHomeDepot}
   onAutoAssignmentChange={setAutoDriverStaffing} onTripPreferenceChange={setDriverTripPreference}/></div>}
   {page==='Fleet'&&<div className="fleet-map-overlay" role="dialog" aria-label="Fleet management"><button type="button" className="fleet-map-overlay-close" aria-label="Close Fleet and return to map" onClick={()=>go('World')}><X size={20}/></button><FleetPanel company={company} fleet={fleet} graph={graph} collectors={{state:research.collector,levels:research.levels,cash:(company?.cash??0)+pendingCashRef.current,gameNow:gameClock?.epochMs??0,onBuy:purchaseCollector,onConfigure:updateCollector,onBuyWarehouse:purchaseCollectorWarehouse,onLocate:id=>{setVehicleFocus(previous=>({id,token:(previous?.token??0)+1}));go('World')},onResearch:()=>go('Research'),onTrade:tradeCollectorResource}} error={simError} onBuy={buyTaxi} onBuyBatch={buyTaxiBatch} onBuyRoadExplorer={buyRoadExplorer} onAssignDriver={assignDriver} onHireDriver={hireDriver} onDismissDriver={dismissDriver} onService={serviceTaxi} onRefill={refillTaxi} onSell={sellVehicle} onReset={resetVehicle} onRequestRecovery={requestRecoveryTruck} recoveryRequests={[...manualRecoveryRequestsRef.current]} recoveryJobs={recoveries.map(j=>({targetId:j.targetId,phase:j.phase}))} onPolicy={setVehiclePolicy} onServiceThreshold={setServiceThreshold} onAutoDepotService={setAutoDepotService}/></div>}
- {page==='Dealership'&&company&&!dealershipLocked&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} researchLevels={research.levels} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
+ {page==='Dealership'&&company&&!dealershipLocked&&<div className="dealership-map-overlay" role="dialog" aria-label="Vehicle dealership"><button type="button" className="dealership-map-close" aria-label="Close dealership and return to map" onClick={()=>go('World')}><X size={20}/></button><DealershipPage cash={company.cash} company={company} fleet={fleet} gameNow={gameClock?.epochMs??Date.now()} researchLevels={research.levels} starterLevel={company.researchProgression===2?(research.starterLevel??0):undefined} ready={Boolean(graph)} depots={depotParkingChoices(company,fleet)} error={simError} onDepotChange={()=>setSimError('')} onOrder={buyTaxiBatch}/></div>}
  {page==='Operations'&&!lockReason('Operations')&&<div className="ops-map-overlay" role="dialog" aria-label="Operations management"><button type="button" className="ops-map-close" aria-label="Close Operations and return to map" onClick={()=>go('World')}><X size={20}/></button><OperationsPanel fleet={fleet} graph={graph} missionCount={missionQueue.length}
   roadPackages={roadPackages} diagnostics={roadDiagnostics} error={simError}
   gameNow={gameClock?.epochMs??Date.now()} explorerTelemetry={explorerTelemetry}

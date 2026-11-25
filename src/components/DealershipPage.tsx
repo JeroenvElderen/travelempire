@@ -6,11 +6,12 @@ import {DRIVER_COST,type FleetState} from '../simulation/taxi';
 import type {Company} from '../company';
 import EuropeanDealership from './EuropeanDealership';
 import type {DepotParking} from '../simulation/depotParking';
+import {dealershipModelAvailable,FULL_DEALERSHIP_LEVEL} from '../researchUnlocks';
 import './DealershipPage.css';
 import './dealership-floating.css';
 import './dealership-fleet-match.css';
 
-type Props={cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
+type Props={cash:number;company:Company;fleet:FleetState;gameNow:number;researchLevels?:Partial<Record<string,number>>;starterLevel?:number;ready:boolean;depots:DepotParking[];error?:string;onDepotChange?:()=>void;onOrder:(offer:VehicleOffer,quantity:number,mode:'cash'|'finance'|'lease',depositPercent:number,termDays:number,depotId:string)=>void};
 const photoFiles:Record<string,string>={
  'Volvo|XC90':'2025 Volvo XC90 (facelift), front 4.11.25.jpg',
  'Volvo|XC60':'Volvo XC60 II 2025 facelift 001.jpg',
@@ -26,7 +27,7 @@ function VehiclePhoto({model}:{model:VehicleModel}){
   {file&&!failed?<img loading="lazy" src={'https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(file)+'?width=900'} alt={model.brand+' '+model.name+' exterior'} onError={()=>setFailed(true)}/>:<div className="dealer-photo-fallback"><CarFront size={32} aria-hidden="true"/><small>Photo unavailable</small></div>}
  </div>;
 }
-export default function DealershipPage({cash,company,fleet,gameNow,researchLevels,ready,depots,error='',onDepotChange,onOrder}:Props){
+export default function DealershipPage({cash,company,fleet,gameNow,researchLevels,starterLevel,ready,depots,error='',onDepotChange,onOrder}:Props){
  const [selected,setSelected]=useState<VehicleModel|null>(null);
  const [stage,setStage]=useState<'browse'|'build'|'review'>('browse');
  const [search,setSearch]=useState('');
@@ -47,7 +48,9 @@ export default function DealershipPage({cash,company,fleet,gameNow,researchLevel
   </select>
   <small>{selectedDepot?`${selectedDepot.available} taxi spaces available · ${selectedDepot.occupied} reserved or assigned`:'Choose a depot'}</small>
  </label>;
- const models=useMemo(()=>EUROPEAN_MODELS.filter(m=>(brand==='All'||m.brand===brand)&&(m.brand+' '+m.name).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>sort==='price'?a.basePrice-b.basePrice:sort==='price-desc'?b.basePrice-a.basePrice:a.brand.localeCompare(b.brand)||a.name.localeCompare(b.name)),[brand,search,sort]);
+ const unlockedModels=useMemo(()=>EUROPEAN_MODELS.filter(m=>dealershipModelAvailable(m,starterLevel)),[starterLevel]);
+ const unlockedBrands=BRANDS.filter(b=>unlockedModels.some(m=>m.brand===b));
+ const models=useMemo(()=>unlockedModels.filter(m=>(brand==='All'||m.brand===brand)&&(m.brand+' '+m.name).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>sort==='price'?a.basePrice-b.basePrice:sort==='price-desc'?b.basePrice-a.basePrice:a.brand.localeCompare(b.brand)||a.name.localeCompare(b.name)),[unlockedModels,brand,search,sort]);
 
  const openModel=(m:VehicleModel)=>{setSelected(m);setStage('build');};
  const switchStage=(next:'browse'|'build'|'review')=>{
@@ -66,14 +69,15 @@ export default function DealershipPage({cash,company,fleet,gameNow,researchLevel
   {stage==='browse'&&<div className="dealer-fleet-kpis">
    <article><Wallet size={19}/><span>Balance</span><strong>{eur(cash)}</strong></article>
    <article><Warehouse size={19}/><span>Parking</span><strong>{remainingSlots}</strong></article>
-   <article><CarFront size={19}/><span>Models</span><strong>{EUROPEAN_MODELS.length}</strong></article>
-   <article><SlidersHorizontal size={19}/><span>Brands</span><strong>{BRANDS.length}</strong></article>
+   <article><CarFront size={19}/><span>Models</span><strong>{unlockedModels.length}</strong></article>
+   <article><SlidersHorizontal size={19}/><span>Brands</span><strong>{unlockedBrands.length}</strong></article>
   </div>}
   {stage==='browse'||!selected?
    <div className="dealer-fleet-catalogue">
+    {starterLevel!==undefined&&starterLevel<FULL_DEALERSHIP_LEVEL&&<p className="dealer-footnote">Starter dealership · Two entry-level models unlocked. Complete Starter Level 5 for the full catalogue.</p>}
     <div className="dealer-fleet-section-heading"><h2>Available vehicles</h2><small>{models.length} models</small></div>
     <div className="dealer-searchbar"><label className="dealer-search-field"><Search size={18} aria-hidden="true"/><input type="search" aria-label="Search vehicles" placeholder="Search manufacturer or model…" value={search} onChange={e=>setSearch(e.target.value)}/></label><label className="dealer-sort-field"><SlidersHorizontal size={17} aria-hidden="true"/><select aria-label="Sort vehicles" value={sort} onChange={e=>setSort(e.target.value)}><option value="price">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="name">Manufacturer</option></select></label></div>
-    <div className="dealer-brand-tabs" aria-label="Manufacturers">{['All',...BRANDS].map(b=><button key={b} type="button" className={brand===b?'active':''} aria-pressed={brand===b} onClick={()=>setBrand(b)}>{b}</button>)}</div>
+    <div className="dealer-brand-tabs" aria-label="Manufacturers">{['All',...unlockedBrands].map(b=><button key={b} type="button" className={brand===b?'active':''} aria-pressed={brand===b} onClick={()=>setBrand(b)}>{b}</button>)}</div>
     <div className="dealer-fleet-model-list">
      {models.map(m=><button type="button" key={m.brand+'|'+m.name} className="dealer-fleet-model-row" onClick={()=>openModel(m)}>
       <span className="dealer-fleet-model-image"><VehiclePhoto model={m}/></span>
@@ -91,7 +95,7 @@ export default function DealershipPage({cash,company,fleet,gameNow,researchLevel
      <div className="dealer-toolbar">{depotSelector}<label>Quantity<input type="number" min={1} max={20} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(20,Number(e.target.value)||1)))}/></label><label>Payment<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="cash">Cash</option><option value="finance">Finance</option><option value="lease">Lease</option></select></label>{mode==='finance'&&<label>Deposit %<input type="number" min={10} max={90} value={deposit} onChange={e=>setDeposit(Math.max(10,Math.min(90,Math.round(Number(e.target.value)||25))))}/></label>}{mode!=='cash'&&<label>Term<select value={term} onChange={e=>setTerm(Number(e.target.value))}><option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option><option value={365}>1 game year</option><option value={730}>2 game years</option></select></label>}</div>
     </details>
     {error&&<p className="dealer-parking-error" role="alert">{error}</p>}
-    <EuropeanDealership key={selected.brand+'|'+selected.name} reviewing={stage==='review'} onReviewChange={reviewing=>setStage(reviewing?'review':'build')} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setStage('browse')} cash={cash} company={company} fleet={fleet} gameNow={gameNow} researchLevels={researchLevels} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
+    <EuropeanDealership key={selected.brand+'|'+selected.name} reviewing={stage==='review'} onReviewChange={reviewing=>setStage(reviewing?'review':'build')} initialBrand={selected.brand} initialModel={selected.brand+' '+selected.name} onBack={()=>setStage('browse')} cash={cash} company={company} fleet={fleet} gameNow={gameNow} researchLevels={researchLevels} starterLevel={starterLevel} ready={ready} quantity={quantity} mode={mode} depositPercent={deposit} termDays={term} depotName={selectedDepot?.name??'No depot selected'} parkingError={capacityError} onOrder={(offer,count,payment,depositPct,days)=>{onOrder(offer,count,payment,depositPct,days,depotId);}}/>
    </div>}
  </section>;
 }
