@@ -44,3 +44,10 @@ describe('resource marketplace',()=>{
   expect(marketForDay(next,now+day).history).toHaveLength(1);
  });
 });
+
+it('reserves warehouse space for every resource in a mixed shipment',()=>{
+ const trip:CollectorTrip={path:[[23,38],[23.01,38],[23,38]],outboundMetres:800,distance:1600,startedAt:0,endsAt:1000,part:'mechanical',quantity:12,cargo:{mechanical:4,electronics:8}};
+ const state={...emptyCollector(),stock:{electronics:140},trip};
+ expect(marketQuote(state,{},100000,now,'electronics','buy',3).reason).toMatch(/warehouse/);
+ expect(marketQuote(state,{},100000,now,'electronics','buy',2).maxQuantity).toBe(2);
+});

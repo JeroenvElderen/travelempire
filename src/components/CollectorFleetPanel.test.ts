@@ -6,7 +6,7 @@ const trip:CollectorTrip={path:[[23,38],[23.01,38],[23,38]],outboundMetres:800,d
 describe('collector fleet status labels',()=>{
  it('distinguishes active, pause pending, parked, service and waiting',()=>{
   expect(collectorStatus({...v,trip},0)).toBe('Collecting');
-  expect(collectorStatus({...v,trip,paused:true},0)).toBe('Returning before pause');
+  expect(collectorStatus({...v,trip,paused:true},0)).toBe('Finishing route before pause');
   expect(collectorStatus({...v,paused:true},0)).toBe('Paused at depot');
   expect(collectorStatus({...v,serviceUntil:1000},0)).toBe('Servicing');
   expect(collectorStatus({...v,waitingReason:'Insufficient operating cash'},0)).toBe('Insufficient operating cash');
