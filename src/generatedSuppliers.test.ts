@@ -19,8 +19,8 @@ describe('procedural supplier network',()=>{
   const first=reserveSupplier(supplier,0,12);
   const second=reserveSupplier(first.supplier,0,12);
   expect(first.quantity).toBe(12);expect(second.quantity).toBe(3);
-  expect(supplierStock(second.supplier,3599999)).toBe(0);
-  expect(supplierStock(second.supplier,3600000)).toBe(2);
+  expect(supplierStock(second.supplier,4*3600000-1)).toBe(0);
+  expect(supplierStock(second.supplier,4*3600000)).toBe(2);
   expect(supplierStock(second.supplier,100*3600000)).toBe(50);
  });
  it('does not duplicate cargo across simultaneous departures or use infinite fallbacks',()=>{
@@ -95,19 +95,19 @@ describe('rarity-based supplier production and visibility',()=>{
  });
  it('hides a depleted supplier immediately and reappears on its next production cycle',()=>{
   const rare:GeneratedSupplier={...supplier,part:'rare',stock:0};
-  const reserved=reserveSupplier(rare,8*hour+1000,12);
+  const reserved=reserveSupplier(rare,32*hour+1000,12);
   expect(reserved.quantity).toBe(2);
-  expect(reserved.supplier.updatedAt).toBe(8*hour);
-  expect(supplierVisible(reserved.supplier,8*hour+1000)).toBe(false);
-  expect(supplierVisible(reserved.supplier,16*hour-1)).toBe(false);
-  expect(supplierVisible(reserved.supplier,16*hour)).toBe(true);
+  expect(reserved.supplier.updatedAt).toBe(32*hour);
+  expect(supplierVisible(reserved.supplier,32*hour+1000)).toBe(false);
+  expect(supplierVisible(reserved.supplier,64*hour-1)).toBe(false);
+  expect(supplierVisible(reserved.supplier,64*hour)).toBe(true);
  });
  it('preserves existing stock and does not bank surplus production beyond capacity',()=>{
   const s:GeneratedSupplier={...supplier,stock:49,capacity:50};
   const reservation=reserveSupplier(s,100*hour,50);
   expect(reservation.quantity).toBe(50);
   expect(supplierStock(reservation.supplier,100*hour)).toBe(0);
-  expect(supplierStock(reservation.supplier,101*hour)).toBe(2);
+  expect(supplierStock(reservation.supplier,104*hour)).toBe(2);
  });
 });
 
@@ -154,12 +154,12 @@ describe('multi-stop collectors and deferred supplier pickups',()=>{
  });
  it('preserves production during reservations and prevents duplicate reservations',()=>{
   const empty={...supplier,stock:4};
-  const booking=reserveSupplier(empty,0,4,2*3600000);
+  const booking=reserveSupplier(empty,0,4,8*3600000);
   expect(supplierStock(booking.supplier,0)).toBe(4);
-  expect(reserveSupplier(booking.supplier,0,4,3600000).quantity).toBe(0);
-  expect(supplierStock(booking.supplier,3600000)).toBe(6);
-  expect(supplierAvailable(booking.supplier,3600000)).toBe(2);
-  expect(supplierStock(booking.supplier,2*3600000)).toBe(4);
-  expect(supplierReserved(booking.supplier,2*3600000)).toBe(0);
+  expect(reserveSupplier(booking.supplier,0,4,4*3600000).quantity).toBe(0);
+  expect(supplierStock(booking.supplier,4*3600000)).toBe(6);
+  expect(supplierAvailable(booking.supplier,4*3600000)).toBe(2);
+  expect(supplierStock(booking.supplier,8*3600000)).toBe(4);
+  expect(supplierReserved(booking.supplier,8*3600000)).toBe(0);
  });
 });

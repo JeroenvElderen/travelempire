@@ -7,7 +7,7 @@ export const SUPPLIER_COLORS:Record<CollectorPart,string>={mechanical:'#dc2626',
 const weights:readonly [CollectorPart,number][]=[['mechanical',25],['business',20],['construction',15],['electronics',12],['research',10],['energy',8],['marine',7],['rare',3]];
 const names:Record<CollectorPart,string>={mechanical:'Mechanical supply',business:'Business supply',construction:'Building materials',electronics:'Electronics supply',research:'Research supplies',energy:'Energy supply',marine:'Marine supply',rare:'Specialist components'};
 const hour=3600000;
-export const SUPPLIER_PRODUCTION_HOURS:Readonly<Record<CollectorPart,number>>={mechanical:1,business:1,construction:1.5,electronics:2,research:3,energy:4,marine:5,rare:8};
+export const SUPPLIER_PRODUCTION_HOURS:Readonly<Record<CollectorPart,number>>={mechanical:4,business:4,construction:6,electronics:8,research:12,energy:16,marine:20,rare:32};
 export const SUPPLIER_BATCH_UNITS=2;
 const productionInterval=(supplier:GeneratedSupplier)=>SUPPLIER_PRODUCTION_HOURS[supplier.part]*hour;
 function hash(input:string):number{
