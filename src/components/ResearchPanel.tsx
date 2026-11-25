@@ -6,7 +6,7 @@ import * as Research from '../research';
 import {ADVANCED_CATEGORIES,RESOURCE_INFO,resourceKeys,safeBag,technologyParents,type ResourceKey,type OperationalContext} from '../researchProgress';
 import {STARTER_STAGES,STARTER_LEVELS,REQUIRED_LEVELS,effectiveCosts,technologyLevelRequirements} from '../researchAutomatic';
 import {buildResearchHierarchy,DIVISIONS,RESEARCH_TILE_SIZE,type DivisionKey,type HierarchyNode} from '../researchHierarchy';
-import {supplierStock,SUPPLIER_COLORS} from '../generatedSuppliers';
+import {supplierStock,SUPPLIER_PRODUCTION_HOURS,SUPPLIER_COLORS} from '../generatedSuppliers';
 import {BUSINESS_UNLOCKS} from '../researchUnlocks';
 import {collectorResearchCosts} from '../collectorResearch';
 import {COLLECTOR_PARTS,COLLECTOR_NAMES,collectorVehicles,collectorLimit,collectorPurchaseLock,collectorCapacity,collectorStorageCapacity,collectorStorageUsage,collectorExpenseTotal,emptyCollectorExpenses,collectorFuelRate,COLLECTOR_SERVICE_KM,COLLECTOR_FUEL_PRICE,collectorWarehouses,REGIONAL_WAREHOUSE_PRICE,COLLECTOR_MODELS,type CollectorModel,type CollectorPart,type CollectorStock} from '../resourceCollectors';
@@ -320,9 +320,9 @@ export default function ResearchPanel({company,state,discoveredRoads,explorerSpe
        {COLLECTOR_PARTS.map(part=>{
         const locations=Object.values(state.collector!.suppliers!).filter(s=>s.part===part);
         const units=locations.reduce((n,s)=>n+supplierStock(s,gameNow),0);
-        return <div key={part} className="factory-resource"><span className="factory-resource-icon" style={{color:SUPPLIER_COLORS[part]}}>▣</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{locations.length} locations · {fmt(units)} supply units</small></div></div>;
+        return <div key={part} className="factory-resource"><span className="factory-resource-icon" style={{color:SUPPLIER_COLORS[part]}}>▣</span><div><strong>{COLLECTOR_NAMES[part]}</strong><small>{locations.length} locations · {fmt(units)} supply units · +2 / {SUPPLIER_PRODUCTION_HOURS[part]}h</small></div></div>;
        })}
-      </div><small>Supplier stock replenishes hourly in game time. Map markers appear when zoomed in.</small></>}
+      </div><small>Suppliers produce two units per cycle in game time; rarer resources take longer. Only suppliers with available stock appear on the map when zoomed in.</small></>}
      <strong>Regional warehouses</strong>
      <small>Warehouse deliveries feed the shared research inventory. Pause at depot before administrative redeployment to another warehouse.</small>
      {warehouses.map(w=><div key={w.id} style={{padding:8,border:'1px solid #8495aa55',borderRadius:8}}>

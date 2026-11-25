@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {generateSuppliers,reserveSupplier,supplierStock,type GeneratedSupplier} from './generatedSuppliers';
+import {generateSuppliers,reserveSupplier,supplierStock,supplierVisible,SUPPLIER_PRODUCTION_HOURS,type GeneratedSupplier} from './generatedSuppliers';
 import {emptyCollector,addCollector,tickCollectorFleet,collectorVehicles,collectorTripCost,collectorExpenseTotal,collectorStorageCapacity,collectorStorageUsage,openCollectorWarehouse} from './resourceCollectors';
 import type {Point,RoadGraph} from './simulation/taxi';
 const a:Point=[23.7,38],b:Point=[23.71,38],c:Point=[23.72,38];
@@ -10,6 +10,7 @@ describe('procedural supplier network',()=>{
  it('generates only discovered non-restricted locations and preserves them on reload',()=>{
   const initial=generateSuppliers({},graph,discovered,graph.nodeKeys,'company',0);
   expect(Object.values(initial).map(s=>s.node)).toEqual(['a','b']);
+  expect(Object.values(initial).every(s=>s.stock===0&&!supplierVisible(s,0))).toBe(true);
   expect(generateSuppliers(initial,graph,discovered,graph.nodeKeys,'company',999)).toBe(initial);
   expect(generateSuppliers({},graph,discovered,graph.nodeKeys,'company',0)).toEqual(initial);
   expect(generateSuppliers({},graph,new Set(),graph.nodeKeys,'company',0)).toEqual({});
@@ -19,7 +20,7 @@ describe('procedural supplier network',()=>{
   const second=reserveSupplier(first.supplier,0,12);
   expect(first.quantity).toBe(12);expect(second.quantity).toBe(3);
   expect(supplierStock(second.supplier,3599999)).toBe(0);
-  expect(supplierStock(second.supplier,3600000)).toBe(4);
+  expect(supplierStock(second.supplier,3600000)).toBe(2);
   expect(supplierStock(second.supplier,100*3600000)).toBe(50);
  });
  it('does not duplicate cargo across simultaneous departures or use infinite fallbacks',()=>{
@@ -72,5 +73,38 @@ describe('collector operating economy',()=>{
   const expanded=openCollectorWarehouse(state,'regional',{collectorRegional:1},[{id:'regional',name:'Regional',lng:a[0],lat:a[1]}]);
   expect(collectorStorageCapacity(expanded,{})).toBe(3200);
   expect(collectorStorageCapacity(expanded,{depotEfficiency:5})).toBe(4800);
+ });
+});
+
+describe('rarity-based supplier production and visibility',()=>{
+ const hour=3600000;
+ it('starts empty and produces exactly two units per complete cycle at every size',()=>{
+  for(const [part,interval] of Object.entries(SUPPLIER_PRODUCTION_HOURS)){
+   for(const capacity of [50,150,1000,3000]){
+    const s:GeneratedSupplier={...supplier,part:part as GeneratedSupplier['part'],capacity,stock:0,updatedAt:1000};
+    expect(supplierVisible(s,1000)).toBe(false);
+    expect(supplierStock(s,1000+interval*hour-1)).toBe(0);
+    expect(supplierStock(s,1000+interval*hour)).toBe(2);
+    expect(supplierVisible(s,1000+interval*hour)).toBe(true);
+    expect(supplierStock(s,1000+interval*hour*3)).toBe(6);
+    expect(supplierStock(s,1000+interval*hour*10000)).toBe(capacity);
+   }
+  }
+ });
+ it('hides a depleted supplier immediately and reappears on its next production cycle',()=>{
+  const rare:GeneratedSupplier={...supplier,part:'rare',stock:0};
+  const reserved=reserveSupplier(rare,8*hour+1000,12);
+  expect(reserved.quantity).toBe(2);
+  expect(reserved.supplier.updatedAt).toBe(8*hour);
+  expect(supplierVisible(reserved.supplier,8*hour+1000)).toBe(false);
+  expect(supplierVisible(reserved.supplier,16*hour-1)).toBe(false);
+  expect(supplierVisible(reserved.supplier,16*hour)).toBe(true);
+ });
+ it('preserves existing stock and does not bank surplus production beyond capacity',()=>{
+  const s:GeneratedSupplier={...supplier,stock:49,capacity:50};
+  const reservation=reserveSupplier(s,100*hour,50);
+  expect(reservation.quantity).toBe(50);
+  expect(supplierStock(reservation.supplier,100*hour)).toBe(0);
+  expect(supplierStock(reservation.supplier,101*hour)).toBe(2);
  });
 });
