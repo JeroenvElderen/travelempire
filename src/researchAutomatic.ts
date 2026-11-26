@@ -13,8 +13,8 @@ import {productRequirements,type ProductBag,PRODUCT_KEYS} from './researchProduc
  * their completed levels and have their next stage assessed automatically.
  */
 export const STARTER_STAGES=[
- {level:1,name:'Start Up',jobs:10,roads:50,unlocks:'Operations I'},
- {level:2,name:'Operations I',jobs:20,roads:200,unlocks:'Starter dealership: Skoda Octavia Combi and Toyota Corolla Touring Sports'},
+ {level:1,name:'Start Up',jobs:10,roads:50,unlocks:'Starter dealership: Skoda Octavia Combi and Toyota Corolla Touring Sports'},
+ {level:2,name:'Operations I',jobs:20,roads:200,unlocks:'Operations II'},
  {level:3,name:'Operations II',jobs:30,roads:500,unlocks:'Operations III'},
  {level:4,name:'Operations III',jobs:40,roads:1000,unlocks:'Operations IV'},
  {level:5,name:'Operations IV',jobs:50,roads:2000,unlocks:'Full dealership and nine research divisions'}

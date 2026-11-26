@@ -1,7 +1,7 @@
 import type {ResearchState} from './research';
 import type {VehicleModel} from './europeanVehicleCatalog';
 
-export const STARTER_DEALERSHIP_LEVEL=2;
+export const STARTER_DEALERSHIP_LEVEL=1;
 export const FULL_DEALERSHIP_LEVEL=5;
 export const STARTER_DEALERSHIP_MODELS=['Skoda Octavia Combi','Toyota Corolla Touring Sports'] as const;
 export function isStarterDealershipModel(model:Pick<VehicleModel,'brand'|'name'>):boolean{
@@ -36,7 +36,7 @@ export function lockedFeature(feature:string,companyIsNew:boolean,state:Research
  const rule=BUSINESS_UNLOCKS[feature as LockedFeature];
  if(!rule)return 'Continue research to unlock '+feature;
  if('starter' in rule)return (!companyIsNew||(state.starterLevel??0)>=rule.starter)?null:
-  rule.name+' requires Starter Level '+rule.starter+' (20 completed taxi jobs and 200 discovered roads)';
+  rule.name+' requires Starter Level '+rule.starter+' (10 completed taxi jobs and 50 discovered roads)';
  return (state.levels[rule.id]??0)>=rule.level?null:
   rule.name+' requires '+rule.id+' Level '+rule.level;
 }
@@ -47,7 +47,7 @@ export function vehicleResearchLock(state:{levels:Partial<Record<string,number>>
  // includes engine/transmission. Match both, not the price or chosen trim.
  const starterModel=STARTER_DEALERSHIP_MODELS.find(name=>offer.id?.startsWith(name.replace(' ','-')+'-')&&
   (offer.model===name||offer.model?.startsWith(name+' ')));
- if(companyIsNew&&level<STARTER_DEALERSHIP_LEVEL)return 'Complete Starter Level 2 to unlock the vehicle dealership.';
+ if(companyIsNew&&level<STARTER_DEALERSHIP_LEVEL)return 'Complete Starter Level 1 to unlock the vehicle dealership.';
  if(companyIsNew&&level<FULL_DEALERSHIP_LEVEL&&!starterModel)return 'This vehicle requires Starter Level 5 (full dealership).';
  if((offer.className==='Premium'||offer.className==='XL')&&(state.levels.premium??0)<1)return 'Premium and XL vehicles require Premium Passenger Service Level 1';
  // The Corolla is a starter hybrid by design; do not relock it at level 5.
