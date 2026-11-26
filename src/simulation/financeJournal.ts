@@ -13,6 +13,7 @@ export const FINANCE_CATEGORY_LABELS:Record<string,string>={
  'property.rental':'Property income',
  'hotel.rooms':'Hotel accommodation & services',
  'hotel.operations':'Hotel operating costs',
+ 'collector.operations':'Resource collection operating costs',
  'construction.crew':'Construction crew wages',
  'construction.supplies':'Construction materials & deliveries',
  'hotel.staff':'Hotel staffing',
@@ -65,4 +66,53 @@ export function detailedFinanceBreakdown(
   label:FINANCE_CATEGORY_LABELS['legacy.'+side],value:missing,
  });
  return rows.filter(row=>row.value>.005).sort((a,b)=>b.value-a.value);
+}
+
+
+/** All date ranges refer to the simulation's existing UTC day keys. */
+export function financePeriodRows(history:readonly FinancePeriod[],gameNow:number,days:number):FinancePeriod[]{
+ const end=new Date(gameNow).toISOString().slice(0,10);
+ const start=new Date(gameNow-(Math.max(1,Math.floor(days))-1)*86400000).toISOString().slice(0,10);
+ return history.filter(row=>row.day>=start&&row.day<=end).sort((a,b)=>a.day.localeCompare(b.day));
+}
+export type DivisionFinanceRow={division:string;revenue:number;expenses:number;profit:number;margin:number|null};
+const DIVISION_LABELS:Record<string,string>={
+ taxi:'Taxis & road fleet',ferry:'Ferries',property:'Property & parking',hotel:'Hotels',
+ construction:'Construction',collector:'Resource logistics',exploration:'Exploration',
+ depot:'Depot facilities',company:'Company overhead',finance:'Financing',vehicle:'Vehicle leases',
+ legacy:'Unclassified / legacy',
+};
+export function divisionFinanceReport(journal:FinanceJournal|undefined,history:readonly FinancePeriod[]):DivisionFinanceRow[]{
+ const totals=new Map<string,{revenue:number;expenses:number}>();
+ const days=new Map<string,FinancePeriod>();
+ for(const row of history){
+  const previous=days.get(row.day);
+  days.set(row.day,{day:row.day,revenue:(previous?.revenue??0)+finitePositive(row.revenue),expenses:(previous?.expenses??0)+finitePositive(row.expenses),trips:0});
+ }
+ for(const row of days.values()){
+  const at=Date.parse(row.day+'T00:00:00Z');
+  if(!Number.isFinite(at))continue;
+  for(const side of ['income','expense'] as const){
+   for(const entry of detailedFinanceBreakdown(journal,[row],at,side)){
+    const prefix=entry.category.split('.')[0];
+    const division=DIVISION_LABELS[prefix]??'Other recorded activity';
+    const sum=totals.get(division)??{revenue:0,expenses:0};
+    if(side==='income')sum.revenue+=entry.value;else sum.expenses+=entry.value;
+    totals.set(division,sum);
+   }
+  }
+ }
+ return [...totals].map(([division,v])=>({...v,division,profit:v.revenue-v.expenses,margin:v.revenue>0?(v.revenue-v.expenses)/v.revenue*100:null}))
+  .sort((a,b)=>b.revenue-a.revenue||b.expenses-a.expenses||a.division.localeCompare(b.division));
+}
+
+/** Add a posted operating expense to the daily history without disturbing
+ * other divisions' totals, including a delayed posting to an older day. */
+export function recordDailyOperatingExpense(history:readonly FinancePeriod[]|undefined,day:string,amount:number):FinancePeriod[]{
+ const rows=[...(history??[])];
+ if(!Number.isFinite(amount)||amount<=0)return rows;
+ const i=rows.findIndex(row=>row.day===day);
+ if(i>=0)rows[i]={...rows[i],expenses:rows[i].expenses+amount};
+ else rows.push({day,revenue:0,expenses:amount,trips:0});
+ return rows.sort((a,b)=>a.day.localeCompare(b.day)).slice(-365);
 }

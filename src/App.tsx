@@ -79,7 +79,7 @@ import "./taxi.css";
 import {deliveryRoute, type VehicleOffer} from "./dealership";
 import ResearchPanel from "./components/ResearchPanel";
 import LiveFinanceTicker from "./components/LiveFinanceTicker";
-import {postFinance,type FinancePosting} from "./simulation/financeJournal";
+import {postFinance,recordDailyOperatingExpense,type FinancePosting} from "./simulation/financeJournal";
 import DailySummaryModal from './components/DailySummaryModal';
 import {buildDailySummary,dayBaseline,gameDay,readSummaryBaseline,saveSummaryBaseline,type DailySummary} from './simulation/dailySummary';
 import * as Research from "./research";
@@ -750,7 +750,8 @@ export default function App(){
   setFleet(old=>{
    const id='collector-operating-'+total;
    if(old.transactions?.some(t=>t.id===id))return old;
-   return {...old,transactions:[{id,time:at,description:'Collector operating expenses · fuel / maintenance / service',amount:-charge},...(old.transactions??[])].slice(0,100),accounting:bookAccounting(old.accounting,periodMonth(at),0,charge,charge,0)};
+   const day=new Date(at).toISOString().slice(0,10);
+   return {...old,financeHistory:recordDailyOperatingExpense(old.financeHistory,day,charge),financeJournal:postFinance(old.financeJournal,[{day,side:'expense',category:'collector.operations',amount:charge}]),transactions:[{id,time:at,description:'Collector operating expenses · fuel / maintenance / service',amount:-charge},...(old.transactions??[])].slice(0,100),accounting:bookAccounting(old.accounting,periodMonth(at),0,charge,charge,0)};
   });
  },[company?.id,research.collector?.expenses,researchLoadedFor,fleetLoadedFor]);
  const purchaseCollector=(model:CollectorModel):string|null=>{

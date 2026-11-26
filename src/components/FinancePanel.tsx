@@ -1,4 +1,5 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,useMemo} from 'react';
+import {financePeriodRows,divisionFinanceReport} from '../simulation/financeJournal';
 import {BarChart3,Receipt,Wallet,CreditCard,ChevronDown} from 'lucide-react';
 import type {Company} from '../company';
 import type {FleetState,EconomyUpgrade} from '../simulation/taxi';
@@ -72,15 +73,17 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  const bankCollectionsToday=fleet.bankPartnershipPaidByDay?.[gameToday]??0;
  const todaysOperatingNet=(fleet.financeHistory??[]).filter(row=>row.day===gameToday).reduce((sum,row)=>sum+row.revenue-row.expenses,0);
  const vehicleValue=(t:FleetState['taxis'][number])=>{
-  const age=Math.max(0,new Date().getFullYear()-(t.vehicleYear??new Date().getFullYear()));
+  const year=new Date(gameEpochMs).getUTCFullYear();
+  const age=Math.max(0,year-(t.vehicleYear??year));
   const km=(t.vehicleMileage??0);
   return Math.max(1000,15000*Math.pow(0.88,age)*Math.pow(0.92,km/30000)*(t.vehicleCondition??100)/100);
  };
  const value=fleet.taxis.reduce((sum,t)=>sum+vehicleValue(t),0);
  const history=fleet.financeHistory??[];
- const periods=[{label:'Last 7 days',days:7},{label:'Last 30 days',days:30},{label:'Last 90 days',days:90}].map(p=>{const cutoff=new Date(Date.now()-(p.days-1)*86400000).toISOString().slice(0,10);const rows=history.filter(h=>h.day>=cutoff);return {...p,revenue:rows.reduce((a,h)=>a+h.revenue,0),expenses:rows.reduce((a,h)=>a+h.expenses,0),trips:rows.reduce((a,h)=>a+h.trips,0)};});
+ const periods=[{label:'Last 7 days',days:7},{label:'Last 30 days',days:30},{label:'Last 90 days',days:90}].map(p=>{const rows=financePeriodRows(history,gameEpochMs,p.days);return {...p,revenue:rows.reduce((a,h)=>a+h.revenue,0),expenses:rows.reduce((a,h)=>a+h.expenses,0),trips:rows.reduce((a,h)=>a+h.trips,0)};});
  const daily=history.slice().sort((a,b)=>a.day.localeCompare(b.day));
- const dailyRecent=daily.filter(h=>h.day>=new Date(Date.now()-(periodDays-1)*86400000).toISOString().slice(0,10));
+ const dailyRecent=financePeriodRows(history,gameEpochMs,periodDays);
+ const divisions=useMemo(()=>divisionFinanceReport(fleet.financeJournal,dailyRecent),[fleet.financeJournal,dailyRecent]);
  const monthly=Array.from(daily.reduce((map,h)=>{
   const key=h.day.slice(0,7),old=map.get(key)??{day:key,revenue:0,expenses:0,trips:0};
   map.set(key,{day:key,revenue:old.revenue+h.revenue,expenses:old.expenses+h.expenses,trips:old.trips+h.trips});
@@ -99,7 +102,7 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  const budgetActual:Budgets={fuel:fleet.fuelExpense??0,maintenance:(fleet.maintenanceExpense??0)+(fleet.serviceExpense??0),
   exploration:fleet.explorationExpense??0,payroll:fleet.driverWages??0,insurance:fleet.insuranceExpense??0,overhead:fleet.overheadExpense??0};
  const historicalExpenses=history.reduce((sum,h)=>sum+h.expenses,0);
- const currentMonth=new Date().toISOString().slice(0,7);
+ const currentMonth=gameToday.slice(0,7);
  const currentMonthHistory=history.filter(h=>h.day.startsWith(currentMonth));
  const monthRecordedExpenses=currentMonthHistory.reduce((sum,h)=>sum+h.expenses,0);
  const monthRecordedRevenue=currentMonthHistory.reduce((sum,h)=>sum+h.revenue,0);
@@ -124,7 +127,7 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  const recordedVehicleHistory=(fleet.vehicleFinanceHistory??[]).filter(v=>vehiclePeriod==='all'||v.day.startsWith(vehiclePeriod));
  const vehicleTotals=new Map<string,{revenue:number;expenses:number;km:number;trips:number}>();
  for(const v of recordedVehicleHistory){const old=vehicleTotals.get(v.taxiId)??{revenue:0,expenses:0,km:0,trips:0};vehicleTotals.set(v.taxiId,{revenue:old.revenue+v.revenue,expenses:old.expenses+v.expenses,km:old.km+v.km,trips:old.trips+v.trips});}
- const forecastDays=history.slice(-30);
+ const forecastDays=financePeriodRows(history,gameEpochMs,30).filter(h=>h.day<gameToday);
  const dailyAverage=forecastDays.length?forecastDays.reduce((sum,h)=>sum+h.revenue-h.expenses,0)/forecastDays.length:0;
 
  return <section className="company-dashboard finance-page finance-v214 finance-v3">
@@ -137,7 +140,7 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  </nav>
  {tab==='overview'&&<div className="finance-mini-summary" aria-label="Finance overview">
   <span><small>Cash</small><strong>{money(cashAvailable)}</strong></span>
-  <span><small>Lifetime profit</small><strong>{money(profit)}</strong></span>
+  <span><small>Legacy fleet contribution</small><strong>{money(profit)}</strong></span>
   <span><small>Debt</small><strong>{money(debt)}</strong></span>
  </div>}
 
@@ -149,13 +152,13 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  </div>
  {cashAvailable<bank.minimumOperatingCash&&<div className="finance-v3-alert" role="alert"><span>Low operating cash</span><strong>{money(cashAvailable)} / {money(bank.minimumOperatingCash)} minimum</strong></div>}
  {(fleet.loans??[]).some(l=>l.remainingDays<=3)&&<div className="finance-v3-alert" role="alert"><span>Loan repayment approaching</span><strong>Due within 3 game days</strong></div>}
- {dailyAverage<0&&<div className="finance-v3-alert" role="alert"><span>Negative recorded cash flow</span><strong>{money(dailyAverage)} / day</strong></div>}
+ {dailyAverage<0&&<div className="finance-v3-alert" role="alert"><span>Negative recorded operating profit</span><strong>{money(dailyAverage)} / day</strong></div>}
  {tab==='overview'&&<details className="finance-detail-section finance-summary-details">
   <summary>All financial metrics <ChevronDown size={15}/></summary>
   <div className="finance-overview-kpis"><div className="company-metrics">
    <article><small>Available cash</small><strong>{money(cashAvailable)}</strong></article>
-   <article><small>Passenger revenue</small><strong>{money(fleet.revenue)}</strong></article>
-   <article><small>Operating profit before financing</small><strong>{money(profit)}</strong></article>
+   <article><small>Legacy fleet revenue total</small><strong>{money(fleet.revenue)}</strong></article>
+   <article><small>Legacy fleet contribution (partial)</small><strong>{money(profit)}</strong></article>
    <article><small>Bank revenue financing paid</small><strong>{money(bankCollections)}</strong></article>
    <article><small>Today's net after bank shares*</small><strong>{money(todaysOperatingNet-bankCollectionsToday)}</strong></article>
    <article><small>Outstanding debt</small><strong>{money(debt)}</strong></article>
@@ -166,20 +169,21 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  <details className="finance-detail-section"><summary>Operating efficiency <ChevronDown size={15}/></summary><div className="finance-detail-body"><div className="finance-section-heading"><h2>Operating analytics</h2><span>Lifetime business efficiency</span></div><p>Lifetime performance from saved simulation totals. Rates include exploration kilometres and exclude vehicle purchases; values are not daily forecasts.</p><div className="company-metrics"><article><small>REVENUE / KM</small><strong>{money(fleet.distanceKm&&fleet.distanceKm>0?fleet.revenue/fleet.distanceKm:0)}</strong></article><article><small>OPERATING PROFIT / KM</small><strong>{money(fleet.distanceKm&&fleet.distanceKm>0?profit/fleet.distanceKm:0)}</strong></article><article><small>REVENUE / COMPLETED TRIP</small><strong>{money(fleet.completed>0?fleet.revenue/fleet.completed:0)}</strong></article><article><small>FLEET DISTANCE</small><strong>{(fleet.distanceKm??0).toFixed(1)} km</strong></article><article><small>ACTIVE VEHICLES</small><strong>{fleet.taxis.filter(t=>t.status!=='IDLE'&&!t.deliveryUntil).length} / {fleet.taxis.length}</strong></article><article><small>EXPLORATION COST</small><strong>{money(fleet.explorationExpense??0)}</strong></article></div>
  </div></details>  <details className="finance-detail-section"><summary>Recorded cash flow <ChevronDown size={15}/></summary><div className="finance-detail-body"><div className="finance-section-heading"><h2>Cash flow overview</h2><span>Based on recorded daily activity</span></div>
  {chart(daily.slice(-14),'Daily revenue and expenses · last 14 recorded days')}
- <div className="company-metrics"><article><small>RECORDED REVENUE</small><strong>{money(history.reduce((a,h)=>a+h.revenue,0))}</strong></article><article><small>RECORDED EXPENSES</small><strong>{money(historicalExpenses)}</strong></article><article><small>RECORDED OPERATING CASH FLOW</small><strong>{money(history.reduce((a,h)=>a+h.revenue-h.expenses,0))}</strong></article></div>
+ <div className="company-metrics"><article><small>RECORDED REVENUE</small><strong>{money(history.reduce((a,h)=>a+h.revenue,0))}</strong></article><article><small>RECORDED EXPENSES</small><strong>{money(historicalExpenses)}</strong></article><article><small>RECORDED OPERATING PROFIT</small><strong>{money(history.reduce((a,h)=>a+h.revenue-h.expenses,0))}</strong></article></div>
  </div></details>
  <details className="finance-detail-section"><summary>Calculation notes <ChevronDown size={15}/></summary>
   <div className="finance-detail-body"><p>Today's operating net excludes purchases, loan principal, shareholder payments and transfers. Operating profit includes accrued maintenance reserves; servicing is recorded separately. Asset values are gameplay estimates.</p></div>
  </details>
- </div>}{tab==='performance'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Operating statement</h2><span>Revenue less recurring expenses</span></div><div className="finance-rows">{([['Passenger fares',fleet.revenue],['Petrol',-(fleet.fuelExpense??0)],['Maintenance reserve',-(fleet.maintenanceExpense??0)],['Explorer travel (€0.50/km)',-(fleet.explorationExpense??0)],['Driver wages + employer costs',-(fleet.driverWages??0)],['Commercial insurance',-(fleet.insuranceExpense??0)],['Office and depot overhead',-(fleet.overheadExpense??0)],['Vehicle servicing',-(fleet.serviceExpense??0)],['Loan interest',-(fleet.loanInterestExpense??0)],['Operating profit',profit],['Bank revenue financing repaid (cash flow only)',-bankCollections],['Loan principal repaid (cash flow only)',-(fleet.loanPrincipalPaid??0)]] as [string,number][]).map(([label,amount])=><div key={label}><span>{label}</span><strong>{money(amount)}</strong></div>)}</div>
+ </div>}{tab==='performance'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Operating statement</h2><span>Legacy lifetime counters · may omit divisions</span></div><div className="finance-rows">{([['Legacy fleet revenue total',fleet.revenue],['Petrol',-(fleet.fuelExpense??0)],['Maintenance reserve',-(fleet.maintenanceExpense??0)],['Explorer travel (€0.50/km)',-(fleet.explorationExpense??0)],['Driver wages + employer costs',-(fleet.driverWages??0)],['Commercial insurance',-(fleet.insuranceExpense??0)],['Office and depot overhead',-(fleet.overheadExpense??0)],['Vehicle servicing',-(fleet.serviceExpense??0)],['Loan interest',-(fleet.loanInterestExpense??0)],['Legacy fleet contribution (partial)',profit],['Bank revenue financing repaid (cash flow only)',-bankCollections],['Loan principal repaid (cash flow only)',-(fleet.loanPrincipalPaid??0)]] as [string,number][]).map(([label,amount])=><div key={label}><span>{label}</span><strong>{money(amount)}</strong></div>)}</div>
  <div className="finance-section-heading"><h2>Financial performance</h2><select aria-label="Performance period" value={periodDays} onChange={e=>setPeriodDays(Number(e.target.value) as 7|30|90)}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></div><p>Daily snapshots are recorded from this version onward. Older transactions are not reconstructed into historical periods.</p><div className="company-metrics">{periods.filter(p=>p.days===periodDays).map(p=><article key={p.days}><small>{p.label.toUpperCase()}</small><strong>{money(p.revenue-p.expenses)} profit</strong><span>Revenue {money(p.revenue)} · Expenses {money(p.expenses)} · {p.trips} trips</span></article>)}</div>
+ <div className="finance-section-heading"><h2>Division profitability</h2><span>Last {periodDays} game days</span></div><p>Recorded revenue and attributed expenses only. Shared fleet costs and unclassified history are shown separately, not allocated by guesswork. Excludes capital purchases and bank principal.</p><div className="finance-rows">{divisions.map(row=><div key={row.division}><span>{row.division}<small style={{display:'block'}}>Revenue {money(row.revenue)} · Expenses {money(row.expenses)} · Margin {row.margin===null?'—':row.margin.toFixed(1)+'%'}</small></span><strong>{money(row.profit)}</strong></div>)}{!divisions.length&&<p>No recorded division activity in this period.</p>}</div>
  <label>Chart grouping <select value={chartGrouping} onChange={e=>setChartGrouping(e.target.value as typeof chartGrouping)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
  {chart(groupedChart,chartGrouping+' revenue and expenses')}
  {chart(monthly,'Monthly revenue and expenses · last 12 recorded months')}
- <div className="finance-section-heading"><h2>Cash-flow forecast</h2><span>Based on last 30 recorded days</span></div>
+ <div className="finance-section-heading"><h2>Cash-flow forecast</h2><span>Based on completed recorded game days in the last 30 days</span></div>
  <p>Simple historical average, not guaranteed income. Excludes planned vehicle purchases, future loan principal and unexpected costs.</p>
  <div className="company-metrics"><article><small>EST. CASH IN 7 DAYS</small><strong>{money((company?.cash??0)+dailyAverage*7)}</strong></article><article><small>EST. CASH IN 30 DAYS</small><strong>{money((company?.cash??0)+dailyAverage*30)}</strong></article><article><small>AVERAGE DAILY OPERATING FLOW</small><strong>{money(dailyAverage)}</strong></article></div>
- <h3>Daily profit trend · last {periodDays} days</h3><div style={{display:'flex',alignItems:'end',gap:3,height:100,overflowX:'auto',padding:'10px 0'}} aria-label="Daily profit bar chart">{history.slice(-periodDays).map(h=>{const net=h.revenue-h.expenses;const max=Math.max(1,...history.slice(-periodDays).map(x=>Math.abs(x.revenue-x.expenses)));return <div key={h.day} title={`${h.day}: ${money(net)}`} style={{height:`${Math.max(3,Math.abs(net)/max*90)}%`,background:net>=0?'#30b98b':'#df6d69',minWidth:9,borderRadius:2}}/>;})}{!history.length&&<span>No daily history recorded yet.</span>}</div>
+ <h3>Daily profit trend · last {periodDays} days</h3><div style={{display:'flex',alignItems:'end',gap:3,height:100,overflowX:'auto',padding:'10px 0'}} aria-label="Daily profit bar chart">{dailyRecent.map(h=>{const net=h.revenue-h.expenses;const max=Math.max(1,...dailyRecent.map(x=>Math.abs(x.revenue-x.expenses)));return <div key={h.day} title={`${h.day}: ${money(net)}`} style={{height:`${Math.max(3,Math.abs(net)/max*90)}%`,background:net>=0?'#30b98b':'#df6d69',minWidth:9,borderRadius:2}}/>;})}{!dailyRecent.length&&<span>No daily history recorded for this period.</span>}</div>
  </div>}{tab==='costs'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Driver salary policy</h2><span>Applies to future wage accrual</span></div><p>Wage multiplier affects future wage accrual only; previously paid wages are unchanged. 100% is the existing baseline.</p><label>Wage level <select value={fleet.wageMultiplier??1} onChange={e=>onWageChange(Number(e.target.value))}>{[0.75,1,1.25,1.5,2].map(v=><option key={v} value={v}>{Math.round(v*100)}% of baseline</option>)}</select></label>
  <h2>Vehicle profitability & depreciation</h2><label>Historical vehicle period <select value={vehiclePeriod} onChange={e=>setVehiclePeriod(e.target.value)}><option value="all">All recorded periods</option>{[...new Set((fleet.vehicleFinanceHistory??[]).map(v=>v.day.slice(0,7)))].sort().reverse().map(m=><option key={m} value={m}>{m}</option>)}</select></label><p>Per-vehicle lifetime operating contribution excludes unallocated depot overhead, loan interest and purchase costs. Estimated resale value uses age, mileage and condition.</p><div className="finance-rows">{fleet.taxis.map(t=>{const cost=(t.fuelExpense??0)+(t.maintenanceExpense??0)+(t.explorationExpense??0)+(t.driverWages??0)+(t.insuranceExpense??0);return <div key={t.id}><span>{t.name} · {t.driver} · {Math.round(t.operatingKm??0)} km<br/>Revenue {money(t.tripRevenue??0)} · Costs {money(cost)} · Est. value {money(vehicleValue(t))} · Cost/km {money((t.operatingKm??0)>0?cost/(t.operatingKm??1):0)} · Revenue/km {money((t.operatingKm??0)>0?(t.tripRevenue??0)/(t.operatingKm??1):0)}{vehicleTotals.has(t.id)&&<> · Selected period: {money(vehicleTotals.get(t.id)!.revenue)} revenue / {money(vehicleTotals.get(t.id)!.expenses)} costs / {vehicleTotals.get(t.id)!.km.toFixed(1)} km</>}</span><strong>{money((t.tripRevenue??0)-cost)}</strong></div>;})}{!fleet.taxis.length&&<p>No vehicles purchased yet.</p>}</div>
  </div>}{tab==='capital'&&<div className="finance-tab-content"><div className="finance-section-heading"><h2>Secured business loans</h2><span>Custom lending based on company value and credit</span></div>
@@ -262,8 +266,8 @@ export default function FinancePanel({company,fleet,gameEpochMs,onAcquire,onFoun
  </div>}{tab==='corporate'&&<CorporatePanel company={company} fleet={fleet} gameEpochMs={gameEpochMs} onAcquire={onAcquire} onFound={onFoundSubsidiary} onTransfer={onCorporateTransfer} onMerge={onCorporateMerge} onRestructure={onCorporateRestructure} onAssetTransfer={onCorporateAssetTransfer} onFoundForeign={onFoundForeign} onAcquireForeign={onAcquireForeign} onTransferForeign={onTransferForeign} error={error}/>}{tab==='equity'&&<EquityPanel company={company} fleet={fleet} gameEpochMs={gameEpochMs} onInvest={onInvest} onIssue={onIssueShares} onDividend={onDividend} onBuyback={onBuyback} error={error}/>}{tab==='forecast'&&<ForecastingPanel company={company} fleet={fleet} gameEpochMs={gameEpochMs}/>}{tab==='accounting'&&<AccountingPanel company={company} fleet={fleet} onSettings={onAccountingSettings}/>}{tab==='depots'&&<DepotFinancePanel company={company} fleet={fleet} onUpgrade={onDepotUpgrade}/>}{tab==='reports'&&<div className="finance-tab-content">
  <div className="finance-section-heading"><h2>Financial reports</h2><span>Saved activity only</span></div>
  <label>Reporting period <select value={reportRange} onChange={e=>setReportRange(Number(e.target.value) as 7|30|90)}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></label>
- {(()=>{const cutoff=new Date(Date.now()-(reportRange-1)*86400000).toISOString().slice(0,10);
- const records=history.filter(h=>h.day>=cutoff);const income=records.reduce((a,h)=>a+h.revenue,0);const spent=records.reduce((a,h)=>a+h.expenses,0);
+ {(()=>{
+ const records=financePeriodRows(history,gameEpochMs,reportRange);const income=records.reduce((a,h)=>a+h.revenue,0);const spent=records.reduce((a,h)=>a+h.expenses,0);
  const cashflow=income-spent;const filename='travelempire-finance-'+reportRange+'d.csv';
  const csv=['Date,Revenue,Expenses,Profit,Trips',...records.map(h=>[h.day,h.revenue.toFixed(2),h.expenses.toFixed(2),(h.revenue-h.expenses).toFixed(2),h.trips].join(','))].join('\n');
  return <><div className="company-metrics"><article><small>REVENUE</small><strong>{money(income)}</strong></article><article><small>EXPENSES</small><strong>{money(spent)}</strong></article><article><small>OPERATING PROFIT</small><strong>{money(cashflow)}</strong></article><article><small>COMPLETED TRIPS</small><strong>{records.reduce((a,h)=>a+h.trips,0)}</strong></article></div>
