@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {diffVisibleRoads,withRoadFeatureId,type RoadFeature} from './purpleRoadDiff';
+import {diffVisibleRoads,withRoadFeatureId,intersectRoadIds,addedRoadIds,type RoadFeature} from './purpleRoadDiff';
 
 const road=(id:string,a:[number,number]=[23,38],b:[number,number]=[23.01,38],
  tunnel=false):RoadFeature=>withRoadFeatureId({
@@ -47,5 +47,21 @@ describe('incremental MapLibre discovered-road data',()=>{
   expect(()=>withRoadFeatureId({
    type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[1,1],[2,2]]}
   })).toThrow(/road ID/);
+ });
+});
+
+
+describe('viewport-only discovery reconciliation',()=>{
+ it('intersects a small viewport with a large discovery set without visiting the full set',()=>{
+  const known=new Set(Array.from({length:10000},(_,i)=>'road-'+i));
+  const visible=new Set(['road-1','road-9999','unknown']);
+  expect([...intersectRoadIds(visible,known)]).toEqual(['road-1','road-9999']);
+  expect([...intersectRoadIds(known,visible)]).toEqual(['road-1','road-9999']);
+ });
+ it('detects discoveries added while a viewport scan was in progress',()=>{
+  const scanned=new Set(['a','b','c']),previous=new Set(['a']),latest=new Set(['a','b','remote']);
+  expect([...addedRoadIds(previous,latest)]).toEqual(['b','remote']);
+  expect([...intersectRoadIds(scanned,latest)]).toEqual(['a','b']);
+  expect([...intersectRoadIds(scanned,new Set(['c']))]).toEqual(['c']);
  });
 });

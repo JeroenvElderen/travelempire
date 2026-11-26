@@ -38,3 +38,18 @@ function sameRoadFeature(a:RoadFeature,b:RoadFeature):boolean{
  return ap?.tunnel===bp?.tunnel&&ap?.bridge===bp?.bridge&&
   ap?.layer===bp?.layer&&ap?.level===bp?.level;
 }
+
+
+/** Stream only the smaller side of a set intersection. In a small viewport
+ * this avoids scanning every discovered road in the country. */
+export function* intersectRoadIds(a:ReadonlySet<string>,b:ReadonlySet<string>):Generator<string>{
+ const [small,large]=a.size<=b.size?[a,b]:[b,a];
+ for(const id of small)if(large.has(id))yield id;
+}
+
+/** Only newly discovered roads need a geometry lookup on a discovery tick.
+ * Removals need only inspect currently displayed IDs. A graph/viewport
+ * change is independently reconciled by the viewport scanner. */
+export function* addedRoadIds(previous:ReadonlySet<string>,next:ReadonlySet<string>):Generator<string>{
+ for(const id of next)if(!previous.has(id))yield id;
+}

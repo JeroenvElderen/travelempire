@@ -13,7 +13,7 @@ import {startAutomaticFerryMarkers} from '../maritime/automaticFerryMarkers';
 import {PUBLIC_PASSENGER_FERRY_EPOCH_MS} from '../maritime/ferryService';
 import type {FerryConnectionResult} from '../maritime/roadConnections';
 import maplibregl from 'maplibre-gl';
-import {diffVisibleRoads,withRoadFeatureId,type RoadFeature} from './purpleRoadDiff';
+import {diffVisibleRoads,withRoadFeatureId,intersectRoadIds,addedRoadIds,type RoadFeature} from './purpleRoadDiff';
 import {buildParkedCars,parkedCarSprites,type ParkingRoad} from './parkedCars';
 import {syncRoadLevelsDebug,removeRoadLevelsDebug,ROAD_LEVEL_DEBUG_LAYER_IDS,type DebugRoad} from './roadLevelsDebug';
 import MobilityMapLayer from './MobilityMapLayer';
@@ -132,12 +132,12 @@ function positionOnTravelledRoute(from:Taxi,to:Taxi,fraction:number):[number,num
 // Spatial grid for map rendering only. Routing continues to use the complete graph.
 const ROAD_GRID_DEGREES=0.05;
 type IndexedRoad=DebugRoad&{highway?:string};
-type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;edgeCounts:Map<string,number>};
+type RoadSpatialIndex={graph:RoadGraph;cursor:number;revision:number;cells:Map<string,IndexedRoad[]>;ids:Set<string>;byId:Map<string,IndexedRoad>;oversized:IndexedRoad[];edgeCounts:Map<string,number>};
 const roadSpatialIndexes=new WeakMap<RoadGraph,RoadSpatialIndex>();
 function roadCellKey(x:number,y:number){return x+':'+y;}
 function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
  let index=roadSpatialIndexes.get(graph);
- if(!index){index={graph,cursor:0,revision:-1,cells:new Map(),ids:new Set(),byId:new Map(),edgeCounts:new Map()};roadSpatialIndexes.set(graph,index);}
+ if(!index){index={graph,cursor:0,revision:-1,cells:new Map(),ids:new Set(),byId:new Map(),oversized:[],edgeCounts:new Map()};roadSpatialIndexes.set(graph,index);}
  // Graph updates can append edges to nodes indexed in earlier tiles.
  // Rescan existing groups only on graph revision; viewport moves stay indexed.
  const rescan=index.revision!==revision;
@@ -164,7 +164,7 @@ function indexRoadGraph(graph:RoadGraph,revision:number):RoadSpatialIndex{
    const minY=Math.floor(Math.min(a[1],b[1])/ROAD_GRID_DEGREES);
    const maxY=Math.floor(Math.max(a[1],b[1])/ROAD_GRID_DEGREES);
    // Avoid unbounded indexing for malformed or exceptionally long segments.
-   if((maxX-minX+1)*(maxY-minY+1)>128)continue;
+   if((maxX-minX+1)*(maxY-minY+1)>128){index.oversized.push(road);continue;}
    for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
     const key=roadCellKey(x,y),cell=index.cells.get(key);
     if(cell)cell.push(road);else index.cells.set(key,[road]);
@@ -189,6 +189,9 @@ function* viewportRoadCandidates(index:RoadSpatialIndex,west:number,east:number,
    yield road;
   }
  }
+ // Exceptional long segments were deliberately not inserted into every grid
+ // cell; keep them eligible for the same viewport intersection check.
+ for(const road of index.oversized)if(!seen.has(road.id))yield road;
 }
 
 type Basemap='standard'|'satellite';
@@ -577,6 +580,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   // Preserve the animation clock and forecast in that case.
   const sameMotion=!!previous&&previous.to.position[0]===renderTaxi.position[0]&&previous.to.position[1]===renderTaxi.position[1]&&previous.to.status===taxi.status&&previous.to.path===renderTaxi.path&&previous.to.edgeIds===taxi.edgeIds&&previous.to.leg===taxi.leg&&previous.to.distanceIntoLeg===taxi.distanceIntoLeg&&previous.to.speedKph===taxi.speedKph;
   if(sameMotion){unchanged++;}else{changed++;}
+  const existingElement=taxiMarkers.current.get(taxi.id)?.getElement();
+  const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
+  if(existingElement&&existingElement.title!==title)existingElement.title=title;
   const activity=vehicleActivity(taxi);
   const activityElement=activityMarkers.current.get(taxi.id)?.getElement();
   if(activityElement&&activityElement.dataset.activity!==activity.label){
@@ -829,7 +835,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     el.addEventListener('click',openControls);
     el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openControls(event);}});
    }
-   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);
+   const m=new maplibregl.Marker({element:el,anchor:'center',rotationAlignment:'map',pitchAlignment:'map'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);m.getElement().style.zIndex='3';taxiMarkers.current.set(taxi.id,m);m.getElement().title=title;
    const badge=document.createElement('span');badge.className='te-vehicle-status-marker';badge.textContent=activity.icon;badge.dataset.activity=activity.label;badge.title=activity.label;badge.setAttribute('aria-hidden','true');
    const activityMarker=new maplibregl.Marker({element:badge,anchor:'center',offset:[0,-27],rotationAlignment:'viewport',pitchAlignment:'viewport'}).setLngLat(roadAlignedPosition(taxi)).addTo(map.current);
    activityMarker.getElement().style.zIndex='4';activityMarkers.current.set(taxi.id,activityMarker);created++;}}
@@ -848,7 +854,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   let lastMobileMarkerFrame=0;
   const animate=()=>{
    const frameNow=performance.now();
-   if(mobileMarkerFrameMs&&frameNow-lastMobileMarkerFrame<mobileMarkerFrameMs){
+   if(document.hidden||mobileMarkerFrameMs&&frameNow-lastMobileMarkerFrame<mobileMarkerFrameMs){
+    if(document.hidden)lastFrameAt=0;
     frame=requestAnimationFrame(animate);
     return;
    }
@@ -883,9 +890,12 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     const tunnelLeg=taxi.edgeIds[Math.max(0,Math.min(taxi.leg,taxi.edgeIds.length-1))];
     // A road-level tunnel obscures the vehicle visually; simulation continues.
     const underground=!!tunnelLeg&&visibleTunnelIds.current.has(tunnelLeg);
-    marker.getElement().style.opacity=underground?(showUndergroundVehiclesRef.current?'0.4':'0'):'1';
+    const opacity=underground?(showUndergroundVehiclesRef.current?'0.4':'0'):'1';
+    const element=marker.getElement();
+    if(element.style.opacity!==opacity)element.style.opacity=opacity;
     const activity=activityMarkers.current.get(id);
-    if(activity)activity.getElement().style.opacity=underground?(showUndergroundVehiclesRef.current?'0.4':'0'):'1';
+    const activityElement=activity?.getElement();
+    if(activityElement&&activityElement.style.opacity!==opacity)activityElement.style.opacity=opacity;
     if(snapshot.from.position[0]===snapshot.to.position[0]&&snapshot.from.position[1]===snapshot.to.position[1]&&snapshot.to.position[0]===snapshot.forecast.position[0]&&snapshot.to.position[1]===snapshot.forecast.position[1]&&renderedPosition.current.has(id))continue;
     const elapsed=Math.max(0,(now-snapshot.at)/1000);
     // Continue a short distance along the actual road after a late simulation tick.
@@ -896,7 +906,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
     const lastRendered=renderedPosition.current.get(id);
     if(!lastRendered||Math.abs(lastRendered[0]-position[0])+Math.abs(lastRendered[1]-position[1])>1e-9){
      marker.setLngLat(position);
-     activityMarkers.current.get(id)?.setLngLat(position);
+     activity?.setLngLat(position);
      renderedPosition.current.set(id,position);
     }
     // Derive heading from the interpolated *displayed* motion, not the next
@@ -932,9 +942,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
      marker.setRotation(initial);
       
     }
-    // Avoid mutating DOM attributes on every animation frame.
-    const title=`${taxi.name} · ${taxi.status} · ${Math.round(taxi.speedKph??0)} km/h`;
-    if(marker.getElement().title!==title)marker.getElement().title=title;
+
    }
    frame=requestAnimationFrame(animate);
   };
@@ -1056,13 +1064,16 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const previous=currentExploredRoads.current;
   const next=new Set(exploredEdgeIds);
   currentExploredRoads.current=next;
-  if(performanceMonitorEnabled()){let additions=0;for(const id of next)if(!previous.has(id))additions++;if(additions)incrementPerformance('explorationDelta',additions);}
+  const additions=addedRoadIds(previous,next);
+  let addedCount=0;
   // Incremental discovery: index visible geometry once per viewport update,
   // then add only changed IDs instead of rebuilding the whole road graph.
   const visible=visibleRoadIndex.current;
   let changed=false;
-  // Restore purple geometry when a road tile/index is rebuilt without new IDs.
-  for(const id of next){
+  // New graph geometry is handled by the viewport scan. Avoid probing
+  // the spatial index for millions of already-known off-screen roads.
+  for(const id of additions){
+   addedCount++;
    if(visibleExploredFeatures.current.has(id))continue;
    let feature=visible.get(id);
    if(!feature){
@@ -1081,7 +1092,8 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    }
    if(feature){visibleExploredFeatures.current.set(id,feature);changed=true;}
   }
-  for(const id of previous){
+  if(addedCount&&performanceMonitorEnabled())incrementPerformance('explorationDelta',addedCount);
+  for(const id of visibleExploredFeatures.current.keys()){
    if(next.has(id))continue;
    if(visibleExploredFeatures.current.delete(id))changed=true;
   }
@@ -1126,8 +1138,6 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
   const update=()=>{
    if(cancelled||!instance.isStyleLoaded())return;
    if(!graph){remove();setRoadStatus('Waiting for geographic road tiles');return;}
-   if(scanTimer!==undefined)clearTimeout(scanTimer);
-   ++scanRevision;
    const bounds=instance.getBounds();
    const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
    // No viewport-only tile requests: the base map supplies visible roads,
@@ -1136,6 +1146,9 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // Source existence is checked to support map-style reloads.
    const signature=[west,east,south,north].map(v=>v.toFixed(5)).join(':')+'|'+roadGraphVersion+'|levels='+showRoadLevelsDebug;
    if(signature===viewportSourceSignature.current&&viewportGraphRef.current===graph&&instance.getSource(purpleSourceId))return;
+   // Duplicate moveend/zoomend events must not cancel the active scan.
+   if(scanTimer!==undefined)clearTimeout(scanTimer);
+   ++scanRevision;
    const graphChanged=viewportGraphRef.current!==graph;
    viewportSourceSignature.current=signature;
    viewportGraphRef.current=graph;
@@ -1191,7 +1204,7 @@ export default function WorldMap({depots=[],companyId,purchasedFerryRouteIds=[],
    // The saved discovery IDs, not the ordinary viewport scan, determine
    // which segments belong in the purple overlay.
    let recoveredPurple=0;
-   for(const id of latestExplored){
+   for(const id of intersectRoadIds(seen,latestExplored)){
     let feature=index.get(id);
     if(!feature){
      const road=spatial.byId.get(id);
