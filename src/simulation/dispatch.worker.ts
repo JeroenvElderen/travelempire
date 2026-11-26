@@ -1009,6 +1009,8 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
    ...(msg.demandPlaces??[]),
   ];
   const passengerLocalStops=new Map<string,number>();
+  // Diagnostics also report regional demand on ticks that cannot generate jobs.
+  let regionStates=regionalPassengerDemand(demandRegions,queue,passengerLastSelectedDepot);
   if(msg.allowMission&&queue.length<demand.queueLimit){
    const gameAt=msg.gameNow??now,period=greekDemandPeriod(gameAt);
    const lookup=(node:string)=>activeGraph.nodes.get(node);
@@ -1019,7 +1021,7 @@ self.onmessage=async(event:MessageEvent<Init|Dispatch|AddRoads|RouteRequest|Fuel
      .filter(place=>passengerSpatialStops.countNear(place.position,lookup,passengerPlaceAccessRadius(place.kind),1)>0);
     activity.set(region.id,regionalPassengerActivity(density,venues.map(place=>passengerPlaceWeight(place.kind,gameAt,period))));
    }
-   const regionStates=regionalPassengerDemand(demandRegions,queue,passengerLastSelectedDepot,activity,passengerRegionLastServed,passengerRequestsCreated);
+   regionStates=regionalPassengerDemand(demandRegions,queue,passengerLastSelectedDepot,activity,passengerRegionLastServed,passengerRequestsCreated);
    // Bound the scheduler's history as vehicles roam between regions.
    if(passengerRegionLastServed.size>512)for(const [id,served] of passengerRegionLastServed)
     if(passengerRequestsCreated-served>256)passengerRegionLastServed.delete(id);
